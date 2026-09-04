@@ -21,8 +21,9 @@ When invoking Windows `dotnet.exe` from WSL, pass **Windows-style project paths*
 
 ## Build & Test
 
-- Restore (fresh clone only, but MANDATORY there): `nuget restore TaimisToolbench.sln`
-  - `packages/` is gitignored and this is a classic `packages.config` project, so nothing is on disk until `nuget.exe` restores it. **`dotnet restore` does NOT do this** - it and `dotnet msbuild -t:restore` both print "Nothing to do. None of the projects specified contain packages to restore." and leave the build failing on `The missing file is packages\BlishHUD.1.3.0\build\BlishHUD.targets`. Get `nuget.exe` from <https://www.nuget.org/downloads>. Windows-only build; CI runs `windows-latest`.
+- Restore (every fresh clone AND every fresh worktree, MANDATORY): `./tools/bootstrap.sh`
+  - `packages/` is gitignored and this is a classic `packages.config` project, so nothing is on disk until `nuget.exe` restores it. **`dotnet restore` does NOT do this** - it and `dotnet msbuild -t:restore` both print "Nothing to do. None of the projects specified contain packages to restore." and leave the build failing on `The missing file is packages\BlishHUD.1.3.0\build\BlishHUD.targets`. Windows-only build; CI runs `windows-latest`, whose image already carries `nuget.exe`, so CI calls `nuget restore` directly and needs no bootstrap.
+  - `tools/bootstrap.sh` fetches `nuget.exe` once into a shared cache outside the tree and then restores. It is idempotent, so running it on an already-restored tree costs nothing. A NEW WORKTREE NEEDS IT TOO: package `HintPath`s are relative (`packages\...`), so `packages/` must sit at each worktree's own root and cannot be shared between them.
 - Build: `<dotnet> build TaimisToolbench.csproj -p:Platform=x64`
 - Tests: `<dotnet> test TaimisToolbench.sln`
   - There are THREE test projects and CI runs all three (`tests/TaimisToolbench.Tests`, `tests/TaimisToolbench.RecipeSeeder.Tests`, `tests/VendorOfferUpdater.Tests`). Testing only the first misses the golden-vector suite that pins `tools/VendorOfferUpdater/VendorOfferHasher.cs` (the `offerId` contract for `ref/vendor_offers.json`) against `tests/shared/vendor_offer_hasher_vectors.json`. The first two target `net48`, the third `net8.0`.

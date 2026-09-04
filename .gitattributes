@@ -41,3 +41,11 @@ ref/recipe_sheet_items.json text=auto diff merge -linguist-generated
 ref/mystic_forge_recipes.json text eol=lf diff merge -linguist-generated
 ref/recipe_search_seed.json text eol=lf diff merge linguist-generated=true
 ref/recipes_seed.json text eol=lf diff merge linguist-generated=true
+
+# Shell scripts run from Git Bash, where core.autocrlf=true otherwise hands
+# the working tree CRLF copies. Git Bash tolerates a CRLF shebang, so this is
+# not about the scripts failing to start; it is that a CR rides along on every
+# unquoted capture and comparison downstream, which fails somewhere far from
+# the cause. These scripts now bootstrap and refresh data in throwaway
+# worktrees, so they get checked out fresh far more often than they get edited.
+*.sh text eol=lf
