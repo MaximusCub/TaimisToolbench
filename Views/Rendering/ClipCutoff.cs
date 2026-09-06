@@ -50,6 +50,19 @@ namespace TaimisToolbench.Views.Rendering
         }
 
         /// <summary>
+        /// <see cref="Enter"/> for an authority that protects
+        /// <paramref name="protectedEdge"/>: the line sits one live slip
+        /// budget below that edge, so the round trip between the authority
+        /// and its children lands ON the edge rather than above it.
+        /// </summary>
+        internal static int EnterFor(int protectedEdge)
+        {
+            return Enter(
+                ClipCutoffMath.CutoffTopFor(
+                    protectedEdge, GameService.Graphics.UIScaleMultiplier));
+        }
+
+        /// <summary>
         /// The clip a container should use in place of the one it inherited.
         /// A no-op when no viewport is painting, which is what makes the
         /// clamping control types below safe to use on any tab.
@@ -124,6 +137,48 @@ namespace TaimisToolbench.Views.Rendering
     }
 
     /// <summary>
+    /// A wheel-transparent clip that publishes <see cref="ClipCutoff"/> for
+    /// its own subtree, for a clip drawn OUTSIDE any scrolling viewport.
+    /// <para>
+    /// The sticky header host's clip is a sibling of the viewport, so no
+    /// line is in force while it paints, and a band part way through being
+    /// pushed out by the end of its table sits higher than the clip showing
+    /// it. Two containers separate the clip's own edge from a header
+    /// label's ink, so without a line the label paints 3 logical pixels
+    /// above the clip at GW2 UI Size Small. Measured on the plan tab, where
+    /// that is 3px above the separator rule.
+    /// </para>
+    /// <para>
+    /// Its own drawing is unclamped, for the reason
+    /// <see cref="ClipAuthorityFlowPanel"/>'s is: the line comes from its
+    /// own bounds, so clamping itself against it would only shrink it.
+    /// </para>
+    /// </summary>
+    internal sealed class WheelTransparentClipAuthorityPanel : Panel
+    {
+        /// <summary>Drops the wheel flag for the reason
+        /// <see cref="WheelTransparentClippedPanel"/> does.</summary>
+        protected override CaptureType CapturesInput()
+        {
+            return CaptureType.Mouse;
+        }
+
+        public override void Draw(
+            SpriteBatch spriteBatch, Rectangle drawBounds, Rectangle scissor)
+        {
+            int previous = ClipCutoff.EnterFor(AbsoluteBounds.Y);
+            try
+            {
+                base.Draw(spriteBatch, drawBounds, scissor);
+            }
+            finally
+            {
+                ClipCutoff.Exit(previous);
+            }
+        }
+    }
+
+    /// <summary>
     /// The scrolling viewport itself: it publishes the cutoff for the whole
     /// of its own subtree's paint, then restores whatever was in force.
     /// Its own drawing is unclamped - the line is derived from its bounds, so
@@ -140,9 +195,7 @@ namespace TaimisToolbench.Views.Rendering
         public sealed override void Draw(
             SpriteBatch spriteBatch, Rectangle drawBounds, Rectangle scissor)
         {
-            int previous = ClipCutoff.Enter(
-                ClipCutoffMath.CutoffTopFor(
-                    ProtectedEdge, GameService.Graphics.UIScaleMultiplier));
+            int previous = ClipCutoff.EnterFor(ProtectedEdge);
             try
             {
                 base.Draw(spriteBatch, drawBounds, scissor);

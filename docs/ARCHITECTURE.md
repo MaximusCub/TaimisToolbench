@@ -2369,6 +2369,21 @@ seam FLICKERED rather than sitting still; `StickyHeaderHost` now paints
 that strip in the band's own fill while the band is whole, so the band
 reads as one piece at every scale.
 
+The sticky clip needs a line of its own. `StickyHeaderHost`'s clip is a
+SIBLING of the viewport, not a child of it, so the viewport's line is not
+in force while the clip paints and nothing was re-asserting anything for
+the band inside it. While a band is whole its top edge and the clip's are
+the same, so nothing shows; while the end of a table is pushing the band
+out, the band sits above its clip and the two containers between the
+clip's edge and a header label's ink let that ink paint 3 logical pixels
+above the clip at UI Size Small. That is what an in-game screenshot
+showed on 2026-09-06: the Total Cost table's column words drawn over the
+plan tab's separator rule and the "Plan updated" line above it. The clip
+is now `WheelTransparentClipAuthorityPanel`, which publishes
+`CutoffTopFor` its own top edge for its own subtree exactly as the
+viewport does for its. `ClipCutoffMathTests` proves the bound for the
+two-container chain that ships.
+
 Where nothing paints the strip and nothing can - the Snapshot tab's
 viewport top, which has no rule under it - the reserve is still spent, and
 that is the trade the cutoff is: an unpainted pixel at the top of a

@@ -141,7 +141,11 @@ namespace TaimisToolbench.Views.Rendering
                 Band = band,
                 Home = home,
                 Geometry = geometry,
-                Clip = new WheelTransparentClippedPanel()
+                // Publishes the cutoff for its own subtree: no viewport's
+                // line is in force out here, and a band being pushed out
+                // sits above the clip that shows it
+                // (Views/Rendering/ClipCutoff.cs).
+                Clip = new WheelTransparentClipAuthorityPanel()
                 {
                     Size = Point.Zero,
                     Visible = false,
