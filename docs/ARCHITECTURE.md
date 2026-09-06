@@ -2630,6 +2630,17 @@ the cursor that had just clicked it, and the next click reached the row and
 expanded the node instead. A column derived from the panel edge cannot move
 for that reason, or for a re-solve that changes either data column's width.
 
+The column also took 25px off the tree's header band, until 2026-09-06.
+`ColumnHeaderRowRenderer` sized the band from the right column's edge plus
+`TableRightMargin`, which was the panel edge for as long as Cost was the
+last column. The action column moved that edge left and the band stopped
+with it, so the tree's band ran short of the panel by exactly the column
+and its gap, and the game world showed through above the ignore buttons.
+The band is the table's own background and every plan table justifies to
+the width it is given, so it is now the panel width for every caller. No
+other table was affected: the tree is the only one that passed a derived
+right edge.
+
 The new column costs `TreeActionColumnWidth` 21 + `TreeActionColumnGap` 4 of
 every row, and it is paid for by `PlanRelayoutMath.TreePillColumnWidth`
 dropping 256 to 231, so no window width lost a pixel to it and
