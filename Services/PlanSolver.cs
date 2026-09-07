@@ -606,6 +606,12 @@ namespace TaimisToolbench.Services
             // currency ids above, which is why it is a second map and
             // never a shared one (Models/BarterItemCost.cs).
             var barterItemMap = new Dictionary<int, long>();
+
+            // The sub-currency behind each barterItemMap entry a currency
+            // trade-up fed, keyed by ITEM id: Id is the currency, Count the
+            // units one item costs. Display only - the Total Cost table's
+            // note says what a holding of that currency buys.
+            var tradeUpCurrencyByItemId = new Dictionary<int, CostLine>();
             var craftOrder = new Dictionary<(int, int), int>();
             var vendorBatchTracking = new Dictionary<(int, AcquisitionSource, int), VendorBatchSolver.VendorBatchState>();
             var vendorOccurrences = new Dictionary<(int, AcquisitionSource, int), List<(int NodeId, int Quantity)>>();
@@ -626,8 +632,18 @@ namespace TaimisToolbench.Services
             // several already-per-occurrence-ceil'd costs; also folds the
             // (now-correct) vendor currency costs into currencyMap and
             // collects any post-solve "timegated" (cap-exceeded) notices.
+            // A requested item is what the plan produces, so its own
+            // acquisition can never be coalesced into a requirement for
+            // itself - the currency it costs is the answer there.
+            var requestedItemIds = new HashSet<int>();
+            foreach (var root in PlanRootNodes.Of(tree))
+            {
+                requestedItemIds.Add(root.Id);
+            }
+
             var timegatedItems = _vendorBatchSolver.FinalizeVendorBatches(
-                stepMap, vendorBatchTracking, currencyMap, barterItemMap);
+                stepMap, vendorBatchTracking, currencyMap, barterItemMap,
+                valuation, tradeUpCurrencyByItemId, requestedItemIds);
 
             // Pass 2c: FinalizeVendorBatches only corrects the merged
             // PlanStep/currencyMap view, never `memo` - which is what the
@@ -831,7 +847,14 @@ namespace TaimisToolbench.Services
             var barterItemCosts = new List<BarterItemCost>(barterItemMap.Count);
             foreach (var kvp in barterItemMap)
             {
-                barterItemCosts.Add(new BarterItemCost { ItemId = kvp.Key, Amount = kvp.Value });
+                tradeUpCurrencyByItemId.TryGetValue(kvp.Key, out var tradeUp);
+                barterItemCosts.Add(new BarterItemCost
+                {
+                    ItemId = kvp.Key,
+                    Amount = kvp.Value,
+                    TradeUpCurrencyId = tradeUp?.Id,
+                    TradeUpCurrencyPerUnit = tradeUp?.Count,
+                });
             }
 
             var plan = new CraftingPlan

@@ -892,16 +892,16 @@ namespace TaimisToolbench.Services
         /// AGGREGATE Quantity and the winning offer's batch shape, ceiling the
         /// purchase count exactly once. Applied only when every occurrence resolved
         /// to the identical winning offer (Conflict false); a Conflict step keeps
-        /// AggregateStep's sum of real per-occurrence purchases. Do not re-add a
-        /// branch that sums a cap notice for Conflict steps whose occurrences agree
-        /// on the raw cap tuple - the premise is false, see VendorBatchState.
+        /// AggregateStep's sum of real per-occurrence purchases. Do not re-add a cap
+        /// notice for Conflict steps that agree on the raw cap tuple - the premise
+        /// is false, see VendorBatchState.
         ///
-        /// Also folds each vendor step's final VendorCurrencyCosts into currencyMap
-        /// and its VendorBarterItemCosts into barterItemMap - the only place either
-        /// reaches a plan-wide total - and collects timegated notices for any
-        /// uniform step whose aggregate purchase count exceeds the daily (preferred)
-        /// or weekly cap, plus an independent Seasonal-cap notice; the checks do not
-        /// suppress each other. Caps never exclude an offer or change Source/TotalCost.
+        /// Also folds each vendor step's non-coin cost into currencyMap or
+        /// barterItemMap - the only place either reaches a plan-wide total, and where
+        /// CurrencyTradeUpCoalescing decides which of the two - and collects timegated
+        /// notices for a uniform step whose aggregate purchase count exceeds the daily
+        /// (preferred) or weekly cap, plus an independent Seasonal-cap notice. Caps
+        /// never exclude an offer or change Source/TotalCost.
         ///
         /// The recomputed step.UnitCost is the winning offer's own
         /// CoinCostPerBatch/OutputCount rate, not a truncating total/Quantity average.
@@ -911,7 +911,10 @@ namespace TaimisToolbench.Services
             Dictionary<(int, AcquisitionSource, int), PlanStep> stepMap,
             Dictionary<(int, AcquisitionSource, int), VendorBatchState> vendorBatchTracking,
             Dictionary<int, long> currencyMap,
-            Dictionary<int, long> barterItemMap)
+            Dictionary<int, long> barterItemMap,
+            CurrencyValuation valuation = null,
+            Dictionary<int, CostLine> tradeUpCurrencyByItemId = null,
+            ISet<int> requestedItemIds = null)
         {
             var timegatedItems = new List<TimegatedItem>();
 
@@ -993,6 +996,36 @@ namespace TaimisToolbench.Services
                 // Conflict intentionally produces no cap notice - a cap
                 // cannot be soundly computed across genuinely different
                 // offers (see this method's doc comment).
+
+                // A step that trades one unvalued map currency up into its
+                // item states its requirement as that item, not as the
+                // currency: the same item reached another way is already an
+                // item line, and one item must produce one number. A
+                // requested item is excluded - the plan produces it, so its
+                // cost is the currency and nothing else. See
+                // CurrencyTradeUpCoalescing.
+                if (barterItemMap != null &&
+                    (requestedItemIds == null || !requestedItemIds.Contains(step.ItemId)) &&
+                    CurrencyTradeUpCoalescing.MatchesStep(step, valuation) &&
+                    CurrencyTradeUpCoalescing.TryGetPerUnitCurrencyCount(step, out int perUnit))
+                {
+                    barterItemMap[step.ItemId] = barterItemMap.TryGetValue(step.ItemId, out var heldItems)
+                        ? checked(heldItems + step.Quantity)
+                        : step.Quantity;
+
+                    if (tradeUpCurrencyByItemId != null && !tradeUpCurrencyByItemId.ContainsKey(step.ItemId))
+                    {
+                        tradeUpCurrencyByItemId[step.ItemId] = new CostLine
+                        {
+                            Type = "Currency",
+                            Id = step.VendorCurrencyCosts[0].Id,
+                            Count = perUnit,
+                        };
+                    }
+
+                    continue;
+                }
+
                 if (step.VendorCurrencyCosts != null)
                 {
                     foreach (var cc in step.VendorCurrencyCosts)

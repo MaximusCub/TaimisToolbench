@@ -162,7 +162,7 @@ namespace TaimisToolbench.Views.Rendering
         /// it does not have.
         /// </para>
         /// </summary>
-        private static int DigitSeat(BitmapFont font, int iconSize)
+        internal static int DigitSeat(BitmapFont font, int iconSize)
         {
             if (font == null)
             {
