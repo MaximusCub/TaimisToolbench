@@ -160,7 +160,10 @@ tag; see `docs/RELEASING.md`.
   fails the build instead of silently dropping a file from compilation.
 - `tools/` contains standalone offline utilities (see below) that are
   separate console projects, most of them SDK-style, each with its own
-  README where one exists.
+  README where one exists. Not all of them are projects: `tools/sandbox`
+  holds a PowerShell script that pins the interface scale the screenshot
+  sandbox renders Blish HUD at, and `tools/sandbox/README.md` explains
+  why one is needed.
 - `TaimisToolbench.sln` lists every project, including the tools - if you
   add a new tool project, add it to the `.sln` too (a project that only
   exists on disk but isn't in the `.sln` is easy to miss entirely, which
