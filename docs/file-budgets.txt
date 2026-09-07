@@ -355,6 +355,7 @@ Views/ResizableTabbedWindow.cs                                                  
 Views/SettingsTabContent.cs                                                             2942
 Views/SuggestionPanel.cs                                                                504
 Views/ViewAdapter.cs                                                                    261
+tests/TaimisToolbench.RecipeSeeder.Tests/MysticForgeMergeTests.cs                       113
 tests/TaimisToolbench.RecipeSeeder.Tests/RecipeSeederHttpTests.cs                       122
 tests/TaimisToolbench.Tests/Helpers/CapturingProgress.cs                                22
 tests/TaimisToolbench.Tests/Helpers/CraftingPlanResultBuilders.cs                       94
@@ -648,7 +649,7 @@ tests/VendorOfferUpdater.Tests/VendorUnlockRequirementParserTests.cs            
 tests/VendorOfferUpdater.Tests/WikiApiRefusalTests.cs                                   344
 tests/VendorOfferUpdater.Tests/WikiSmwClientTests.cs                                    707
 tools/TaimisToolbench.Harness/Program.cs                                                861
-tools/TaimisToolbench.RecipeSeeder/Program.cs                                           765
+tools/TaimisToolbench.RecipeSeeder/Program.cs                                           787
 tools/MysticForgeSeeder/Program.cs                                                      818
 tools/MysticForgeSeeder/WikiRecipeClient.cs                                             681
 tools/Shared/FileMysticForgeRecipeSource.cs                                             39
