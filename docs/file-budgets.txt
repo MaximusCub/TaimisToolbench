@@ -189,7 +189,7 @@ Services/PlanStripStatusBoard.cs                                                
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     597
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        1809
+Services/PlanViewModelBuilder.cs                                                        1903
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
@@ -611,7 +611,7 @@ tests/TaimisToolbench.Tests/Services/TreeRowShapeGoldenTests.cs                 
 tests/TaimisToolbench.Tests/Services/TreeRowTooltipComposerTests.cs                     538
 tests/TaimisToolbench.Tests/Services/TypeRampMetricsTests.cs                            206
 tests/TaimisToolbench.Tests/Services/ValueDetailTooltipBuilderTests.cs                  191
-tests/TaimisToolbench.Tests/Services/VendorCurrencyTradeUpRoutingTests.cs               241
+tests/TaimisToolbench.Tests/Services/VendorCurrencyTradeUpRoutingTests.cs               248
 tests/TaimisToolbench.Tests/Services/VendorOfferStoreTests.cs                           576
 tests/TaimisToolbench.Tests/Services/VendorUnlockRecipeTests.cs                         233
 tests/TaimisToolbench.Tests/Services/WheelDeltaSanitizerTests.cs                        183

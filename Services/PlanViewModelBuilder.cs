@@ -69,8 +69,14 @@ namespace TaimisToolbench.Services
             // (it renders from vm.TreeRoot, positioned second by the view);
             // everything else below is exactly the gw2e ordering.
 
+            // The Total Cost table's Note and the Shopping List's row for a
+            // traded-up item are one number. It is worked out once, here,
+            // while the Note is seated, and read back below. Two
+            // derivations of it could disagree; one cannot.
+            var tradeUpPurchases = new Dictionary<int, TradeUpPurchase>();
+
             // 1. Total Cost section (always present)
-            var summarySection = BuildSummarySection(result, isMultiItem);
+            var summarySection = BuildSummarySection(result, isMultiItem, tradeUpPurchases);
             vm.Sections.Add(summarySection);
             vm.NonCoinCostTotals = BuildNonCoinCostTotals(summarySection);
 
@@ -91,7 +97,11 @@ namespace TaimisToolbench.Services
             // 3. Shopping List section (only if non-empty)
             if (shoppingSteps.Count > 0)
             {
-                vm.Sections.Add(BuildShoppingListSection(shoppingSteps, result));
+                var shoppingSection = BuildShoppingListSection(shoppingSteps, result, tradeUpPurchases);
+                if (shoppingSection.Rows.Count > 0)
+                {
+                    vm.Sections.Add(shoppingSection);
+                }
             }
 
             // 4. Required Disciplines section (only if non-empty)
@@ -232,7 +242,9 @@ namespace TaimisToolbench.Services
         // showing different numbers reads as a bug, not a scoping nuance.
         internal const string MaterialsValueSellableLabel = "Materials Value (sellable)";
 
-        private PlanSectionViewModel BuildSummarySection(CraftingPlanResult result, bool isMultiItem)
+        private PlanSectionViewModel BuildSummarySection(
+            CraftingPlanResult result, bool isMultiItem,
+            Dictionary<int, TradeUpPurchase> tradeUpPurchases)
         {
             var section = new PlanSectionViewModel
             {
@@ -262,7 +274,7 @@ namespace TaimisToolbench.Services
 
             BuildCostFormulaBand(section, result, coinTotalIsFloor);
             BuildProfitFormulaBand(section, result, isMultiItem, unpricedZero);
-            BuildCurrencyTableRows(section, result);
+            BuildCurrencyTableRows(section, result, tradeUpPurchases);
 
             // Gated on the same conditions the Sell value/Profit rows
             // themselves are, so this note never scopes a figure not
@@ -587,11 +599,13 @@ namespace TaimisToolbench.Services
         /// which projects in row order, in the order the table shows.
         /// </para>
         /// </summary>
-        private static void BuildCurrencyTableRows(PlanSectionViewModel section, CraftingPlanResult result)
+        private static void BuildCurrencyTableRows(
+            PlanSectionViewModel section, CraftingPlanResult result,
+            Dictionary<int, TradeUpPurchase> tradeUpPurchases)
         {
             var currencyRows = new List<PlanRowViewModel>();
             AddCurrencyCostRows(currencyRows, result);
-            AddBarterItemCostRows(currencyRows, result);
+            AddBarterItemCostRows(currencyRows, result, tradeUpPurchases);
             if (currencyRows.Count == 0)
             {
                 return;
@@ -652,7 +666,8 @@ namespace TaimisToolbench.Services
         /// Have/Needed are genuinely unknown.
         /// </summary>
         private static void AddBarterItemCostRows(
-            List<PlanRowViewModel> currencyRows, CraftingPlanResult result)
+            List<PlanRowViewModel> currencyRows, CraftingPlanResult result,
+            Dictionary<int, TradeUpPurchase> tradeUpPurchases)
         {
             if (result.Plan.BarterItemCosts == null || result.Plan.BarterItemCosts.Count == 0)
             {
@@ -673,7 +688,7 @@ namespace TaimisToolbench.Services
                     Rarity = ResolveRarity(bc.ItemId, result.ItemMetadata),
                 };
                 int? held = LookupOwned(result.OwnedVendorItemAmounts, bc.ItemId);
-                ApplyOwnedSplit(row, held, ApplyTradeUpNote(row, bc, held, result));
+                ApplyOwnedSplit(row, held, ApplyTradeUpNote(row, bc, held, result, tradeUpPurchases));
                 currencyRows.Add(row);
             }
         }
@@ -725,13 +740,32 @@ namespace TaimisToolbench.Services
         /// </para>
         /// </summary>
         private static int ApplyTradeUpNote(
-            PlanRowViewModel row, BarterItemCost cost, int? ownedItems, CraftingPlanResult result)
+            PlanRowViewModel row, BarterItemCost cost, int? ownedItems, CraftingPlanResult result,
+            Dictionary<int, TradeUpPurchase> tradeUpPurchases)
         {
             if (!cost.TradeUpCurrencyId.HasValue || !cost.TradeUpCurrencyPerUnit.HasValue)
             {
                 return 0;
             }
 
+            int buys = SeatTradeUpNote(row, cost, ownedItems, result);
+            tradeUpPurchases[cost.ItemId] = new TradeUpPurchase
+            {
+                Buys = buys,
+                CurrencyId = cost.TradeUpCurrencyId.Value,
+                CurrencyPerUnit = cost.TradeUpCurrencyPerUnit.Value,
+            };
+            return buys;
+        }
+
+        /// <summary>
+        /// The note itself, for a row already known to be a trade-up. 0
+        /// whenever no note is seated, so the number the note states and
+        /// the number taken off Needed are always the same number.
+        /// </summary>
+        private static int SeatTradeUpNote(
+            PlanRowViewModel row, BarterItemCost cost, int? ownedItems, CraftingPlanResult result)
+        {
             int currencyId = cost.TradeUpCurrencyId.Value;
             int? heldCurrency = LookupOwned(result.OwnedCurrencyAmounts, currencyId);
             if (!heldCurrency.HasValue || heldCurrency.Value <= 0)
@@ -754,6 +788,22 @@ namespace TaimisToolbench.Services
             row.TradeUpCurrencyHeld = heldCurrency.Value;
             row.TradeUpBuysQuantity = buys;
             return buys;
+        }
+
+        /// <summary>
+        /// What the Total Cost table's Note says one traded-up item's held
+        /// map currency buys right now, and the vendor rate that produced
+        /// it. The Shopping List reads this rather than the plan step,
+        /// which states only the part of the requirement the solver routed
+        /// through the vendor.
+        /// </summary>
+        private struct TradeUpPurchase
+        {
+            public int Buys;
+
+            public int CurrencyId;
+
+            public int CurrencyPerUnit;
         }
 
         /// <summary>
@@ -947,18 +997,35 @@ namespace TaimisToolbench.Services
             return section;
         }
 
+        /// <summary>
+        /// The Shopping List: what to go and buy now. A traded-up item is
+        /// listed at what the held map currency buys right now, the same
+        /// number the Total Cost table's Note states, and is left out
+        /// entirely when that is none. The plan step's own quantity is only
+        /// the part of the requirement the solver routed through the
+        /// vendor, so it is not what to buy - the rest of the requirement
+        /// has other routes and the plan does not direct which.
+        /// </summary>
         private PlanSectionViewModel BuildShoppingListSection(
-            List<PlanStep> steps, CraftingPlanResult result)
+            List<PlanStep> steps, CraftingPlanResult result,
+            Dictionary<int, TradeUpPurchase> tradeUpPurchases)
         {
             var section = new PlanSectionViewModel
             {
                 SectionType = PlanSectionType.ShoppingList,
-                Title = $"Shopping List ({steps.Count})",
                 IsDefaultExpanded = true,
             };
 
             foreach (var step in steps)
             {
+                TradeUpPurchase purchase = default(TradeUpPurchase);
+                bool isTradeUp = step.Source == AcquisitionSource.BuyFromVendor &&
+                    tradeUpPurchases.TryGetValue(step.ItemId, out purchase);
+                if (isTradeUp && purchase.Buys <= 0)
+                {
+                    continue;
+                }
+
                 string name = ResolveName(step.ItemId, result.ItemMetadata);
                 string iconUrl = ResolveIconUrl(step.ItemId, result.ItemMetadata);
                 string rarity = ResolveRarity(step.ItemId, result.ItemMetadata);
@@ -972,7 +1039,7 @@ namespace TaimisToolbench.Services
                     Label = name,
                     IconUrl = iconUrl,
                     Rarity = rarity,
-                    Quantity = step.Quantity,
+                    Quantity = isTradeUp ? purchase.Buys : step.Quantity,
                     CoinValue = step.TotalCost,
                     UnitCoinValue = step.UnitCost,
                     HintText = ResolveHintText(rowType, step.ItemId, result.AcquisitionHints),
@@ -981,13 +1048,40 @@ namespace TaimisToolbench.Services
                     // only, never Each (a per-unit rate has no ownership
                     // concept).
                     CurrencyCosts = CurrencyDisplayResolver.ResolveAmounts(
-                        step.VendorCurrencyCosts, result.CurrencyMetadata, result.OwnedCurrencyAmounts),
+                        isTradeUp ? TradeUpCurrencyCost(purchase) : step.VendorCurrencyCosts,
+                        result.CurrencyMetadata,
+                        result.OwnedCurrencyAmounts),
                     UnitCurrencyCosts = CurrencyDisplayResolver.ResolveUnitAmounts(
                         step.VendorOfferOutputCount, step.VendorOfferCurrencyCostLinesPerBatch, result.CurrencyMetadata),
                 });
             }
 
+            section.Title = $"Shopping List ({section.Rows.Count})";
             return section;
+        }
+
+        /// <summary>
+        /// What the listed number of a traded-up item costs at the vendor.
+        /// Re-derived from the listed quantity, not carried over from the
+        /// plan step, whose currency total is for the step's own smaller
+        /// quantity.
+        /// <para>
+        /// The multiply cannot overflow: CurrencyTradeUpCoalescing.BuysNow
+        /// never returns more than the held amount divided by the rate, so
+        /// the product is at most the held amount, itself an int.
+        /// </para>
+        /// </summary>
+        private static List<CostLine> TradeUpCurrencyCost(TradeUpPurchase purchase)
+        {
+            return new List<CostLine>
+            {
+                new CostLine
+                {
+                    Type = "Currency",
+                    Id = purchase.CurrencyId,
+                    Count = purchase.Buys * purchase.CurrencyPerUnit,
+                },
+            };
         }
 
         /// <summary>
