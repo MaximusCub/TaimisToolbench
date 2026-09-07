@@ -237,10 +237,16 @@ namespace TaimisToolbench.Models
     }
 
     /// <summary>
-    /// A single non-coin currency amount, already resolved to display-ready
-    /// name/icon (never a raw currency id - see CurrencyDisplayResolver).
-    /// Used for BuyFromVendor rows/nodes priced wholly or partly in a
-    /// non-coin currency (spirit shards, karma, etc.) - KNOWN-ISSUES #16.
+    /// A single non-coin amount, already resolved to display-ready
+    /// name/icon (never a raw id - see CurrencyDisplayResolver). Used for
+    /// BuyFromVendor rows/nodes priced wholly or partly in something other
+    /// than coin - KNOWN-ISSUES #16.
+    /// <para>
+    /// Usually a wallet currency such as a spirit shard or karma. Not
+    /// always: NonCoinCostTotals also projects barter-item rows into this
+    /// type, where Amount is a count of items rather than of currency. Read
+    /// the source list to know which, and never label one as the other.
+    /// </para>
     /// </summary>
     internal class CurrencyAmountViewModel
     {

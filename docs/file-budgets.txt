@@ -58,7 +58,7 @@ Models/PlanRequestItem.cs                                                       
 Models/PlanSolveContext.cs                                                              212
 Models/PlanStatus.cs                                                                    11
 Models/PlanStep.cs                                                                      72
-Models/PlanViewModel.cs                                                                 505
+Models/PlanViewModel.cs                                                                 511
 Models/PriceBasis.cs                                                                    32
 Models/RankerRowMetrics.cs                                                              152
 Models/RankerSlotAvailability.cs                                                        59
@@ -169,7 +169,7 @@ Services/PanelChromeMath.cs                                                     
 Services/PhaseOrdinalGuard.cs                                                           40
 Services/PillSubduingEvaluator.cs                                                       280
 Services/PillSubduingTooltipBuilder.cs                                                  101
-Services/PillTooltipTextComposer.cs                                                     262
+Services/PillTooltipTextComposer.cs                                                     273
 Services/PlanContentHeightMath.cs                                                       500
 Services/PlanHistoryBlobStore.cs                                                        216
 Services/PlanHistoryDedupKey.cs                                                         104
@@ -190,7 +190,7 @@ Services/PlanStripStatusBoard.cs                                                
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     597
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        1793
+Services/PlanViewModelBuilder.cs                                                        1788
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
@@ -301,12 +301,12 @@ Views/ItemInputRowStrip.cs                                                      
 Views/ItemRowState.cs                                                                   39
 Views/LogTabContent.cs                                                                  1538
 Views/MainThreadMarshal.cs                                                              141
-Views/MainView.cs                                                                       3315
+Views/MainView.cs                                                                       3331
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    425
 Views/PlanHistoryTabContent.cs                                                          1501
-Views/RankerTabContent.cs                                                               3037
+Views/RankerTabContent.cs                                                               3042
 Views/Rendering/ClickSound.cs                                                           197
 Views/Rendering/CaretKeyButton.cs                                                       109
 Views/Rendering/CloseKeyButton.cs                                                       64
@@ -420,6 +420,7 @@ tests/TaimisToolbench.Tests/Services/CraftingTreeBuilderTests.cs                
 tests/TaimisToolbench.Tests/Services/CurrencyDisplayResolverTests.cs                    459
 tests/TaimisToolbench.Tests/Services/CurrencyMetadataServiceTests.cs                    409
 tests/TaimisToolbench.Tests/Services/CurrencyTooltipComposerTests.cs                    169
+tests/TaimisToolbench.Tests/Services/CurrencyTradeUpCoalescingTests.cs                  326
 tests/TaimisToolbench.Tests/Services/CurrencyTradeUpRowTests.cs                         249
 tests/TaimisToolbench.Tests/Services/CurrencyValuationSerializerTests.cs                274
 tests/TaimisToolbench.Tests/Services/DailyCooldownItemServiceTests.cs                   209
@@ -475,7 +476,7 @@ tests/TaimisToolbench.Tests/Services/PanelChromeMathTests.cs                    
 tests/TaimisToolbench.Tests/Services/PhaseOrdinalGuardTests.cs                          46
 tests/TaimisToolbench.Tests/Services/PillSubduingEvaluatorTests.cs                      357
 tests/TaimisToolbench.Tests/Services/PillSubduingTooltipBuilderTests.cs                 130
-tests/TaimisToolbench.Tests/Services/PillTooltipTextComposerTests.cs                    321
+tests/TaimisToolbench.Tests/Services/PillTooltipTextComposerTests.cs                    338
 tests/TaimisToolbench.Tests/Services/PlanCompatibilityFixtureTests.cs                   371
 tests/TaimisToolbench.Tests/Services/PlanContentHeightMathTests.cs                      657
 tests/TaimisToolbench.Tests/Services/PlanHistoryBlobStoreTests.cs                       324
@@ -611,6 +612,7 @@ tests/TaimisToolbench.Tests/Services/TradingPostServiceTests.cs                 
 tests/TaimisToolbench.Tests/Services/TransmutedNameTests.cs                             441
 tests/TaimisToolbench.Tests/Services/TreeChipStripLayoutTests.cs                        283
 tests/TaimisToolbench.Tests/Services/TreeCostColumnMathTests.cs                         768
+tests/TaimisToolbench.Tests/Services/TreeRootCostMatchesPlanTotalTests.cs               116
 tests/TaimisToolbench.Tests/Services/TreeRowIdentityTests.cs                            246
 tests/TaimisToolbench.Tests/Services/TreeRowShapeGoldenTests.cs                         145
 tests/TaimisToolbench.Tests/Services/TreeRowTooltipComposerTests.cs                     538

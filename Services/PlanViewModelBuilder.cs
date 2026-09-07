@@ -716,12 +716,12 @@ namespace TaimisToolbench.Services
         /// the currency converts it up before acquiring the rest any other
         /// way.
         /// <para>
-        /// The note and that subtraction are one decision, never two: a
-        /// Needed the note cannot account for is a number with no visible
-        /// derivation. So both are skipped together whenever the currency
-        /// resolves no icon - without one the note names nothing on screen,
-        /// because the offline fallback for these ids is the word
-        /// "Currency" (Gw2Constants.ResolveCurrencyName).
+        /// The subtraction does not depend on currency metadata. It used to
+        /// be skipped whenever the currency resolved no icon, so the same
+        /// plan showed a different Needed before and after /v2/currencies
+        /// answered. The note is still drawn: the renderer seats an icon
+        /// frame whether or not art resolved, and that frame carries the
+        /// currency's name on hover.
         /// </para>
         /// </summary>
         private static int ApplyTradeUpNote(
@@ -743,14 +743,9 @@ namespace TaimisToolbench.Services
             int buys = CurrencyTradeUpCoalescing.BuysNow(
                 heldCurrency.Value, cost.TradeUpCurrencyPerUnit.Value, outstanding);
 
-            string iconUrl = CurrencyDisplayResolver.ResolveIconUrl(currencyId, result.CurrencyMetadata);
-            if (string.IsNullOrEmpty(iconUrl))
-            {
-                return 0;
-            }
-
             row.TradeUpCurrencyName = CurrencyDisplayResolver.ResolveName(currencyId, result.CurrencyMetadata);
-            row.TradeUpCurrencyIconUrl = iconUrl;
+            row.TradeUpCurrencyIconUrl =
+                CurrencyDisplayResolver.ResolveIconUrl(currencyId, result.CurrencyMetadata);
             row.TradeUpCurrencyHeld = heldCurrency.Value;
             row.TradeUpBuysQuantity = buys;
             return buys;

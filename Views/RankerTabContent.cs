@@ -796,7 +796,12 @@ namespace TaimisToolbench.Views
             "Whether you can afford everything this item still needs right now, or how much coin you are short of it.",
             "How close this item is to finished: the five barriers under the row, blended into one figure.",
             "The shortest possible wait in days, set by once-per-day crafts that no amount of coin can shorten.",
-            "The coin still to spend, for the materials this item needs that you do not already hold.",
+            // Names the price basis because this tab always solves on buy
+            // orders with own materials free, whatever the plan tab is set
+            // to. Without that sentence the same item reads two different
+            // coin figures on two tabs and neither says why.
+            "The coin still to spend, for the materials this item needs that you do not already hold. " +
+                "Always priced at buy orders, and always counting your own materials as free, so every row compares.",
         };
 
         private void PositionChrome(Container container, int width)
