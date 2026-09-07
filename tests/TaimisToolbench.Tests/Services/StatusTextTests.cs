@@ -315,6 +315,64 @@ namespace TaimisToolbench.Tests.Services
             Assert.EndsWith("mo ago", StatusText.ForSnapshotAgeSuffix(TimeSpan.MaxValue));
         }
 
+        // ---- ForPlanAccountDataAge: the Crafting Plan status line's
+        // account-data clause. It follows a "Plan generated" timestamp, so
+        // unlike ForSnapshotAgeSuffix it must name what the age belongs to.
+        private static readonly TimeSpan DefaultRefreshInterval = TimeSpan.FromMinutes(10);
+
+        [Fact]
+        public void ForPlanAccountDataAge_UnderThreshold_SaysNothing()
+        {
+            // The healthy case is the common one, and a clause on every plan
+            // would be furniture rather than a warning.
+            Assert.Null(StatusText.ForPlanAccountDataAge(
+                TimeSpan.FromMinutes(9), DefaultRefreshInterval));
+            Assert.Null(StatusText.ForPlanAccountDataAge(
+                TimeSpan.Zero, DefaultRefreshInterval));
+        }
+
+        [Fact]
+        public void ForPlanAccountDataAge_AtOrPastThreshold_NamesTheData()
+        {
+            // The same boundary IsStale uses, so the clause and the Snapshot
+            // tab's amber recolor can never disagree about one snapshot.
+            Assert.Equal(
+                "account data captured 10m ago",
+                StatusText.ForPlanAccountDataAge(
+                    TimeSpan.FromMinutes(10), DefaultRefreshInterval));
+            Assert.Equal(
+                "account data captured 37m ago",
+                StatusText.ForPlanAccountDataAge(
+                    TimeSpan.FromMinutes(37), DefaultRefreshInterval));
+        }
+
+        [Fact]
+        public void ForPlanAccountDataAge_ThresholdDecides_NotTheAgeAlone()
+        {
+            var age = TimeSpan.FromMinutes(30);
+            Assert.NotNull(StatusText.ForPlanAccountDataAge(age, TimeSpan.FromMinutes(15)));
+            Assert.Null(StatusText.ForPlanAccountDataAge(age, TimeSpan.FromMinutes(120)));
+        }
+
+        [Fact]
+        public void ForPlanAccountDataAge_Negative_ClampedToZero()
+        {
+            // CapturedAt momentarily ahead of the local clock must never
+            // render as a negative duration, nor read as stale.
+            Assert.Null(StatusText.ForPlanAccountDataAge(
+                TimeSpan.FromSeconds(-5), DefaultRefreshInterval));
+        }
+
+        [Theory]
+        [InlineData(60, "account data captured 1h 0m ago")]
+        [InlineData(1440, "account data captured 1d ago")]
+        [InlineData(43200, "account data captured 1mo ago")]
+        public void ForPlanAccountDataAge_RidesTheSameLadder(double minutes, string expected)
+        {
+            Assert.Equal(expected, StatusText.ForPlanAccountDataAge(
+                TimeSpan.FromMinutes(minutes), DefaultRefreshInterval));
+        }
+
         // ForAgeAgo rides the SAME ladder and the same framing - the Plan
         // History detail panel's cost-delta line - and differs only below a
         // minute.

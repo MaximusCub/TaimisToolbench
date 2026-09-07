@@ -85,7 +85,7 @@ Models/UsedMaterial.cs                                                          
 Models/VendorItemCostLine.cs                                                            42
 Models/VendorOffer.cs                                                                   73
 Models/VendorOfferDataset.cs                                                            15
-Module.cs                                                                               2953
+Module.cs                                                                               2954
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
@@ -257,7 +257,7 @@ Services/SortIndicatorLayout.cs                                                 
 Services/SourceFilterFlowLayout.cs                                                      85
 Services/StaticItemSearchProvider.cs                                                    42
 Services/StatusStore.cs                                                                 73
-Services/StatusText.cs                                                                  326
+Services/StatusText.cs                                                                  356
 Services/StatusUpdateGuard.cs                                                           38
 Services/StickyHeaderLayout.cs                                                          117
 Services/SummarySectionLayoutMath.cs                                                   1037
@@ -293,7 +293,7 @@ Services/WindowSizing.cs                                                        
 Views/AboutTabContent.cs                                                                1000
 Views/ApiAccessDialog.cs                                                                231
 Views/AutocompleteTextBox.cs                                                            45
-Views/CraftingPlanView.cs                                                               5253
+Views/CraftingPlanView.cs                                                               5294
 Views/FocusRelease.cs                                                                   159
 Views/ItemInputRowStrip.cs                                                              465
 Views/ItemRowState.cs                                                                   39
@@ -587,7 +587,7 @@ tests/TaimisToolbench.Tests/Services/SocketedUpgradeTests.cs                    
 tests/TaimisToolbench.Tests/Services/SortIndicatorLayoutTests.cs                        151
 tests/TaimisToolbench.Tests/Services/SourceFilterFlowLayoutTests.cs                     127
 tests/TaimisToolbench.Tests/Services/StatusStoreTests.cs                                116
-tests/TaimisToolbench.Tests/Services/StatusTextTests.cs                                 386
+tests/TaimisToolbench.Tests/Services/StatusTextTests.cs                                 444
 tests/TaimisToolbench.Tests/Services/StatusUpdateGuardTests.cs                          33
 tests/TaimisToolbench.Tests/Services/StickyHeaderLayoutTests.cs                         266
 tests/TaimisToolbench.Tests/Services/SummarySectionLayoutMathTests.cs                   1610

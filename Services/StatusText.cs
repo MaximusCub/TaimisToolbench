@@ -275,6 +275,36 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// The Crafting Plan status line's account-data clause, or null when
+        /// the snapshot the plan subtracted owned materials from is younger
+        /// than <paramref name="staleThreshold"/>. A refresh that keeps
+        /// failing leaves the previous snapshot in place and the plan tab
+        /// said nothing about it, so a plan built on hour-old owned
+        /// materials read exactly like one built after a good refresh.
+        /// <para>
+        /// Gated on the same threshold as the Snapshot tab's amber recolor
+        /// and Module.Update()'s auto-refresh, so the clause appears only
+        /// once the module itself considers the snapshot due for a refresh.
+        /// </para>
+        /// <para>
+        /// It names account data rather than following the Crafting
+        /// Ranker's bare "(37m ago)": this clause follows a "Plan
+        /// generated" timestamp that a bare age would read as restating.
+        /// </para>
+        /// </summary>
+        public static string ForPlanAccountDataAge(TimeSpan age, TimeSpan staleThreshold)
+        {
+            if (age < TimeSpan.Zero)
+            {
+                age = TimeSpan.Zero;
+            }
+
+            return IsStale(age, staleThreshold)
+                ? "account data captured " + ForAgeAgo(age)
+                : null;
+        }
+
+        /// <summary>
         /// Whether a snapshot of the given age counts as stale against the
         /// caller-supplied threshold. The Snapshot tab's staleness recolor
         /// (Views/MainView.cs) and Module.Update()'s auto-refresh gate both

@@ -990,7 +990,8 @@ namespace TaimisToolbench
                 // ItemMetadataService.WarmStatBlocksAsync for why it is
                 // not GetMetadataAsync.
                 _warmItemStatsAsync,
-                () => lifetimeToken
+                () => lifetimeToken,
+                () => _currentSnapshot
             );
 
             _settingsContent = new SettingsTabContent(

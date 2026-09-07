@@ -152,6 +152,12 @@ namespace TaimisToolbench.Views
         // from gw2efficiency, whose default is unchecked. Purely in-memory
         // session state, reset on every module reload.
         private bool _useOwnMaterials = true;
+
+        // The live account snapshot, for the plan status line's account-data
+        // age clause. Separate from _accountDataAvailable below, which is
+        // pushed every tick and carries only whether one exists.
+        private readonly Func<AccountSnapshot> _getSnapshot;
+
         // Whether an account snapshot exists to subtract from; pushed by
         // the host every tick (Module.Update) so a key added mid-session,
         // or a Clear Cache, moves the gate without a restart.
@@ -816,8 +822,14 @@ namespace TaimisToolbench.Views
             // ends them instead of leaving them running against disposed
             // objects. Optional; without it both use CancellationToken.None,
             // which is what they did before.
-            Func<CancellationToken> moduleLifetimeToken = null)
+            Func<CancellationToken> moduleLifetimeToken = null,
+            // Read once per Generate, at the moment the pipeline reads the
+            // same snapshot, so the finished plan can say how old the owned
+            // materials it subtracted were. Optional; without it the plan
+            // status line carries no account-data clause.
+            Func<AccountSnapshot> getSnapshot = null)
         {
+            _getSnapshot = getSnapshot;
             _generateAsync = generateAsync;
             _modalDialog = modalDialog;
             _itemSearchProvider = itemSearchProvider;
@@ -4034,6 +4046,13 @@ namespace TaimisToolbench.Views
                 .Resolve(_useOwnMaterials, _accountDataAvailable)
                 .Checked;
 
+            // Read here rather than when the result lands: a background
+            // refresh committing mid-generation would otherwise make the
+            // finished plan report an age for a snapshot it never used.
+            DateTime? snapshotCapturedAt = useOwnMaterials
+                ? _getSnapshot?.Invoke()?.CapturedAt
+                : null;
+
             try
             {
                 var result = await _generateAsync(
@@ -4081,7 +4100,7 @@ namespace TaimisToolbench.Views
                     // panel is torn down must not drop the "Plan
                     // generated" text - a later Build() pulls it from the
                     // board instead.
-                    _statusBoard.Finish(myGen, StatusText.Stamp("Plan generated", _planGeneratedAt));
+                    _statusBoard.Finish(myGen, PlanGeneratedStatus(snapshotCapturedAt));
 
                     // Plan CONTENT still requires a live panel to render
                     // into - unlike the strip status above, this part of
@@ -4291,6 +4310,28 @@ namespace TaimisToolbench.Views
                     SetStatus(standing);
                 }
             }
+        }
+
+        /// <summary>
+        /// The finished plan's status line. Carries the account-data age
+        /// clause only when the plan subtracted owned materials from a
+        /// snapshot the module already considers due for a refresh - see
+        /// StatusText.ForPlanAccountDataAge, which owns that decision and
+        /// the wording.
+        /// </summary>
+        private string PlanGeneratedStatus(DateTime? snapshotCapturedAt)
+        {
+            string status = StatusText.Stamp("Plan generated", _planGeneratedAt);
+            if (!snapshotCapturedAt.HasValue || _settings == null)
+            {
+                return status;
+            }
+
+            string clause = StatusText.ForPlanAccountDataAge(
+                DateTime.UtcNow - snapshotCapturedAt.Value,
+                TimeSpan.FromMinutes(_settings.GetClampedSnapshotRefreshIntervalMinutes()));
+
+            return clause == null ? status : status + " (" + clause + ")";
         }
 
         /// <summary>
