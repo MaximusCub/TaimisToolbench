@@ -25,7 +25,7 @@
 # Format: <path> <max-lines>. Seeded 2026-08-25 from the tree at that
 # commit (git ls-files '*.cs' | xargs wc -l).
 Contracts/IItemSearchProvider.cs                                                        74
-Models/AccountSnapshot.cs                                                               24
+Models/AccountSnapshot.cs                                                               32
 Models/AcquisitionHint.cs                                                               26
 Models/AcquisitionSource.cs                                                             50
 Models/BarterItemDecisionDefaults.cs                                                    153
@@ -72,7 +72,7 @@ Models/RequiredRecipe.cs                                                        
 Models/SeasonalVendorTip.cs                                                             48
 Models/SettingsFormState.cs                                                             149
 Models/SnapshotCharacterDiscipline.cs                                                   24
-Models/SnapshotHoldLocation.cs                                                          45
+Models/SnapshotHoldLocation.cs                                                          59
 Models/SnapshotItemEntry.cs                                                             80
 Models/SnapshotSearchRow.cs                                                             58
 Models/SnapshotSourceFilter.cs                                                          42
@@ -122,7 +122,7 @@ Services/FirstLoadSnapshotGate.cs                                               
 Services/GlyphButtonMetrics.cs                                                          69
 Services/GridLayout.cs                                                                  93
 Services/Gw2AccountRecipeClient.cs                                                      30
-Services/Gw2AccountSnapshotService.cs                                                   793
+Services/Gw2AccountSnapshotService.cs                                                   807
 Services/Gw2ItemApiClient.cs                                                            261
 Services/Gw2PriceApiClient.cs                                                           66
 Services/Gw2RecipeApiClient.cs                                                          206
@@ -241,11 +241,11 @@ Services/SnapshotFailureKind.cs                                                 
 Services/SnapshotFetchFailedException.cs                                                69
 Services/SnapshotHeaderLayout.cs                                                        209
 Services/SnapshotHelpers.cs                                                             79
-Services/SnapshotHoldLine.cs                                                            300
-Services/SnapshotItemGridLayout.cs                                                      250
+Services/SnapshotHoldLine.cs                                                            355
+Services/SnapshotItemGridLayout.cs                                                      271
 Services/SnapshotRefreshSlot.cs                                                         93
 Services/SnapshotResultLayout.cs                                                        90
-Services/SnapshotSearchResultBuilder.cs                                                 501
+Services/SnapshotSearchResultBuilder.cs                                                 572
 Services/SnapshotStore.cs                                                               98
 Services/SnapshotTableSorter.cs                                                         99
 Services/SocketedUpgradeIndex.cs                                                        146
@@ -298,7 +298,7 @@ Views/ItemInputRowStrip.cs                                                      
 Views/ItemRowState.cs                                                                   39
 Views/LogTabContent.cs                                                                  1538
 Views/MainThreadMarshal.cs                                                              141
-Views/MainView.cs                                                                       2974
+Views/MainView.cs                                                                       2976
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    425
@@ -372,7 +372,7 @@ tests/TaimisToolbench.Tests/Helpers/ShippedSeedManifest.cs                      
 tests/TaimisToolbench.Tests/Helpers/TempDirectory.cs                                    47
 tests/TaimisToolbench.Tests/Helpers/TooltipContentPlainText.cs                         110
 tests/TaimisToolbench.Tests/Helpers/VendorOfferBuilders.cs                              123
-tests/TaimisToolbench.Tests/Models/AccountSnapshotSerializationTests.cs                 107
+tests/TaimisToolbench.Tests/Models/AccountSnapshotSerializationTests.cs                 129
 tests/TaimisToolbench.Tests/Models/BarterItemDecisionDefaultsTests.cs                   145
 tests/TaimisToolbench.Tests/Models/CurrencyDecisionDefaultsTests.cs                     155
 tests/TaimisToolbench.Tests/Models/CurrencyValuationTests.cs                            305
@@ -572,11 +572,11 @@ tests/TaimisToolbench.Tests/Services/SnapshotFailureClassifierTests.cs          
 tests/TaimisToolbench.Tests/Services/SnapshotFetchFailedExceptionTests.cs               75
 tests/TaimisToolbench.Tests/Services/SnapshotHeaderLayoutTests.cs                       441
 tests/TaimisToolbench.Tests/Services/SnapshotHelpersTests.cs                            95
-tests/TaimisToolbench.Tests/Services/SnapshotHoldLineTests.cs                           264
-tests/TaimisToolbench.Tests/Services/SnapshotItemGridLayoutTests.cs                     336
+tests/TaimisToolbench.Tests/Services/SnapshotHoldLineTests.cs                           320
+tests/TaimisToolbench.Tests/Services/SnapshotItemGridLayoutTests.cs                     372
 tests/TaimisToolbench.Tests/Services/SnapshotRefreshSlotTests.cs                        241
 tests/TaimisToolbench.Tests/Services/SnapshotResultLayoutTests.cs                       94
-tests/TaimisToolbench.Tests/Services/SnapshotSearchResultBuilderTests.cs                1152
+tests/TaimisToolbench.Tests/Services/SnapshotSearchResultBuilderTests.cs                1286
 tests/TaimisToolbench.Tests/Services/SnapshotSerializationTests.cs                      283
 tests/TaimisToolbench.Tests/Services/SnapshotStoreTests.cs                              433
 tests/TaimisToolbench.Tests/Services/SnapshotTableSorterTests.cs                        147

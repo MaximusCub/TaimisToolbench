@@ -147,6 +147,62 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal("Legendary Armory", line);
         }
 
+        // --- Who is wearing an account-wide Legendary Armory item ---
+        [Fact]
+        public void TheArmoryNamesTheCharactersWearingItsCopy()
+        {
+            var armory = Place(SnapshotHoldCategory.LegendaryArmory, 1);
+            armory.EquippedBy = new List<string> { "Divineaxe", "Apoyu" };
+
+            var line = SnapshotHoldLine.Format(new List<SnapshotHoldLocation> { armory });
+
+            // The dash keeps these apart from the colon that introduces the
+            // characters holding a category's stock. They hold none: they
+            // draw the one copy this place already counts.
+            Assert.Equal("Legendary Armory - Equipped: Divineaxe, Apoyu", line);
+        }
+
+        [Fact]
+        public void WearersNeverAddToTheCount()
+        {
+            var armory = Place(SnapshotHoldCategory.LegendaryArmory, 2);
+            armory.EquippedBy = new List<string> { "Divineaxe", "Apoyu", "Zoe" };
+
+            var line = SnapshotHoldLine.Format(new List<SnapshotHoldLocation>
+            {
+                Place(SnapshotHoldCategory.Bank, 1),
+                armory,
+            });
+
+            Assert.Equal(
+                "Bank (1)  Legendary Armory (2) - Equipped: Divineaxe, Apoyu, Zoe", line);
+        }
+
+        [Fact]
+        public void WearersDoNotTurnAOnePlaceLineIntoACountedOne()
+        {
+            var armory = Place(SnapshotHoldCategory.LegendaryArmory, 3);
+            armory.EquippedBy = new List<string> { "Apoyu" };
+
+            Assert.Equal(
+                "Legendary Armory - Equipped: Apoyu",
+                SnapshotHoldLine.Format(new List<SnapshotHoldLocation> { armory }));
+        }
+
+        [Fact]
+        public void AnArmoryNobodyIsWearingReadsAsItAlwaysDid()
+        {
+            foreach (var wearers in new[] { null, new List<string>(), new List<string> { "" } })
+            {
+                var armory = Place(SnapshotHoldCategory.LegendaryArmory, 1);
+                armory.EquippedBy = wearers;
+
+                Assert.Equal(
+                    "Legendary Armory",
+                    SnapshotHoldLine.Format(new List<SnapshotHoldLocation> { armory }));
+            }
+        }
+
         [Fact]
         public void CharactersKeepTheOrderTheCallerSupplied()
         {

@@ -6,7 +6,7 @@ namespace TaimisToolbench.Services
     /// rows a cell count fills. Blish-free, like every grid that uses it.
     /// <para>
     /// What did NOT move here: each grid's own MinColumnWidth derivation and
-    /// its cell-internal x offsets (CellAmountRightEdge, CellTagX, ...).
+    /// its cell-internal x offsets (CellContentRightEdge, CellTagX, ...).
     /// Those are genuinely different per grid - a currency row holds a name
     /// and three controls, a snapshot cell a name and an amount - and
     /// sharing them would couple numbers that only coincide. Nor did the

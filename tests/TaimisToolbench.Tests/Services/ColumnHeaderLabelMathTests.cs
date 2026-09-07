@@ -19,7 +19,11 @@ namespace TaimisToolbench.Tests.Services
         public static readonly object[][] IconColumns =
         {
             new object[] { ShoppingColumnMath.NameX, ShoppingColumnMath.IconX },
-            new object[] { SnapshotItemGridLayout.CellTextX, SnapshotItemGridLayout.CellIconX },
+            new object[]
+            {
+                SnapshotItemGridLayout.CellTextX(SnapshotItemGridLayout.AmountColumnFloor),
+                SnapshotItemGridLayout.CellIconX(SnapshotItemGridLayout.AmountColumnFloor),
+            },
             new object[] { SettingsCurrencyGridLayout.CellNameX, SettingsCurrencyGridLayout.CellIconX },
             new object[]
             {

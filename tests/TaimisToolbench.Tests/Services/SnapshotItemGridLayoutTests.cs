@@ -77,9 +77,9 @@ namespace TaimisToolbench.Tests.Services
         {
             int columnWidth = SnapshotItemGridLayout.ComputeColumnWidth(GridWidthAtWindowMinimum);
 
-            // Budgeted the way the cell is actually built: the name stops
-            // at the Amount column, not at the cell's right pad.
-            int nameRunBudget = SnapshotItemGridLayout.CellNameMaxWidth(
+            // Budgeted the way the cell is actually built: the name starts
+            // past the Amount column and the icon gutter.
+            int nameRunBudget = SnapshotItemGridLayout.CellTextMaxWidth(
                 columnWidth, SnapshotItemGridLayout.AmountColumnFloor);
 
             Assert.True(
@@ -88,55 +88,91 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void CellColumns_JustifyToTheCellRatherThanPullingIn()
+        public void TheNameIsTheOnlyPartOfTheCellThatFlexes()
         {
             // The plan view's rule on one grid cell: a wider cell must not
-            // strand the recovered space right of the amount.
+            // strand the recovered space, and everything left of the name is
+            // fixed for the run.
             const int band = 60;
-            int narrow = SnapshotItemGridLayout.CellNameMaxWidth(600, band);
-            int wide = SnapshotItemGridLayout.CellNameMaxWidth(800, band);
+            int narrow = SnapshotItemGridLayout.CellTextMaxWidth(600, band);
+            int wide = SnapshotItemGridLayout.CellTextMaxWidth(800, band);
 
             Assert.Equal(200, wide - narrow);
             Assert.Equal(
                 800 - SnapshotItemGridLayout.CellTextRightPad,
-                SnapshotItemGridLayout.CellAmountRightEdge(800));
-        }
-
-        // The Name column IS everything left of the Amount band, so its
-        // cell reaches the band rather than stopping between two words.
-        [Fact]
-        public void HeaderCellSplit_SitsInTheGapBetweenTheNameAndTheAmountBand()
-        {
-            const int columnWidth = 600;
-            const int band = 79;
-
-            int split = SnapshotItemGridLayout.CellHeaderSplitX(columnWidth, band);
-            int amountLeftEdge = SnapshotItemGridLayout.CellAmountRightEdge(columnWidth) - band;
-            int nameRightEdge = SnapshotItemGridLayout.CellNameMaxWidth(columnWidth, band)
-                + SnapshotItemGridLayout.CellTextX;
-
-            Assert.InRange(split, nameRightEdge, amountLeftEdge);
-
-            // Each pixel answers the header of the column it is in.
-            Assert.True(split > nameRightEdge - SnapshotItemGridLayout.CellAmountGap);
-            Assert.True(split < SnapshotItemGridLayout.CellAmountRightEdge(columnWidth));
+                SnapshotItemGridLayout.CellContentRightEdge(800));
         }
 
         [Fact]
-        public void HeaderCellSplit_TracksTheColumnWidthLikeTheAmountEdgeDoes()
+        public void TheAmountColumnLeadsTheCellAndTheIconFollowsIt()
         {
             const int band = 79;
 
+            // Amount, gap, icon gutter, then the text: the reading order the
+            // cell is built in.
             Assert.Equal(
-                200,
-                SnapshotItemGridLayout.CellHeaderSplitX(800, band)
-                    - SnapshotItemGridLayout.CellHeaderSplitX(600, band));
+                SnapshotItemGridLayout.CellAmountX + band + SnapshotItemGridLayout.CellAmountGap,
+                SnapshotItemGridLayout.CellIconX(band));
+            Assert.Equal(
+                SnapshotItemGridLayout.CellIconX(band) + SnapshotItemGridLayout.IconGutterWidth,
+                SnapshotItemGridLayout.CellTextX(band));
 
-            // The boundary is measured from the band, so it moves with it.
+            // A wider band pushes the name right by exactly its own growth.
             Assert.Equal(
                 20,
-                SnapshotItemGridLayout.CellHeaderSplitX(600, band)
-                    - SnapshotItemGridLayout.CellHeaderSplitX(600, band + 20));
+                SnapshotItemGridLayout.CellTextX(band + 20) - SnapshotItemGridLayout.CellTextX(band));
+        }
+
+        [Fact]
+        public void AnAmountCentresInItsBand()
+        {
+            const int band = 80;
+
+            Assert.Equal(
+                SnapshotItemGridLayout.CellAmountX + 30,
+                SnapshotItemGridLayout.CellAmountTextX(band, 20));
+
+            // The widest amount in the run fills the band exactly.
+            Assert.Equal(
+                SnapshotItemGridLayout.CellAmountX,
+                SnapshotItemGridLayout.CellAmountTextX(band, band));
+
+            // Nothing is ever placed left of the band, whatever it measures.
+            Assert.Equal(
+                SnapshotItemGridLayout.CellAmountX,
+                SnapshotItemGridLayout.CellAmountTextX(band, band + 40));
+            Assert.Equal(
+                SnapshotItemGridLayout.CellAmountX,
+                SnapshotItemGridLayout.CellAmountTextX(0, 0));
+        }
+
+        // The Amount column IS everything left of the icon gutter, so its
+        // cell reaches the gutter rather than stopping between two words.
+        [Fact]
+        public void HeaderCellSplit_SitsInTheGapBetweenTheAmountBandAndTheIcon()
+        {
+            const int band = 79;
+
+            int split = SnapshotItemGridLayout.CellHeaderSplitX(band);
+            int amountRightEdge = SnapshotItemGridLayout.CellAmountX + band;
+
+            Assert.InRange(split, amountRightEdge, SnapshotItemGridLayout.CellIconX(band));
+
+            // Each pixel answers the header of the column it is in.
+            Assert.True(split > SnapshotItemGridLayout.CellAmountX);
+        }
+
+        [Fact]
+        public void HeaderCellSplit_MovesWithTheBandAndNotWithTheColumn()
+        {
+            const int band = 79;
+
+            // Everything left of the split is fixed-width, so a wider window
+            // spends every recovered pixel on the name.
+            Assert.Equal(
+                20,
+                SnapshotItemGridLayout.CellHeaderSplitX(band + 20)
+                    - SnapshotItemGridLayout.CellHeaderSplitX(band));
         }
 
         [Fact]

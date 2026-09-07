@@ -20,19 +20,19 @@ namespace TaimisToolbench.Services
     /// </summary>
     internal static class SnapshotItemGridLayout
     {
-        /// <summary>Left edge of a cell's tier-1 bag-slot icon frame, and
-        /// so of the cell's content - the rule its header word takes
-        /// (<see cref="ColumnHeaderLabelMath"/>).</summary>
-        public const int CellIconX = 2;
+        /// <summary>Left edge of a cell's content, which is the Amount
+        /// column: the amount reads before the name, so a long name pushes
+        /// nothing away from where a short one puts it.</summary>
+        public const int CellAmountX = 2;
 
         /// <summary>
-        /// Left edge of a cell's text column: the icon frame (art + 1px
-        /// border each side) plus its right gap. It lives here, derived
-        /// from <see cref="ItemIconTiers.BagSlotIconSize"/>, so
+        /// Width of a cell's icon gutter: the frame (art + 1px border each
+        /// side) plus its right gap. It lives here, derived from
+        /// <see cref="ItemIconTiers.BagSlotIconSize"/>, so
         /// <see cref="SnapshotMinColumnWidth"/> is derived from the geometry
         /// the cells are actually built with and cannot drift from it.
         /// </summary>
-        public const int CellTextX = CellIconX + ItemIconTiers.BagSlotIconSize + 2 + 6;
+        public const int IconGutterWidth = ItemIconTiers.BagSlotIconSize + 2 + 6;
 
         /// <summary>Gap kept clear of a cell's right edge.</summary>
         public const int CellTextRightPad = 8;
@@ -56,7 +56,7 @@ namespace TaimisToolbench.Services
         /// <summary>
         /// The run the narrowest column is sized to hold without
         /// ellipsizing: an item's NAME, 45 characters. Was 52, until the
-        /// count prefix became its own right-pinned column budgeted by
+        /// count prefix became a column of its own budgeted by
         /// <see cref="AmountColumnFloor"/>.
         /// <para>
         /// The BREAKDOWN line below it is deliberately NOT part of this
@@ -70,14 +70,29 @@ namespace TaimisToolbench.Services
         /// </summary>
         public const int SnapshotNameRunChars = 45;
 
-        /// <summary>Gap before the Amount column pinned to a cell's right -
+        /// <summary>Gap between the Amount column and the icon after it -
         /// the same 12px the plan's name columns keep.</summary>
         public const int CellAmountGap = 12;
+
+        /// <summary>Left edge of a cell's tier-1 bag-slot icon frame, and so
+        /// of the name column - the rule that column's header word takes
+        /// (<see cref="ColumnHeaderLabelMath"/>).</summary>
+        public static int CellIconX(int amountBandWidth)
+        {
+            return CellAmountX + (amountBandWidth > 0 ? amountBandWidth : 0) + CellAmountGap;
+        }
+
+        /// <summary>Left edge of a cell's text, past the icon gutter. Both
+        /// of a cell's lines start here.</summary>
+        public static int CellTextX(int amountBandWidth)
+        {
+            return CellIconX(amountBandWidth) + IconGutterWidth;
+        }
 
         /// <summary>
         /// Width the Amount column is assumed to want in the minimum-column
         /// derivation. MEASURED: "Amount" is 79px at 20-bold, and a run with
-        /// wider digits ellipsizes a little earlier.
+        /// wider digits indents the name a little further.
         /// <para>
         /// Plus the persistent sort indicator this header now carries at all
         /// times: <see cref="SortIndicatorLayout.Gap"/> and a slot sized for
@@ -92,20 +107,21 @@ namespace TaimisToolbench.Services
         /// Narrowest column a cell fits in. Below twice this the grid falls
         /// back to a single column rather than clipping the name line.
         /// <para>
-        /// 586px - the cell's whole width, term by term: the icon column,
-        /// a 45-character name, the gap before the Amount column, that
-        /// column's own floor, and the cell's right pad. Two columns fit
+        /// 586px - the cell's whole width, term by term: the Amount
+        /// column's own floor, the gap after it, the icon gutter, a
+        /// 45-character name, and the cell's right pad. Two columns fit
         /// inside the 1252px grid the 1378px window minimum leaves (626px
         /// each) and a third only once the window reaches 1884px.
         /// </para>
         /// </summary>
         public const int SnapshotMinColumnWidth =
-            CellTextX + (SnapshotNameRunChars * MaxCharWidthPx) + CellAmountGap + AmountColumnFloor + CellTextRightPad;
+            CellAmountX + AmountColumnFloor + CellAmountGap + IconGutterWidth
+                + (SnapshotNameRunChars * MaxCharWidthPx) + CellTextRightPad;
 
-        /// <summary>Right edge every cell's Amount column is pinned to. A
-        /// cell justifies like a plan table row: this edge is a function of
-        /// the cell width alone, and the name is what flexes.</summary>
-        public static int CellAmountRightEdge(int columnWidth)
+        /// <summary>Right edge every cell's text stops at. A cell justifies
+        /// like a plan table row: this edge is a function of the cell width
+        /// alone, and the name is what flexes.</summary>
+        public static int CellContentRightEdge(int columnWidth)
         {
             return columnWidth - CellTextRightPad;
         }
@@ -119,29 +135,34 @@ namespace TaimisToolbench.Services
             return band > 0 ? band : 0;
         }
 
-        /// <summary>Where a cell's Name header cell ends and its Amount one
-        /// begins. The name column IS everything left of the band, so a
-        /// boundary between the two header WORDS would hand it away.</summary>
-        public static int CellHeaderSplitX(int columnWidth, int amountBandWidth)
+        /// <summary>
+        /// Where one piece of text sits inside the Amount column: centred in
+        /// the band, so the amounts read as one column whatever their
+        /// digits measure. Never left of the band.
+        /// </summary>
+        public static int CellAmountTextX(int amountBandWidth, int textWidth)
         {
-            return PlanRelayoutMath.HeaderSplitBeforeColumn(
-                CellAmountRightEdge(columnWidth), amountBandWidth, CellAmountGap);
+            int slack = amountBandWidth - textWidth;
+            return slack > 0 ? CellAmountX + (slack / 2) : CellAmountX;
         }
 
-        /// <summary>Width a cell's name line may occupy before the Amount
-        /// column - the plan tables' rule, applied to one cell.</summary>
-        public static int CellNameMaxWidth(int columnWidth, int amountBandWidth)
+        /// <summary>
+        /// Where a cell's Amount header cell ends and its Name one begins.
+        /// Everything left of it is fixed-width, so unlike the name column
+        /// this boundary does not move with the cell.
+        /// </summary>
+        public static int CellHeaderSplitX(int amountBandWidth)
         {
-            return PlanRelayoutMath.NameMaxWidthBeforeColumn(
-                CellAmountRightEdge(columnWidth), amountBandWidth, CellAmountGap, CellTextX);
+            return CellIconX(amountBandWidth) - (CellAmountGap / 2);
         }
 
-        /// <summary>Width the cell's second line may occupy. It runs UNDER
-        /// the Amount column: that is one short line at the top of the
-        /// cell, and this is the row's unbounded text.</summary>
-        public static int CellFullLineMaxWidth(int columnWidth)
+        /// <summary>Width either of a cell's text lines may occupy: what is
+        /// left of the cell once the Amount column and the icon gutter have
+        /// taken theirs. Clamped to 20px so a very narrow column never
+        /// yields a zero ellipsis width.</summary>
+        public static int CellTextMaxWidth(int columnWidth, int amountBandWidth)
         {
-            int width = CellAmountRightEdge(columnWidth) - CellTextX;
+            int width = CellContentRightEdge(columnWidth) - CellTextX(amountBandWidth);
             return width > 20 ? width : 20;
         }
 

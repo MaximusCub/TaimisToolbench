@@ -87,12 +87,12 @@ namespace TaimisToolbench.Tests.Services
         {
             Assert.Equal(RankerRowLayout.IconSize, ItemIconTiers.ArtSize(ItemIconTier.BagSlot));
 
-            // The Snapshot grid's text column starts 2px in, past the art,
-            // then 2px of frame and 6px of gap - the icon is the term that
-            // has to track the tier.
+            // The Snapshot grid's text starts past the art, then 2px of
+            // frame and 6px of gap - the icon is the term that has to track
+            // the tier.
             Assert.Equal(
-                SnapshotItemGridLayout.CellTextX,
-                2 + ItemIconTiers.ArtSize(ItemIconTier.BagSlot) + 2 + 6);
+                SnapshotItemGridLayout.IconGutterWidth,
+                ItemIconTiers.ArtSize(ItemIconTier.BagSlot) + 2 + 6);
         }
 
         [Fact]
