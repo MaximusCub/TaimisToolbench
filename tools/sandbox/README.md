@@ -94,9 +94,25 @@ on screen the first time, and after any Blish HUD upgrade.
 `SearchBoxWidth` in `Views/MainView.cs` is 300, and the Snapshot tab draws
 its search box at exactly that. Open the module window in the sandbox,
 capture it, and measure that box. At `SyncWithGame` with no game it is 243
-pixels wide. At `Large` it is 300. Measure a code constant like this one,
-never the corner icon: Blish anchors the corner icon strip in game pixels,
-so it sits at the same physical offset at every UI scale.
+pixels wide. At `Large` it is 300.
+
+Measure a code constant like this one. Do not use the module's corner icon,
+and do not carry an offset measured for it at one scale over to another. An
+earlier version of this section said Blish anchors the corner icon strip in
+game pixels, so it sits at the same physical offset at every UI scale. That
+is wrong. The strip moves and grows with the interface scale.
+
+Measured in the sandbox, with the Blish HUD window at the same position at
+both scales:
+
+| UI scale | icon left | icon right | offset from the window rectangle |
+| --- | --- | --- | --- |
+| `SyncWithGame`, 0.810 | 330 | 346 | +336, +21 |
+| `Large`, 1.0 | 400 | 424 | +404, +17 |
+
+The +336, +21 offset lands outside the icon at `Large`. Anything that has to
+click or crop the corner icon must locate it at the scale the sandbox is
+running, not reuse a recorded number.
 
 ## Wiring it into the launcher
 
