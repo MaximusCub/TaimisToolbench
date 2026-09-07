@@ -70,6 +70,26 @@ namespace TaimisToolbench.Services
         public static void AppendBonuses(
             TooltipContentBuilder builder, IReadOnlyList<string> bonuses, TooltipSpanRole baseRole)
         {
+            AppendBonuses(builder, bonuses, baseRole, baseRole, int.MaxValue);
+        }
+
+        /// <summary>
+        /// The same ladder with the tiers the wearer has reached in
+        /// <paramref name="activeRole"/> and the rest in
+        /// <paramref name="inactiveRole"/>. Tiers are cumulative, so
+        /// <paramref name="activeTiers"/> lights entries 1 through N: the
+        /// wiki's Rune article states the rule the colours follow, "Active
+        /// bonuses are shown in blue on the tooltip, or in gray if the
+        /// bonus is not active for lack of a sufficient number of this
+        /// rune."
+        /// </summary>
+        public static void AppendBonuses(
+            TooltipContentBuilder builder,
+            IReadOnlyList<string> bonuses,
+            TooltipSpanRole activeRole,
+            TooltipSpanRole inactiveRole,
+            int activeTiers)
+        {
             if (builder == null)
             {
                 return;
@@ -78,6 +98,7 @@ namespace TaimisToolbench.Services
             var list = bonuses ?? NoBonuses;
             for (int i = 0; i < list.Count; i++)
             {
+                var baseRole = i < activeTiers ? activeRole : inactiveRole;
                 builder.Styled($"({i + 1}): ", baseRole);
                 var spans = ItemDescriptionSanitizer.SanitizeToSpans(list[i]);
                 foreach (var span in spans)
@@ -91,6 +112,28 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// The rune's name with the counter the game prints after it, as in
+        /// "Superior Rune of Fireworks (6/6)".
+        /// <para>
+        /// The denominator is the ladder height /v2/items reports in
+        /// details.bonuses: six on a Superior rune (24836), four on a Major
+        /// one (24838). The numerator is NOT capped to it. The wiki's Rune
+        /// article says the tooltip shows the total number of identical
+        /// runes, and turns that number red past two minor or four major
+        /// ones; the module has no measurement of that red, so an
+        /// over-count prints in the same blue as the name.
+        /// </para>
+        /// </summary>
+        private static string NameWithSetCounter(
+            string name, IReadOnlyList<string> bonuses, int wornCopies)
+        {
+            int ladderHeight = bonuses == null ? 0 : bonuses.Count;
+            return wornCopies > 0 && ladderHeight > 0
+                ? $"{name} ({wornCopies}/{ladderHeight})"
+                : name;
+        }
+
+        /// <summary>
         /// One socketed component's block, the way the game draws it: the
         /// component's icon and name on the first line, then its effect
         /// text or its bonus ladder flush left under it.
@@ -101,33 +144,39 @@ namespace TaimisToolbench.Services
         /// (85,153,255), the same blue as the effect text beside them.
         /// </para>
         /// <para>
-        /// The bonus ladder is INACTIVE. A tier is active only when that
-        /// many pieces of the set are equipped (wiki, Rune: "Active
-        /// bonuses are shown in blue on the tooltip, or in gray if the
-        /// bonus is not active for lack of a sufficient number of this
-        /// rune"), and the snapshot reads bank, shared inventory and
-        /// character bags only, never /v2/characters/:id/equipment, so
-        /// every item here is unequipped. See KNOWN-ISSUES #42.
+        /// <paramref name="wornCopies"/> is how many pieces carrying this
+        /// component the host's wearer has equipped, and is 0 unless the
+        /// host sits in exactly one place and that place is one character's
+        /// worn gear - see <see cref="EquippedRuneSetIndex"/>. At 0 the
+        /// name takes no counter and the whole ladder stays inactive, which
+        /// is what the module drew before any equipment was read.
         /// </para>
         /// </summary>
-        public static void AppendSocketedBlock(TooltipContentBuilder builder, ItemStatBlock upgrade)
+        public static void AppendSocketedBlock(
+            TooltipContentBuilder builder, ItemStatBlock upgrade, int wornCopies = 0)
         {
             if (builder == null || upgrade == null || string.IsNullOrEmpty(upgrade.Name))
             {
                 return;
             }
 
+            string name = NameWithSetCounter(upgrade.Name, upgrade.UpgradeBonuses, wornCopies);
             if (string.IsNullOrEmpty(upgrade.IconUrl))
             {
-                builder.Styled(upgrade.Name, TooltipSpanRole.Bonus).EndLine();
+                builder.Styled(name, TooltipSpanRole.Bonus).EndLine();
             }
             else
             {
-                builder.EffectBlock(upgrade.IconUrl, upgrade.Name, TooltipSpanRole.Bonus);
+                builder.EffectBlock(upgrade.IconUrl, name, TooltipSpanRole.Bonus);
             }
 
             AppendBuff(builder, upgrade.BuffDescription, TooltipSpanRole.Bonus);
-            AppendBonuses(builder, upgrade.UpgradeBonuses, TooltipSpanRole.BonusInactive);
+            AppendBonuses(
+                builder,
+                upgrade.UpgradeBonuses,
+                TooltipSpanRole.Bonus,
+                TooltipSpanRole.BonusInactive,
+                wornCopies);
         }
     }
 }

@@ -17,14 +17,24 @@ namespace TaimisToolbench.Services
     internal sealed class SocketedUpgradeView
     {
         private static readonly IReadOnlyList<ItemStatBlock> NoBlocks = new List<ItemStatBlock>();
+        private static readonly Dictionary<int, int> NoCounts = new Dictionary<int, int>();
 
-        public static readonly SocketedUpgradeView None = new SocketedUpgradeView(NoBlocks, NoBlocks);
+        public static readonly SocketedUpgradeView None =
+            new SocketedUpgradeView(NoBlocks, NoBlocks, NoCounts);
+
+        // Upgrade item id -> pieces of it the host's wearer has equipped,
+        // for a host that sits in exactly one place and that place is one
+        // character's worn gear. Empty for every other host.
+        private readonly IReadOnlyDictionary<int, int> _wornCopies;
 
         private SocketedUpgradeView(
-            IReadOnlyList<ItemStatBlock> infusions, IReadOnlyList<ItemStatBlock> upgrades)
+            IReadOnlyList<ItemStatBlock> infusions,
+            IReadOnlyList<ItemStatBlock> upgrades,
+            IReadOnlyDictionary<int, int> wornCopies)
         {
             Infusions = infusions ?? NoBlocks;
             Upgrades = upgrades ?? NoBlocks;
+            _wornCopies = wornCopies ?? NoCounts;
         }
 
         public IReadOnlyList<ItemStatBlock> Infusions { get; }
@@ -36,6 +46,21 @@ namespace TaimisToolbench.Services
         public static SocketedUpgradeView Resolve(
             SocketedUpgradeIds ids, Func<int, ItemStatBlock> getStatBlock)
         {
+            return Resolve(ids, getStatBlock, null);
+        }
+
+        /// <summary>
+        /// The same resolution, plus how many pieces carrying each socketed
+        /// component the host's wearer has equipped.
+        /// <paramref name="wornCopies"/> answers 0 when the host is not
+        /// uniquely worn by one character, which is the only state a rune
+        /// set counter can be read from - see
+        /// <see cref="EquippedRuneSetIndex"/>. Pass null when the caller
+        /// holds no snapshot to count against.
+        /// </summary>
+        public static SocketedUpgradeView Resolve(
+            SocketedUpgradeIds ids, Func<int, ItemStatBlock> getStatBlock, Func<int, int> wornCopies)
+        {
             if (ids == null || ids.IsEmpty || getStatBlock == null)
             {
                 return None;
@@ -43,9 +68,45 @@ namespace TaimisToolbench.Services
 
             var infusions = Lookup(ids.Infusions, getStatBlock);
             var upgrades = Lookup(ids.Upgrades, getStatBlock);
-            return infusions.Count == 0 && upgrades.Count == 0
-                ? None
-                : new SocketedUpgradeView(infusions, upgrades);
+            if (infusions.Count == 0 && upgrades.Count == 0)
+            {
+                return None;
+            }
+
+            return new SocketedUpgradeView(infusions, upgrades, CountWorn(upgrades, wornCopies));
+        }
+
+        /// <summary>
+        /// How many pieces of <paramref name="upgradeItemId"/> the host's
+        /// wearer has equipped, or 0 when that is not knowable.
+        /// </summary>
+        public int WornCopies(int upgradeItemId)
+        {
+            return _wornCopies.TryGetValue(upgradeItemId, out int worn) ? worn : 0;
+        }
+
+        private static IReadOnlyDictionary<int, int> CountWorn(
+            IReadOnlyList<ItemStatBlock> upgrades, Func<int, int> wornCopies)
+        {
+            if (wornCopies == null || upgrades.Count == 0)
+            {
+                return NoCounts;
+            }
+
+            var counts = new Dictionary<int, int>(upgrades.Count);
+            foreach (var upgrade in upgrades)
+            {
+                if (upgrade.ItemId > 0 && !counts.ContainsKey(upgrade.ItemId))
+                {
+                    int worn = wornCopies(upgrade.ItemId);
+                    if (worn > 0)
+                    {
+                        counts[upgrade.ItemId] = worn;
+                    }
+                }
+            }
+
+            return counts.Count == 0 ? NoCounts : counts;
         }
 
         private static List<ItemStatBlock> Lookup(
