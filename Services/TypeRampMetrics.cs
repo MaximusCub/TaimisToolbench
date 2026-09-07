@@ -111,6 +111,14 @@ namespace TaimisToolbench.Services
         public const int SmallHeadingPointSize = 20;
 
         /// <summary>
+        /// The Snapshot tab's Amount column. Two points above the body rows
+        /// beside it, which at this size means the BOLD face: 18-regular is
+        /// the collapsed-space defect named above, so the ramp has no
+        /// regular step between 16 and 20.
+        /// </summary>
+        public const int AmountColumnPointSize = 18;
+
+        /// <summary>
         /// Whether the installed Menomonia REGULAR face at this size can
         /// be drawn with at all. The two exclusions are the measured
         /// defects in this class's own doc comment, named ONCE here:
@@ -128,6 +136,9 @@ namespace TaimisToolbench.Services
         public static FontInk SectionTitleInk => Bold24;
 
         public static FontInk StatusInk => Bold18;
+
+        /// <summary>The Snapshot tab's Amount column.</summary>
+        public static FontInk AmountColumnInk => Bold18;
 
         /// <summary>Body rows, everywhere. Not part of the ramp change.</summary>
         public static FontInk BodyInk => Regular16;
@@ -163,6 +174,22 @@ namespace TaimisToolbench.Services
         public static int BaselineAlignedY(FontInk font, int baseline)
         {
             return baseline - font.BaselineY;
+        }
+
+        /// <summary>
+        /// The y a line has to be drawn at for its CAPITAL ink to sit
+        /// centred in a box that starts at <paramref name="boxTop"/> and is
+        /// <paramref name="boxHeight"/> tall - how a number is centred
+        /// against the icon beside it.
+        /// <para>
+        /// Cap ink, not the line box. A line box carries leading above the
+        /// caps and descender room below, and the two are not equal, so
+        /// centring the box leaves the digits sitting high.
+        /// </para>
+        /// </summary>
+        public static int CapCentredY(FontInk font, int boxTop, int boxHeight)
+        {
+            return boxTop + ((boxHeight - font.CapHeight) / 2) - font.CapTopY;
         }
     }
 }
