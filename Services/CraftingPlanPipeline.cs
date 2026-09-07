@@ -105,7 +105,11 @@ namespace TaimisToolbench.Services
             // Threaded separately from `snapshot`: the useOwn:false path
             // passes snapshot: null, which must not also blank the Required
             // Disciplines tiebreak (see AccountSnapshot.CharacterDisciplines).
-            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null)
+            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null,
+            // Ids already fetched by a caller generating several plans in a
+            // row; see GetLearnedRecipeIdsAsync. Null means this generation
+            // fetches its own.
+            ISet<int> learnedRecipeIds = null)
         {
             var valuation = currencyValuation ?? CurrencyValuation.None;
             var tiers = homesteadTiers ?? HomesteadEfficiencyTiers.Default;
@@ -144,7 +148,7 @@ namespace TaimisToolbench.Services
             return await RunPipelineAsync(
                 tree, targetItemId, quantity, items: null, snapshot, ct, progress,
                 activeCharacterName, priceBasis, valuation, ownMaterialsMode, tiers,
-                characterDisciplines, sw, timingLog, phaseTracker);
+                characterDisciplines, learnedRecipeIds, sw, timingLog, phaseTracker);
         }
 
         /// <summary>
@@ -170,6 +174,7 @@ namespace TaimisToolbench.Services
             OwnMaterialsMode ownMaterialsMode,
             HomesteadEfficiencyTiers tiers,
             IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines,
+            ISet<int> suppliedLearnedRecipeIds,
             Stopwatch sw,
             List<string> timingLog,
             PhaseTracker phaseTracker)
@@ -374,8 +379,8 @@ namespace TaimisToolbench.Services
                 await AwaitCurrencyMetadataOrNullAsync(currencyTask, progress, sw, timingLog, ct);
 
             // Fetch learned recipe IDs (if permission available)
-            ISet<int> learnedRecipeIds =
-                await FetchLearnedRecipeIdsAsync(progress, sw, timingLog, phaseTracker, ct);
+            ISet<int> learnedRecipeIds = await FetchLearnedRecipeIdsAsync(
+                progress, sw, timingLog, phaseTracker, suppliedLearnedRecipeIds, ct);
 
             // Build structured result
             phaseTracker.Start(PlanPhase.BuildingDisplay, "Building display", null);
@@ -611,7 +616,7 @@ namespace TaimisToolbench.Services
             return await RunPipelineAsync(
                 tree, Gw2Constants.MultiItemWrapperItemId, quantity: 1, items, snapshot, ct,
                 progress, activeCharacterName, priceBasis, valuation, ownMaterialsMode, tiers,
-                characterDisciplines, sw, timingLog, phaseTracker);
+                characterDisciplines, suppliedLearnedRecipeIds: null, sw, timingLog, phaseTracker);
         }
 
         /// <summary>
@@ -1048,38 +1053,53 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// Fetches learned recipe ids if the account client is wired up and
-        /// permitted. KNOWN-ISSUES #31/api-degradation F4: any non-cancellation
-        /// failure degrades to null, a state PlanResultBuilder already treats
-        /// as supported rather than discarding an otherwise-priced plan.
+        /// Fetches the account's learned recipe ids once, for a caller that
+        /// is about to generate several plans in a row. Hand the result to
+        /// GenerateStructuredAsync's learnedRecipeIds parameter and those
+        /// generations skip the call. Returns null when no client is wired
+        /// up, when the account lacks the Unlocks permission, and on any
+        /// non-cancellation failure. KNOWN-ISSUES #31/api-degradation F4:
+        /// null is the "unknown" state PlanResultBuilder already supports,
+        /// rather than a reason to discard an otherwise-priced plan.
+        /// </summary>
+        public async Task<ISet<int>> GetLearnedRecipeIdsAsync(CancellationToken ct)
+        {
+            if (_accountRecipeClient == null || !_accountRecipeClient.HasRequiredPermission())
+            {
+                return null;
+            }
+
+            try
+            {
+                return await _accountRecipeClient.GetLearnedRecipeIdsAsync(ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Reports the learned-recipe phase and answers it. A caller that
+        /// already fetched the ids passes them in <paramref name="supplied"/>
+        /// and no call is made, so the timing line reads about 0ms.
         /// </summary>
         private async Task<ISet<int>> FetchLearnedRecipeIdsAsync(
             IProgress<PlanStatus> progress,
             Stopwatch sw,
             List<string> timingLog,
             PhaseTracker phaseTracker,
+            ISet<int> supplied,
             CancellationToken ct)
         {
             phaseTracker.Start(PlanPhase.CheckingLearnedRecipes, "Checking learned recipes", null);
             progress?.Report(new PlanStatus { Message = "Checking learned recipes..." });
             sw.Restart();
-            ISet<int> learnedRecipeIds = null;
-            if (_accountRecipeClient != null && _accountRecipeClient.HasRequiredPermission())
-            {
-                try
-                {
-                    learnedRecipeIds = await _accountRecipeClient.GetLearnedRecipeIdsAsync(ct);
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception)
-                {
-                    learnedRecipeIds = null;
-                }
-            }
-
+            ISet<int> learnedRecipeIds = supplied ?? await GetLearnedRecipeIdsAsync(ct);
             sw.Stop();
             timingLog.Add($"Fetch learned recipes: {sw.ElapsedMilliseconds}ms");
             return learnedRecipeIds;
