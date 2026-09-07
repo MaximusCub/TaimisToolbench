@@ -2688,6 +2688,11 @@ namespace TaimisToolbench.Views
                     ? cascade.CurrentAvailability
                     : null;
 
+                // One fetch for the whole run, not one per generation. A run
+                // solves two plans per row, and the account cannot learn a
+                // recipe between them without the player leaving this tab.
+                var learnedRecipeIds = await _pipeline.GetLearnedRecipeIdsAsync(ct).ConfigureAwait(false);
+
                 int total = work.Count(w => w.Solve);
                 int position = 0;
 
@@ -2726,7 +2731,8 @@ namespace TaimisToolbench.Views
                         ownMaterialsMode: OwnMaterialsMode.Free,
                         homesteadTiers: homesteadTiers,
                         phaseProgress: null,
-                        characterDisciplines: snapshot?.CharacterDisciplines).ConfigureAwait(false);
+                        characterDisciplines: snapshot?.CharacterDisciplines,
+                        learnedRecipeIds: learnedRecipeIds).ConfigureAwait(false);
 
                     if (myGen != _refreshGeneration)
                     {
@@ -2743,7 +2749,8 @@ namespace TaimisToolbench.Views
                         ownMaterialsMode: OwnMaterialsMode.Free,
                         homesteadTiers: homesteadTiers,
                         phaseProgress: null,
-                        characterDisciplines: snapshot?.CharacterDisciplines).ConfigureAwait(false);
+                        characterDisciplines: snapshot?.CharacterDisciplines,
+                        learnedRecipeIds: learnedRecipeIds).ConfigureAwait(false);
 
                     if (myGen != _refreshGeneration)
                     {

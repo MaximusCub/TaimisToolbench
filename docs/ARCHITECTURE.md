@@ -3366,20 +3366,32 @@ add amounts across currencies. The numeric key is `UnitRate` rather than
 `Amount` 0 and shows its rate as bundle text ("912 for 92"), so keying on
 `Amount` would sort every such row as free and tie them all with each other.
 
-### S1.9 Session caches and timing diagnostics
+### S1.9 Learned recipe freshness and timing diagnostics
 
-`Services/CachingAccountRecipeClient.cs` is a decorator rather than a field
-inside `Gw2AccountRecipeClient` because that class holds a Blish
-`Gw2ApiManager`, and tests in this repo are Blish-free, so caching logic
-living there could never be exercised by a test. Its staleness has two
-downstream consumers, both annotations rather than solver inputs: the
-"already known" flag on required recipes
-(`PlanResultBuilder`'s `RecipeRequirement.IsMissing`), and the gate on
-`RecipeSheetSavingsCalculator`, which emits a note advising the purchase of
-a recipe sheet the account does not own, carrying a `SavingsPerUnit` coin
-figure. So a recipe learned in-game inside the TTL window not only still
-reads as missing - the plan may keep recommending, priced, the sheet that
-taught it until the window passes.
+Every plan generation fetches the account's learned recipe ids from
+`/v2/account/recipes`. There is no cache in front of that call. A five
+minute cache used to sit there and was removed in September 2026, because
+Blish HUD is an overlay on the running game: a player can buy a recipe
+sheet, learn the recipe and generate a plan again well inside five minutes.
+The learned ids drive two annotations, both of which then told the player
+to buy a sheet they already owned: the "already known" flag on required
+recipes (`PlanResultBuilder`'s `RecipeRequirement.IsMissing`), and the gate
+on `RecipeSheetSavingsCalculator`, which emits a note advising the purchase
+of a recipe sheet the account does not own, carrying a `SavingsPerUnit`
+coin figure. Neither is a solver input, so the stale answer never produced
+a wrong plan, only a wrong recommendation. The cost of the removal is one
+extra fetch per generation, measured at 1129ms and 1453ms in a tester's log
+on the day it was removed.
+
+A caller generating several plans in a row fetches once instead. The
+Crafting Ranker does: `Views/RankerTabContent.cs` calls
+`CraftingPlanPipeline.GetLearnedRecipeIdsAsync` once per refresh and passes
+the ids to the `learnedRecipeIds` parameter of every generation, which
+solves two plans for each watchlist row. Those generations make no call, so
+their `Fetch learned recipes` timing line reads about 0ms. A refresh is one
+user action, and the account cannot learn a recipe part way through it
+without the player leaving the tab. This is a per-run argument, not a clock:
+the next refresh fetches again.
 
 `Services/Diagnostics/PlanPhaseTimingSummary.cs` buckets the raw per-step
 `timingLog` lines `PlanTimingAnalyzer` already parses (Build recipe

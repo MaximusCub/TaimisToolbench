@@ -185,13 +185,60 @@ namespace TaimisToolbench.Tests.Services
             Assert.Null(recipeB.IsMissing);
         }
 
-        // The pipeline holds no learned-recipe state between generations:
-        // every GenerateStructuredAsync asks its IAccountRecipeClient
-        // again. Any caching therefore has to live in the client, and this
-        // count stays one-per-generation whatever that client does with
-        // the request.
+        // A player can buy and use a recipe sheet, then generate again,
+        // without leaving the game. The second plan must report the recipe
+        // as known. Nothing between the pipeline and /v2/account/recipes
+        // may hold an older answer, so the client is asked once per
+        // generation and its newest answer is the one that is annotated.
         [Fact]
-        public async Task GenerateStructuredAsync_TwoGenerations_AsksTheAccountClientEachTime()
+        public async Task GenerateStructuredAsync_RecipeLearnedBetweenGenerations_SecondPlanSeesIt()
+        {
+            var accountClient = new InMemoryAccountRecipeClient();
+
+            var pipeline = PipelineBuilder.Create()
+                .WithSearchResult(1, 10)
+                .WithRecipe(new RawRecipe
+                {
+                    Id = 10,
+                    OutputItemId = 1,
+                    OutputItemCount = 1,
+                    Ingredients = new List<RawIngredient>
+                    {
+                        new RawIngredient { Type = "Item", Id = 2, Count = 1 },
+                    },
+                })
+                .WithPrice(1, buyUnitPrice: 50, sellUnitPrice: 1000)
+                .WithPrice(2, buyUnitPrice: 10, sellUnitPrice: 100)
+                .WithItem(1, "Target Item", "target.png")
+                .WithItem(2, "Ingredient", "ingredient.png")
+                .WithAccountRecipeClient(accountClient)
+                .Build();
+
+            var first = await pipeline.GenerateStructuredAsync(1, 1, null, CancellationToken.None,
+                priceBasis: PriceBasis.InstantBuy);
+
+            accountClient.AddLearnedRecipe(10);
+
+            var second = await pipeline.GenerateStructuredAsync(1, 1, null, CancellationToken.None,
+                priceBasis: PriceBasis.InstantBuy);
+
+            Assert.Equal(2, accountClient.GetCallCount);
+
+            var firstRecipe = first.RequiredRecipes.FirstOrDefault(r => r.RecipeId == 10);
+            Assert.NotNull(firstRecipe);
+            Assert.True(firstRecipe.IsMissing);
+
+            var secondRecipe = second.RequiredRecipes.FirstOrDefault(r => r.RecipeId == 10);
+            Assert.NotNull(secondRecipe);
+            Assert.False(secondRecipe.IsMissing);
+        }
+
+        // A caller generating several plans in a row fetches the ids once
+        // and hands them to each generation. The Crafting Ranker does this:
+        // it solves two plans per watchlist row, and one fetch answers the
+        // whole refresh.
+        [Fact]
+        public async Task GenerateStructuredAsync_SuppliedLearnedRecipeIds_AsksTheAccountClientOnce()
         {
             var accountClient = new InMemoryAccountRecipeClient();
             accountClient.AddLearnedRecipe(10);
@@ -215,17 +262,55 @@ namespace TaimisToolbench.Tests.Services
                 .WithAccountRecipeClient(accountClient)
                 .Build();
 
-            await pipeline.GenerateStructuredAsync(1, 1, null, CancellationToken.None,
-                priceBasis: PriceBasis.InstantBuy);
+            var learned = await pipeline.GetLearnedRecipeIdsAsync(CancellationToken.None);
+            Assert.Equal(1, accountClient.GetCallCount);
+
+            var first = await pipeline.GenerateStructuredAsync(1, 1, null, CancellationToken.None,
+                priceBasis: PriceBasis.InstantBuy, learnedRecipeIds: learned);
             var second = await pipeline.GenerateStructuredAsync(1, 1, null, CancellationToken.None,
-                priceBasis: PriceBasis.InstantBuy);
+                priceBasis: PriceBasis.InstantBuy, learnedRecipeIds: learned);
 
-            Assert.Equal(2, accountClient.GetCallCount);
+            Assert.Equal(1, accountClient.GetCallCount);
 
-            // And the ids still reach the annotation on both runs.
-            var recipe = second.RequiredRecipes.FirstOrDefault(r => r.RecipeId == 10);
-            Assert.NotNull(recipe);
-            Assert.False(recipe.IsMissing);
+            // The supplied ids still drive the annotation on both plans.
+            Assert.False(first.RequiredRecipes.FirstOrDefault(r => r.RecipeId == 10)?.IsMissing);
+            Assert.False(second.RequiredRecipes.FirstOrDefault(r => r.RecipeId == 10)?.IsMissing);
+        }
+
+        // The batch fetch degrades the way the per-generation one does, so a
+        // Ranker refresh survives a failing /v2/account/recipes with every
+        // recipe state unknown instead of no plans at all.
+        [Fact]
+        public async Task GetLearnedRecipeIdsAsync_ClientFails_ReturnsNull()
+        {
+            var accountClient = new InMemoryAccountRecipeClient { ThrowOnGet = true };
+
+            var pipeline = PipelineBuilder.Create()
+                .WithAccountRecipeClient(accountClient)
+                .Build();
+
+            var learned = await pipeline.GetLearnedRecipeIdsAsync(CancellationToken.None);
+
+            Assert.Null(learned);
+            Assert.Equal(1, accountClient.GetCallCount);
+        }
+
+        // No permission means no request at all, and the plan reports every
+        // recipe state as unknown.
+        [Fact]
+        public async Task GetLearnedRecipeIdsAsync_NoPermission_MakesNoRequest()
+        {
+            var accountClient = new InMemoryAccountRecipeClient();
+            accountClient.SetHasPermission(false);
+
+            var pipeline = PipelineBuilder.Create()
+                .WithAccountRecipeClient(accountClient)
+                .Build();
+
+            var learned = await pipeline.GetLearnedRecipeIdsAsync(CancellationToken.None);
+
+            Assert.Null(learned);
+            Assert.Equal(0, accountClient.GetCallCount);
         }
 
         [Fact]

@@ -202,11 +202,6 @@ namespace TaimisToolbench
         private HttpClient _httpClient;
         private CraftingPlanPipeline _craftingPipeline;
 
-        // Held apart from the pipeline that owns it purely so
-        // OnSubtokenUpdated can drop the cached ids: they belong to the
-        // account the old subtoken addressed.
-        private CachingAccountRecipeClient _accountRecipeClient;
-
         // Held apart from the pipeline that owns it so the Settings tab's
         // currency icons can read the same session-cached list the plan
         // rows do, instead of opening a second one - see
@@ -629,9 +624,6 @@ namespace TaimisToolbench
             // a hover reads. Never a fetch (GetCachedStatBlock).
             var itemMetadataService = new ItemMetadataService(itemApi, itemNameSeed);
 
-            _accountRecipeClient = new CachingAccountRecipeClient(
-                new Gw2AccountRecipeClient(Gw2ApiManager));
-
             _currencyMetadataService = new CurrencyMetadataService(_httpClient);
 
             _craftingPipeline = new CraftingPlanPipeline(
@@ -641,7 +633,7 @@ namespace TaimisToolbench
                 itemMetadataService,
                 _vendorOfferStore,
                 reducer: new InventoryReducer(),
-                accountRecipeClient: _accountRecipeClient,
+                accountRecipeClient: new Gw2AccountRecipeClient(Gw2ApiManager),
                 currencyMetadataService: _currencyMetadataService,
                 acquisitionHints: acquisitionHints,
                 dailyCooldownItems: dailyCooldownItems,
@@ -2000,10 +1992,6 @@ namespace TaimisToolbench
 
         private void OnSubtokenUpdated(object sender, ValueEventArgs<IEnumerable<Gw2Sharp.WebApi.V2.Models.TokenPermission>> e)
         {
-            // The key may now address a different account, which no TTL can
-            // detect - see CachingAccountRecipeClient.Invalidate.
-            _accountRecipeClient?.Invalidate();
-
             if (_snapshotService.HasRequiredPermissions())
             {
                 _ = RefreshSnapshotInBackgroundAsync();
