@@ -300,8 +300,10 @@ namespace TaimisToolbench.Tests.Services
         // and the button band must never overlap, at any width, with any
         // progress string.
         // ---------------------------------------------------------------
-        private const int SpinnerSize = 20;
-        private const int SpinnerGap = 6;
+        // The same constants the view hands RankerRowLayout.Toolbar. A
+        // literal here proves a band that does not ship.
+        private const int SpinnerSize = InlineSpinnerLayout.SnapshotStatusSize;
+        private const int SpinnerGap = InlineSpinnerLayout.LabelGap;
 
         [Theory]
         [MemberData(nameof(RealWidths))]

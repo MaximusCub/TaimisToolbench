@@ -546,7 +546,7 @@ tests/TaimisToolbench.Tests/Services/RankerReadinessCalculatorTests.cs          
 tests/TaimisToolbench.Tests/Services/RankerReadinessRampTests.cs                        225
 tests/TaimisToolbench.Tests/Services/RankerRecipeGateAgreesWithPlanTests.cs             128
 tests/TaimisToolbench.Tests/Services/RankerResultCacheTests.cs                          215
-tests/TaimisToolbench.Tests/Services/RankerRowLayoutTests.cs                            977
+tests/TaimisToolbench.Tests/Services/RankerRowLayoutTests.cs                            979
 tests/TaimisToolbench.Tests/Services/RankerSnapshotWatchTests.cs                        141
 tests/TaimisToolbench.Tests/Services/RankerStoreTests.cs                                285
 tests/TaimisToolbench.Tests/Services/ReceiptCaptionHelperTests.cs                       124
