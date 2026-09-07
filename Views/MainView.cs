@@ -341,9 +341,8 @@ namespace TaimisToolbench.Views
         private const int WalletIconY = 2;
 
         // Y of each run's Amount text: its capital ink centred on the icon
-        // frame beside it, not on the whole cell. The name line above it is
-        // top-aligned and the item cell is 22px taller than its icon, so the
-        // two numbers differ.
+        // frame beside it, not on the cell. The two runs differ because
+        // their icon frames do - 54px for an item, 32px for a currency.
         private static readonly int ItemAmountY = TypeRampMetrics.CapCentredY(
             TypeRampMetrics.AmountColumnInk,
             ItemIconY,
