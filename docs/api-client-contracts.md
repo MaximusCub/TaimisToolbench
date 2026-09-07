@@ -188,8 +188,8 @@ that the schema version goes in the `v=` query parameter. Its
 | Client identifies itself | Met | `Services/Gw2ApiUserAgent.cs` builds the agent and `Module.cs` applies it to the single `HttpClient` every runtime API call shares; `tools/TaimisToolbench.RecipeSeeder/Program.cs` applies the same helper |
 | 200 ids per request | Met | `Services/Gw2RecipeApiClient.cs` batches at 200, `Services/Gw2AccountSnapshotService.cs` chunks item lookups at 200, `tools/TaimisToolbench.RecipeSeeder/Program.cs` batches at 200 |
 | Stay inside 600 requests a minute | Not enforced | the heaviest runtime walk, `Services/Recipes/RecipeCorpusRefresher.cs`, sleeps one second between 200-id batches; `Services/RecipeService.cs` fans out at concurrency 4 with no pacing, and `Services/Gw2ApiConnectionLimit.cs` now gives that fan-out the sockets to run at, so it is bounded only by how many recipes a plan misses in the committed corpus. Nothing in the module counts requests per minute |
-| Honour `Retry-After` | Partly met | `tools/TaimisToolbench.RecipeSeeder/HttpRetry.cs` reads both the delta and the date form; `Services/Gw2BuildApiClient.cs` waits a fixed two seconds and reads neither |
-| Distinguish "come back later" from "this request is wrong" | Partly met | `tools/TaimisToolbench.RecipeSeeder/HttpRetry.cs` retries 429 and 5xx only; `Services/Gw2BuildApiClient.cs` retries any failure |
+| Honour `Retry-After` | Met on the module's own clients | `Services/HttpRetry.cs` reads both the delta and the date form, and `Services/Gw2ApiRequest.cs` applies it to the recipe, price and item clients; `Services/Gw2BuildApiClient.cs` applies it to the build lookup |
+| Distinguish "come back later" from "this request is wrong" | Partly met | `Services/Gw2ApiRequest.cs` repeats 429 and 503 only, and returns every other status to its caller unchanged; `Services/Gw2BuildApiClient.cs` still retries any failure |
 | A refusal must not read as an empty result | Met in the seeder | `tools/TaimisToolbench.RecipeSeeder/Program.cs` throws once a batch is unrecoverable instead of returning an empty batch into the seed |
 | Cache | Met | the recipe corpus persists across sessions in `Services/Recipes/OverlayRecipeCacheStore.cs`; prices carry a 15-minute TTL in `Services/TradingPostService.cs`; item metadata is memoised for the session in `Services/ItemMetadataService.cs`; `Services/CurrencyMetadataService.cs` fetches `ids=all` once |
 | Compression | Not met | the module's `HttpClient` uses the default handler, which requests no encoding |
@@ -336,14 +336,18 @@ These are known, sourced above, and not settled.
 3. **No request compression anywhere.** The GW2 API supports gzip, measured
    above; MediaWiki asks for it. No client in this repository sets
    `Accept-Encoding`.
-4. **`Services/Gw2BuildApiClient.cs` retries any failure on a fixed delay.**
-   It repeats a request the API has already rejected as malformed, and it
-   ignores a `Retry-After` the API sends.
-5. **POST reads carry no `Promise-Non-Write-API-Action` header.**
+4. **`Services/Gw2BuildApiClient.cs` retries any failure.** It repeats a
+   request the API has already rejected as malformed. It does read
+   `Retry-After`, unlike when this entry was written.
+5. **Nothing counts requests per minute.** `Services/Gw2ApiRequest.cs`
+   answers a refusal after it arrives; no client in the module paces itself
+   against the 600 a minute the API reports, and the module's own
+   concurrency bounds can exceed that rate in a burst.
+6. **POST reads carry no `Promise-Non-Write-API-Action` header.**
    `tools/MysticForgeSeeder/WikiRecipeClient.cs` POSTs its `action=ask`
    queries to keep URLs short, which is allowed, but does not send the
    header that tells MediaWiki the request is a read.
-6. **The GFDL attribution question on scraped facts.** Section 5 states
+7. **The GFDL attribution question on scraped facts.** Section 5 states
    what the wiki's copyright page says and what the seeds actually hold.
    Nothing in the repository states a position on it.
 
