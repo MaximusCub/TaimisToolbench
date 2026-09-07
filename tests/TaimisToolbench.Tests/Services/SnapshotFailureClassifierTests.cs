@@ -198,6 +198,47 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(SnapshotFailureKind.Unknown, result.Kind);
         }
 
+        // ---- Characters the fetch could not read in full. They are not
+        // account-wide sources, so they classify on their own only when
+        // every source answered. A failed source outranks them: it is the
+        // bigger fact and usually the same cause.
+        [Fact]
+        public void EverySourceReadButACharacterNot_ClassifiesAsIncompleteCharacters()
+        {
+            var result = SnapshotFailureClassifier.Classify(
+                new List<string>(), failedSourceCount: 0, totalSourceCount: 6, incompleteCharacterCount: 2);
+
+            Assert.Equal(SnapshotFailureKind.IncompleteCharacters, result.Kind);
+            Assert.Equal(2, result.IncompleteCharacterCount);
+        }
+
+        [Fact]
+        public void AFailedSourceOutranksAnIncompleteCharacter()
+        {
+            var typeNames = new List<string> { "ServerErrorException" };
+
+            var result = SnapshotFailureClassifier.Classify(
+                typeNames, failedSourceCount: 2, totalSourceCount: 6, incompleteCharacterCount: 1);
+
+            Assert.Equal(SnapshotFailureKind.PartialFailure, result.Kind);
+            Assert.Equal(1, result.IncompleteCharacterCount);
+        }
+
+        [Fact]
+        public void ClassifyException_ReadsTheIncompleteCharactersOffTheFetchFailure()
+        {
+            var ex = new SnapshotFetchFailedException(
+                failedSourceCount: 0,
+                totalSourceCount: 6,
+                failedSourceExceptionTypeNames: null,
+                incompleteCharacterNames: new[] { "Taimi" });
+
+            var result = SnapshotFailureClassifier.Classify((Exception)ex);
+
+            Assert.Equal(SnapshotFailureKind.IncompleteCharacters, result.Kind);
+            Assert.Equal(1, result.IncompleteCharacterCount);
+        }
+
         // ---- Classify(Exception) overload ----
         [Fact]
         public void ClassifyException_SnapshotFetchFailedException_UsesItsPerSourceDetail()

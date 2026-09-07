@@ -206,7 +206,7 @@ namespace TaimisToolbench.Tests.Services
         {
             Assert.Equal(
                 "Refresh failed: GW2 API access not ready",
-                StatusText.ForRefreshFailure(SnapshotFailureKind.ApiAccessNotReady, failedSourceCount: 5, totalSourceCount: 5));
+                StatusText.ForRefreshFailure(Classification(SnapshotFailureKind.ApiAccessNotReady, 5, 5)));
         }
 
         [Fact]
@@ -214,15 +214,32 @@ namespace TaimisToolbench.Tests.Services
         {
             Assert.Equal(
                 "Refresh failed: could not reach the GW2 API",
-                StatusText.ForRefreshFailure(SnapshotFailureKind.NetworkOrApiDown, failedSourceCount: 5, totalSourceCount: 5));
+                StatusText.ForRefreshFailure(Classification(SnapshotFailureKind.NetworkOrApiDown, 5, 5)));
         }
 
         [Fact]
-        public void ForRefreshFailure_PartialFailure_ReturnsCountText()
+        public void ForRefreshFailure_PartialFailure_SaysTheRefreshFailedNotThatItHalfWorked()
+        {
+            // A fetch that could not read everything commits nothing, so
+            // the data on screen is still the previous snapshot. The old
+            // "Refresh partially failed" read as though half of it landed.
+            Assert.Equal(
+                "Refresh failed: 2 of 5 sources unavailable",
+                StatusText.ForRefreshFailure(Classification(SnapshotFailureKind.PartialFailure, 2, 5)));
+        }
+
+        [Fact]
+        public void ForRefreshFailure_IncompleteCharacters_NamesTheCountOfCharacters()
         {
             Assert.Equal(
-                "Refresh partially failed: 2 of 5 sources",
-                StatusText.ForRefreshFailure(SnapshotFailureKind.PartialFailure, failedSourceCount: 2, totalSourceCount: 5));
+                "Refresh failed: could not read 1 character in full",
+                StatusText.ForRefreshFailure(
+                    new SnapshotFailureClassification(SnapshotFailureKind.IncompleteCharacters, 0, 6, 1)));
+
+            Assert.Equal(
+                "Refresh failed: could not read 3 characters in full",
+                StatusText.ForRefreshFailure(
+                    new SnapshotFailureClassification(SnapshotFailureKind.IncompleteCharacters, 0, 6, 3)));
         }
 
         [Fact]
@@ -232,7 +249,19 @@ namespace TaimisToolbench.Tests.Services
             // exactly - callers append the time suffix themselves.
             Assert.Equal(
                 "Refresh failed",
-                StatusText.ForRefreshFailure(SnapshotFailureKind.Unknown, failedSourceCount: 0, totalSourceCount: 0));
+                StatusText.ForRefreshFailure(Classification(SnapshotFailureKind.Unknown, 0, 0)));
+        }
+
+        [Fact]
+        public void ForRefreshFailure_NoClassification_StillReadsAsAStatusLine()
+        {
+            Assert.Equal("Refresh failed", StatusText.ForRefreshFailure(null));
+        }
+
+        private static SnapshotFailureClassification Classification(
+            SnapshotFailureKind kind, int failedSourceCount, int totalSourceCount)
+        {
+            return new SnapshotFailureClassification(kind, failedSourceCount, totalSourceCount);
         }
 
         // ---- Stamp: the ONE shape every timestamped
@@ -253,7 +282,7 @@ namespace TaimisToolbench.Tests.Services
             // dash-introduced, so the composed line never repeats one
             // separator at two grammatical levels.
             string cause = StatusText.ForRefreshFailure(
-                SnapshotFailureKind.NetworkOrApiDown, failedSourceCount: 5, totalSourceCount: 5);
+                Classification(SnapshotFailureKind.NetworkOrApiDown, 5, 5));
             Assert.Equal(
                 "Refresh failed: could not reach the GW2 API - Aug 15, 2026 3:41 PM",
                 StatusText.Stamp(cause, new DateTime(2026, 8, 15, 15, 41, 0)));

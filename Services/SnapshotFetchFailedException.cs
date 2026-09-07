@@ -5,24 +5,22 @@ using System.Linq;
 namespace TaimisToolbench.Services
 {
     /// <summary>
-    /// Thrown by Gw2AccountSnapshotService.FetchSnapshotAsync when one or more
-    /// of the independent account-data sources (wallet, bank, shared
-    /// inventory, material storage, character list) failed for this fetch
-    /// (KNOWN-ISSUES #31/api-degradation F1).
+    /// Thrown by Gw2AccountSnapshotService.FetchSnapshotAsync when part of
+    /// the account could not be read for this fetch (KNOWN-ISSUES
+    /// #31/api-degradation F1): an account-wide source, or one character's
+    /// bags, equipment or crafting disciplines.
     ///
     /// Conservative persistence rule: FetchSnapshotAsync only ever returns
-    /// normally on a FULL success of all data sources. ANY failure - partial
-    /// or total - throws this instead of returning a snapshot with holes, so a
-    /// caller can never silently replace a good cached snapshot with one that
-    /// is missing categories the previous snapshot had. Module.cs's callers
-    /// let it propagate to their existing generic-Exception catch, which
-    /// already keeps the prior good snapshot in place and surfaces a "Refresh
-    /// failed" status distinct from "Updated".
+    /// normally when every one of those was read in full. ANY failure -
+    /// partial or total - throws this instead of returning a snapshot with
+    /// holes, so a caller can never silently replace a good cached snapshot
+    /// with one that is missing what the previous snapshot had. Module.cs's
+    /// callers let it propagate to their generic-Exception catch, which
+    /// keeps the prior snapshot and surfaces a "Refresh failed" status.
     ///
-    /// Genuine caller cancellation is unaffected: FetchSnapshotAsync's
-    /// per-source catches explicitly exclude OperationCanceledException, so a
-    /// real cancellation still propagates as OperationCanceledException, never
-    /// wrapped in this type.
+    /// Genuine caller cancellation is unaffected: the per-source catches
+    /// exclude OperationCanceledException, so a real cancellation still
+    /// propagates as itself and is never wrapped in this type.
     /// </summary>
     internal class SnapshotFetchFailedException : Exception
     {
@@ -44,24 +42,71 @@ namespace TaimisToolbench.Services
         /// </summary>
         public IReadOnlyList<string> FailedSourceExceptionTypeNames { get; }
 
+        /// <summary>
+        /// The characters whose bags, equipment or crafting disciplines
+        /// could not be read in full, in character-list order. Never null.
+        /// Names, not ids: the user reads these in game, and the account
+        /// data is not trustworthy without them.
+        /// </summary>
+        public IReadOnlyList<string> IncompleteCharacterNames { get; }
+
         public SnapshotFetchFailedException(int failedSourceCount, int totalSourceCount)
             : this(failedSourceCount, totalSourceCount, null)
         {
         }
 
         public SnapshotFetchFailedException(int failedSourceCount, int totalSourceCount, IEnumerable<string> failedSourceExceptionTypeNames)
-            : base(BuildMessage(failedSourceCount, totalSourceCount))
+            : this(failedSourceCount, totalSourceCount, failedSourceExceptionTypeNames, null)
+        {
+        }
+
+        public SnapshotFetchFailedException(
+            int failedSourceCount,
+            int totalSourceCount,
+            IEnumerable<string> failedSourceExceptionTypeNames,
+            IEnumerable<string> incompleteCharacterNames)
+            : base(BuildMessage(failedSourceCount, totalSourceCount, Names(incompleteCharacterNames)))
         {
             FailedSourceCount = failedSourceCount;
             TotalSourceCount = totalSourceCount;
             FailedSourceExceptionTypeNames = failedSourceExceptionTypeNames?.ToList() ?? new List<string>();
+            IncompleteCharacterNames = Names(incompleteCharacterNames);
         }
 
-        private static string BuildMessage(int failedSourceCount, int totalSourceCount)
+        private static List<string> Names(IEnumerable<string> names)
         {
-            return failedSourceCount >= totalSourceCount
-                ? "All account data sources failed."
-                : $"{failedSourceCount} of {totalSourceCount} account data sources failed.";
+            return names?.ToList() ?? new List<string>();
+        }
+
+        /// <summary>
+        /// What actually failed, in the caller's own words. A character
+        /// failure is not an account-wide source, so it gets its own
+        /// sentence rather than being folded into the source tally.
+        /// </summary>
+        private static string BuildMessage(
+            int failedSourceCount, int totalSourceCount, List<string> incompleteCharacterNames)
+        {
+            var parts = new List<string>(2);
+            if (failedSourceCount >= totalSourceCount && failedSourceCount > 0)
+            {
+                parts.Add("All account data sources failed.");
+            }
+            else if (failedSourceCount > 0)
+            {
+                parts.Add($"{failedSourceCount} of {totalSourceCount} account data sources failed.");
+            }
+
+            if (incompleteCharacterNames.Count > 0)
+            {
+                string label = incompleteCharacterNames.Count == 1 ? "character" : "characters";
+                parts.Add(
+                    $"{incompleteCharacterNames.Count} {label} could not be read in full: "
+                    + string.Join(", ", incompleteCharacterNames) + ".");
+            }
+
+            return parts.Count == 0
+                ? "The account snapshot fetch failed."
+                : string.Join(" ", parts);
         }
     }
 }

@@ -401,32 +401,41 @@ namespace TaimisToolbench.Services
         /// Cause text for a failed Refresh Now (Views/MainView.cs), keyed
         /// by SnapshotFailureClassifier's classification - the fix,
         /// measured in game, for the "Refresh Failed" dead end (at CHARACTER
-        /// SELECT every account data source throws an invalid-token
-        /// exception, and the bare status line gave no hint why). Callers
-        /// pass the result to <see cref="Stamp"/> as the verb, so the
-        /// Unknown case still reads exactly like every other status line
-        /// (nothing more specific to say once no known pattern matched).
+        /// SELECT every source throws an invalid-token exception, and the
+        /// bare status line gave no hint why). Callers pass the result to
+        /// <see cref="Stamp"/> as the verb, so the Unknown case still reads
+        /// like every other status line.
         /// ApiAccessNotReady also drives Views/MainView.cs's walkthrough
-        /// dialog, but still gets its own status text here so the header
-        /// label reads correctly once that dialog is closed.
+        /// dialog, but keeps its own status text so the header label reads
+        /// correctly once that dialog is closed.
         /// <para>
         /// The cause clause is introduced by a COLON, not a dash:
         /// <see cref="StampSeparator"/> owns the dash, and a line carrying
         /// both ("Refresh failed - could not reach the GW2 API - Aug 15,
-        /// 2026 3:41 PM") gave two unrelated clauses the same separator and
-        /// no way to tell which was which.
+        /// 2026 3:41 PM") gave two clauses one separator. Every clause says
+        /// FAILED, the partial one included: a fetch that could not read
+        /// everything commits nothing.
         /// </para>
         /// </summary>
-        public static string ForRefreshFailure(SnapshotFailureKind kind, int failedSourceCount, int totalSourceCount)
+        public static string ForRefreshFailure(SnapshotFailureClassification classification)
         {
-            switch (kind)
+            if (classification == null)
+            {
+                return "Refresh failed";
+            }
+
+            switch (classification.Kind)
             {
                 case SnapshotFailureKind.ApiAccessNotReady:
                     return "Refresh failed: GW2 API access not ready";
                 case SnapshotFailureKind.NetworkOrApiDown:
                     return "Refresh failed: could not reach the GW2 API";
                 case SnapshotFailureKind.PartialFailure:
-                    return $"Refresh partially failed: {failedSourceCount} of {totalSourceCount} sources";
+                    return "Refresh failed: " + classification.FailedSourceCount
+                        + " of " + classification.TotalSourceCount + " sources unavailable";
+                case SnapshotFailureKind.IncompleteCharacters:
+                    return "Refresh failed: could not read "
+                        + Count(classification.IncompleteCharacterCount, "character") + " in full";
                 default:
                     return "Refresh failed";
             }

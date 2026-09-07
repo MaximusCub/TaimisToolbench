@@ -2220,7 +2220,7 @@ namespace TaimisToolbench
                 // KNOWN-ISSUES #37 follow-up for why unprompted background
                 // popups are a separate, deferred UX call.
                 var classification = SnapshotFailureClassifier.Classify(ex);
-                string cause = StatusText.ForRefreshFailure(classification.Kind, classification.FailedSourceCount, classification.TotalSourceCount);
+                string cause = StatusText.ForRefreshFailure(classification);
                 var status = StatusText.Stamp(cause, DateTime.Now);
                 SaveStatusThreadSafe(status);
             }

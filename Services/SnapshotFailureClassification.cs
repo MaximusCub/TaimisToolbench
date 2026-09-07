@@ -14,11 +14,24 @@ namespace TaimisToolbench.Services
 
         public int TotalSourceCount { get; }
 
+        /// <summary>
+        /// How many characters could not be read in full, which is a
+        /// separate fault from a failed account-wide source.
+        /// </summary>
+        public int IncompleteCharacterCount { get; }
+
         public SnapshotFailureClassification(SnapshotFailureKind kind, int failedSourceCount, int totalSourceCount)
+            : this(kind, failedSourceCount, totalSourceCount, 0)
+        {
+        }
+
+        public SnapshotFailureClassification(
+            SnapshotFailureKind kind, int failedSourceCount, int totalSourceCount, int incompleteCharacterCount)
         {
             Kind = kind;
             FailedSourceCount = failedSourceCount;
             TotalSourceCount = totalSourceCount;
+            IncompleteCharacterCount = incompleteCharacterCount;
         }
     }
 }

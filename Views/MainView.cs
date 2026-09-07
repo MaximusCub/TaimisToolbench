@@ -1460,7 +1460,7 @@ namespace TaimisToolbench.Views
                 }
 
                 var classification = SnapshotFailureClassifier.Classify(ex);
-                string cause = StatusText.ForRefreshFailure(classification.Kind, classification.FailedSourceCount, classification.TotalSourceCount);
+                string cause = StatusText.ForRefreshFailure(classification);
                 var status = StatusText.Stamp(cause, DateTime.Now);
                 _saveStatusThreadSafe(status);
                 MainThreadMarshal.Run(() =>
@@ -1602,11 +1602,11 @@ namespace TaimisToolbench.Views
             {
                 TimeSpan age = DateTime.UtcNow - _snapshot.CapturedAt;
 
-                // A character the fetch could not read in full is a hole in
-                // the data the tab is showing, and the refresh that made it
-                // still succeeded - so it is reported here beside the age
-                // rather than through StatusText.ForRefreshFailure, which
-                // says the refresh failed and the data is the previous one.
+                // A character the fetch could not read in full is a hole
+                // in the data on screen. A fetch no longer commits one, so
+                // this reports a snapshot an older build left on disk. It
+                // sits beside the age because ForRefreshFailure speaks for
+                // the last refresh, not for the data being shown.
                 string detail = StatusText.ForSnapshotDetail(
                     age, _snapshot.IncompleteCharacterCount, _snapshot.CharacterCount);
 

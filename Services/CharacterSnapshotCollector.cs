@@ -23,7 +23,8 @@ namespace TaimisToolbench.Services
         /// <summary>
         /// This character's bags or equipment failed to fetch, so
         /// <see cref="Items"/> is missing holdings rather than empty. The
-        /// items still listed are real, which is why they are kept.
+        /// items still listed are real, so they stay in the harvest, but
+        /// the harvest as a whole is then not fit to commit.
         /// </summary>
         public bool ItemsDegraded { get; set; }
 
@@ -57,6 +58,23 @@ namespace TaimisToolbench.Services
         /// complete is claiming the account owns less than it does.
         /// </summary>
         public int IncompleteCharacterCount { get; set; }
+
+        /// <summary>
+        /// Which characters those were, in character-list order. The names
+        /// are what a failure has to say out loud: the user sees them in
+        /// game, unlike the ids the module keeps to itself.
+        /// </summary>
+        public List<string> IncompleteCharacterNames { get; } = new List<string>();
+
+        /// <summary>
+        /// Every character was read in full. Gw2AccountSnapshotService
+        /// refuses to commit a harvest that is not, so the previous
+        /// snapshot stays: older and complete beats fresh with holes.
+        /// </summary>
+        public bool IsComplete
+        {
+            get { return IncompleteCharacterCount == 0; }
+        }
     }
 
     /// <summary>
@@ -64,19 +82,18 @@ namespace TaimisToolbench.Services
     /// at a time, then folds the results back into one result ordered by
     /// the character list.
     /// <para>
-    /// Items and armory wearers are collected best-effort: a character
-    /// that fails contributes nothing, which under-counts what the account
-    /// owns and never invents a holding. Crafting disciplines are
-    /// all-or-nothing instead: one failed character discards the whole
-    /// list, because a partial list reads as an affirmative "not trained"
-    /// claim for every character the fetch never reached.
+    /// A character that fails contributes nothing, which under-counts what
+    /// the account owns and never invents a holding. Crafting disciplines
+    /// go further and are all-or-nothing: one failed character discards the
+    /// whole list, because a partial list reads as an affirmative "not
+    /// trained" claim for every character the fetch never reached.
     /// </para>
     /// <para>
-    /// Either failure is counted in
-    /// <see cref="CharacterSnapshotHarvest.IncompleteCharacterCount"/>. An
+    /// Either failure is named in
+    /// <see cref="CharacterSnapshotHarvest.IncompleteCharacterNames"/>. An
     /// under-count is conservative for cost and wrong for advice: it makes
-    /// the plan tell the user to buy an item their own bags hold, so the
-    /// snapshot has to say it is incomplete rather than only be incomplete.
+    /// the plan tell the user to buy an item their own bags hold. So the
+    /// caller refuses the whole harvest rather than commit one.
     /// </para>
     /// </summary>
     internal static class CharacterSnapshotCollector
@@ -148,12 +165,14 @@ namespace TaimisToolbench.Services
                 {
                     degraded = true;
                     incomplete++;
+                    harvest.IncompleteCharacterNames.Add(names[i]);
                     continue;
                 }
 
                 if (part.ItemsDegraded || part.DisciplinesDegraded)
                 {
                     incomplete++;
+                    harvest.IncompleteCharacterNames.Add(names[i]);
                 }
 
                 harvest.Items.AddRange(part.Items);

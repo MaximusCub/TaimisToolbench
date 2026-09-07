@@ -25,7 +25,7 @@
 # Format: <path> <max-lines>. Seeded 2026-08-25 from the tree at that
 # commit (git ls-files '*.cs' | xargs wc -l).
 Contracts/IItemSearchProvider.cs                                                        74
-Models/AccountSnapshot.cs                                                               46
+Models/AccountSnapshot.cs                                                               49
 Models/AcquisitionHint.cs                                                               26
 Models/AcquisitionSource.cs                                                             50
 Models/BarterItemDecisionDefaults.cs                                                    153
@@ -93,7 +93,7 @@ Services/AccountItemIndex.cs                                                    
 Services/AchievementBitDedupPrePass.cs                                                  197
 Services/AcquisitionHintService.cs                                                      75
 Services/BoundedConcurrency.cs                                                          51
-Services/CharacterSnapshotCollector.cs                                                  184
+Services/CharacterSnapshotCollector.cs                                                  203
 Services/ClickSoundVolume.cs                                                            90
 Services/CoinSegmentMath.cs                                                             303
 Services/ColumnBoardLayout.cs                                                           130
@@ -123,7 +123,7 @@ Services/FirstLoadSnapshotGate.cs                                               
 Services/GlyphButtonMetrics.cs                                                          69
 Services/GridLayout.cs                                                                  93
 Services/Gw2AccountRecipeClient.cs                                                      30
-Services/Gw2AccountSnapshotService.cs                                                   889
+Services/Gw2AccountSnapshotService.cs                                                   897
 Services/Gw2ApiConnectionLimit.cs                                                       70
 Services/Gw2ItemApiClient.cs                                                            271
 Services/Gw2PriceApiClient.cs                                                           76
@@ -238,13 +238,14 @@ Services/SettingsSaveBarLayout.cs                                               
 Services/ShoppingColumnMath.cs                                                          449
 Services/ShoppingRowTooltipFormatter.cs                                                 145
 Services/ShoppingSourceBadge.cs                                                         89
+Services/SnapshotCallRetry.cs                                                           142
 Services/SnapshotCommitGate.cs                                                          102
 Services/SnapshotEpochGuard.cs                                                          27
-Services/SnapshotFailureClassification.cs                                               24
-Services/SnapshotFailureClassifier.cs                                                   143
+Services/SnapshotFailureClassification.cs                                               37
+Services/SnapshotFailureClassifier.cs                                                   167
 Services/SnapshotFetchBudget.cs                                                         49
-Services/SnapshotFailureKind.cs                                                         50
-Services/SnapshotFetchFailedException.cs                                                69
+Services/SnapshotFailureKind.cs                                                         59
+Services/SnapshotFetchFailedException.cs                                                112
 Services/SnapshotHeaderLayout.cs                                                        209
 Services/SnapshotHelpers.cs                                                             79
 Services/SnapshotHoldLine.cs                                                            355
@@ -263,7 +264,7 @@ Services/SortIndicatorLayout.cs                                                 
 Services/SourceFilterFlowLayout.cs                                                      85
 Services/StaticItemSearchProvider.cs                                                    42
 Services/StatusStore.cs                                                                 73
-Services/StatusText.cs                                                                  435
+Services/StatusText.cs                                                                  444
 Services/StatusUpdateGuard.cs                                                           38
 Services/StickyHeaderLayout.cs                                                          117
 Services/SummarySectionLayoutMath.cs                                                   1037
@@ -585,10 +586,11 @@ tests/TaimisToolbench.Tests/Services/ShoppingColumnMathTests.cs                 
 tests/TaimisToolbench.Tests/Services/ShoppingListEachTimesAmountTests.cs                131
 tests/TaimisToolbench.Tests/Services/ShoppingRowTooltipFormatterTests.cs                246
 tests/TaimisToolbench.Tests/Services/ShoppingSourceBadgeTests.cs                        233
+tests/TaimisToolbench.Tests/Services/SnapshotCallRetryTests.cs                          318
 tests/TaimisToolbench.Tests/Services/SnapshotCommitGateTests.cs                         239
 tests/TaimisToolbench.Tests/Services/SnapshotEpochGuardTests.cs                         33
-tests/TaimisToolbench.Tests/Services/SnapshotFailureClassifierTests.cs                  267
-tests/TaimisToolbench.Tests/Services/SnapshotFetchFailedExceptionTests.cs               75
+tests/TaimisToolbench.Tests/Services/SnapshotFailureClassifierTests.cs                  303
+tests/TaimisToolbench.Tests/Services/SnapshotFetchFailedExceptionTests.cs               127
 tests/TaimisToolbench.Tests/Services/SnapshotHeaderLayoutTests.cs                       441
 tests/TaimisToolbench.Tests/Services/SnapshotHelpersTests.cs                            95
 tests/TaimisToolbench.Tests/Services/SnapshotHoldLineTests.cs                           320
@@ -598,13 +600,13 @@ tests/TaimisToolbench.Tests/Services/SnapshotRefreshSlotTests.cs                
 tests/TaimisToolbench.Tests/Services/SnapshotResultLayoutTests.cs                       94
 tests/TaimisToolbench.Tests/Services/SnapshotSearchResultBuilderTests.cs                1329
 tests/TaimisToolbench.Tests/Services/SnapshotSerializationTests.cs                      283
-tests/TaimisToolbench.Tests/Services/SnapshotStoreTests.cs                              469
+tests/TaimisToolbench.Tests/Services/SnapshotStoreTests.cs                              545
 tests/TaimisToolbench.Tests/Services/SnapshotTableSorterTests.cs                        147
 tests/TaimisToolbench.Tests/Services/SocketedUpgradeTests.cs                            321
 tests/TaimisToolbench.Tests/Services/SortIndicatorLayoutTests.cs                        151
 tests/TaimisToolbench.Tests/Services/SourceFilterFlowLayoutTests.cs                     127
 tests/TaimisToolbench.Tests/Services/StatusStoreTests.cs                                116
-tests/TaimisToolbench.Tests/Services/StatusTextTests.cs                                 560
+tests/TaimisToolbench.Tests/Services/StatusTextTests.cs                                 589
 tests/TaimisToolbench.Tests/Services/StatusUpdateGuardTests.cs                          33
 tests/TaimisToolbench.Tests/Services/StickyHeaderLayoutTests.cs                         266
 tests/TaimisToolbench.Tests/Services/SummarySectionLayoutMathTests.cs                   1610

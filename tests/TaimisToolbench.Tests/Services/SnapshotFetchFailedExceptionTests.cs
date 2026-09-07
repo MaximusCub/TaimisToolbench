@@ -70,5 +70,58 @@ namespace TaimisToolbench.Tests.Services
             Assert.NotNull(ex.FailedSourceExceptionTypeNames);
             Assert.Empty(ex.FailedSourceExceptionTypeNames);
         }
+
+        // ---- Characters the fetch could not read in full. Pain seen in
+        // game on 2026-09-07: one character's equipment fetch failed and
+        // the snapshot committed 1020 items instead of 1039. A character is
+        // not an account-wide source, so the message must not report it as
+        // one. Names are safe to show; ids are not.
+        [Fact]
+        public void IncompleteCharactersOnly_MessageNamesThemAndNoSources()
+        {
+            var ex = new SnapshotFetchFailedException(
+                failedSourceCount: 0,
+                totalSourceCount: 6,
+                failedSourceExceptionTypeNames: null,
+                incompleteCharacterNames: new[] { "Taimi" });
+
+            Assert.Equal("1 character could not be read in full: Taimi.", ex.Message);
+            Assert.Equal(new[] { "Taimi" }, ex.IncompleteCharacterNames);
+        }
+
+        [Fact]
+        public void SeveralIncompleteCharacters_ArePluralisedAndListed()
+        {
+            var ex = new SnapshotFetchFailedException(
+                failedSourceCount: 0,
+                totalSourceCount: 6,
+                failedSourceExceptionTypeNames: null,
+                incompleteCharacterNames: new[] { "Taimi", "Braham" });
+
+            Assert.Equal("2 characters could not be read in full: Taimi, Braham.", ex.Message);
+        }
+
+        [Fact]
+        public void FailedSourcesAndIncompleteCharacters_AreReportedAsTwoSeparateFacts()
+        {
+            var ex = new SnapshotFetchFailedException(
+                failedSourceCount: 2,
+                totalSourceCount: 6,
+                failedSourceExceptionTypeNames: new[] { "ServerErrorException" },
+                incompleteCharacterNames: new[] { "Taimi" });
+
+            Assert.Equal(
+                "2 of 6 account data sources failed. 1 character could not be read in full: Taimi.",
+                ex.Message);
+        }
+
+        [Fact]
+        public void EarlierConstructors_ReportNoIncompleteCharacters()
+        {
+            var ex = new SnapshotFetchFailedException(failedSourceCount: 2, totalSourceCount: 5);
+
+            Assert.NotNull(ex.IncompleteCharacterNames);
+            Assert.Empty(ex.IncompleteCharacterNames);
+        }
     }
 }
