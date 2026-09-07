@@ -423,6 +423,7 @@ tests/TaimisToolbench.Tests/Services/DecisionPillPlannerSubduingTests.cs        
 tests/TaimisToolbench.Tests/Services/DecisionPillPlannerTests.cs                        1036
 tests/TaimisToolbench.Tests/Services/DialogLayoutMathTests.cs                           484
 tests/TaimisToolbench.Tests/Services/DisciplinesColumnMathTests.cs                      177
+tests/TaimisToolbench.Tests/Services/EquippedRuneSetTests.cs                            217
 tests/TaimisToolbench.Tests/Services/ExcessCraftOutputCalculatorTests.cs                345
 tests/TaimisToolbench.Tests/Services/FirstLoadSnapshotGateTests.cs                      153
 tests/TaimisToolbench.Tests/Services/GridLawGoldenTests.cs                              100
