@@ -339,6 +339,19 @@ namespace TaimisToolbench.Models
         // a total-price table column.
         public long UnitCoinValue { get; set; }
 
+        // How many units UnitCoinValue actually buys, when it does not buy
+        // one. Zero means UnitCoinValue is a true per-unit price and the
+        // Each cell renders it alone.
+        //
+        // A vendor offer selling 2 for 5 copper has no per-unit coin price,
+        // and a merged step whose occurrences paid different prices has no
+        // single price either. Dividing produced a number that failed the
+        // reader's own check, because Each times Amount did not reach
+        // Total. The Each cell instead renders UnitCoinValue followed by
+        // "for N", the same shape CurrencyAmountViewModel.BundleLabel
+        // already uses for the currency half of the same cell.
+        public int UnitCoinBundleQuantity { get; set; }
+
         public string StatusTag { get; set; }
 
         // Wiki-derived acquisition guidance for unknown-source rows,

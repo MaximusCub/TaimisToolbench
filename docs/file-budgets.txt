@@ -58,7 +58,7 @@ Models/PlanRequestItem.cs                                                       
 Models/PlanSolveContext.cs                                                              212
 Models/PlanStatus.cs                                                                    11
 Models/PlanStep.cs                                                                      72
-Models/PlanViewModel.cs                                                                 492
+Models/PlanViewModel.cs                                                                 505
 Models/PriceBasis.cs                                                                    32
 Models/RankerRowMetrics.cs                                                              152
 Models/RankerSlotAvailability.cs                                                        59
@@ -189,7 +189,7 @@ Services/PlanStripStatusBoard.cs                                                
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     597
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        1739
+Services/PlanViewModelBuilder.cs                                                        1793
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
@@ -309,7 +309,7 @@ Views/RankerTabContent.cs                                                       
 Views/Rendering/ClickSound.cs                                                           197
 Views/Rendering/CaretKeyButton.cs                                                       109
 Views/Rendering/CloseKeyButton.cs                                                       64
-Views/Rendering/CoinCurrencyRenderer.cs                                                 671
+Views/Rendering/CoinCurrencyRenderer.cs                                                 737
 Views/Rendering/ColumnHeaderRowRenderer.cs                                              221
 Views/Rendering/CraftStepsSectionRenderer.cs                                            264
 Views/Rendering/DeferredIconArt.cs                                                      88
@@ -337,7 +337,7 @@ Views/Rendering/RichTooltipSurface.cs                                           
 Views/Rendering/RowRelayoutHelpers.cs                                                   72
 Views/Rendering/RowActionKey.cs                                                         103
 Views/Rendering/ShoppingBadgeColors.cs                                                  72
-Views/Rendering/ShoppingListSectionRenderer.cs                                          550
+Views/Rendering/ShoppingListSectionRenderer.cs                                          512
 Views/Rendering/SortIndicator.cs                                                        145
 Views/Rendering/SortableHeaderBlock.cs                                                  108
 Views/Rendering/SortableHeaderCells.cs                                                  249
@@ -568,6 +568,7 @@ tests/TaimisToolbench.Tests/Services/SettingsFormLayoutTests.cs                 
 tests/TaimisToolbench.Tests/Services/SettingsInputParserTests.cs                        338
 tests/TaimisToolbench.Tests/Services/SettingsSaveBarLayoutTests.cs                      117
 tests/TaimisToolbench.Tests/Services/ShoppingColumnMathTests.cs                         630
+tests/TaimisToolbench.Tests/Services/ShoppingListEachTimesAmountTests.cs                131
 tests/TaimisToolbench.Tests/Services/ShoppingRowTooltipFormatterTests.cs                246
 tests/TaimisToolbench.Tests/Services/ShoppingSourceBadgeTests.cs                        233
 tests/TaimisToolbench.Tests/Services/SnapshotCommitGateTests.cs                         239

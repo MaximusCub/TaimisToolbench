@@ -917,6 +917,7 @@ namespace TaimisToolbench.Services
                 string iconUrl = ResolveIconUrl(step.ItemId, result.ItemMetadata);
                 string rarity = ResolveRarity(step.ItemId, result.ItemMetadata);
                 PlanRowType rowType = MapShoppingRowType(step.Source);
+                ResolveUnitCoin(step, out long unitCoin, out int unitCoinBundle);
 
                 section.Rows.Add(new PlanRowViewModel
                 {
@@ -928,7 +929,8 @@ namespace TaimisToolbench.Services
                     Rarity = rarity,
                     Quantity = step.Quantity,
                     CoinValue = step.TotalCost,
-                    UnitCoinValue = step.UnitCost,
+                    UnitCoinValue = unitCoin,
+                    UnitCoinBundleQuantity = unitCoinBundle,
                     HintText = ResolveHintText(rowType, step.ItemId, result.AcquisitionHints),
                     BadgeText = ResolveBadgeText(rowType, step.ItemId, result.AcquisitionHints),
                     // Owned/needed split, cosmetic only - Total column
@@ -942,6 +944,58 @@ namespace TaimisToolbench.Services
             }
 
             return section;
+        }
+
+        /// <summary>
+        /// What the shopping list's coin "Each" cell says: a per-unit price,
+        /// or a price and the number of units that price buys.
+        /// <para>
+        /// A remainder means no whole coin value is the per-unit price, so
+        /// the pair is reported rather than a truncated division. Same rule
+        /// and same shape as CurrencyDisplayResolver.ResolveDividedAmounts,
+        /// which the currency half of this same cell already uses.
+        /// </para>
+        /// </summary>
+        private static void ResolveUnitCoin(PlanStep step, out long unitCoin, out int bundleQuantity)
+        {
+            long total = step.TotalCost;
+            int divisor = step.Quantity;
+
+            // A uniform vendor step's total is the offer's per-purchase coin
+            // cost times whole purchases, so dividing by the purchase count
+            // recovers that cost exactly. The offer's own batch is what the
+            // player is charged; the step's quantity can sit inside a
+            // part-used purchase, and dividing by that instead invents a
+            // rate no purchase of this offer ever charges. VendorBatchSolver
+            // sets VendorOfferOutputCount only when every occurrence merged
+            // into this step resolved to one offer.
+            if (step.VendorOfferOutputCount > 0 && step.Quantity > 0)
+            {
+                int purchases = (step.Quantity + step.VendorOfferOutputCount - 1)
+                    / step.VendorOfferOutputCount;
+                if (purchases > 0)
+                {
+                    total = step.TotalCost / purchases;
+                    divisor = step.VendorOfferOutputCount;
+                }
+            }
+
+            if (divisor <= 1 || total <= 0)
+            {
+                unitCoin = divisor == 0 ? 0 : total;
+                bundleQuantity = 0;
+                return;
+            }
+
+            if (total % divisor == 0)
+            {
+                unitCoin = total / divisor;
+                bundleQuantity = 0;
+                return;
+            }
+
+            unitCoin = total;
+            bundleQuantity = divisor;
         }
 
         /// <summary>
