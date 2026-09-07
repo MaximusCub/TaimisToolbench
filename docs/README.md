@@ -89,7 +89,7 @@ and not compilation units. File counts measured with `ls <dir>/*.cs | wc -l`.
 | Folder | What lives there | Open these first |
 | --- | --- | --- |
 | `Models/` (57) | The data shapes passed between layers: the plan result, the display tree, the view model the renderers read. | `PlanViewModel.cs`, `CraftingTreeNode.cs`, `CraftingPlanResult.cs`, `CurrencyValuation.cs` |
-| `Services/` (209, flat) | Every piece of logic in the module: the solver, pricing, the offline-seed loaders, the pure layout arithmetic, and the text/decision composers the views render. | `PlanSolver.cs`, `CraftingPlanPipeline.cs`, `PlanViewModelBuilder.cs`, `VendorBatchSolver.cs`, `PlanContentHeightMath.cs` |
+| `Services/` (210, flat) | Every piece of logic in the module: the solver, pricing, the offline-seed loaders, the pure layout arithmetic, and the text/decision composers the views render. | `PlanSolver.cs`, `CraftingPlanPipeline.cs`, `PlanViewModelBuilder.cs`, `VendorBatchSolver.cs`, `PlanContentHeightMath.cs` |
 | `Services/Recipes/` (10) | Recipe cache stores, the committed seed readers behind them, and the corpus probe that verifies them against the live build. | `RecipeCacheSerializer.cs`, `OverlayRecipeCacheStore.cs`, `RecipeCorpusVerifier.cs` |
 | `Services/Diagnostics/` (2) | Plan-generation phase timing, summarised into the plan's debug log by `CraftingPlanPipeline`. | `PlanTimingAnalyzer.cs`, `PlanPhaseTimingSummary.cs` |
 | `Views/` (65) | The Blish-bound layer: one file per tab, the window, and the two main-thread primitives. | `CraftingPlanView.cs` (5,185 lines - the plan tab), `MainView.cs` (Snapshot), `SettingsTabContent.cs`, `MainThreadMarshal.cs` |

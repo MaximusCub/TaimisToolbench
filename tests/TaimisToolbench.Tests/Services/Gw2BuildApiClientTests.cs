@@ -80,6 +80,23 @@ namespace TaimisToolbench.Tests.Services
             return () => throw new HttpRequestException("connection refused");
         }
 
+        // TryAddWithoutValidation, so a deliberately malformed value reaches
+        // the client instead of being rejected here.
+        private static Func<HttpResponseMessage> Refuses(string retryAfter)
+        {
+            return () =>
+            {
+                var response = new HttpResponseMessage(
+                    HttpStatusCode.ServiceUnavailable)
+                {
+                    Content = new StringContent(string.Empty),
+                };
+
+                response.Headers.TryAddWithoutValidation("Retry-After", retryAfter);
+                return response;
+            };
+        }
+
         private static Gw2BuildApiClient NoDelay(
             HttpClient http, TimeSpan? attemptTimeout = null)
         {
@@ -162,6 +179,94 @@ namespace TaimisToolbench.Tests.Services
                 Assert.Equal(3, result.Attempts);
                 Assert.Equal(3, handler.Calls);
                 Assert.IsAssignableFrom<OperationCanceledException>(result.LastError);
+            }
+        }
+
+        // Retry-After is a delta in seconds or an HTTP-date (RFC 9110 section
+        // 10.2.3). Reading only the delta sends the next attempt the moment
+        // the API named a time to come back at, which is the one thing the
+        // header exists to stop.
+        private static readonly DateTimeOffset Now =
+            new DateTimeOffset(2026, 9, 5, 12, 0, 0, TimeSpan.Zero);
+
+        private static async Task<List<TimeSpan>> WaitsAfterRefusal(string retryAfter)
+        {
+            using (var handler = new ScriptedHandler(Refuses(retryAfter), Ok(205780)))
+            using (var http = new HttpClient(handler))
+            {
+                var waits = new List<TimeSpan>();
+                var client = new Gw2BuildApiClient(
+                    http,
+                    (d, ct) =>
+                    {
+                        waits.Add(d);
+                        return Task.CompletedTask;
+                    },
+                    null,
+                    () => Now);
+
+                var result = await client.TryGetBuildIdAsync(CancellationToken.None);
+
+                Assert.Equal(205780, result.BuildId);
+                return waits;
+            }
+        }
+
+        [Fact]
+        public async Task TryGetBuildId_RetryAfterDelta_WaitsWhatTheApiAsked()
+        {
+            var waits = await WaitsAfterRefusal("7");
+
+            Assert.Equal(TimeSpan.FromSeconds(7), Assert.Single(waits));
+        }
+
+        [Fact]
+        public async Task TryGetBuildId_RetryAfterHttpDate_WaitsUntilTheMomentNamed()
+        {
+            var waits = await WaitsAfterRefusal(Now.AddSeconds(9).ToString("R"));
+
+            Assert.Equal(TimeSpan.FromSeconds(9), Assert.Single(waits));
+        }
+
+        [Fact]
+        public async Task TryGetBuildId_RetryAfterDateAlreadyPast_UsesTheFixedDelay()
+        {
+            var waits = await WaitsAfterRefusal(Now.AddMinutes(-1).ToString("R"));
+
+            Assert.Equal(TimeSpan.FromSeconds(2), Assert.Single(waits));
+        }
+
+        [Fact]
+        public async Task TryGetBuildId_MalformedRetryAfter_UsesTheFixedDelay()
+        {
+            var waits = await WaitsAfterRefusal("shortly");
+
+            Assert.Equal(TimeSpan.FromSeconds(2), Assert.Single(waits));
+        }
+
+        [Fact]
+        public async Task TryGetBuildId_RetryAfterBeyondTheBound_StopsRatherThanReturningEarly()
+        {
+            using (var handler = new ScriptedHandler(Refuses("300")))
+            using (var http = new HttpClient(handler))
+            {
+                var waits = new List<TimeSpan>();
+                var client = new Gw2BuildApiClient(
+                    http,
+                    (d, ct) =>
+                    {
+                        waits.Add(d);
+                        return Task.CompletedTask;
+                    },
+                    null,
+                    () => Now);
+
+                var result = await client.TryGetBuildIdAsync(CancellationToken.None);
+
+                Assert.Null(result.BuildId);
+                Assert.Equal(1, result.Attempts);
+                Assert.Equal(1, handler.Calls);
+                Assert.Empty(waits);
             }
         }
 

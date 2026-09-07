@@ -8,4 +8,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- The module's Retry-After reader, by source link rather than by
+         project reference: this tool targets net8.0 and the module is a
+         net48 Blish HUD assembly, so it cannot reference it. Linking the
+         one file keeps a single answer to a header both clients read. -->
+    <Compile Include="..\..\Services\HttpRetry.cs" Link="HttpRetry.cs" />
+  </ItemGroup>
+
 </Project>

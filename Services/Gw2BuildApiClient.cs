@@ -46,24 +46,40 @@ namespace TaimisToolbench.Services
         private static readonly TimeSpan DefaultAttemptTimeout = TimeSpan.FromSeconds(3);
         private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(2);
 
+        /// <summary>
+        /// A Retry-After further out than this ends the lookup instead of
+        /// being waited out. The caller already degrades without the build
+        /// id, so the choice is between giving up now and giving up later;
+        /// coming back before the API said to is not one of the options.
+        /// </summary>
+        private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(30);
+
         private readonly HttpClient _http;
         private readonly Func<TimeSpan, CancellationToken, Task> _delay;
+        private readonly Func<DateTimeOffset> _now;
         private readonly TimeSpan _attemptTimeout;
 
         public Gw2BuildApiClient(
             HttpClient http,
             Func<TimeSpan, CancellationToken, Task> delay = null,
-            TimeSpan? attemptTimeout = null)
+            TimeSpan? attemptTimeout = null,
+            Func<DateTimeOffset> now = null)
         {
             _http = http;
             _delay = delay ?? ((d, ct) => Task.Delay(d, ct));
+            _now = now ?? (() => DateTimeOffset.UtcNow);
             _attemptTimeout = attemptTimeout ?? DefaultAttemptTimeout;
         }
 
         /// <summary>
         /// One attempt, with its own timeout. Throws on any failure.
         /// </summary>
-        public async Task<int> GetBuildIdAsync(CancellationToken ct)
+        public Task<int> GetBuildIdAsync(CancellationToken ct)
+        {
+            return GetBuildIdAsync(ct, null);
+        }
+
+        private async Task<int> GetBuildIdAsync(CancellationToken ct, RetryAfterHint hint)
         {
             using (var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
             {
@@ -71,6 +87,11 @@ namespace TaimisToolbench.Services
 
                 using (var response = await _http.GetAsync(BuildUrl, timeoutCts.Token))
                 {
+                    if (hint != null && !response.IsSuccessStatusCode)
+                    {
+                        hint.Delay = HttpRetry.ResolveDelay(response, RetryDelay, _now());
+                    }
+
                     response.EnsureSuccessStatusCode();
                     string json = await response.Content.ReadAsStringAsync();
                     using (var doc = JsonDocument.Parse(json))
@@ -94,9 +115,11 @@ namespace TaimisToolbench.Services
 
             for (int attempt = 1; attempt <= MaxAttempts; attempt++)
             {
+                var hint = new RetryAfterHint();
+
                 try
                 {
-                    int buildId = await GetBuildIdAsync(ct);
+                    int buildId = await GetBuildIdAsync(ct, hint);
                     return new Gw2BuildIdResult(buildId, attempt, null);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -111,13 +134,31 @@ namespace TaimisToolbench.Services
                     lastError = ex;
                 }
 
-                if (attempt < MaxAttempts)
+                if (attempt >= MaxAttempts)
                 {
-                    await _delay(RetryDelay, ct);
+                    break;
                 }
+
+                TimeSpan wait = hint.Delay ?? RetryDelay;
+                if (wait > MaxRetryDelay)
+                {
+                    return new Gw2BuildIdResult(null, attempt, lastError);
+                }
+
+                await _delay(wait, ct);
             }
 
             return new Gw2BuildIdResult(null, MaxAttempts, lastError);
+        }
+
+        /// <summary>
+        /// Carries the wait a refused attempt was told to take back to the
+        /// retry loop, which otherwise sees only the exception thrown after
+        /// the response was disposed.
+        /// </summary>
+        private class RetryAfterHint
+        {
+            public TimeSpan? Delay { get; set; }
         }
     }
 }

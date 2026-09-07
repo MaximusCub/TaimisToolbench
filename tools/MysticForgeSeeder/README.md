@@ -52,6 +52,23 @@ that root's `ref/` directory.
    `expectedOutputCount` override from the file it is about to overwrite.
 6. Writes `ref/mystic_forge_recipes.json`, numbering from -100000 downwards.
 
+## How It Treats a Wiki Refusal
+
+Every query carries `maxlag=5`, so the wiki declines the request while its
+databases are lagging instead of serving it slowly. That refusal arrives as
+HTTP 200 with an `error` object in the body rather than as a status code;
+`tools/MysticForgeSeeder/WikiApiRefusal.cs` reads it. The tool waits and
+sends the request again, up to four attempts. The wait is whatever
+`Retry-After` asks for, in either its seconds or its HTTP-date form, and at
+least five seconds when the response asks for nothing.
+
+Three things end the run with an error rather than quietly: a refusal that
+survives all four attempts, an error code that means the query itself is
+wrong, and a page carrying neither results nor an error. None of them may
+end the scrape early, because step 6 rewrites
+`ref/mystic_forge_recipes.json` whole - a short scrape would drop recipes
+from the shipped seed and report success.
+
 ## Data Files
 
 | File | Role |
