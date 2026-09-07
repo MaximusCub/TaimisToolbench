@@ -2113,10 +2113,6 @@ namespace TaimisToolbench.Views
             return null;
         }
 
-        // Left edge of a row's text column, past the icon at x=2. It lives
-        // in SnapshotItemGridLayout with every other edge in the cell.
-        private const int RowTextX = SnapshotItemGridLayout.CellTextX;
-
         /// <summary>One run's chrome: its section title with the rule under
         /// it, and the sortable header band above its cells. The band spans
         /// the whole grid and carries ONE label pair per column - the
@@ -2336,7 +2332,13 @@ namespace TaimisToolbench.Views
             int columnCount = section.Grid.ColumnCount;
             int columnWidth = section.Grid.ColumnWidth;
             int nameHeaderX = ColumnHeaderLabelMath.LabelX(
-                SnapshotItemGridLayout.CellTextX, SnapshotItemGridLayout.CellIconX);
+                SnapshotItemGridLayout.CellTextX(chrome.AmountBand),
+                SnapshotItemGridLayout.CellIconX(chrome.AmountBand));
+
+            // Centred over the band its digits centre in, so the word and
+            // the numbers under it read as one column.
+            int amountHeaderX = SnapshotItemGridLayout.CellAmountTextX(
+                chrome.AmountBand, chrome.AmountWidth);
 
             while (chrome.NameHeaders.Count < columnCount)
             {
@@ -2358,11 +2360,9 @@ namespace TaimisToolbench.Views
                 }
 
                 int columnX = i * columnWidth;
-                int amountX =
-                    SnapshotItemGridLayout.CellAmountRightEdge(columnWidth) - chrome.AmountWidth;
 
                 chrome.NameHeaders[i].MoveTo(columnX + nameHeaderX);
-                chrome.AmountHeaders[i].MoveTo(columnX + amountX);
+                chrome.AmountHeaders[i].MoveTo(columnX + amountHeaderX);
             }
 
             SyncHeaderCells(chrome, columnCount, columnWidth, gridWidth);
@@ -2388,18 +2388,20 @@ namespace TaimisToolbench.Views
                 chrome.CellPlan = new HeaderCellPlan(columnCount * 2, chrome.Cells);
                 for (int i = 0; i < columnCount; i++)
                 {
+                    // Amount before Name: HeaderCellMath.Partition walks its
+                    // labels left to right, and Amount is now the left one.
                     chrome.CellPlan.Set(
-                        i * 2, chrome.NameHeaders[i].Title, chrome.NameWidth, chrome.SortByName,
-                        chrome.NameHeaders[i].IndicatorLabel);
-                    chrome.CellPlan.Set(
-                        (i * 2) + 1, chrome.AmountHeaders[i].Title, chrome.AmountWidth,
+                        i * 2, chrome.AmountHeaders[i].Title, chrome.AmountWidth,
                         chrome.SortByAmount, chrome.AmountHeaders[i].IndicatorLabel);
+                    chrome.CellPlan.Set(
+                        (i * 2) + 1, chrome.NameHeaders[i].Title, chrome.NameWidth,
+                        chrome.SortByName, chrome.NameHeaders[i].IndicatorLabel);
                 }
 
                 chrome.PlanColumns = columnCount;
             }
 
-            int splitX = SnapshotItemGridLayout.CellHeaderSplitX(columnWidth, chrome.AmountBand);
+            int splitX = SnapshotItemGridLayout.CellHeaderSplitX(chrome.AmountBand);
             for (int i = 0; i < columnCount; i++)
             {
                 int columnX = i * columnWidth;
@@ -2447,8 +2449,8 @@ namespace TaimisToolbench.Views
         /// <summary>
         /// One placed result cell: the row Panel the grid moves and sizes,
         /// and the closure that re-ellipsizes its text lines against a new
-        /// column width and re-pins its amount. Text and position only -
-        /// see RefitResultRows for the wallet row's one exception.
+        /// column width. The amount is not in it: that column sits at the
+        /// cell's left edge and does not move with the width.
         /// </summary>
         private sealed class ResultCell
         {
@@ -2472,14 +2474,15 @@ namespace TaimisToolbench.Views
         /// Log tab's rows and the plan's tables use.
         /// </summary>
         private static Label CreateRowTextLabel(
-            Panel rowPanel, string text, int maxWidth, int y, Color? color, out bool shortened)
+            Panel rowPanel, string text, int textX, int maxWidth, int y, Color? color,
+            out bool shortened)
         {
             var label = new Label()
             {
                 Font = UiFonts.Body,
                 AutoSizeWidth = true,
                 AutoSizeHeight = true,
-                Location = new Point(RowTextX, y),
+                Location = new Point(textX, y),
                 Parent = rowPanel,
             };
             if (color.HasValue)
@@ -2547,32 +2550,36 @@ namespace TaimisToolbench.Views
 
             IconControls.CreateItemIcon(
                 rowPanel, row.IconUrl, ItemIconFrame.ForRarity(rarity),
-                SnapshotItemGridLayout.CellIconX, 1,
+                SnapshotItemGridLayout.CellIconX(chrome.AmountBand), 1,
                 ItemIconTier.BagSlot, hover);
 
             // Never display raw item IDs (repo invariant) - row.Name is
             // already the resolved display name.
             //
-            // The count is a COLUMN, not a prefix: a quantity a reader can
-            // sort by has to line up. The name takes a rarity colour only
-            // when one is KNOWN - the unknown entry is a 200-grey that would
-            // dim every name on a fresh session (see RarityFor).
+            // The count is a COLUMN and it reads FIRST: a long name then
+            // trails off to the right instead of pushing the amount away
+            // from where a short one puts it. The name takes a rarity colour
+            // only when one is KNOWN - the unknown entry is a 200-grey that
+            // would dim every name on a fresh session (see RarityFor).
+            int textX = SnapshotItemGridLayout.CellTextX(chrome.AmountBand);
             string nameText = row.Name ?? "";
             string amountText = AmountText(row.TotalCount);
             var nameLabel = CreateRowTextLabel(
-                rowPanel, nameText,
-                SnapshotItemGridLayout.CellNameMaxWidth(columnWidth, chrome.AmountBand),
+                rowPanel, nameText, textX,
+                SnapshotItemGridLayout.CellTextMaxWidth(columnWidth, chrome.AmountBand),
                 4, rarity == null ? (Color?)null : RarityColors.GetRarityNameColor(rarity),
                 out _);
 
             // Measured here, not in the closure: the text is fixed and the
             // repack walks every row on screen.
             int amountWidth = (int)Math.Ceiling(UiFonts.Body.MeasureString(amountText).Width);
-            var amountLabel = CreateAmountLabel(rowPanel, amountText, amountWidth, columnWidth, 4);
+            CreateAmountLabel(rowPanel, amountText, amountWidth, chrome.AmountBand, 4);
 
-            // Runs UNDER the Amount column: that is one short line.
+            // Under the name, in the same run of the cell: the Amount column
+            // is left of both lines, not over this one.
             var breakdownLabel = CreateRowTextLabel(
-                rowPanel, breakdown, SnapshotItemGridLayout.CellFullLineMaxWidth(columnWidth),
+                rowPanel, breakdown, textX,
+                SnapshotItemGridLayout.CellTextMaxWidth(columnWidth, chrome.AmountBand),
                 26, InfoTextColor, out _);
 
             // NOTHING else on the cell answers a hover: the item's tooltip
@@ -2584,19 +2591,19 @@ namespace TaimisToolbench.Views
             // so this closure only re-fits what the new column width changed.
             _itemCells.Add(new ResultCell(rowPanel, w =>
             {
-                FitRowTextLabel(
-                    nameLabel, nameText, SnapshotItemGridLayout.CellNameMaxWidth(w, chrome.AmountBand));
-                FitRowTextLabel(breakdownLabel, breakdown, SnapshotItemGridLayout.CellFullLineMaxWidth(w));
-                PlaceAmountLabel(amountLabel, amountWidth, w, 4);
+                int fitWidth = SnapshotItemGridLayout.CellTextMaxWidth(w, chrome.AmountBand);
+                FitRowTextLabel(nameLabel, nameText, fitWidth);
+                FitRowTextLabel(breakdownLabel, breakdown, fitWidth);
             }));
         }
 
         /// <summary>
-        /// The cell's Amount column: right-aligned on the edge every cell
-        /// pins to, so the numbers line up however long the names are.
+        /// The cell's Amount column: centred in the band at the cell's left
+        /// edge. The band is fixed for the run, so this never moves with the
+        /// column width and the repack has no amount to re-place.
         /// </summary>
-        private static Label CreateAmountLabel(
-            Panel rowPanel, string text, int textWidth, int columnWidth, int y)
+        private static void CreateAmountLabel(
+            Panel rowPanel, string text, int textWidth, int amountBandWidth, int y)
         {
             var label = LabelHelpers.WithDescenderClearance(new Label()
             {
@@ -2607,17 +2614,8 @@ namespace TaimisToolbench.Views
                 AutoSizeHeight = true,
                 Parent = rowPanel,
             });
-            PlaceAmountLabel(label, textWidth, columnWidth, y);
-            return label;
-        }
-
-        /// <summary>Re-pins one amount to its column's right edge, on the
-        /// width the caller measured at build: the text never changes, and
-        /// this is a position-and-width-only path.</summary>
-        private static void PlaceAmountLabel(Label label, int textWidth, int columnWidth, int y)
-        {
             label.Location = new Point(
-                SnapshotItemGridLayout.CellAmountRightEdge(columnWidth) - textWidth, y);
+                SnapshotItemGridLayout.CellAmountTextX(amountBandWidth, textWidth), y);
         }
 
         /// <summary>
@@ -2762,7 +2760,7 @@ namespace TaimisToolbench.Views
             string currencyIconUrl = entry.IconUrl;
             IconControls.CreateItemIcon(
                 rowPanel, currencyIconUrl, ItemIconFrame.Currency(),
-                SnapshotItemGridLayout.CellIconX, 2,
+                SnapshotItemGridLayout.CellIconX(chrome.AmountBand), 2,
                 ItemIconTier.CurrencyListRow,
                 // A WALLET row is a wallet currency by construction - the
                 // id came out of /v2/account/wallet - so the kind needs no
@@ -2786,16 +2784,16 @@ namespace TaimisToolbench.Views
             string name = currencyName;
             string amountText = AmountText(entry.Value);
             var label = CreateRowTextLabel(
-                rowPanel, name, SnapshotItemGridLayout.CellNameMaxWidth(columnWidth, chrome.AmountBand),
+                rowPanel, name, SnapshotItemGridLayout.CellTextX(chrome.AmountBand),
+                SnapshotItemGridLayout.CellTextMaxWidth(columnWidth, chrome.AmountBand),
                 6, null, out _);
             int amountWidth = (int)Math.Ceiling(UiFonts.Body.MeasureString(amountText).Width);
-            var amountLabel = CreateAmountLabel(rowPanel, amountText, amountWidth, columnWidth, 6);
+            CreateAmountLabel(rowPanel, amountText, amountWidth, chrome.AmountBand, 6);
 
             _walletCells.Add(new ResultCell(rowPanel, w =>
             {
                 FitRowTextLabel(
-                    label, name, SnapshotItemGridLayout.CellNameMaxWidth(w, chrome.AmountBand));
-                PlaceAmountLabel(amountLabel, amountWidth, w, 6);
+                    label, name, SnapshotItemGridLayout.CellTextMaxWidth(w, chrome.AmountBand));
             }));
         }
 
