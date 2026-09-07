@@ -611,6 +611,7 @@ tests/TaimisToolbench.Tests/Services/TreeRowShapeGoldenTests.cs                 
 tests/TaimisToolbench.Tests/Services/TreeRowTooltipComposerTests.cs                     538
 tests/TaimisToolbench.Tests/Services/TypeRampMetricsTests.cs                            206
 tests/TaimisToolbench.Tests/Services/ValueDetailTooltipBuilderTests.cs                  191
+tests/TaimisToolbench.Tests/Services/VendorCoinCostShippedDataTests.cs                  101
 tests/TaimisToolbench.Tests/Services/VendorCurrencyTradeUpRoutingTests.cs               241
 tests/TaimisToolbench.Tests/Services/VendorOfferStoreTests.cs                           576
 tests/TaimisToolbench.Tests/Services/VendorUnlockRecipeTests.cs                         233
