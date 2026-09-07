@@ -464,11 +464,12 @@ tests/TaimisToolbench.Tests/Services/MysticForgeRecipeDataTests.cs              
 tests/TaimisToolbench.Tests/Services/MysticForgeSeedStalenessTests.cs                   480
 tests/TaimisToolbench.Tests/Services/NotesSectionLayoutMathTests.cs                     197
 tests/TaimisToolbench.Tests/Services/OwnedMaterialsForceBuyPrePassTests.cs              178
+tests/TaimisToolbench.Tests/Services/OwnedStockBadgeCoverageTests.cs                    243
 tests/TaimisToolbench.Tests/Services/PanelChromeMathTests.cs                            317
 tests/TaimisToolbench.Tests/Services/PhaseOrdinalGuardTests.cs                          46
 tests/TaimisToolbench.Tests/Services/PillSubduingEvaluatorTests.cs                      357
 tests/TaimisToolbench.Tests/Services/PillSubduingTooltipBuilderTests.cs                 130
-tests/TaimisToolbench.Tests/Services/PillTooltipTextComposerTests.cs                    306
+tests/TaimisToolbench.Tests/Services/PillTooltipTextComposerTests.cs                    321
 tests/TaimisToolbench.Tests/Services/PlanCompatibilityFixtureTests.cs                   371
 tests/TaimisToolbench.Tests/Services/PlanContentHeightMathTests.cs                      657
 tests/TaimisToolbench.Tests/Services/PlanHistoryBlobStoreTests.cs                       324
