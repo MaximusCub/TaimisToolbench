@@ -238,10 +238,9 @@ namespace TaimisToolbench.Views.Rendering
             // as the cursor leaves this row after a press, so a stale arm
             // from an earlier aborted drag can't be replayed by an
             // unrelated release later landing back on this row.
-            string wikiHint = null;
-            if (!string.IsNullOrEmpty(row.WikiUrl))
+            var wikiTarget = row.WikiTarget;
+            if (wikiTarget.HasPage)
             {
-                string wikiUrl = row.WikiUrl;
                 bool wikiLinkArmed = false;
                 rowPanel.RightMouseButtonPressed += (_, __) => wikiLinkArmed = true;
                 rowPanel.MouseLeft += (_, __) => wikiLinkArmed = false;
@@ -250,19 +249,19 @@ namespace TaimisToolbench.Views.Rendering
                     if (wikiLinkArmed)
                     {
                         wikiLinkArmed = false;
-                        WikiLinkLauncher.Open(wikiUrl);
+                        WikiLinkLauncher.Open(wikiTarget.BuildUrl());
                     }
                 };
-                wikiHint = TreeRowTooltipComposer.WikiHintText;
             }
 
             int itemId = row.ItemId;
-            string hintLine = wikiHint;
+            string hintLine = row.HintText;
             var hover = ItemIconTooltip.ForItem(
                 ItemTooltipIdentity.ForItem(row.Label ?? "", row.IconUrl, row.Rarity),
                 _getItemStatBlock == null || itemId <= 0 ? (Func<ItemStatBlock>)null
                     : () => _getItemStatBlock(itemId),
-                () => hintLine == null ? null : new List<string> { hintLine });
+                () => string.IsNullOrEmpty(hintLine) ? null : new List<string> { hintLine },
+                wikiTarget);
 
             IconControls.CreateItemIcon(
                 rowPanel, row.IconUrl, ItemIconFrame.ForRarity(row.Rarity),

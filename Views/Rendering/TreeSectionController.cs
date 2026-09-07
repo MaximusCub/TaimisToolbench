@@ -1048,7 +1048,9 @@ namespace TaimisToolbench.Views.Rendering
             int iconX = shape.IconX;
             ItemIconFrame frame = dimmed
                 ? ItemIconFrame.Explicit(new Color(60, 60, 60))
-                : ItemIconFrame.ForRarity(node.Rarity);
+                : TreeRowTooltipComposer.RowSubjectIsACurrency(node)
+                    ? ItemIconFrame.Currency()
+                    : ItemIconFrame.ForRarity(node.Rarity);
             var hover = TreeRowHover(node, captionText);
             var iconFrame = IconControls.CreateItemIcon(
                 rowPanel, node.IconUrl, frame, iconX, PlanContentHeightMath.TreeRowIconPad,
@@ -1272,9 +1274,10 @@ namespace TaimisToolbench.Views.Rendering
             if (WikiLinkBuilder.HasWikiPage(node.Name))
             {
                 // Which page a row opens is decided by
-                // TreeRowTooltipComposer.BuildWikiUrl, the same Blish-free
-                // class that writes the tooltip line naming the affordance.
-                string wikiUrl = TreeRowTooltipComposer.BuildWikiUrl(node);
+                // TreeRowTooltipComposer.WikiTargetFor, the same value the
+                // row's icon hover reads, so the row and its icon can never
+                // open different pages.
+                var wikiTarget = TreeRowTooltipComposer.WikiTargetFor(node);
                 bool wikiLinkArmed = false;
                 rowPanel.RightMouseButtonPressed += (_, __) => wikiLinkArmed = true;
                 rowPanel.MouseLeft += (_, __) => wikiLinkArmed = false;
@@ -1283,10 +1286,10 @@ namespace TaimisToolbench.Views.Rendering
                     if (wikiLinkArmed)
                     {
                         wikiLinkArmed = false;
-                        WikiLinkLauncher.Open(wikiUrl);
+                        WikiLinkLauncher.Open(wikiTarget.BuildUrl());
                     }
                 };
-        }
+            }
         }
 
         /// <summary>
@@ -1783,7 +1786,13 @@ namespace TaimisToolbench.Views.Rendering
             // comment and docs/ARCHITECTURE.md section 5's STANDING RULE.
             var extraContent = TreeRowTooltipComposer.BuildExtraTooltipContent(
                 node, captionText, _host.CurrentPlan);
-            var identity = ItemTooltipIdentity.ForItem(node.Name ?? "", node.IconUrl, node.Rarity);
+
+            // The id space the row drew its icon from decides the header's
+            // frame: a currency row headed as an item drew a filled plate
+            // behind transparent art, which reads as a grey background.
+            var identity = TreeRowTooltipComposer.RowSubjectIsACurrency(node)
+                ? ItemTooltipIdentity.ForCurrency(node.Name ?? "", node.IconUrl)
+                : ItemTooltipIdentity.ForItem(node.Name ?? "", node.IconUrl, node.Rarity);
             var getStatBlock = _getItemStatBlock;
 
             // Composed at HOVER time, not here: a plan restored from disk
@@ -1793,10 +1802,9 @@ namespace TaimisToolbench.Views.Rendering
             // ItemMetadataService.GetCachedStatBlock, which never fetches.
             return ItemIconTooltip.Composed(
                 identity,
-                () => ItemRowTooltipComposer.BuildRowContent(
-                    TreeRowTooltipComposer.BuildStatTooltipContent(node, getStatBlock),
-                    identity,
-                    extraContent));
+                () => TreeRowTooltipComposer.BuildStatTooltipContent(node, getStatBlock),
+                () => extraContent,
+                TreeRowTooltipComposer.WikiTargetFor(node));
         }
 
         /// <summary>

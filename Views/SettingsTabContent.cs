@@ -2313,7 +2313,8 @@ namespace TaimisToolbench.Views
                         ItemTooltipIdentity.ForItem(row.Name, item.IconUrl, rarity),
                         _getItemStatBlock == null || itemId <= 0
                             ? (Func<ItemStatBlock>)null
-                            : () => _getItemStatBlock(itemId)));
+                            : () => _getItemStatBlock(itemId),
+                        IconWikiTarget.ItemPage(row.Name)));
                 return;
             }
 
@@ -2343,7 +2344,8 @@ namespace TaimisToolbench.Views
                         currencyName,
                         CurrencyDisplayResolver.ResolveIconUrl(currencyId, _currencyMetadata),
                         CurrencyDisplayResolver.ResolveDescription(currencyId, _currencyMetadata),
-                        null)));
+                        null),
+                    IconWikiTarget.ItemPage(currencyName)));
         }
 
         /// <summary>

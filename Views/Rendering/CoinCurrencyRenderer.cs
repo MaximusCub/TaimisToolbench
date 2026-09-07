@@ -418,9 +418,15 @@ namespace TaimisToolbench.Views.Rendering
                 // It still occupies the whole measured bar-tier window, so
                 // this segment's advance below is unchanged by the border
                 // coming off.
+                string segName = seg.Name;
+                string segIconUrl = seg.IconUrl;
                 var icon = IconControls.CreateCurrencyIcon(
-                    parent, seg.IconUrl, x + seg.TextWidth + CoinSegmentMath.CoinLabelIconGap,
-                    y + iconYOffset, ItemIconTier.CurrencyBarRun, seg.Name);
+                    parent, segIconUrl, x + seg.TextWidth + CoinSegmentMath.CoinLabelIconGap,
+                    y + iconYOffset, ItemIconTier.CurrencyBarRun,
+                    ItemIconTooltip.ForCurrency(
+                        segName,
+                        () => CurrencyTooltipFacts.For(segName, segIconUrl, null, null),
+                        IconWikiTarget.ItemPage(segName)));
 
                 controls[i] = (label, icon);
                 widths[i] = seg.TextWidth;

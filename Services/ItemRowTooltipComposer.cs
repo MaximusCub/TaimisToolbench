@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using TaimisToolbench.Models;
-
 namespace TaimisToolbench.Services
 {
     /// <summary>
@@ -45,44 +42,10 @@ namespace TaimisToolbench.Services
             }
             else if (identity.HasSubject)
             {
-                builder.Header(
-                    identity.IconUrl, identity.Name,
-                    TooltipHeaderSubject.ItemOfRarity(identity.Rarity));
+                builder.Header(identity.IconUrl, identity.Name, identity.Subject);
             }
 
-            var content = builder.Build();
-            if (extraContent == null || extraContent.IsEmpty)
-            {
-                return content;
-            }
-
-            // A row with extras and nothing else to say puts them in the
-            // FIRST box: a second box under an empty one is a blank frame.
-            return content.IsEmpty ? extraContent : content.WithExtra(extraContent);
-        }
-
-        /// <summary>A stat block plus prose-only extras, for the surfaces
-        /// whose additions are plain sentences (a hint, a wallet
-        /// holding).</summary>
-        public static TooltipContent BuildRowContent(
-            ItemStatBlock stats,
-            ItemTooltipIdentity identity,
-            IReadOnlyList<string> extraLines)
-        {
-            var extras = new TooltipContentBuilder();
-            if (extraLines != null)
-            {
-                foreach (var line in extraLines)
-                {
-                    if (!string.IsNullOrEmpty(line))
-                    {
-                        extras.Text(line).EndLine();
-                    }
-                }
-            }
-
-            return BuildRowContent(
-                ItemStatTooltipComposer.BuildContent(stats), identity, extras.Build());
+            return SecondTooltipBox.Attach(builder.Build(), extraContent);
         }
     }
 }

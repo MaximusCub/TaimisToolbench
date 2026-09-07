@@ -486,7 +486,7 @@ namespace TaimisToolbench.Tests.Services
 
         // --- UI-bundle milestone, Feature A (wiki links) ---
         [Fact]
-        public void RequiredRecipes_Missing_NotLearnedFromItem_WikiUrlLinksToAcquisitionAnchor()
+        public void RequiredRecipes_NotLearnedFromItem_WikiTargetIsTheAcquisitionAnchor()
         {
             var meta = MetaFor((1, "Bolt of Damask", "bolt.png"));
             var result = MakeResult(metadata: meta, requiredRecipes: new List<RequiredRecipe>
@@ -507,11 +507,13 @@ namespace TaimisToolbench.Tests.Services
             var section = vm.Sections.First(s => s.SectionType == PlanSectionType.RequiredRecipes);
             Assert.Equal(
                 "https://wiki.guildwars2.com/wiki/Bolt_of_Damask#Acquisition",
-                section.Rows[0].WikiUrl);
+                section.Rows[0].WikiTarget.BuildUrl());
+            Assert.Equal(
+                IconWikiTarget.AcquisitionHintText, section.Rows[0].WikiTarget.Hint);
         }
 
         [Fact]
-        public void RequiredRecipes_Missing_LearnedFromItem_WikiUrlLinksToRecipeSheet()
+        public void RequiredRecipes_LearnedFromItem_WikiTargetIsTheRecipeSheetPage()
         {
             var meta = MetaFor((1, "Bolt of Damask", "bolt.png"));
             var result = MakeResult(metadata: meta, requiredRecipes: new List<RequiredRecipe>
@@ -532,53 +534,39 @@ namespace TaimisToolbench.Tests.Services
             var section = vm.Sections.First(s => s.SectionType == PlanSectionType.RequiredRecipes);
             Assert.Equal(
                 "https://wiki.guildwars2.com/wiki/Recipe:_Bolt_of_Damask",
-                section.Rows[0].WikiUrl);
+                section.Rows[0].WikiTarget.BuildUrl());
         }
 
-        [Fact]
-        public void RequiredRecipes_Learned_NoWikiUrl()
+        /// <summary>
+        /// A row the player has nothing left to unlock still reaches the
+        /// wiki: every icon in the module opens a page on right-click, and
+        /// an already-learned recipe's page is still the page about it.
+        /// </summary>
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(true, true)]
+        public void RequiredRecipes_LearnedAndAutoLearnedRowsStillReachTheWiki(
+            bool isAutoLearned, bool isMissing)
         {
-            var result = MakeResult(requiredRecipes: new List<RequiredRecipe>
+            var meta = MetaFor((1, "Bolt of Damask", "bolt.png"));
+            var result = MakeResult(metadata: meta, requiredRecipes: new List<RequiredRecipe>
             {
                 new RequiredRecipe
                 {
                     RecipeId = 10,
                     OutputItemId = 1,
-                    IsAutoLearned = false,
+                    IsAutoLearned = isAutoLearned,
                     Disciplines = new List<string> { "Weaponsmith" },
                     MinRating = 400,
-                    IsMissing = false,
+                    IsMissing = isMissing,
                 },
             });
             var vm = _builder.Build(result);
 
             var section = vm.Sections.First(s => s.SectionType == PlanSectionType.RequiredRecipes);
-            Assert.Null(section.Rows[0].WikiUrl);
-        }
-
-        [Fact]
-        public void RequiredRecipes_AutoLearned_NoWikiUrl()
-        {
-            var result = MakeResult(requiredRecipes: new List<RequiredRecipe>
-            {
-                new RequiredRecipe
-                {
-                    RecipeId = 10,
-                    OutputItemId = 1,
-                    IsAutoLearned = true,
-                    Disciplines = new List<string> { "Weaponsmith" },
-                    MinRating = 400,
-                    // Verification-fix: true, not null - the real-data shape
-                    // (an AutoLearned recipe below the character rating is
-                    // IsAutoLearned AND IsMissing) is the axis this test must
-                    // pin; null passed vacuously under any gate.
-                    IsMissing = true,
-                },
-            });
-            var vm = _builder.Build(result);
-
-            var section = vm.Sections.First(s => s.SectionType == PlanSectionType.RequiredRecipes);
-            Assert.Null(section.Rows[0].WikiUrl);
+            Assert.Equal(
+                "https://wiki.guildwars2.com/wiki/Bolt_of_Damask#Acquisition",
+                section.Rows[0].WikiTarget.BuildUrl());
         }
 
         [Fact]

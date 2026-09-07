@@ -123,10 +123,9 @@ namespace TaimisToolbench.Views.Rendering
                 nameText, vm.TargetIconUrl, vm.TargetRarity);
             var hover = ItemIconTooltip.Composed(
                 identity,
-                () => ItemRowTooltipComposer.BuildRowContent(
-                    TreeRowTooltipComposer.BuildStatTooltipContent(treeRoot, _getItemStatBlock),
-                    identity,
-                    (TooltipContent)null));
+                () => TreeRowTooltipComposer.BuildStatTooltipContent(treeRoot, _getItemStatBlock),
+                null,
+                IconWikiTarget.ItemPage(nameText));
 
             IconControls.CreateItemIcon(
                 titlePanel, vm.TargetIconUrl, ItemIconFrame.ForRarity(vm.TargetRarity),
@@ -307,7 +306,8 @@ namespace TaimisToolbench.Views.Rendering
 
             return ItemIconTooltip.ForItem(
                 identity,
-                getStatBlock == null ? (Func<ItemStatBlock>)null : () => getStatBlock(itemId));
+                getStatBlock == null ? (Func<ItemStatBlock>)null : () => getStatBlock(itemId),
+                IconWikiTarget.ItemPage(item.Name));
         }
     }
 }

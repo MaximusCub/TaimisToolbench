@@ -2194,7 +2194,8 @@ namespace TaimisToolbench.Views
             return ItemIconTooltip.ForItem(
                 ItemTooltipIdentity.ForItem(row.FullName, entry.IconUrl, rarity),
                 _getItemStatBlock == null || itemId <= 0 ? (Func<ItemStatBlock>)null
-                    : () => _getItemStatBlock(itemId));
+                    : () => _getItemStatBlock(itemId),
+                IconWikiTarget.ItemPage(row.FullName));
         }
 
         /// <summary>The rarity the session stat cache knows for an item, or
@@ -2270,15 +2271,18 @@ namespace TaimisToolbench.Views
         /// </summary>
         private ItemIconTooltip CurrencyHover(int currencyId, string fullName)
         {
-            return ItemIconTooltip.ForCurrency(fullName, () =>
-            {
-                var metadata = CurrencyMetadataFor(currencyId);
-                return CurrencyTooltipFacts.For(
-                    fullName,
-                    CurrencyDisplayResolver.ResolveIconUrl(currencyId, metadata),
-                    CurrencyDisplayResolver.ResolveDescription(currencyId, metadata),
-                    null);
-            });
+            return ItemIconTooltip.ForCurrency(
+                fullName,
+                () =>
+                {
+                    var metadata = CurrencyMetadataFor(currencyId);
+                    return CurrencyTooltipFacts.For(
+                        fullName,
+                        CurrencyDisplayResolver.ResolveIconUrl(currencyId, metadata),
+                        CurrencyDisplayResolver.ResolveDescription(currencyId, metadata),
+                        null);
+                },
+                IconWikiTarget.ItemPage(fullName));
         }
 
         private string CurrencyIconUrl(RankerCurrencyShortfall shortfall)

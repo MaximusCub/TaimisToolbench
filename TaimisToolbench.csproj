@@ -247,9 +247,11 @@
     <Compile Include="Services\UpgradeEffectLines.cs" />
     <Compile Include="Services\ItemRowTooltipComposer.cs" />
     <Compile Include="Services\ItemTooltipIdentity.cs" />
+    <Compile Include="Services\IconWikiTarget.cs" />
     <Compile Include="Services\ExcessCraftOutputCalculator.cs" />
     <Compile Include="Services\CostLineValuation.cs" />
     <Compile Include="Services\SeasonalOfferFilter.cs" />
+    <Compile Include="Services\SecondTooltipBox.cs" />
     <Compile Include="Services\RecipeSheetSavingsCalculator.cs" />
     <Compile Include="Services\RecipeSheetItemSeedService.cs" />
     <Compile Include="Services\JsonSeedReader.cs" />
@@ -332,6 +334,7 @@
     <Compile Include="Views\Rendering\RecipesSectionRenderer.cs" />
     <Compile Include="Views\Rendering\SummarySectionRenderer.cs" />
     <Compile Include="Views\Rendering\IconNameRowHelpers.cs" />
+    <Compile Include="Views\Rendering\IconWikiClick.cs" />
     <Compile Include="Views\Rendering\RowRelayoutHelpers.cs" />
     <Compile Include="Views\Rendering\RowActionKey.cs" />
     <Compile Include="Views\Rendering\TreeSectionController.cs" />

@@ -36,11 +36,23 @@ namespace TaimisToolbench.Tests.Services
             return ItemTooltipIdentity.ForItem(name, IconUrl, "Basic");
         }
 
+        private static TooltipContent Stats(ItemStatBlock block)
+        {
+            return ItemStatTooltipComposer.BuildContent(block);
+        }
+
+        // Through the real second-box builder, which is what every icon
+        // hover composes its extras with.
+        private static TooltipContent Extras(params string[] tips)
+        {
+            return SecondTooltipBox.Compose(tips, null);
+        }
+
         [Fact]
         public void StatBlockOpensTheTooltipAndSuppressesTheDuplicateNameLine()
         {
             var lines = ItemRowTooltipComposer.BuildRowContent(
-                Block(), Identity(), extraLines: null).ToPlainLines();
+                Stats(Block()), Identity(), null).ToPlainLines();
 
             Assert.Equal("Mithril Ore", lines[0]);
             Assert.Equal(1, lines.Count(l => l == "Mithril Ore"));
@@ -57,7 +69,7 @@ namespace TaimisToolbench.Tests.Services
         public void WithNoStatBlockTheHeaderStillCarriesTheRowsOwnIcon()
         {
             var content = ItemRowTooltipComposer.BuildRowContent(
-                (ItemStatBlock)null, Identity("A Very Long Item Name"), extraLines: null);
+                Stats(null), Identity("A Very Long Item Name"), null);
 
             Assert.Equal(TooltipLineKind.Header, content.Lines[0].Kind);
             Assert.Equal(IconUrl, content.Lines[0].IconUrl);
@@ -68,7 +80,7 @@ namespace TaimisToolbench.Tests.Services
         public void WithAStatBlockTheHeaderCarriesTheStatBlocksIcon()
         {
             var content = ItemRowTooltipComposer.BuildRowContent(
-                Block(), Identity(), extraLines: null);
+                Stats(Block()), Identity(), null);
 
             Assert.Equal(TooltipLineKind.Header, content.Lines[0].Kind);
             Assert.Equal(IconUrl, content.Lines[0].IconUrl);
@@ -78,14 +90,14 @@ namespace TaimisToolbench.Tests.Services
         public void AnIdentityWithNoNameHeadsNothing()
         {
             Assert.True(ItemRowTooltipComposer.BuildRowContent(
-                (ItemStatBlock)null, ItemTooltipIdentity.Unnamed(), extraLines: null).IsEmpty);
+                Stats(null), ItemTooltipIdentity.Unnamed(), null).IsEmpty);
         }
 
         [Fact]
         public void ExtraLinesGoToTheSecondBoxAndNeverIntoTheItemsOwn()
         {
             var content = ItemRowTooltipComposer.BuildRowContent(
-                Block(), Identity(), new[] { "Right-click to open the wiki page." });
+                Stats(Block()), Identity(), Extras(IconWikiTarget.HintText));
 
             Assert.True(content.HasExtra);
             Assert.Equal(new[] { "Right-click to open the wiki page." }, content.ToExtraLines());
@@ -101,8 +113,8 @@ namespace TaimisToolbench.Tests.Services
         public void ExtraLinesAloneStayInTheFirstBoxRatherThanUnderAnEmptyOne()
         {
             var content = ItemRowTooltipComposer.BuildRowContent(
-                (ItemStatBlock)null, ItemTooltipIdentity.Unnamed(),
-                new[] { "Right-click to open the wiki page." });
+                Stats(null), ItemTooltipIdentity.Unnamed(),
+                Extras(IconWikiTarget.HintText));
 
             Assert.False(content.HasExtra);
             Assert.Equal(new[] { "Right-click to open the wiki page." }, content.ToPlainLines());

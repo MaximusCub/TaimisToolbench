@@ -118,23 +118,26 @@ namespace TaimisToolbench.Views.Rendering
         /// advance, a term in the minimum-window-width derivation, does not
         /// move.
         /// </para>
-        /// <paramref name="tooltipText"/> is required, not defaulted: these
-        /// icons mostly draw with no name text beside them, so a hover is
-        /// the only thing that can identify one.
+        /// <paramref name="tooltip"/> is an <see cref="ItemIconTooltip"/>
+        /// like every other icon's, not a bare name string: these icons
+        /// mostly draw with no name text beside them, so the hover is the
+        /// only thing that can identify one, and it earns the same second
+        /// box and the same right-click as the rest.
         /// </summary>
         internal static Panel CreateCurrencyIcon(
-            Panel parent, string iconUrl, int x, int y, ItemIconTier tier, string tooltipText)
+            Panel parent, string iconUrl, int x, int y, ItemIconTier tier, ItemIconTooltip tooltip)
         {
-            if (!IconFrameGeometry.CurrencyIsFramed(tier))
-            {
-                return CreateUnframedIcon(
-                    parent, iconUrl, x, y, ItemIconTiers.FrameSize(tier), tooltipText);
-            }
+            Panel panel = IconFrameGeometry.CurrencyIsFramed(tier)
+                ? CreateFrame(
+                    parent, iconUrl, ItemIconFrame.Currency(), x, y,
+                    ItemIconTiers.ArtSize(tier), ItemIconTiers.BorderThickness(tier),
+                    tooltip.PlainText, deferArt: false, artSquare: out _)
+                : CreateUnframedIcon(
+                    parent, iconUrl, x, y, ItemIconTiers.FrameSize(tier),
+                    tooltip.PlainText, deferArt: false);
 
-            return CreateFrame(
-                parent, iconUrl, ItemIconFrame.Currency(), x, y,
-                ItemIconTiers.ArtSize(tier), ItemIconTiers.BorderThickness(tier), tooltipText,
-                deferArt: false, artSquare: out _);
+            tooltip.StampOnIconTree(panel);
+            return panel;
         }
 
         private static Panel CreateFramedIcon(

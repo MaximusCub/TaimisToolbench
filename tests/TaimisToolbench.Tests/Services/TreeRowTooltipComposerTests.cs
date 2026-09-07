@@ -274,9 +274,7 @@ namespace TaimisToolbench.Tests.Services
             // consolidation: every composer now spells a coin amount the
             // way the icons beside it do (leading all-zero units omitted,
             // trailing units zero-padded).
-            Assert.Equal(
-                new[] { "Unit price: 5s 0c", "Unit price: 5 Karma", "Right-click to open the wiki page." },
-                lines);
+            Assert.Equal(new[] { "Unit price: 5s 0c", "Unit price: 5 Karma" }, lines);
         }
 
         [Fact]
@@ -369,13 +367,15 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void RealItemName_AddsWikiLinkLine()
+        public void RealItemName_ReachesAPageAndSaysSo()
         {
-            var node = Node(CraftingDecision.Have, name: "Bolt of Damask");
+            var target = TreeRowTooltipComposer.WikiTargetFor(
+                Node(CraftingDecision.Have, name: "Bolt of Damask"));
 
-            var lines = TreeRowTooltipComposer.BuildExtraTooltipContent(node, null, null).ToPlainLines();
-
-            Assert.Contains("Right-click to open the wiki page.", lines);
+            Assert.True(target.HasPage);
+            Assert.Equal(IconWikiTarget.HintText, target.Hint);
+            Assert.Equal(
+                "https://wiki.guildwars2.com/wiki/Bolt_of_Damask", target.BuildUrl());
         }
 
         [Theory]
@@ -383,28 +383,34 @@ namespace TaimisToolbench.Tests.Services
         [InlineData("")]
         [InlineData(null)]
         [InlineData("   ")]
-        public void SentinelOrEmptyName_SuppressesWikiLinkLine(string name)
+        public void SentinelOrEmptyName_ReachesNoPageAndSaysNothing(string name)
         {
-            var node = Node(CraftingDecision.Have, name: name);
+            var target = TreeRowTooltipComposer.WikiTargetFor(
+                Node(CraftingDecision.Have, name: name));
 
-            var lines = TreeRowTooltipComposer.BuildExtraTooltipContent(node, null, null).ToPlainLines();
+            Assert.False(target.HasPage);
+            Assert.Null(target.Hint);
+            Assert.Null(target.BuildUrl());
 
-            Assert.DoesNotContain("Right-click to open the wiki page.", lines);
+            Assert.Empty(
+                SecondTooltipBox.Compose((TooltipContent)null, target.Hint).ToPlainLines());
         }
 
+        /// <summary>
+        /// The whole second box a tree row shows, composed the way the icon
+        /// hover composes it: this surface's tips in their own order, then
+        /// one blank line, then the right-click affordance last.
+        /// </summary>
         [Fact]
-        public void AllLinesTogether_RenderInEstablishedOrder()
+        public void TheSecondBox_PutsTheTipsFirstAndTheWikiLineLast()
         {
-            // Order matters for on-screen readability: caption first (when
-            // present), then unit price, then the price-side caveat, then
-            // the acquisition hint, then the wiki-link affordance last -
-            // matching TreeSectionController.RenderTreeNode's original
-            // build order verbatim.
             var node = Node(
                 CraftingDecision.BuyFromTp, name: "Bolt of Damask", quantity: 3, unitCost: 100,
                 priceSideFellBack: true);
 
-            var lines = TreeRowTooltipComposer.BuildExtraTooltipContent(node, "Caption line", null).ToPlainLines();
+            var box = SecondTooltipBox.Compose(
+                TreeRowTooltipComposer.BuildExtraTooltipContent(node, "Caption line", null),
+                TreeRowTooltipComposer.WikiTargetFor(node).Hint);
 
             Assert.Equal(
                 new[]
@@ -412,9 +418,10 @@ namespace TaimisToolbench.Tests.Services
                     "Caption line",
                     "Unit price: 1s 0c",
                     "The other trading post price side is shown.",
-                    "Right-click to open the wiki page.",
+                    "",
+                    IconWikiTarget.HintText,
                 },
-                lines);
+                box.ToPlainLines());
         }
 
         // --- Stat tooltip gate (item-stat-tooltips) ---

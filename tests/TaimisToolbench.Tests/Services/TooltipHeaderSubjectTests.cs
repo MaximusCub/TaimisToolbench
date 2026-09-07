@@ -48,9 +48,9 @@ namespace TaimisToolbench.Tests.Services
                 CurrencyContent().Lines[0].Spans.Single().Role);
 
             var item = ItemRowTooltipComposer.BuildRowContent(
-                (ItemStatBlock)null,
+                null,
                 ItemTooltipIdentity.ForItem("Unlooked Thing", ItemIcon, null),
-                extraLines: null);
+                null);
 
             Assert.Equal(TooltipSpanRole.Rarity, item.Lines[0].Spans.Single().Role);
         }
@@ -63,9 +63,9 @@ namespace TaimisToolbench.Tests.Services
             // item's frame.
             var currency = SubjectOfFirstLine(CurrencyContent());
             var item = SubjectOfFirstLine(ItemRowTooltipComposer.BuildRowContent(
-                (ItemStatBlock)null,
+                null,
                 ItemTooltipIdentity.ForItem("Unlooked Thing", ItemIcon, null),
-                extraLines: null));
+                null));
 
             Assert.Null(currency.RarityKey);
             Assert.Null(item.RarityKey);
@@ -77,9 +77,9 @@ namespace TaimisToolbench.Tests.Services
         public void AnItemRowHeaderCarriesTheRarityTheRowResolved()
         {
             var subject = SubjectOfFirstLine(ItemRowTooltipComposer.BuildRowContent(
-                (ItemStatBlock)null,
+                null,
                 ItemTooltipIdentity.ForItem("Mithril Ore", ItemIcon, "Basic"),
-                extraLines: null));
+                null));
 
             Assert.False(subject.IsCurrency);
             Assert.Equal("Basic", subject.RarityKey);
