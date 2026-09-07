@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "generatedAt": "2026-08-16T00:00:00Z",
-  "source": "api.guildwars2.com /v2/recipes, /v2/items (measured 2026-08-16) - see docs/KNOWN-ISSUES.md RECIPE-SHEET SAVINGS entry for why this map cannot be built from any existing seed/API field",
+  "source": "api.guildwars2.com /v2/recipes, /v2/items (measured 2026-08-16). The link an entry needs is GET /v2/items/:id details.recipe_id, returned for an item whose details.type is Unlock and details.unlock_type is CraftingRecipe. No file under ref/ carries it, so an entry is added by running that lookup against a candidate sheet item id. tools/VendorOfferUpdater runs the same lookup in Gw2ApiHelper.ResolveRecipeSheetRecipeIdAsync, and 18 offers in ref/vendor_offers.json already carry the pair it resolved.",
   "items": [
     {
       "recipeId": 13853,
