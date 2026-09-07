@@ -338,7 +338,7 @@ Views/Rendering/SortIndicator.cs                                                
 Views/Rendering/SortableHeaderBlock.cs                                                  108
 Views/Rendering/SortableHeaderCells.cs                                                  249
 Views/Rendering/SortableHeaderLabel.cs                                                  38
-Views/Rendering/StickyHeaderHost.cs                                                     404
+Views/Rendering/StickyHeaderHost.cs                                                     408
 Views/Rendering/SummarySectionRenderer.cs                                               1137
 Views/Rendering/TextRowRenderer.cs                                                      36
 Views/Rendering/TooltipFacility.cs                                                      288
