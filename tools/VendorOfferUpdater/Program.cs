@@ -73,6 +73,7 @@ namespace VendorOfferUpdater
             int maxSeasonalPages = 500;
             string? diffSummaryBefore = null;
             string? diffSummaryAfter = null;
+            bool buildRecipeSheetMap = false;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -141,6 +142,10 @@ namespace VendorOfferUpdater
                 {
                     recheckMisses = true;
                 }
+                else if (args[i] == "--build-recipe-sheet-map")
+                {
+                    buildRecipeSheetMap = true;
+                }
                 else if (args[i] == "--tag-seasonal-festivals")
                 {
                     tagSeasonalFestivals = true;
@@ -174,6 +179,21 @@ namespace VendorOfferUpdater
             if (diffSummaryBefore != null && diffSummaryAfter != null)
             {
                 return await RunDiffSummaryAsync(diffSummaryBefore, diffSummaryAfter);
+            }
+
+            // --build-recipe-sheet-map reads ref/vendor_offers.json and the
+            // GW2 item endpoint, and writes only ref/recipe_sheet_items.json.
+            // It short-circuits here for the same reason --diff-summary does:
+            // it touches no wiki page, so none of the scrape setup below
+            // applies to it.
+            if (buildRecipeSheetMap)
+            {
+                using var itemHttpClient = new HttpClient();
+                itemHttpClient.DefaultRequestHeaders.UserAgent.ParseAdd(
+                    "TaimisToolbench-VendorOfferUpdater/1.0 " +
+                    "(+https://github.com/MaximusCub/TaimisToolbench)");
+                return await RecipeSheetMapBuilder.RunAsync(
+                    FindRepoRoot(), itemHttpClient, delayMs, allowCoverageDrop, ct);
             }
 
             if (maxAttempts <= 0)
