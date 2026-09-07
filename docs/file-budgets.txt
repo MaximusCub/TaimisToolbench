@@ -641,6 +641,7 @@ tests/VendorOfferUpdater.Tests/SeasonalFestivalMappingTests.cs                  
 tests/VendorOfferUpdater.Tests/SeasonalFestivalRoundTripTests.cs                        151
 tests/VendorOfferUpdater.Tests/SerializeDatasetGoldenFileTests.cs                       116
 tests/VendorOfferUpdater.Tests/TemporaryTemplateParserTests.cs                          191
+tests/VendorOfferUpdater.Tests/UnhashedFieldCarryForwardTests.cs                        284
 tests/VendorOfferUpdater.Tests/VendorOfferDiffTests.cs                                  338
 tests/VendorOfferUpdater.Tests/VendorOfferHasherGoldenVectorTests.cs                    82
 tests/VendorOfferUpdater.Tests/VendorOfferHasherTests.cs                                365
@@ -662,7 +663,7 @@ tools/VendorOfferUpdater/Models/Gw2Constants.cs                                 
 tools/VendorOfferUpdater/Models/VendorOffer.cs                                          75
 tools/VendorOfferUpdater/Models/VendorOfferDataset.cs                                   21
 tools/VendorOfferUpdater/Models/VendorOfferManifest.cs                                  33
-tools/VendorOfferUpdater/Program.cs                                                     2419
+tools/VendorOfferUpdater/Program.cs                                                     2452
 tools/VendorOfferUpdater/QueryOptions.cs                                                56
 tools/VendorOfferUpdater/QueryStats.cs                                                  79
 tools/VendorOfferUpdater/TemporaryTemplateParser.cs                                     122
