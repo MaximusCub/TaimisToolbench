@@ -5,6 +5,8 @@ AcquisitionHint.LastVerified:String
 AcquisitionHint.SourceUrl:String
 BarterItemCost.Amount:Int64
 BarterItemCost.ItemId:Int32
+BarterItemCost.TradeUpCurrencyId:Nullable`1<Int32>
+BarterItemCost.TradeUpCurrencyPerUnit:Nullable`1<Int32>
 CompetencyOpportunity.CraftCost:Int64
 CompetencyOpportunity.DeltaCost:Int64
 CompetencyOpportunity.Disciplines:IReadOnlyList`1<String>

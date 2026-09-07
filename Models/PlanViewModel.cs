@@ -420,6 +420,23 @@ namespace TaimisToolbench.Models
         // populated for both kinds. False on every other row.
         public bool IsBarterItemCost { get; set; }
 
+        // The sub-currency behind a coalesced trade-up item row: the
+        // holding the account has of it, and how many of THIS row's item
+        // that holding buys. Both are set together, only on an
+        // IsBarterItemCost row whose plan cost carried a
+        // BarterItemCost.TradeUpCurrencyId, and only when the wallet
+        // snapshot answered for that currency at all. TradeUpBuysQuantity
+        // is capped at what the row still needs, so it never claims a
+        // holding covers more than the plan asks for. Null/0 everywhere
+        // else, which is what suppresses the table's Note column.
+        public string TradeUpCurrencyName { get; set; }
+
+        public string TradeUpCurrencyIconUrl { get; set; }
+
+        public int? TradeUpCurrencyHeld { get; set; }
+
+        public int TradeUpBuysQuantity { get; set; }
+
         // Identity of one CurrencyCost row, stable across a re-solve: the
         // row's id with the id space it came from written into the string.
         // The id space has to be part of it, because a wallet currency id

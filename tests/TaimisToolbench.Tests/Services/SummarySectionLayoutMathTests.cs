@@ -806,6 +806,99 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void WithNoNote_TheTableIsExactlyWhatItWasBeforeTheColumnExisted()
+        {
+            var without = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(1200, 90, 40);
+            var zeroNote = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(1200, 90, 40, 0);
+
+            Assert.Equal(without.RequiredRightEdge, zeroNote.RequiredRightEdge);
+            Assert.Equal(without.HaveRightEdge, zeroNote.HaveRightEdge);
+            Assert.Equal(without.NeededRightEdge, zeroNote.NeededRightEdge);
+            Assert.Equal(without.MarkerX, zeroNote.MarkerX);
+            Assert.Equal(0, zeroNote.NoteWidth);
+            Assert.Equal(zeroNote.MarkerX, zeroNote.NoteX);
+
+            // A Status header still measures its room from Needed, not from
+            // a note band that is not there.
+            var rooms = SummarySectionLayoutMath.CurrencyHeaderRoomsFor(zeroNote, 20, 20, 20);
+            var before = SummarySectionLayoutMath.CurrencyHeaderRoomsFor(without, 20, 20, 20);
+            Assert.Equal(before.Status.Left, rooms.Status.Left);
+            Assert.Equal(before.Status.Right, rooms.Status.Right);
+        }
+
+        [Fact]
+        public void ANoteColumnSitsBetweenNeededAndStatus()
+        {
+            const int NoteWidth = 120;
+            var edges = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(1200, 60, 34, NoteWidth);
+
+            Assert.Equal(NoteWidth, edges.NoteWidth);
+            Assert.Equal(
+                edges.MarkerX - SummarySectionLayoutMath.CurrencyColumnGap - NoteWidth, edges.NoteX);
+
+            // Every number column keeps clear of the note's left rule, the
+            // way they used to keep clear of the marker's. Needed stops
+            // short of it rather than on it, because a distributed band
+            // centres on its own track (see TrackBandRightEdge).
+            Assert.True(
+                edges.NeededRightEdge <= edges.NoteX - SummarySectionLayoutMath.CurrencyColumnGap);
+            Assert.True(edges.HaveRightEdge < edges.NeededRightEdge);
+            Assert.True(edges.RequiredRightEdge < edges.HaveRightEdge);
+
+            // And the whole table moves left by exactly what the column
+            // took, rather than the note overlapping Status.
+            var without = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(1200, 60, 34);
+            Assert.Equal(without.MarkerX, edges.MarkerX);
+            Assert.True(edges.NeededRightEdge < without.NeededRightEdge);
+        }
+
+        /// <summary>
+        /// The pre-scan and the drawn cell place a note from the same
+        /// arithmetic, so the "buys N" half always ends exactly on the
+        /// note's own right edge.
+        /// </summary>
+        [Fact]
+        public void ANotesPartsFillExactlyTheWidthItReserves()
+        {
+            const int NoteX = 500;
+            const int HeldWidth = 30;
+            const int BuysWidth = 44;
+
+            int width = SummarySectionLayoutMath.TradeUpNoteWidth(HeldWidth, BuysWidth);
+            Assert.Equal(
+                NoteX + width,
+                SummarySectionLayoutMath.TradeUpNoteBuysX(NoteX, HeldWidth) + BuysWidth);
+            Assert.True(SummarySectionLayoutMath.TradeUpNoteIconX(NoteX, HeldWidth) >= NoteX + HeldWidth);
+            Assert.Equal(0, SummarySectionLayoutMath.TradeUpNoteWidth(0, 0));
+        }
+
+        [Fact]
+        public void ARowWithNoHeldSubCurrencyHasNoNoteText()
+        {
+            var row = new PlanRowViewModel { RowType = PlanRowType.CurrencyCost, Quantity = 18 };
+
+            Assert.Null(SummarySectionLayoutMath.TradeUpNoteHeldText(row));
+            Assert.Null(SummarySectionLayoutMath.TradeUpNoteBuysText(row));
+            Assert.False(SummarySectionLayoutMath.AnyTradeUpNote(new[] { row }));
+        }
+
+        [Fact]
+        public void ARowWithAHeldSubCurrencyReadsAsAnAmountAndWhatItBuys()
+        {
+            var row = new PlanRowViewModel
+            {
+                RowType = PlanRowType.CurrencyCost,
+                Quantity = 18,
+                TradeUpCurrencyHeld = 1013,
+                TradeUpBuysQuantity = 4,
+            };
+
+            Assert.Equal("1013", SummarySectionLayoutMath.TradeUpNoteHeldText(row));
+            Assert.Equal("buys 4", SummarySectionLayoutMath.TradeUpNoteBuysText(row));
+            Assert.True(SummarySectionLayoutMath.AnyTradeUpNote(new[] { row }));
+        }
+
+        [Fact]
         public void CurrencyColumnEdges_CarryTheBandEveryHeaderCentresOver()
         {
             var edges = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(1200, 90);

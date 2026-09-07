@@ -718,9 +718,18 @@ namespace TaimisToolbench.Views.Rendering
             internal readonly int MarkerInk;
             internal readonly int MarkerBandWidth;
 
+            /// <summary>
+            /// Widest note this render, or 0 when no row carries one -
+            /// which is what leaves the Note column out of the table
+            /// entirely rather than reserving an empty band.
+            /// </summary>
+            internal readonly int NoteInk;
+
+            internal readonly int NoteBandWidth;
+
             internal CurrencyColumnScan(
                 int numberBandWidth, int requiredInk, int haveInk, int neededInk,
-                int markerInk, int markerBandWidth)
+                int markerInk, int markerBandWidth, int noteInk, int noteBandWidth)
             {
                 NumberBandWidth = numberBandWidth;
                 RequiredInk = requiredInk;
@@ -728,12 +737,14 @@ namespace TaimisToolbench.Views.Rendering
                 NeededInk = neededInk;
                 MarkerInk = markerInk;
                 MarkerBandWidth = markerBandWidth;
+                NoteInk = noteInk;
+                NoteBandWidth = noteBandWidth;
             }
 
             internal SummarySectionLayoutMath.CurrencyColumnEdges EdgesFor(int panelWidth)
             {
                 return SummarySectionLayoutMath.ComputeCurrencyColumnEdges(
-                    panelWidth, NumberBandWidth, MarkerBandWidth);
+                    panelWidth, NumberBandWidth, MarkerBandWidth, NoteBandWidth);
             }
         }
 
@@ -749,13 +760,14 @@ namespace TaimisToolbench.Views.Rendering
         private static CurrencyColumnScan ScanCurrencyColumns(List<PlanRowViewModel> rows)
         {
             var font = UiFonts.Body;
-            int required = 0, have = 0, needed = 0;
+            int required = 0, have = 0, needed = 0, note = 0;
             bool anyCovered = false;
             foreach (var row in rows)
             {
                 required = Max(required, MeasureNumber(font, row.Quantity.ToString()));
                 have = Max(have, MeasureNumber(font, CurrencyHaveText(row)));
                 needed = Max(needed, MeasureNumber(font, CurrencyNeededText(row)));
+                note = Max(note, MeasureNoteWidth(font, row));
                 anyCovered |= row.CurrencyFullyCovered;
             }
 
@@ -763,8 +775,12 @@ namespace TaimisToolbench.Views.Rendering
             int markerInk = anyCovered ? LabelHelpers.FullCoverageMarkerWidth() : 0;
             int markerBand = SummarySectionLayoutMath.EffectiveCurrencyMarkerWidth(
                 Max(markerInk, MeasureHeader(HeaderBands.Font, StatusHeaderText)));
+            int noteBand = note > 0
+                ? Max(note, MeasureHeader(HeaderBands.Font, NoteHeaderText))
+                : 0;
 
-            return new CurrencyColumnScan(band, required, have, needed, markerInk, markerBand);
+            return new CurrencyColumnScan(
+                band, required, have, needed, markerInk, markerBand, note, noteBand);
         }
 
         private static int Max(int a, int b)
@@ -794,6 +810,24 @@ namespace TaimisToolbench.Views.Rendering
             return row.CurrencyNeededQuantity.HasValue ? row.CurrencyNeededQuantity.Value.ToString() : "-";
         }
 
+        /// <summary>
+        /// Width of one row's note, 0 on a row with none. Measured through
+        /// the layout math's own arithmetic, so the pre-scan below and the
+        /// drawn cell cannot place the same note differently.
+        /// </summary>
+        private static int MeasureNoteWidth(BitmapFont font, PlanRowViewModel row)
+        {
+            string held = SummarySectionLayoutMath.TradeUpNoteHeldText(row);
+            if (string.IsNullOrEmpty(held))
+            {
+                return 0;
+            }
+
+            return SummarySectionLayoutMath.TradeUpNoteWidth(
+                MeasureNumber(font, held),
+                MeasureNumber(font, SummarySectionLayoutMath.TradeUpNoteBuysText(row)));
+        }
+
         private const string RequiredHeaderText = "Required";
         private const string HaveHeaderText = "Have";
         private const string NeededHeaderText = "Needed";
@@ -805,6 +839,13 @@ namespace TaimisToolbench.Views.Rendering
         /// share one number band and this one has its own.
         /// </summary>
         private const string StatusHeaderText = "Status";
+
+        /// <summary>
+        /// Names the column that says what a held sub-currency converts
+        /// into. Present only while a row carries such a note; the other
+        /// four headers are always drawn.
+        /// </summary>
+        private const string NoteHeaderText = "Note";
 
         // The same three strings the header row draws, so the floor they
         // set can never be measured from a label that is no longer there.
@@ -902,11 +943,16 @@ namespace TaimisToolbench.Views.Rendering
             int haveHeaderWidth = MeasureHeader(font, HaveHeaderText);
             int neededHeaderWidth = MeasureHeader(font, NeededHeaderText);
             int statusHeaderWidth = MeasureHeader(font, StatusHeaderText);
+            int noteHeaderWidth = MeasureHeader(font, NoteHeaderText);
             var xs = new CurrencyHeaderXs(
-                edges, scan, requiredHeaderWidth, haveHeaderWidth, neededHeaderWidth, statusHeaderWidth);
+                edges, scan, requiredHeaderWidth, haveHeaderWidth, neededHeaderWidth,
+                statusHeaderWidth, noteHeaderWidth);
             var requiredLabel = CreateHeaderLabelAt(band, RequiredHeaderText, font, xs.Required);
             var haveLabel = CreateHeaderLabelAt(band, HaveHeaderText, font, xs.Have);
             var neededLabel = CreateHeaderLabelAt(band, NeededHeaderText, font, xs.Needed);
+            var noteLabel = scan.NoteBandWidth > 0
+                ? CreateHeaderLabelAt(band, NoteHeaderText, font, xs.Note)
+                : null;
             var statusLabel = CreateHeaderLabelAt(band, StatusHeaderText, font, xs.Status);
 
             // The scan is data-derived, not panelWidth-derived, so it never
@@ -917,10 +963,16 @@ namespace TaimisToolbench.Views.Rendering
                 flowBand.Resize(w);
                 var moved = new CurrencyHeaderXs(
                     scan.EdgesFor(w), scan,
-                    requiredHeaderWidth, haveHeaderWidth, neededHeaderWidth, statusHeaderWidth);
+                    requiredHeaderWidth, haveHeaderWidth, neededHeaderWidth, statusHeaderWidth,
+                    noteHeaderWidth);
                 requiredLabel.Location = new Point(moved.Required, HeaderBands.LabelY);
                 haveLabel.Location = new Point(moved.Have, HeaderBands.LabelY);
                 neededLabel.Location = new Point(moved.Needed, HeaderBands.LabelY);
+                if (noteLabel != null)
+                {
+                    noteLabel.Location = new Point(moved.Note, HeaderBands.LabelY);
+                }
+
                 statusLabel.Location = new Point(moved.Status, HeaderBands.LabelY);
             });
 
@@ -948,12 +1000,13 @@ namespace TaimisToolbench.Views.Rendering
             internal readonly int Required;
             internal readonly int Have;
             internal readonly int Needed;
+            internal readonly int Note;
             internal readonly int Status;
 
             internal CurrencyHeaderXs(
                 SummarySectionLayoutMath.CurrencyColumnEdges edges, CurrencyColumnScan scan,
                 int requiredHeaderWidth, int haveHeaderWidth, int neededHeaderWidth,
-                int statusHeaderWidth)
+                int statusHeaderWidth, int noteHeaderWidth)
             {
                 var rooms = SummarySectionLayoutMath.CurrencyHeaderRoomsFor(
                     edges, scan.RequiredInk, scan.HaveInk, scan.NeededInk);
@@ -963,6 +1016,11 @@ namespace TaimisToolbench.Views.Rendering
                     edges.HaveRightEdge, scan.HaveInk, haveHeaderWidth, rooms.Have);
                 Needed = JustifiedColumnTracks.CenteredOverContentRightAligned(
                     edges.NeededRightEdge, scan.NeededInk, neededHeaderWidth, rooms.Needed);
+
+                // The note is a left-ruled run, so its header centres over
+                // the ink from NoteX rightward, not over a right edge.
+                Note = JustifiedColumnTracks.CenteredOverContent(
+                    edges.NoteX, scan.NoteInk, noteHeaderWidth, rooms.Note);
                 Status = JustifiedColumnTracks.CenteredOverContent(
                     edges.MarkerX,
                     SummarySectionLayoutMath.CurrencyStatusInk(edges, scan.MarkerInk),
@@ -1054,6 +1112,8 @@ namespace TaimisToolbench.Views.Rendering
             var haveLabel = LabelHelpers.CreateRightAlignedLabel(rowPanel, CurrencyHaveText(row), font, numberColor, edges.HaveRightEdge, SummarySectionLayoutMath.CurrencyRowTextY);
             var neededLabel = LabelHelpers.CreateRightAlignedLabel(rowPanel, CurrencyNeededText(row), font, numberColor, edges.NeededRightEdge, SummarySectionLayoutMath.CurrencyRowTextY);
 
+            var note = CreateTradeUpNote(row, rowPanel, edges, font);
+
             Panel marker = null;
             if (row.CurrencyFullyCovered)
             {
@@ -1083,6 +1143,7 @@ namespace TaimisToolbench.Views.Rendering
                 requiredLabel.Location = new Point(PlanRelayoutMath.RightAlignedX(e.RequiredRightEdge, requiredLabel.Width), SummarySectionLayoutMath.CurrencyRowTextY);
                 haveLabel.Location = new Point(PlanRelayoutMath.RightAlignedX(e.HaveRightEdge, haveLabel.Width), SummarySectionLayoutMath.CurrencyRowTextY);
                 neededLabel.Location = new Point(PlanRelayoutMath.RightAlignedX(e.NeededRightEdge, neededLabel.Width), SummarySectionLayoutMath.CurrencyRowTextY);
+                note.MoveTo(e.NoteX);
                 if (marker != null)
                 {
                     marker.Location = new Point(
@@ -1101,6 +1162,100 @@ namespace TaimisToolbench.Views.Rendering
                 }
             });
             return rowPanel;
+        }
+
+        /// <summary>
+        /// One row's Note cell: how much of the sub-currency the account
+        /// holds, that currency's icon, then how many of this row's item
+        /// the holding buys. Frame-less at the bar tier, like every other
+        /// currency icon the module draws beside digits
+        /// (IconFrameGeometry.CurrencyIsFramed); the icon's hover is the
+        /// only thing that names the currency, so it is never drawn
+        /// without one.
+        /// </summary>
+        private static TradeUpNoteHandle CreateTradeUpNote(
+            PlanRowViewModel row, Panel rowPanel,
+            SummarySectionLayoutMath.CurrencyColumnEdges edges, BitmapFont font)
+        {
+            string heldText = SummarySectionLayoutMath.TradeUpNoteHeldText(row);
+            if (string.IsNullOrEmpty(heldText))
+            {
+                return default(TradeUpNoteHandle);
+            }
+
+            int y = SummarySectionLayoutMath.CurrencyRowTextY;
+            int heldWidth = MeasureNumber(font, heldText);
+            int iconY = y + CoinCurrencyRenderer.DigitSeat(font, CoinSegmentMath.CoinIconSize);
+            var color = new Color(220, 220, 220);
+
+            var heldLabel = LabelHelpers.WithDescenderClearance(new Label()
+            {
+                Text = heldText, Font = font, TextColor = color,
+                AutoSizeWidth = true, AutoSizeHeight = true,
+                Location = new Point(edges.NoteX, y),
+                Parent = rowPanel,
+            });
+
+            var icon = IconControls.CreateCurrencyIcon(
+                rowPanel, row.TradeUpCurrencyIconUrl,
+                SummarySectionLayoutMath.TradeUpNoteIconX(edges.NoteX, heldWidth), iconY,
+                ItemIconTier.CurrencyBarRun, row.TradeUpCurrencyName);
+
+            var buysLabel = LabelHelpers.WithDescenderClearance(new Label()
+            {
+                Text = SummarySectionLayoutMath.TradeUpNoteBuysText(row), Font = font, TextColor = color,
+                AutoSizeWidth = true, AutoSizeHeight = true,
+                Location = new Point(
+                    SummarySectionLayoutMath.TradeUpNoteBuysX(edges.NoteX, heldWidth), y),
+                Parent = rowPanel,
+            });
+
+            return new TradeUpNoteHandle(heldLabel, icon, buysLabel, heldWidth, iconY);
+        }
+
+        /// <summary>
+        /// The three controls of one Note cell, so a resize moves them
+        /// together off the one left rule they were placed from. Default
+        /// (all-null) on a row with no note, and MoveTo then does nothing.
+        /// </summary>
+        private readonly struct TradeUpNoteHandle
+        {
+            private readonly Label _held;
+            private readonly Panel _icon;
+            private readonly Label _buys;
+            private readonly int _heldWidth;
+            private readonly int _iconY;
+
+            internal TradeUpNoteHandle(Label held, Panel icon, Label buys, int heldWidth, int iconY)
+            {
+                _held = held;
+                _icon = icon;
+                _buys = buys;
+                _heldWidth = heldWidth;
+                _iconY = iconY;
+            }
+
+            internal void MoveTo(int noteX)
+            {
+                if (_held == null)
+                {
+                    return;
+                }
+
+                int y = SummarySectionLayoutMath.CurrencyRowTextY;
+                _held.Location = new Point(noteX, y);
+                if (_icon != null)
+                {
+                    _icon.Location = new Point(
+                        SummarySectionLayoutMath.TradeUpNoteIconX(noteX, _heldWidth), _iconY);
+                }
+
+                if (_buys != null)
+                {
+                    _buys.Location = new Point(
+                        SummarySectionLayoutMath.TradeUpNoteBuysX(noteX, _heldWidth), y);
+                }
+            }
         }
 
         // A single subdued footnote row at the bottom of the section -

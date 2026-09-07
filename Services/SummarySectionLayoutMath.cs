@@ -373,6 +373,83 @@ namespace TaimisToolbench.Services
         public const string InventoryGroupHeading = "From your inventory";
 
         /// <summary>
+        /// The Note column's left half: how much of the sub-currency the
+        /// account holds. The currency's own icon follows it, so nothing
+        /// here names the currency - the icon's hover does. Null on a row
+        /// with no note, which is what keeps the column absent.
+        /// </summary>
+        public static string TradeUpNoteHeldText(PlanRowViewModel row)
+        {
+            return row != null && row.TradeUpCurrencyHeld.HasValue
+                ? row.TradeUpCurrencyHeld.Value.ToString(CultureInfo.InvariantCulture)
+                : null;
+        }
+
+        /// <summary>
+        /// The Note column's right half: how many of the row's own item
+        /// that holding buys. Capped by the builder at what the row still
+        /// needs, so it never claims to cover more than the plan asks for.
+        /// Null under the same condition as
+        /// <see cref="TradeUpNoteHeldText"/>.
+        /// </summary>
+        public static string TradeUpNoteBuysText(PlanRowViewModel row)
+        {
+            return row != null && row.TradeUpCurrencyHeld.HasValue
+                ? "buys " + row.TradeUpBuysQuantity.ToString(CultureInfo.InvariantCulture)
+                : null;
+        }
+
+        /// <summary>
+        /// Width one note occupies: the held amount, the sub-currency's
+        /// icon seated after it the way every inline currency run in the
+        /// module seats one, then the "buys N" half. Spelled once so the
+        /// column pre-scan and the drawn row cannot disagree. The two text
+        /// widths are Blish measurements and arrive from the caller.
+        /// </summary>
+        public static int TradeUpNoteWidth(int heldTextWidth, int buysTextWidth)
+        {
+            if (heldTextWidth <= 0 && buysTextWidth <= 0)
+            {
+                return 0;
+            }
+
+            return heldTextWidth + CoinSegmentMath.CoinLabelIconGap + CoinSegmentMath.CoinIconSize +
+                CoinSegmentMath.CoinSegmentGap + buysTextWidth;
+        }
+
+        /// <summary>X the note's icon starts at, given the note's left rule.</summary>
+        public static int TradeUpNoteIconX(int noteX, int heldTextWidth)
+        {
+            return noteX + heldTextWidth + CoinSegmentMath.CoinLabelIconGap;
+        }
+
+        /// <summary>X the note's "buys N" half starts at.</summary>
+        public static int TradeUpNoteBuysX(int noteX, int heldTextWidth)
+        {
+            return TradeUpNoteIconX(noteX, heldTextWidth) +
+                CoinSegmentMath.CoinIconSize + CoinSegmentMath.CoinSegmentGap;
+        }
+
+        /// <summary>True when any row in the table carries a note.</summary>
+        public static bool AnyTradeUpNote(IReadOnlyList<PlanRowViewModel> nonCoinRows)
+        {
+            if (nonCoinRows == null)
+            {
+                return false;
+            }
+
+            foreach (var row in nonCoinRows)
+            {
+                if (row != null && row.TradeUpCurrencyHeld.HasValue)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// One group of the non-coin table: its heading and its rows.
         /// </summary>
         public readonly struct NonCoinRowGroup
@@ -709,9 +786,24 @@ namespace TaimisToolbench.Services
             /// </summary>
             public readonly int NumberColumnWidth;
 
+            /// <summary>
+            /// Left rule of the Note column, between Needed and Status. The
+            /// note is a currency amount run, so it reads left to right
+            /// from here. Equal to <see cref="MarkerX"/> and paired with a
+            /// zero <see cref="NoteWidth"/> when no row carries a note,
+            /// which is every table that has no coalesced trade-up item.
+            /// </summary>
+            public readonly int NoteX;
+
+            /// <summary>
+            /// Width the Note column reserves: this render's widest note,
+            /// measured by the caller. Zero when the column is absent.
+            /// </summary>
+            public readonly int NoteWidth;
+
             public CurrencyColumnEdges(
                 int requiredRightEdge, int haveRightEdge, int neededRightEdge, int markerX,
-                int numberColumnWidth, int markerWidth)
+                int numberColumnWidth, int markerWidth, int noteX = 0, int noteWidth = 0)
             {
                 RequiredRightEdge = requiredRightEdge;
                 HaveRightEdge = haveRightEdge;
@@ -719,6 +811,8 @@ namespace TaimisToolbench.Services
                 MarkerX = markerX;
                 NumberColumnWidth = numberColumnWidth;
                 MarkerWidth = markerWidth;
+                NoteX = noteWidth > 0 ? noteX : markerX;
+                NoteWidth = noteWidth > 0 ? noteWidth : 0;
             }
 
             /// <summary>Left edge of the band each column's numbers grow
@@ -773,12 +867,14 @@ namespace TaimisToolbench.Services
         /// need to pass a data-driven width.
         /// </summary>
         public static CurrencyColumnEdges ComputeCurrencyColumnEdges(
-            int panelWidth, int widestNumberWidth = 0, int markerColumnWidth = 0)
+            int panelWidth, int widestNumberWidth = 0, int markerColumnWidth = 0,
+            int noteColumnWidth = 0)
         {
             return EdgesFromRightEdge(
                 PlanRelayoutMath.PinnedRightEdge(panelWidth),
                 EffectiveCurrencyNumberColumnWidth(widestNumberWidth),
-                EffectiveCurrencyMarkerWidth(markerColumnWidth));
+                EffectiveCurrencyMarkerWidth(markerColumnWidth),
+                noteColumnWidth > 0 ? noteColumnWidth : 0);
         }
 
         /// <summary>
@@ -817,17 +913,20 @@ namespace TaimisToolbench.Services
             public readonly JustifiedColumnTracks.HeaderRoom Required;
             public readonly JustifiedColumnTracks.HeaderRoom Have;
             public readonly JustifiedColumnTracks.HeaderRoom Needed;
+            public readonly JustifiedColumnTracks.HeaderRoom Note;
             public readonly JustifiedColumnTracks.HeaderRoom Status;
 
             internal CurrencyHeaderRooms(
                 JustifiedColumnTracks.HeaderRoom required,
                 JustifiedColumnTracks.HeaderRoom have,
                 JustifiedColumnTracks.HeaderRoom needed,
+                JustifiedColumnTracks.HeaderRoom note,
                 JustifiedColumnTracks.HeaderRoom status)
             {
                 Required = required;
                 Have = have;
                 Needed = needed;
+                Note = note;
                 Status = status;
             }
         }
@@ -850,6 +949,13 @@ namespace TaimisToolbench.Services
             int haveInkX = edges.HaveRightEdge - haveInk;
             int neededInkX = edges.NeededRightEdge - neededInk;
 
+            // With no Note column, Needed's right bound falls back to the
+            // marker rule (NoteX is the marker's own x then) and Status's
+            // left neighbour is Needed again - exactly the two bounds the
+            // table had before the column existed.
+            int noteInkRight = edges.NoteX + edges.NoteWidth;
+            int statusLeftNeighborInkRight = edges.NoteWidth > 0 ? noteInkRight : edges.NeededRightEdge;
+
             return new CurrencyHeaderRooms(
                 JustifiedColumnTracks.HeaderRoom.Between(
                     JustifiedColumnTracks.RoomLeftBound(nameBudgetRight, requiredInkX),
@@ -859,9 +965,12 @@ namespace TaimisToolbench.Services
                     JustifiedColumnTracks.RoomRightBound(edges.HaveRightEdge, neededInkX)),
                 JustifiedColumnTracks.HeaderRoom.Between(
                     JustifiedColumnTracks.RoomLeftBound(edges.HaveRightEdge, neededInkX),
-                    JustifiedColumnTracks.RoomRightBound(edges.NeededRightEdge, edges.MarkerX)),
+                    JustifiedColumnTracks.RoomRightBound(edges.NeededRightEdge, edges.NoteX)),
                 JustifiedColumnTracks.HeaderRoom.Between(
-                    JustifiedColumnTracks.RoomLeftBound(edges.NeededRightEdge, edges.MarkerX),
+                    JustifiedColumnTracks.RoomLeftBound(edges.NeededRightEdge, edges.NoteX),
+                    JustifiedColumnTracks.RoomRightBound(noteInkRight, edges.MarkerX)),
+                JustifiedColumnTracks.HeaderRoom.Between(
+                    JustifiedColumnTracks.RoomLeftBound(statusLeftNeighborInkRight, edges.MarkerX),
                     edges.MarkerX + edges.MarkerWidth));
         }
 
@@ -877,15 +986,21 @@ namespace TaimisToolbench.Services
         }
 
         private static CurrencyColumnEdges EdgesFromRightEdge(
-            int rightEdge, int numberColumnWidth, int markerWidth)
+            int rightEdge, int numberColumnWidth, int markerWidth, int noteWidth = 0)
         {
             int markerX = rightEdge - markerWidth;
+
+            // The Note column sits between Needed and Status, so the rest
+            // of the table lays out against its left rule instead of the
+            // marker's. A table with no note reserves nothing and every
+            // edge below is what it was before the column existed.
+            int noteX = noteWidth > 0 ? markerX - CurrencyColumnGap - noteWidth : markerX;
 
             // The table's own right edge, which the marker trails: the
             // packed stack's Needed column, and the last track's end under
             // distribution (where Needed's band centres on that track and so
             // stops short of it by half the track's slack).
-            int neededRightEdge = markerX - CurrencyColumnGap;
+            int neededRightEdge = noteX - CurrencyColumnGap;
 
             // A track has to hold its own reserved number band plus the gap
             // that keeps a wide value (a 7-digit Karma balance) out of the
@@ -901,13 +1016,16 @@ namespace TaimisToolbench.Services
                     TrackBandRightEdge(trackSpan, 3, numberColumnWidth),
                     markerX,
                     numberColumnWidth,
-                    markerWidth);
+                    markerWidth,
+                    noteX,
+                    noteWidth);
             }
 
             int haveRightEdge = neededRightEdge - numberColumnWidth - CurrencyColumnGap;
             int requiredRightEdge = haveRightEdge - numberColumnWidth - CurrencyColumnGap;
             return new CurrencyColumnEdges(
-                requiredRightEdge, haveRightEdge, neededRightEdge, markerX, numberColumnWidth, markerWidth);
+                requiredRightEdge, haveRightEdge, neededRightEdge, markerX, numberColumnWidth, markerWidth,
+                noteX, noteWidth);
         }
     }
 }
