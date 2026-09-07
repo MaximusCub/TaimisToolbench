@@ -245,5 +245,35 @@ namespace TaimisToolbench.Tests.Services
                 }
             }
         }
+
+        [Fact]
+        public void BackgroundPrimeIsSlowerThanTheOnScreenOne()
+        {
+            // The whole point of the second pace: a tab nobody is looking
+            // at must not take the frame budget the visible one gets.
+            Assert.True(
+                SnapshotIconWindow.BackgroundPrimePerFrame > 0,
+                "the background prime has to make progress");
+            Assert.True(
+                SnapshotIconWindow.BackgroundPrimePerFrame < SnapshotIconWindow.PrimePerFrame,
+                "the background prime has to cost less than the on-screen one");
+        }
+
+        [Theory]
+        [InlineData(0, 0)]
+        [InlineData(1, 1)]
+        [InlineData(4, 1)]
+        [InlineData(5, 2)]
+        [InlineData(927, 232)]
+        public void PrimeFrames_CountsFramesAtAGivenPace(int pictures, int expected)
+        {
+            Assert.Equal(expected, SnapshotIconWindow.PrimeFrames(pictures, 4));
+        }
+
+        [Fact]
+        public void PrimeFrames_AtAZeroPaceNeverFinishes_AndSaysSoRatherThanDividingByZero()
+        {
+            Assert.Equal(0, SnapshotIconWindow.PrimeFrames(10, 0));
+        }
     }
 }

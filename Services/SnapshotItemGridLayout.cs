@@ -118,6 +118,40 @@ namespace TaimisToolbench.Services
             CellAmountX + AmountColumnFloor + CellAmountGap + IconGutterWidth
                 + (SnapshotNameRunChars * MaxCharWidthPx) + CellTextRightPad;
 
+        /// <summary>
+        /// Weight of the rule between one column of cells and the next.
+        /// 2px, like every other rule in the module: Blish applies the GW2
+        /// UI scale (0.897 at "Normal") as a GPU matrix, so a 1px quad can
+        /// rasterize to no physical pixel at all
+        /// (Views/Rendering/LabelHelpers.CreateRowDivider).
+        /// </summary>
+        public const int ColumnDividerWidth = 2;
+
+        /// <summary>
+        /// Rules a grid of <paramref name="columnCount"/> columns draws: one
+        /// in each gap between two columns. None after the last column,
+        /// which has no next cell to be told apart from.
+        /// </summary>
+        public static int ColumnDividerCount(int columnCount)
+        {
+            return columnCount > 1 ? columnCount - 1 : 0;
+        }
+
+        /// <summary>
+        /// X of the rule that follows column <paramref name="columnIndex"/>,
+        /// centred in the clear run between that cell's text right edge and
+        /// the next cell's Amount column. Those two pads are the only thing
+        /// keeping the rule off ink, which is why it is derived from them
+        /// rather than chosen.
+        /// </summary>
+        public static int ColumnDividerX(int columnIndex, int columnWidth)
+        {
+            int boundary = (columnIndex + 1) * columnWidth;
+            int gapLeft = boundary - CellTextRightPad;
+            int gapWidth = CellTextRightPad + CellAmountX;
+            return gapLeft + ((gapWidth - ColumnDividerWidth) / 2);
+        }
+
         /// <summary>Right edge every cell's text stops at. A cell justifies
         /// like a plan table row: this edge is a function of the cell width
         /// alone, and the name is what flexes.</summary>
