@@ -395,38 +395,58 @@ namespace TaimisToolbench.Services
         public static string TradeUpNoteBuysText(PlanRowViewModel row)
         {
             return row != null && row.TradeUpCurrencyHeld.HasValue
-                ? "buys " + row.TradeUpBuysQuantity.ToString(CultureInfo.InvariantCulture)
+                ? "Buys " + row.TradeUpBuysQuantity.ToString(CultureInfo.InvariantCulture)
                 : null;
         }
 
         /// <summary>
-        /// Width one note occupies: the held amount, the sub-currency's
-        /// icon seated after it the way every inline currency run in the
-        /// module seats one, then the "buys N" half. Spelled once so the
-        /// column pre-scan and the drawn row cannot disagree. The two text
-        /// widths are Blish measurements and arrive from the caller.
+        /// Width the Note column occupies: the held amount, the
+        /// sub-currency's icon seated after it the way every inline
+        /// currency run in the module seats one, then the "Buys N" half.
+        /// <para>
+        /// Both widths are the widest the TABLE measures, not one row's,
+        /// because every row seats its icon at the same x
+        /// (<see cref="TradeUpNoteIconX"/>). They are Blish measurements
+        /// and arrive from the caller.
+        /// </para>
         /// </summary>
-        public static int TradeUpNoteWidth(int heldTextWidth, int buysTextWidth)
+        public static int TradeUpNoteWidth(int heldBandWidth, int buysBandWidth)
         {
-            if (heldTextWidth <= 0 && buysTextWidth <= 0)
+            if (heldBandWidth <= 0 && buysBandWidth <= 0)
             {
                 return 0;
             }
 
-            return heldTextWidth + CoinSegmentMath.CoinLabelIconGap + CoinSegmentMath.CoinIconSize +
-                CoinSegmentMath.CoinSegmentGap + buysTextWidth;
+            return heldBandWidth + CoinSegmentMath.CoinLabelIconGap + CoinSegmentMath.CoinIconSize +
+                CoinSegmentMath.CoinSegmentGap + buysBandWidth;
         }
 
-        /// <summary>X the note's icon starts at, given the note's left rule.</summary>
-        public static int TradeUpNoteIconX(int noteX, int heldTextWidth)
+        /// <summary>
+        /// X the held amount draws at: right-aligned in the held band, so a
+        /// three-digit holding and a four-digit one both end where the icon
+        /// begins. A number wider than the band - which only happens if the
+        /// caller's band is not the table's own widest - keeps the note's
+        /// left rule and pushes its own icon right, so it is never
+        /// truncated and only that row leaves the shared icon x.
+        /// </summary>
+        public static int TradeUpNoteHeldX(int noteX, int heldBandWidth, int heldTextWidth)
         {
-            return noteX + heldTextWidth + CoinSegmentMath.CoinLabelIconGap;
+            int slack = heldBandWidth - heldTextWidth;
+            return slack > 0 ? noteX + slack : noteX;
         }
 
-        /// <summary>X the note's "buys N" half starts at.</summary>
-        public static int TradeUpNoteBuysX(int noteX, int heldTextWidth)
+        /// <summary>X the note's icon starts at: past the held band, so it
+        /// is the same x on every row of the table.</summary>
+        public static int TradeUpNoteIconX(int noteX, int heldBandWidth, int heldTextWidth)
         {
-            return TradeUpNoteIconX(noteX, heldTextWidth) +
+            int band = heldTextWidth > heldBandWidth ? heldTextWidth : heldBandWidth;
+            return noteX + band + CoinSegmentMath.CoinLabelIconGap;
+        }
+
+        /// <summary>X the note's "Buys N" half starts at.</summary>
+        public static int TradeUpNoteBuysX(int noteX, int heldBandWidth, int heldTextWidth)
+        {
+            return TradeUpNoteIconX(noteX, heldBandWidth, heldTextWidth) +
                 CoinSegmentMath.CoinIconSize + CoinSegmentMath.CoinSegmentGap;
         }
 
@@ -657,21 +677,19 @@ namespace TaimisToolbench.Services
 
         // --- Currency table column geometry ---
         //
-        // The row from the name's left edge to the table's own right edge
-        // is CurrencyTrackCount EQUAL tracks - name, Required, Have, Needed
-        // - each number band CENTRED on its own track. Distribution, not
-        // the packed right-hand stack this table used to draw: at the plan
-        // panel's real width that stack left ~1000px of nothing between a
-        // currency's name and its first number, with no anchor for the eye
-        // between them, and the eye could not track a row across
-        // it. The idiom is RankerRowLayout.GateCell's, which already
-        // divides a row's full width into N equal cells for the same
-        // reason.
+        // Every column reserves what its own widest cell needs, and the
+        // space left over is split into EQUAL GAPS between them. The table
+        // used to divide the row into four equal tracks instead, which at
+        // the 1310px plan panel gave each number column a 262px track for
+        // an 88px band ("Required", measured at the 20-bold header face)
+        // while the Note run got 112px and 14px of clearance before
+        // Status. Equal gaps spend the row on the columns that hold
+        // something instead.
         //
         // Numbers right-align INSIDE their band - that is what keeps digits
-        // aligned down a column - and the band, header included, centres on
-        // the track. See JustifiedColumnTracks for why a shared edge is not
-        // enough.
+        // aligned down a column. The name is the one column that flexes,
+        // and it may run past its reserve into the gap after it, bounded by
+        // PlanRelayoutMath.NameMaxWidthBeforeColumn.
         //
         // Required/Have/Needed columns reserve CurrencyNumberColumnWidth by
         // default, widened per-render when an actual value needs more room
@@ -686,9 +704,10 @@ namespace TaimisToolbench.Services
         // player's wallet, which can plausibly exceed the 60px floor. Since
         // CreateRightAlignedLabel grows a label LEFTWARD from the column's
         // own right edge, an unreserved overlong value would visually
-        // intrude into its left neighbor's column rather than clip. Under
-        // distribution that reserve is what decides whether the row is wide
-        // enough to distribute at all - see EdgesFromRightEdge.
+        // intrude into its left neighbor's column rather than clip. That
+        // reserve is also what decides whether the row is wide enough to
+        // lay the columns out with equal gaps at all - see
+        // EdgesFromRightEdge.
 
         /// <summary>
         /// Open space between the last formula band and the currency
@@ -750,12 +769,17 @@ namespace TaimisToolbench.Services
         public const int CurrencyMarkerWidth = 34;
 
         /// <summary>
-        /// Columns the row's width is divided evenly between: the currency
-        /// name, then Required, Have and Needed. The trailing Status column
-        /// is NOT one of them - its badges are pinned outside the table's
-        /// own right edge, on a band of their own.
+        /// Room the name column reserves before the gaps are shared out.
+        /// MEASURED: "Clot of Congealed Screams", one of the longer names
+        /// these two groups draw, is 209px in the 16-regular body face. A
+        /// longer name is not truncated to this: the name flexes into the
+        /// gap after the column, up to
+        /// PlanRelayoutMath.NameMaxWidthBeforeColumn.
         /// </summary>
-        public const int CurrencyTrackCount = 4;
+        public const int CurrencyNameColumnWidth = 210;
+
+        /// <summary>Number columns the table draws: Required, Have, Needed.</summary>
+        public const int CurrencyNumberColumnCount = 3;
 
         public readonly struct CurrencyColumnEdges
         {
@@ -792,6 +816,11 @@ namespace TaimisToolbench.Services
             /// from here. Equal to <see cref="MarkerX"/> and paired with a
             /// zero <see cref="NoteWidth"/> when no row carries a note,
             /// which is every table that has no coalesced trade-up item.
+            /// <para>
+            /// The column takes its own gap from the row like every other
+            /// one, so the note is not pushed up against the Status badges
+            /// it used to sit one gap away from.
+            /// </para>
             /// </summary>
             public readonly int NoteX;
 
@@ -854,12 +883,12 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// Column layout for the currency table's Required/Have/Needed
-        /// numeric columns plus the trailing full-coverage marker, derived
-        /// from panelWidth plus (optionally) this render's actual widest
-        /// Required/Have/Needed value width. Both regimes anchor on the
-        /// same pinned right edge and the same effective (floor-or-
-        /// measured) column width ShoppingColumnMath.ComputeEdges uses, so
-        /// header and data rows built from the same panelWidth/
+        /// numeric columns, the Note column and the trailing full-coverage
+        /// marker, derived from panelWidth plus (optionally) this render's
+        /// actual widest Required/Have/Needed value width. Both regimes
+        /// anchor on the same pinned right edge and the same effective
+        /// (floor-or-measured) column width ShoppingColumnMath.ComputeEdges
+        /// uses, so header and data rows built from the same panelWidth/
         /// widestNumberWidth pair always agree by construction.
         /// widestNumberWidth defaults to 0 (i.e. the fixed
         /// CurrencyNumberColumnWidth floor, unchanged prior
@@ -875,28 +904,6 @@ namespace TaimisToolbench.Services
                 EffectiveCurrencyNumberColumnWidth(widestNumberWidth),
                 EffectiveCurrencyMarkerWidth(markerColumnWidth),
                 noteColumnWidth > 0 ? noteColumnWidth : 0);
-        }
-
-        /// <summary>
-        /// Right edge of the number band CENTRED on track
-        /// <paramref name="index"/>, through the module's shared
-        /// distribution law - see <see cref="JustifiedColumnTracks"/>, which
-        /// Plan History's own column band computes from as well.
-        /// <para>
-        /// Centred, not right-aligned on the track's own edge: a header and
-        /// its numbers then share the track's centre line rather than only
-        /// its right edge, which is what puts "Required" over the required
-        /// amounts instead of over the gap before Have. The band's centre is
-        /// the track's centre whatever
-        /// <paramref name="numberColumnWidth"/> is, so a wider value grows
-        /// symmetrically about the column rather than dragging it sideways.
-        /// </para>
-        /// </summary>
-        private static int TrackBandRightEdge(int trackSpan, int index, int numberColumnWidth)
-        {
-            return JustifiedColumnTracks.CenteredX(
-                CurrencyNameX, trackSpan, CurrencyTrackCount, index, numberColumnWidth)
-                + numberColumnWidth;
         }
 
         /// <summary>
@@ -990,42 +997,41 @@ namespace TaimisToolbench.Services
         {
             int markerX = rightEdge - markerWidth;
 
-            // The Note column sits between Needed and Status, so the rest
-            // of the table lays out against its left rule instead of the
-            // marker's. A table with no note reserves nothing and every
-            // edge below is what it was before the column existed.
-            int noteX = noteWidth > 0 ? markerX - CurrencyColumnGap - noteWidth : markerX;
-
-            // The table's own right edge, which the marker trails: the
-            // packed stack's Needed column, and the last track's end under
-            // distribution (where Needed's band centres on that track and so
-            // stops short of it by half the track's slack).
-            int neededRightEdge = noteX - CurrencyColumnGap;
-
-            // A track has to hold its own reserved number band plus the gap
-            // that keeps a wide value (a 7-digit Karma balance) out of the
-            // column to its left; below that the row falls back to the
-            // packed right-to-left stack. See JustifiedColumnTracks.
-            int trackSpan = neededRightEdge - CurrencyNameX;
-            if (JustifiedColumnTracks.FitsDistributed(
-                    trackSpan, CurrencyTrackCount, numberColumnWidth, CurrencyColumnGap))
+            // One gap after each column that precedes Status: the name, the
+            // three numbers, and the note when the table has one.
+            int gapCount = CurrencyNumberColumnCount + (noteWidth > 0 ? 2 : 1);
+            int reserved = CurrencyNameColumnWidth
+                + (CurrencyNumberColumnCount * numberColumnWidth) + noteWidth;
+            int gap = (markerX - CurrencyNameX - reserved) / gapCount;
+            if (gap >= CurrencyColumnGap)
             {
+                int requiredRightEdge =
+                    CurrencyNameX + CurrencyNameColumnWidth + gap + numberColumnWidth;
+                int haveRightEdge = requiredRightEdge + gap + numberColumnWidth;
+                int neededRightEdge = haveRightEdge + gap + numberColumnWidth;
+
+                // Integer division leaves up to gapCount-1 px over. It
+                // lands in the last gap, before Status, rather than
+                // widening one gap in the middle of the row.
                 return new CurrencyColumnEdges(
-                    TrackBandRightEdge(trackSpan, 1, numberColumnWidth),
-                    TrackBandRightEdge(trackSpan, 2, numberColumnWidth),
-                    TrackBandRightEdge(trackSpan, 3, numberColumnWidth),
-                    markerX,
-                    numberColumnWidth,
-                    markerWidth,
-                    noteX,
-                    noteWidth);
+                    requiredRightEdge, haveRightEdge, neededRightEdge, markerX,
+                    numberColumnWidth, markerWidth, neededRightEdge + gap, noteWidth);
             }
 
-            int haveRightEdge = neededRightEdge - numberColumnWidth - CurrencyColumnGap;
-            int requiredRightEdge = haveRightEdge - numberColumnWidth - CurrencyColumnGap;
+            // Below the width the columns and their minimum gaps need,
+            // there is nothing to share out and spreading anyway would
+            // overlap them. They pack right-to-left on the minimum gap
+            // instead. On a narrow panel a cramped legible table beats an
+            // evenly spaced illegible one.
+            int packedNoteX = noteWidth > 0 ? markerX - CurrencyColumnGap - noteWidth : markerX;
+            int packedNeededRightEdge = packedNoteX - CurrencyColumnGap;
+            int packedHaveRightEdge =
+                packedNeededRightEdge - numberColumnWidth - CurrencyColumnGap;
+            int packedRequiredRightEdge =
+                packedHaveRightEdge - numberColumnWidth - CurrencyColumnGap;
             return new CurrencyColumnEdges(
-                requiredRightEdge, haveRightEdge, neededRightEdge, markerX, numberColumnWidth, markerWidth,
-                noteX, noteWidth);
+                packedRequiredRightEdge, packedHaveRightEdge, packedNeededRightEdge, markerX,
+                numberColumnWidth, markerWidth, packedNoteX, noteWidth);
         }
     }
 }

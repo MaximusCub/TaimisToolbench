@@ -2787,13 +2787,9 @@ namespace TaimisToolbench.Views
                 return;
             }
 
-            string text = $"Analyzing {position} of {total} - {name}";
-            if (!_firstRefreshDone)
-            {
-                text += ". The first analysis of a session downloads recipe data and can take a while.";
-            }
-
-            SetStatus(text, isError: false);
+            SetStatus(
+                StatusText.ForRankerProgress(position, total, name, !_firstRefreshDone),
+                isError: false);
         }
 
         private void ApplyRowMetrics(
