@@ -80,6 +80,28 @@ namespace TaimisToolbench.Services
     }
 
     /// <summary>
+    /// What one restore should do: the offset to scroll to, and how much
+    /// trailing blank space the content needs for that offset to be legal.
+    /// </summary>
+    internal readonly struct ScrollRestorePlan
+    {
+        public readonly int Offset;
+
+        /// <summary>
+        /// Height of a spacer at the bottom of the scrolled content, zero
+        /// for every case that does not need one. See
+        /// <see cref="ScrollAnchorMath.TailSpacerHeight"/>.
+        /// </summary>
+        public readonly int TailSpacerHeight;
+
+        public ScrollRestorePlan(int offset, int tailSpacerHeight)
+        {
+            Offset = offset;
+            TailSpacerHeight = tailSpacerHeight;
+        }
+    }
+
+    /// <summary>
     /// Pure scroll-ANCHORING arithmetic (Blish-free, unit-testable), the
     /// step beyond ScrollMath's offset preservation.
     /// <para>
@@ -434,7 +456,74 @@ namespace TaimisToolbench.Services
             int savedOffset, ScrollAnchor anchor, int newAnchorTop, int contentHeight, int viewportHeight)
         {
             return ClampOffset(
-                savedOffset + (newAnchorTop - anchor.CapturedTop), contentHeight, viewportHeight);
+                TargetOffset(savedOffset, anchor, newAnchorTop), contentHeight, viewportHeight);
+        }
+
+        /// <summary>
+        /// The whole restore decision: which element survived, the offset
+        /// that puts it back under its line, and the trailing spacer that
+        /// offset needs.
+        /// <para>
+        /// The spacer is sized from the anchored target only. When nothing
+        /// survived there is no spacer at all: a user parked in a previous
+        /// spacer's blank space has nothing to hold still, and sizing one
+        /// from the saved offset would preserve a position in emptiness
+        /// and go on doing it. That case clamps back onto content.
+        /// </para>
+        /// </summary>
+        public static ScrollRestorePlan PlanRestore(
+            IReadOnlyList<ScrollAnchorCandidate> candidates,
+            ScrollAnchor anchor,
+            int savedOffset,
+            int contentHeight,
+            int viewportHeight)
+        {
+            if (!TryFindSurvivingAnchor(candidates, anchor, out var survivor, out int newTop))
+            {
+                return new ScrollRestorePlan(
+                    ClampOffset(savedOffset, contentHeight, viewportHeight), 0);
+            }
+
+            int target = TargetOffset(savedOffset, survivor, newTop);
+            int spacer = TailSpacerHeight(target, contentHeight, viewportHeight);
+            return new ScrollRestorePlan(
+                ClampOffset(target, contentHeight + spacer, viewportHeight), spacer);
+        }
+
+        /// <summary>
+        /// Trailing blank space the content needs for targetOffset to be a
+        /// legal scroll position: max(0, target - (content - viewport)).
+        /// Zero whenever the content is long enough to hold the target,
+        /// which is every plan that grew or held its height.
+        /// <para>
+        /// Sized to the shortfall and nothing more. A constant pad of one
+        /// viewport, which is what Monaco ships as scrollBeyondLastLine,
+        /// also works, but it shortens the scrollbar thumb on every plan
+        /// and worst on the short ones that are the common case. Simulated
+        /// thumb sizes: a short plan reads 77 per cent demand-sized
+        /// against 43 constant, and a plan just over the threshold 93
+        /// against 48.
+        /// </para>
+        /// </summary>
+        public static int TailSpacerHeight(int targetOffset, int contentHeight, int viewportHeight)
+        {
+            if (targetOffset <= 0 || viewportHeight <= 0)
+            {
+                return 0;
+            }
+
+            int shortfall = targetOffset - (contentHeight - viewportHeight);
+            return shortfall > 0 ? shortfall : 0;
+        }
+
+        /// <summary>
+        /// The offset that puts the anchored element back under its line,
+        /// before any clamp: the old offset plus how far the element
+        /// itself moved.
+        /// </summary>
+        private static int TargetOffset(int savedOffset, ScrollAnchor anchor, int newAnchorTop)
+        {
+            return savedOffset + (newAnchorTop - anchor.CapturedTop);
         }
 
         /// <summary>
