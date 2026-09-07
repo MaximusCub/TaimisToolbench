@@ -78,6 +78,43 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// Characters the Crafting Ranker's status line may run to before
+        /// it ellipsizes. RankerRowLayout.Toolbar leaves the status band
+        /// roughly 750px at the module's 1378px window minimum, once the
+        /// Analyze button, the two display toggles and the spinner have
+        /// taken theirs. MEASURED: 75 characters of this line is about
+        /// 720px in the 18-bold status face. The band's own width is
+        /// derived rather than measured in game, so treat this as a width
+        /// to stay well inside rather than a hard edge.
+        /// </summary>
+        public const int RankerStatusBudgetChars = 75;
+
+        /// <summary>
+        /// The Crafting Ranker's per-item progress line: which item of how
+        /// many is being solved, and on the first run of a session that
+        /// this run is the slow one.
+        /// <para>
+        /// The first run downloads recipe data, and that used to be spelled
+        /// out here in a full sentence. MEASURED: with a legendary's name
+        /// in it the line was 122 characters and 1190px, well past the
+        /// band, so it ellipsized on every item and the reader had to hover
+        /// a line that kept moving. The mechanism is on the Analyze
+        /// button's own tooltip; this line carries only what a waiting
+        /// player acts on.
+        /// </para>
+        /// </summary>
+        public static string ForRankerProgress(int position, int total, string name, bool firstRun)
+        {
+            string line = "Analyzing " + position + " of " + total;
+            if (!string.IsNullOrEmpty(name))
+            {
+                line += " - " + name;
+            }
+
+            return firstRun ? line + " (first run is slower)" : line;
+        }
+
+        /// <summary>
         /// The re-solve status line for
         /// TreeSectionController.ApplyOverridesAndResolve.
         /// <para>

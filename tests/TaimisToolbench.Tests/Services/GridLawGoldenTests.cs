@@ -23,7 +23,8 @@ namespace TaimisToolbench.Tests.Services
     /// Two columns have been re-captured since, each because a CELL's
     /// minimum width grew: the currency ones when the Settings cell gained
     /// its leading icon, the snapshot ones when the Amount header gained a
-    /// persistent sort indicator. The board columns are still the original
+    /// persistent sort indicator and again when the Amount column took an
+    /// 8px left inset. The board columns are still the original
     /// pre-collapse capture, and the law itself has never moved.
     /// </summary>
     public class GridLawGoldenTests

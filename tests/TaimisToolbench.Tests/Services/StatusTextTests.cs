@@ -347,5 +347,40 @@ namespace TaimisToolbench.Tests.Services
             var age = TimeSpan.FromMinutes(minutes);
             Assert.Equal(StatusText.ForAgeAgo(age), StatusText.ForSnapshotAgeSuffix(age));
         }
+
+        [Fact]
+        public void RankerProgress_NamesTheItemAndItsPlaceInTheRun()
+        {
+            Assert.Equal(
+                "Analyzing 3 of 12 - Gift of the Pact Marshal",
+                StatusText.ForRankerProgress(3, 12, "Gift of the Pact Marshal", false));
+
+            // A missing name leaves the count standing rather than a
+            // dangling separator.
+            Assert.Equal("Analyzing 3 of 12", StatusText.ForRankerProgress(3, 12, null, false));
+            Assert.Equal("Analyzing 3 of 12", StatusText.ForRankerProgress(3, 12, "", false));
+        }
+
+        [Fact]
+        public void RankerProgress_FirstRun_SaysSoWithoutOverrunningTheStatusBand()
+        {
+            string first = StatusText.ForRankerProgress(3, 12, "Gift of the Pact Marshal", true);
+
+            Assert.Equal(
+                "Analyzing 3 of 12 - Gift of the Pact Marshal (first run is slower)", first);
+
+            // The sentence this replaced ran the line to 122 characters,
+            // which ellipsized on every item and left the full text only on
+            // a tooltip over a line that kept changing.
+            Assert.True(
+                first.Length <= StatusText.RankerStatusBudgetChars,
+                $"{first.Length} characters, budget {StatusText.RankerStatusBudgetChars}");
+
+            // The item's own name is the only unbounded term, so the line
+            // fits for every name up to the room the rest of it leaves.
+            Assert.True(
+                StatusText.ForRankerProgress(3, 12, new string('x', 30), true).Length
+                    <= StatusText.RankerStatusBudgetChars);
+        }
     }
 }
