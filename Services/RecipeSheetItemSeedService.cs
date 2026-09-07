@@ -5,7 +5,7 @@ namespace TaimisToolbench.Services
 {
     /// <summary>
     /// opportunity-notes (RECIPE-SHEET SAVINGS): loads the
-    /// wiki/API-verified recipe id -&gt; unlocking recipe-sheet item id seed
+    /// API-verified recipe id -&gt; unlocking recipe-sheet item id seed
     /// (ref/recipe_sheet_items.json) into the plain
     /// IReadOnlyDictionary&lt;int, int&gt; RecipeSheetSavingsCalculator/
     /// CraftingPlanPipeline already accept. Byte-for-byte the same load
