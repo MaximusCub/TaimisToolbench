@@ -57,6 +57,11 @@ namespace TaimisToolbench.Views
         // stacks disagree - see SocketedUpgradeIndex.
         private IReadOnlyDictionary<int, SocketedUpgradeIds> _socketsByItemId;
 
+        // How many pieces of a rune the wearer of a uniquely equipped item
+        // has on, built beside _itemsById once per snapshot. Answers 0 for
+        // every id that is not uniquely equipped - see EquippedRuneSetIndex.
+        private EquippedRuneSetIndex _equippedRuneSets = EquippedRuneSetIndex.Empty;
+
         // itemId -> its copies and the skins they wear, built beside
         // _itemsById once per snapshot. Absent for an id no copy of which
         // is transmuted. Which skin a row then shows depends on the source
@@ -2658,6 +2663,7 @@ namespace TaimisToolbench.Views
         private void IndexSockets()
         {
             _socketsByItemId = SocketedUpgradeIndex.Build(_snapshot?.Items);
+            _equippedRuneSets = new EquippedRuneSetIndex(_snapshot?.Items);
             _statWarmer.Start(StatIdsForSnapshot());
         }
 
@@ -2702,7 +2708,8 @@ namespace TaimisToolbench.Views
                 return SocketedUpgradeView.None;
             }
 
-            return SocketedUpgradeView.Resolve(ids, _getItemStatBlock);
+            return SocketedUpgradeView.Resolve(
+                ids, _getItemStatBlock, runeId => _equippedRuneSets.WornCopies(itemId, runeId));
         }
 
         /// <summary>

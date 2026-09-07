@@ -355,11 +355,10 @@ namespace TaimisToolbench.Services
         Bonus,
 
         /// <summary>
-        /// A bonus tier the wearer has not reached. Carried by every tier
-        /// of a rune found SOCKETED in an owned stack, none of which can
-        /// be active: the snapshot reads no equipment endpoint, so every
-        /// such stack is unequipped (KNOWN-ISSUES #42). Naming the count
-        /// itself still needs the character's equipped set.
+        /// A bonus tier the wearer has not reached, and every tier of a
+        /// rune socketed in a stack whose wearer cannot be named - see
+        /// <see cref="EquippedRuneSetIndex"/>. The grey is the game's own,
+        /// confirmed in the client against a partly equipped rune set.
         /// </summary>
         BonusInactive,
 

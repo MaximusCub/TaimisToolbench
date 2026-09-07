@@ -116,6 +116,7 @@ Services/Diagnostics/PlanPhaseTimingSummary.cs                                  
 Services/Diagnostics/PlanTimingAnalyzer.cs                                              100
 Services/DialogLayoutMath.cs                                                            472
 Services/DisciplinesColumnMath.cs                                                       148
+Services/EquippedRuneSetIndex.cs                                                        150
 Services/ExcessCraftOutputCalculator.cs                                                 158
 Services/FirstLoadSnapshotGate.cs                                                       86
 Services/GlyphButtonMetrics.cs                                                          69
@@ -147,7 +148,7 @@ Services/ItemSearchProviderFactory.cs                                           
 Services/ItemSlotFacts.cs                                                               141
 Services/ItemStatBlockFactory.cs                                                        207
 Services/ItemStatMath.cs                                                                64
-Services/ItemStatTooltipComposer.cs                                                     821
+Services/ItemStatTooltipComposer.cs                                                     822
 Services/JsonSeedReader.cs                                                              46
 Services/LogGutterLayout.cs                                                             147
 Services/LogLineFormat.cs                                                               137
@@ -248,7 +249,7 @@ Services/SnapshotSearchResultBuilder.cs                                         
 Services/SnapshotStore.cs                                                               98
 Services/SnapshotTableSorter.cs                                                         99
 Services/SocketedUpgradeIndex.cs                                                        146
-Services/SocketedUpgradeView.cs                                                         72
+Services/SocketedUpgradeView.cs                                                         133
 Services/SolveResult.cs                                                                 21
 Services/SolverDecision.cs                                                              124
 Services/SortIndicatorLayout.cs                                                         101
@@ -278,7 +279,7 @@ Services/TreeRowTooltipComposer.cs                                              
 Services/TreeToolbarRowLayout.cs                                                        112
 Services/TypeRampMetrics.cs                                                             171
 Services/UiSpacing.cs                                                                   53
-Services/UpgradeEffectLines.cs                                                          133
+Services/UpgradeEffectLines.cs                                                          182
 Services/ValueDetailTooltipBuilder.cs                                                   159
 Services/VendorBatchSolver.cs                                                           1206
 Services/VendorOfferLoader.cs                                                           51
@@ -422,6 +423,7 @@ tests/TaimisToolbench.Tests/Services/DecisionPillPlannerSubduingTests.cs        
 tests/TaimisToolbench.Tests/Services/DecisionPillPlannerTests.cs                        1036
 tests/TaimisToolbench.Tests/Services/DialogLayoutMathTests.cs                           484
 tests/TaimisToolbench.Tests/Services/DisciplinesColumnMathTests.cs                      177
+tests/TaimisToolbench.Tests/Services/EquippedRuneSetTests.cs                            217
 tests/TaimisToolbench.Tests/Services/ExcessCraftOutputCalculatorTests.cs                345
 tests/TaimisToolbench.Tests/Services/FirstLoadSnapshotGateTests.cs                      153
 tests/TaimisToolbench.Tests/Services/GridLawGoldenTests.cs                              100

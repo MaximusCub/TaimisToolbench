@@ -307,8 +307,8 @@ namespace TaimisToolbench.Services
             }
 
             // The loose component itself, not one socketed into armour: no
-            // (x/6) counter and no greyed tier, because no set is being
-            // worn to count against. The socketed case does differ - see
+            // counter and no greyed tier, because no set is being worn to
+            // count against. The socketed case does differ - see
             // UpgradeEffectLines.AppendSocketedBlock.
             UpgradeEffectLines.AppendBonuses(builder, stats.UpgradeBonuses, TooltipSpanRole.Bonus);
         }
@@ -478,7 +478,8 @@ namespace TaimisToolbench.Services
             foreach (var upgrade in socketed.Upgrades)
             {
                 slots.Separator();
-                UpgradeEffectLines.AppendSocketedBlock(slots, upgrade);
+                UpgradeEffectLines.AppendSocketedBlock(
+                    slots, upgrade, socketed.WornCopies(upgrade.ItemId));
             }
 
             return slots.Build();
