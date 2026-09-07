@@ -46,5 +46,14 @@ namespace TaimisToolbench.Services
         /// "the API is down".
         /// </summary>
         PartialFailure,
+
+        /// <summary>
+        /// Every account-wide source was read, but at least one character's
+        /// bags, equipment or crafting disciplines was not. The same
+        /// conservative-persistence rule throws on this, so the user is
+        /// still looking at the previous snapshot and has to be told which
+        /// fact the status line is reporting.
+        /// </summary>
+        IncompleteCharacters,
     }
 }
