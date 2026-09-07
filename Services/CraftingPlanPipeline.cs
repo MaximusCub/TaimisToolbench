@@ -358,6 +358,12 @@ namespace TaimisToolbench.Services
             // see AddAllVendorOfferItemComponentIds.
             AddAllVendorOfferItemComponentIds(vendorOffers, metadataIds);
             AddAllVendorOfferUnlockItemIds(vendorOffers, metadataIds);
+            // The Required Recipes section names the recipe SHEET, so the
+            // sheet's own name, icon and rarity have to be in this fetch.
+            // Read off the same craft steps PlanResultBuilder derives the
+            // required recipes from, which is why it can run before the
+            // result exists.
+            AddRecipeSheetItemIds(plan.Steps, metadataIds);
             phaseTracker.Start(PlanPhase.FetchingItemDetails, "Fetching item details", metadataIds.Count);
             progress?.Report(new PlanStatus
             {
@@ -393,7 +399,8 @@ namespace TaimisToolbench.Services
             // which equally-good discipline is reported but never change a
             // decision or total (see PlanResultBuilder.Build).
             var result = resultBuilder.Build(
-                plan, treeUsedForSolve, metadata, usedMaterials, learnedRecipeIds, effectiveCharacterDisciplines);
+                plan, treeUsedForSolve, metadata, usedMaterials, learnedRecipeIds,
+                effectiveCharacterDisciplines, _recipeSheetItemIdByRecipeId);
             result.CurrencyMetadata = currencyMetadata;
             result.AcquisitionHints = _acquisitionHints;
             result.DailyCooldownItems = _dailyCooldownItems;
@@ -711,7 +718,7 @@ namespace TaimisToolbench.Services
             var result = resultBuilder.Build(
                 solveResult.Plan, solveTree, context.Metadata,
                 usedMaterials, context.LearnedRecipeIds,
-                context.CharacterDisciplines);
+                context.CharacterDisciplines, _recipeSheetItemIdByRecipeId);
             result.CurrencyMetadata = context.CurrencyMetadata;
             result.AcquisitionHints = context.AcquisitionHints;
             result.DailyCooldownItems = context.DailyCooldownItems;
@@ -1437,6 +1444,30 @@ namespace TaimisToolbench.Services
                     {
                         metadataIds.Add(offer.UnlockRecipeItemId.Value);
                     }
+                }
+            }
+        }
+
+        /// <summary>
+        /// The recipe sheets this plan's craft steps would need, so their
+        /// names, icons and rarities arrive in the one bulk metadata
+        /// fetch. Reads the SAME craft steps PlanResultBuilder derives the
+        /// required recipes from, so the section can never name a sheet
+        /// this fetch did not cover.
+        /// </summary>
+        private void AddRecipeSheetItemIds(List<PlanStep> steps, HashSet<int> metadataIds)
+        {
+            if (steps == null || _recipeSheetItemIdByRecipeId.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var step in steps)
+            {
+                if (step != null && step.Source == AcquisitionSource.Craft &&
+                    _recipeSheetItemIdByRecipeId.TryGetValue(step.RecipeId, out int sheetItemId))
+                {
+                    metadataIds.Add(sheetItemId);
                 }
             }
         }
