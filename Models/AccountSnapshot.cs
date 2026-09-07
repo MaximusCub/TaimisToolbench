@@ -5,7 +5,21 @@ namespace TaimisToolbench.Models
 {
     internal class AccountSnapshot
     {
+        // When the last holding was read, not when the fetch started. The
+        // two differ by the whole fetch, which the snapshot budget allows
+        // up to a minute (see Module.SnapshotFetchTimeout).
         public DateTime CapturedAt { get; set; }
+
+        // How many characters this snapshot reached, and how many of those
+        // it could not read in full. A character counts incomplete when its
+        // bags, its equipment or its disciplines failed to fetch; its
+        // holdings are then missing, so the plan can tell the user to buy
+        // something they own. Both default to 0, which a snapshot.json
+        // written before these fields existed loads as "nothing known to be
+        // missing" - the same claim those older builds already made.
+        public int CharacterCount { get; set; }
+
+        public int IncompleteCharacterCount { get; set; }
 
         public int CoinCopper { get; set; }
 

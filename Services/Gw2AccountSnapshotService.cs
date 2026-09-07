@@ -84,7 +84,7 @@ namespace TaimisToolbench.Services
         {
             Gw2ApiConnectionLimit.Apply();
 
-            var snapshot = new AccountSnapshot { CapturedAt = DateTime.UtcNow };
+            var snapshot = new AccountSnapshot();
             int failedSources = 0;
             bool canReadLegendaryArmory = _apiManager.HasPermissions(LegendaryArmoryPermissions);
             int totalSources = canReadLegendaryArmory ? SourceCount : SourceCount - 1;
@@ -281,6 +281,14 @@ namespace TaimisToolbench.Services
                 snapshot.Items.AddRange(harvest.Items);
                 snapshot.LegendaryArmoryEquipped.AddRange(harvest.ArmoryEquipped);
                 snapshot.CharacterDisciplines = harvest.Disciplines;
+
+                // A character whose bags, equipment or disciplines failed
+                // is tolerated: the rest of the account is still worth
+                // committing, and dropping it would lose a good bank and
+                // wallet over one 500. What is not tolerated is calling the
+                // result complete - see AccountSnapshot for what that costs.
+                snapshot.CharacterCount = harvest.CharacterCount;
+                snapshot.IncompleteCharacterCount = harvest.IncompleteCharacterCount;
             }
             catch (Exception ex) when (!(ex is OperationCanceledException))
             {
@@ -293,6 +301,14 @@ namespace TaimisToolbench.Services
                 // "not trained" claim for characters never reached.
                 snapshot.CharacterDisciplines = null;
             }
+
+            // Stamped here, not at the top: every holding above has landed
+            // and nothing below reads one. Stamping at the start dated the
+            // snapshot from when the fetch began, so a fetch that ran the
+            // whole budget produced data already a minute older than its own
+            // timestamp claimed. The resolve passes below only attach names
+            // and icons, so they do not move the capture moment.
+            snapshot.CapturedAt = DateTime.UtcNow;
 
             // A partial failure must never masquerade as a full snapshot:
             // throw instead of returning a snapshot with holes relative to
@@ -368,11 +384,13 @@ namespace TaimisToolbench.Services
             await Task.WhenAll(inventoryTask, equipmentTask, craftingTask);
 
             var part = new CharacterSnapshotPart();
-            part.Items.AddRange(inventoryTask.Result);
+            var inventory = inventoryTask.Result;
+            part.Items.AddRange(inventory.Items);
 
             var equipment = equipmentTask.Result;
             part.Items.AddRange(equipment.Items);
             part.ArmoryItemIds.AddRange(equipment.ArmoryItemIds);
+            part.ItemsDegraded = inventory.Degraded || equipment.Degraded;
 
             var crafting = craftingTask.Result;
             part.DisciplinesDegraded = crafting.Degraded;
@@ -389,8 +407,11 @@ namespace TaimisToolbench.Services
         // here and widens this feature's failure blast radius. Never
         // throws, so the caller can Task.WhenAll it with
         // FetchCharacterCraftingAsync without either short-circuiting the
-        // other.
-        private async Task<List<SnapshotItemEntry>> FetchCharacterInventoryItemsAsync(string characterName, CancellationToken ct)
+        // other. A failure is reported through Degraded, the way the
+        // crafting fetch reports its own: the caller has to know these bags
+        // were unreadable, not empty.
+        private async Task<(bool Degraded, List<SnapshotItemEntry> Items)>
+            FetchCharacterInventoryItemsAsync(string characterName, CancellationToken ct)
         {
             var items = new List<SnapshotItemEntry>();
             try
@@ -429,9 +450,10 @@ namespace TaimisToolbench.Services
             {
                 Logger.Warn(ex, "Failed to fetch inventory for character {CharacterName}", characterName);
                 ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch inventory for character {characterName}: {ex.GetType().Name} - {ex.Message}");
+                return (true, items);
             }
 
-            return items;
+            return (false, items);
         }
 
         /// <summary>
@@ -450,7 +472,7 @@ namespace TaimisToolbench.Services
         /// throws, like the inventory fetch.
         /// </para>
         /// </summary>
-        private async Task<(List<SnapshotItemEntry> Items, List<int> ArmoryItemIds)>
+        private async Task<(bool Degraded, List<SnapshotItemEntry> Items, List<int> ArmoryItemIds)>
             FetchCharacterEquipmentItemsAsync(string characterName, CancellationToken ct)
         {
             var items = new List<SnapshotItemEntry>();
@@ -499,9 +521,10 @@ namespace TaimisToolbench.Services
             {
                 Logger.Warn(ex, "Failed to fetch equipment for character {CharacterName}", characterName);
                 ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch equipment for character {characterName}: {ex.GetType().Name} - {ex.Message}");
+                return (true, items, armoryItemIds);
             }
 
-            return (items, armoryItemIds);
+            return (false, items, armoryItemIds);
         }
 
         /// <summary>

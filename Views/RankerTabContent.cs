@@ -2964,7 +2964,20 @@ namespace TaimisToolbench.Views
             var snapshot = _getSnapshot();
             if (snapshot != null)
             {
-                text += " (" + StatusText.ForSnapshotAgeSuffix(DateTime.UtcNow - snapshot.CapturedAt) + ")";
+                string detail = StatusText.ForSnapshotAgeSuffix(
+                    DateTime.UtcNow - snapshot.CapturedAt);
+
+                // Every row here is scored against what the account owns, so
+                // a character the snapshot could not read in full moves the
+                // readiness numbers the same way it moves a plan.
+                string incomplete = StatusText.ForIncompleteCharacters(
+                    snapshot.IncompleteCharacterCount, snapshot.CharacterCount);
+                if (incomplete != null)
+                {
+                    detail += ", " + incomplete;
+                }
+
+                text += " (" + detail + ")";
             }
 
             ApplyStatusText(text, isError: false);

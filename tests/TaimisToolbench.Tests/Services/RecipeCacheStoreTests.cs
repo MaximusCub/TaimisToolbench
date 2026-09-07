@@ -13,6 +13,90 @@ namespace TaimisToolbench.Tests.Services
 {
     public class RecipeCacheStoreTests
     {
+        // ---- SeedMayBeStale. A /v2/build fetch that failed leaves the
+        // module unable to vouch for the seed. Reading that as fresh
+        // silenced the staleness status for the whole of any session that
+        // launched offline, which is the one session most likely to be
+        // serving old data.
+        private static SeededRecipeCacheStore SeedWithManifestBuild(int? seedBuildId)
+        {
+            var store = new SeededRecipeCacheStore();
+            string searchJson = RecipeCacheSerializer.SerializeSearches(
+                new Dictionary<int, IReadOnlyList<int>> { { 100, new List<int> { 1 } } });
+            string recipeJson = RecipeCacheSerializer.SerializeRecipes(
+                new Dictionary<int, RawRecipe>
+                {
+                    { 1, new RawRecipe { Id = 1, OutputItemId = 100, OutputItemCount = 1 } },
+                });
+
+            using (var s1 = new MemoryStream(Encoding.UTF8.GetBytes(searchJson)))
+            using (var s2 = new MemoryStream(Encoding.UTF8.GetBytes(recipeJson)))
+            {
+                store.Load(s1, s2);
+            }
+
+            if (seedBuildId.HasValue)
+            {
+                string manifestJson = RecipeCacheSerializer.SerializeManifest(
+                    new RecipeSeedManifest { SeedVersion = 1, Gw2BuildId = seedBuildId.Value });
+                using (var m = new MemoryStream(Encoding.UTF8.GetBytes(manifestJson)))
+                {
+                    store.LoadManifest(m);
+                }
+            }
+
+            return store;
+        }
+
+        [Fact]
+        public void SeedMayBeStale_LiveBuildUnknown_DoesNotReadAsFresh()
+        {
+            var store = SeedWithManifestBuild(205780);
+
+            // SetCurrentBuildId is never called: this is the offline launch.
+            Assert.True(store.SeedMayBeStale);
+        }
+
+        [Fact]
+        public void SeedMayBeStale_LiveBuildMatches_ReadsAsFresh()
+        {
+            var store = SeedWithManifestBuild(205780);
+            store.SetCurrentBuildId(205780);
+
+            Assert.False(store.SeedMayBeStale);
+        }
+
+        [Fact]
+        public void SeedMayBeStale_LiveBuildDiffers_StaysTrue()
+        {
+            var store = SeedWithManifestBuild(205505);
+            store.SetCurrentBuildId(205780);
+
+            Assert.True(store.SeedMayBeStale);
+        }
+
+        [Fact]
+        public void SeedMayBeStale_SeedCarriesNoBuildId_MakesNoClaim()
+        {
+            // Without a seed build there is nothing to compare, so the
+            // status line would have no build number to name.
+            var store = SeedWithManifestBuild(null);
+
+            Assert.False(store.SeedMayBeStale);
+        }
+
+        [Fact]
+        public void SeedMayBeStale_LateBuildIdArrival_ClearsTheWarning()
+        {
+            // The build fetch is retried off the plan path, so a store can
+            // go from unknown to known inside one session.
+            var store = SeedWithManifestBuild(205780);
+            Assert.True(store.SeedMayBeStale);
+
+            store.SetCurrentBuildId(205780);
+            Assert.False(store.SeedMayBeStale);
+        }
+
         [Fact]
         public void SeededStore_LoadsAndServes()
         {

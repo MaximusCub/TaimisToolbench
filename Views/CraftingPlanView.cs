@@ -4048,10 +4048,8 @@ namespace TaimisToolbench.Views
 
             // Read here rather than when the result lands: a background
             // refresh committing mid-generation would otherwise make the
-            // finished plan report an age for a snapshot it never used.
-            DateTime? snapshotCapturedAt = useOwnMaterials
-                ? _getSnapshot?.Invoke()?.CapturedAt
-                : null;
+            // finished plan describe a snapshot it never used.
+            AccountSnapshot plannedSnapshot = useOwnMaterials ? _getSnapshot?.Invoke() : null;
 
             try
             {
@@ -4100,7 +4098,7 @@ namespace TaimisToolbench.Views
                     // panel is torn down must not drop the "Plan
                     // generated" text - a later Build() pulls it from the
                     // board instead.
-                    _statusBoard.Finish(myGen, PlanGeneratedStatus(snapshotCapturedAt));
+                    _statusBoard.Finish(myGen, PlanGeneratedStatus(plannedSnapshot));
 
                     // Plan CONTENT still requires a live panel to render
                     // into - unlike the strip status above, this part of
@@ -4313,23 +4311,25 @@ namespace TaimisToolbench.Views
         }
 
         /// <summary>
-        /// The finished plan's status line. Carries the account-data age
-        /// clause only when the plan subtracted owned materials from a
-        /// snapshot the module already considers due for a refresh - see
-        /// StatusText.ForPlanAccountDataAge, which owns that decision and
+        /// The finished plan's status line. Carries the account-data clause
+        /// only when the plan subtracted owned materials from a snapshot
+        /// that is overdue for a refresh or missing a character - see
+        /// StatusText.ForPlanAccountDataNote, which owns that decision and
         /// the wording.
         /// </summary>
-        private string PlanGeneratedStatus(DateTime? snapshotCapturedAt)
+        private string PlanGeneratedStatus(AccountSnapshot planned)
         {
             string status = StatusText.Stamp("Plan generated", _planGeneratedAt);
-            if (!snapshotCapturedAt.HasValue || _settings == null)
+            if (planned == null || _settings == null)
             {
                 return status;
             }
 
-            string clause = StatusText.ForPlanAccountDataAge(
-                DateTime.UtcNow - snapshotCapturedAt.Value,
-                TimeSpan.FromMinutes(_settings.GetClampedSnapshotRefreshIntervalMinutes()));
+            string clause = StatusText.ForPlanAccountDataNote(
+                DateTime.UtcNow - planned.CapturedAt,
+                TimeSpan.FromMinutes(_settings.GetClampedSnapshotRefreshIntervalMinutes()),
+                planned.IncompleteCharacterCount,
+                planned.CharacterCount);
 
             return clause == null ? status : status + " (" + clause + ")";
         }

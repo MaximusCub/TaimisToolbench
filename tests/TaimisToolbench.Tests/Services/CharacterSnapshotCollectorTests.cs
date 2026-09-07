@@ -237,6 +237,136 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal("fetchCharacter", ex.ParamName);
         }
 
+        // ---- IncompleteCharacterCount: the snapshot has to say it is
+        // missing holdings, not only be missing them. An under-count is
+        // conservative for cost and wrong for advice - it makes the plan
+        // recommend buying an item the account already holds.
+        [Fact]
+        public async Task AllCharactersSucceeding_ReportsNoneIncomplete()
+        {
+            var harvest = await CharacterSnapshotCollector.CollectAsync(
+                FourNames,
+                4,
+                name => Task.FromResult(PartFor(name)),
+                CancellationToken.None);
+
+            Assert.Equal(4, harvest.CharacterCount);
+            Assert.Equal(0, harvest.IncompleteCharacterCount);
+        }
+
+        [Fact]
+        public async Task DegradedItems_CountAsIncompleteButKeepWhatWasRead()
+        {
+            // The bags that DID answer are real holdings, so they stay.
+            // What changes is that the harvest admits Bex is short.
+            var harvest = await CharacterSnapshotCollector.CollectAsync(
+                FourNames,
+                4,
+                name =>
+                {
+                    var part = PartFor(name);
+                    if (name == "Bex")
+                    {
+                        part.ItemsDegraded = true;
+                    }
+
+                    return Task.FromResult(part);
+                },
+                CancellationToken.None);
+
+            Assert.Equal(4, harvest.CharacterCount);
+            Assert.Equal(1, harvest.IncompleteCharacterCount);
+            Assert.Equal(
+                new[] { "Ayn", "Bex", "Cyd", "Dov" },
+                harvest.Items.Select(i => i.Source).ToArray());
+
+            // Bags are tolerated one at a time, so disciplines survive.
+            Assert.NotNull(harvest.Disciplines);
+        }
+
+        [Fact]
+        public async Task DegradedDisciplines_CountAsIncompleteToo()
+        {
+            var harvest = await CharacterSnapshotCollector.CollectAsync(
+                FourNames,
+                4,
+                name =>
+                {
+                    var part = PartFor(name);
+                    if (name == "Cyd")
+                    {
+                        part.DisciplinesDegraded = true;
+                    }
+
+                    return Task.FromResult(part);
+                },
+                CancellationToken.None);
+
+            Assert.Equal(1, harvest.IncompleteCharacterCount);
+            Assert.Null(harvest.Disciplines);
+        }
+
+        [Fact]
+        public async Task BothFaultsOnOneCharacter_CountThatCharacterOnce()
+        {
+            var harvest = await CharacterSnapshotCollector.CollectAsync(
+                FourNames,
+                4,
+                name =>
+                {
+                    var part = PartFor(name);
+                    if (name == "Dov")
+                    {
+                        part.ItemsDegraded = true;
+                        part.DisciplinesDegraded = true;
+                    }
+
+                    return Task.FromResult(part);
+                },
+                CancellationToken.None);
+
+            Assert.Equal(1, harvest.IncompleteCharacterCount);
+        }
+
+        [Fact]
+        public async Task AThrowingCharacterCountsAsIncomplete()
+        {
+            var harvest = await CharacterSnapshotCollector.CollectAsync(
+                FourNames,
+                4,
+                name => name == "Bex" ? ThrowAsync("Bex") : Task.FromResult(PartFor(name)),
+                CancellationToken.None);
+
+            Assert.Equal(4, harvest.CharacterCount);
+            Assert.Equal(1, harvest.IncompleteCharacterCount);
+        }
+
+        [Fact]
+        public async Task EveryCharacterFailing_ReportsEveryOneIncomplete()
+        {
+            var harvest = await CharacterSnapshotCollector.CollectAsync(
+                FourNames,
+                4,
+                name => ThrowAsync(name),
+                CancellationToken.None);
+
+            Assert.Equal(4, harvest.CharacterCount);
+            Assert.Equal(4, harvest.IncompleteCharacterCount);
+        }
+
+        [Fact]
+        public async Task NoCharacters_ReportsNeitherACountNorAFault()
+        {
+            var harvest = await CharacterSnapshotCollector.CollectAsync(
+                new string[0],
+                4,
+                name => Task.FromResult(PartFor(name)),
+                CancellationToken.None);
+
+            Assert.Equal(0, harvest.CharacterCount);
+            Assert.Equal(0, harvest.IncompleteCharacterCount);
+        }
+
         private static Task<CharacterSnapshotPart> ThrowAsync(string name)
         {
             var failed = new TaskCompletionSource<CharacterSnapshotPart>();

@@ -1601,10 +1601,24 @@ namespace TaimisToolbench.Views
             if (_snapshot != null)
             {
                 TimeSpan age = DateTime.UtcNow - _snapshot.CapturedAt;
-                string ageText = StatusText.ForSnapshotAgeSuffix(age);
-                text = string.IsNullOrEmpty(text) ? ageText : $"{text} ({ageText})";
+                string detail = StatusText.ForSnapshotAgeSuffix(age);
+
+                // A character the fetch could not read in full is a hole in
+                // the data the tab is showing, and the refresh that made it
+                // still succeeded - so it is reported here beside the age
+                // rather than through StatusText.ForRefreshFailure, which
+                // says the refresh failed and the data is the previous one.
+                string incomplete = StatusText.ForIncompleteCharacters(
+                    _snapshot.IncompleteCharacterCount, _snapshot.CharacterCount);
+                if (incomplete != null)
+                {
+                    detail += ", " + incomplete;
+                }
+
+                text = string.IsNullOrEmpty(text) ? detail : $"{text} ({detail})";
                 var staleThreshold = TimeSpan.FromMinutes(_settings.GetClampedSnapshotRefreshIntervalMinutes());
-                _statusLabel.TextColor = StatusText.IsStale(age, staleThreshold) ? WarningTextColor : _defaultStatusColor;
+                bool warn = StatusText.IsStale(age, staleThreshold) || incomplete != null;
+                _statusLabel.TextColor = warn ? WarningTextColor : _defaultStatusColor;
             }
             else
             {

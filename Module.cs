@@ -212,6 +212,17 @@ namespace TaimisToolbench
         private readonly PlanStripStatusBoard _planStripStatusBoard = new PlanStripStatusBoard();
         private VendorOfferStore _vendorOfferStore;
         private OverlayRecipeCacheStore _recipeOverlay;
+
+        // Held so a later build-id attempt can stamp both stores, the way
+        // the startup attempt does. See FetchLiveBuildIdAsync.
+        private SeededRecipeCacheStore _recipeSeed;
+        private Gw2BuildApiClient _buildApi;
+
+        // At most one build-id fetch in flight. Retried rather than tried
+        // once per session: without the id nothing verifies the corpus, so
+        // a launch that raced the network stayed unverified until Blish was
+        // restarted.
+        private int _buildIdFetchRunning;
         private IItemSearchProvider _itemSearchProvider;
         private Texture2D _moduleIconTexture;
         private Texture2D _cornerIconTexture;
@@ -581,38 +592,9 @@ namespace TaimisToolbench
             // Async build ID fetch: stamps provenance and licenses the
             // corpus probe - never a wipe. The overlay is already loaded
             // and serving above.
-            var buildApi = new Gw2BuildApiClient(_httpClient);
-            Task.Run(async () =>
-            {
-                try
-                {
-                    var build = await buildApi.TryGetBuildIdAsync(_buildIdCts.Token);
-
-                    if (!build.BuildId.HasValue)
-                    {
-                        // The cache still serves; only the build stamp and
-                        // the corpus verification are lost this session, so
-                        // recipes a newer build added may render UNKNOWN.
-                        string reason = build.LastError == null
-                            ? "no response"
-                            : $"[{build.LastError.GetType().Name}] {build.LastError.Message}";
-                        Logger.Warn("GW2 build ID unavailable after {0} attempts - recipe data cannot be verified against the live build this session: {1}", build.Attempts, reason);
-                        ModuleLog.Shared.Write(ModuleLogLevel.Warn, "startup", $"GW2 build ID unavailable after {build.Attempts} attempts - recipe data cannot be verified against the live build this session: {reason}");
-                        return;
-                    }
-
-                    recipeOverlay.SetCurrentBuildId(build.BuildId.Value);
-                    recipeSeed.SetCurrentBuildId(build.BuildId.Value);
-
-                    Volatile.Write(ref _liveGw2BuildId, build.BuildId.Value);
-                    KickCorpusVerification();
-                }
-                catch (Exception ex) when (ex is OperationCanceledException || ex is ObjectDisposedException)
-                {
-                    // Unloaded mid-fetch: _buildIdCts is cancelled and
-                    // _httpClient disposed before this task can finish.
-                }
-            });
+            _recipeSeed = recipeSeed;
+            _buildApi = new Gw2BuildApiClient(_httpClient);
+            KickBuildIdFetch();
 
             // Hoisted out of the pipeline's argument list so the plan view
             // can read its session item-stat cache for tooltips - the same
@@ -643,20 +625,91 @@ namespace TaimisToolbench
         }
 
         /// <summary>
+        /// Fetches the live game build id in the background and stamps both
+        /// recipe stores with it. A no-op once the id is known, and while an
+        /// attempt is already running.
+        /// <para>
+        /// Called at startup and again from
+        /// <see cref="KickCorpusVerification"/>, so a launch with no network
+        /// picks the id up at a later plan generation rather than staying
+        /// unverified until Blish restarts.
+        /// </para>
+        /// </summary>
+        private void KickBuildIdFetch()
+        {
+            var buildApi = _buildApi;
+            if (buildApi == null || Volatile.Read(ref _liveGw2BuildId) != 0)
+            {
+                return;
+            }
+
+            if (Interlocked.CompareExchange(ref _buildIdFetchRunning, 1, 0) != 0)
+            {
+                return;
+            }
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    var build = await buildApi.TryGetBuildIdAsync(_buildIdCts.Token);
+
+                    if (!build.BuildId.HasValue)
+                    {
+                        // The cache still serves; only the build stamp and
+                        // the corpus verification are lost for now, so
+                        // recipes a newer build added may render UNKNOWN.
+                        string reason = build.LastError == null
+                            ? "no response"
+                            : $"[{build.LastError.GetType().Name}] {build.LastError.Message}";
+                        Logger.Warn("GW2 build ID unavailable after {0} attempts - recipe data cannot be verified against the live build yet: {1}", build.Attempts, reason);
+                        ModuleLog.Shared.Write(ModuleLogLevel.Warn, "startup", $"GW2 build ID unavailable after {build.Attempts} attempts - recipe data cannot be verified against the live build yet, retrying at the next plan generation: {reason}");
+                        return;
+                    }
+
+                    _recipeOverlay?.SetCurrentBuildId(build.BuildId.Value);
+                    _recipeSeed?.SetCurrentBuildId(build.BuildId.Value);
+
+                    Volatile.Write(ref _liveGw2BuildId, build.BuildId.Value);
+                    KickCorpusVerification();
+                }
+                catch (Exception ex) when (ex is OperationCanceledException || ex is ObjectDisposedException)
+                {
+                    // Unloaded mid-fetch: _buildIdCts is cancelled and
+                    // _httpClient disposed before this task can finish.
+                }
+                finally
+                {
+                    Volatile.Write(ref _buildIdFetchRunning, 0);
+                }
+            });
+        }
+
+        /// <summary>
         /// Runs the corpus probe in the background: one /v2/recipes id-list
         /// request per game build, the license for serving derived
         /// negatives as exact (see RecipeCorpusVerifier). Never awaited by
-        /// plan generation. A no-op while the live build is unknown, while
-        /// a probe is already in flight, or - via the verifier's own
-        /// manifest cheap-out - when this build and corpus are already
-        /// verified (0 requests on a same-patch relaunch).
+        /// plan generation. A no-op while a probe is already in flight, or -
+        /// via the verifier's own manifest cheap-out - when this build and
+        /// corpus are already verified (0 requests on a same-patch
+        /// relaunch). While the live build is unknown it retries the build
+        /// fetch instead.
         /// </summary>
         private void KickCorpusVerification()
         {
             int buildId = Volatile.Read(ref _liveGw2BuildId);
             var store = _recipeCacheStore;
             var verifier = _recipeCorpusVerifier;
-            if (buildId == 0 || store == null || verifier == null || !store.CorpusUsable)
+            if (buildId == 0)
+            {
+                // Nothing can be verified without the id, and the startup
+                // attempt may have run before the network was up. Try again
+                // now; the next plan generation calls back here.
+                KickBuildIdFetch();
+                return;
+            }
+
+            if (store == null || verifier == null || !store.CorpusUsable)
             {
                 return;
             }
