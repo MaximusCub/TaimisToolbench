@@ -1081,7 +1081,8 @@ namespace TaimisToolbench.Views.Rendering
                             ItemTooltipIdentity.ForItem(row.Label ?? "", row.IconUrl, row.Rarity),
                             _getItemStatBlock == null || row.ItemId <= 0
                                 ? (Func<ItemStatBlock>)null
-                                : () => _getItemStatBlock(row.ItemId))
+                                : () => _getItemStatBlock(row.ItemId),
+                            IconWikiTarget.ItemPage(row.Label))
                         // CurrencyOwnedQuantity is already the raw
                         // unclamped wallet holding the game's tooltip
                         // states.
@@ -1089,7 +1090,8 @@ namespace TaimisToolbench.Views.Rendering
                             row.Label,
                             () => CurrencyTooltipFacts.For(
                                 row.Label, row.IconUrl, row.CurrencyDescription,
-                                row.CurrencyOwnedQuantity)));
+                                row.CurrencyOwnedQuantity),
+                            IconWikiTarget.ItemPage(row.Label)));
             }
 
             const int nameX = SummarySectionLayoutMath.CurrencyNameX;
@@ -1203,11 +1205,19 @@ namespace TaimisToolbench.Views.Rendering
                 Parent = rowPanel,
             });
 
+            string tradeUpName = row.TradeUpCurrencyName;
+            string tradeUpIconUrl = row.TradeUpCurrencyIconUrl;
+            int? tradeUpHeld = row.TradeUpCurrencyHeld;
             var icon = IconControls.CreateCurrencyIcon(
-                rowPanel, row.TradeUpCurrencyIconUrl,
+                rowPanel, tradeUpIconUrl,
                 SummarySectionLayoutMath.TradeUpNoteIconX(edges.NoteX, heldBandWidth, heldWidth),
                 iconY,
-                ItemIconTier.CurrencyBarRun, row.TradeUpCurrencyName);
+                ItemIconTier.CurrencyBarRun,
+                ItemIconTooltip.ForCurrency(
+                    tradeUpName,
+                    () => CurrencyTooltipFacts.For(
+                        tradeUpName, tradeUpIconUrl, null, tradeUpHeld),
+                    IconWikiTarget.ItemPage(tradeUpName)));
 
             var buysLabel = LabelHelpers.WithDescenderClearance(new Label()
             {

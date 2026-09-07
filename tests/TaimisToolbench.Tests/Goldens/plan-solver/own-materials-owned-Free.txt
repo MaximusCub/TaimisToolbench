@@ -194,6 +194,7 @@ result.RequiredRecipes[0].IsMissing = null
 result.RequiredRecipes[0].MinRating = 400
 result.RequiredRecipes[0].OutputItemId = 1
 result.RequiredRecipes[0].RecipeId = 10
+result.RequiredRecipes[0].SheetItemId = 0
 result.SeasonalVendorTips.count = 0
 result.SellableQuantity = 1
 result.SolveContext.AccountItems = null

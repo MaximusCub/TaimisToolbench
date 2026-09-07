@@ -142,7 +142,7 @@ namespace TaimisToolbench.Tests.Services
             // stat block, so the deferred builder is empty and the icon's
             // own note has to survive.
             var composed = ItemRowTooltipComposer.BuildRowContent(
-                (ItemStatBlock)null, ItemTooltipIdentity.Unnamed(), extraLines: null);
+                null, ItemTooltipIdentity.Unnamed(), null);
 
             Assert.True(composed.IsEmpty);
             Assert.Equal(

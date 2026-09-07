@@ -5,41 +5,23 @@ using TaimisToolbench.Models;
 namespace TaimisToolbench.Services
 {
     /// <summary>
-    /// Builds a Recipe Tree row's extra tooltip lines (unit-price line(s), the
-    /// TP price-side-fallback caveat, the Unknown/GuildUpgrade acquisition
-    /// hint, the receipt/what-if caption, and the wiki right-click
-    /// affordance line), for <c>TreeSectionController.RenderTreeNode</c>. Pure,
+    /// Builds a Recipe Tree row's tips for the second box of its hover -
+    /// the unit-price line(s), the TP price-side-fallback caveat, the
+    /// Unknown/GuildUpgrade acquisition hint and the receipt/what-if
+    /// caption - for <c>TreeSectionController.RenderTreeNode</c>. Pure,
     /// Blish-free string shaping so this row-tooltip logic is directly
-    /// unit-testable without a live <c>Panel</c>/<c>BasicTooltipText</c>,
-    /// matching this repo's pattern for tree-rendering text
-    /// (DecisionPillPlanner, ValueDetailTooltipBuilder, ShoppingRowTooltipFormatter).
+    /// unit-testable without a live <c>Panel</c>, matching this repo's
+    /// pattern for tree-rendering text (DecisionPillPlanner,
+    /// ValueDetailTooltipBuilder, ShoppingRowTooltipFormatter).
     ///
-    /// Deliberately excludes the wiki-link RIGHT-CLICK WIRING itself
-    /// (<c>rowPanel.RightMouseButtonPressed</c>/<c>MouseLeft</c>/
-    /// <c>RightMouseButtonReleased</c>) - that is Blish-bound event wiring and
-    /// stays in <c>TreeSectionController.RenderTreeNode</c>, gated by the
-    /// identical <see cref="WikiLinkBuilder.HasWikiPage"/> predicate this class
-    /// also calls to decide whether to append the tooltip line. Calling that
-    /// cheap pure predicate twice per row is intentional: it keeps this class
-    /// free of any Blish dependency rather than threading a bool back out for
-    /// one call site.
+    /// The right-click affordance is NOT one of these tips.
+    /// <see cref="SecondTooltipBox"/> appends it after them, so it is last
+    /// in the box on every surface rather than wherever a composer put it.
+    /// <see cref="WikiTargetFor"/> is where a tree row says which page it
+    /// opens, and the hover and the row's own right-click both read it.
     /// </summary>
     internal static class TreeRowTooltipComposer
     {
-        /// <summary>
-        /// The right-click affordance line. Shared with
-        /// <c>Views/Rendering/RecipesSectionRenderer</c>, which offers the
-        /// same right-click on its own rows and must not word it
-        /// differently.
-        /// </summary>
-        public const string WikiHintText = "Right-click to open the wiki page.";
-
-        /// <summary>The same affordance on a row whose acquisition is left
-        /// to the player, where the link lands on the page's Acquisition
-        /// section rather than its top.</summary>
-        public const string WikiAcquisitionHintText =
-            "Right-click to see how to get this on the wiki.";
-
         /// <summary>
         /// A row's item stat block as tooltip content, or empty content
         /// when the session has no stats for it - or when the row's id is
@@ -227,45 +209,53 @@ namespace TaimisToolbench.Services
                 extraTooltipLines.Insert(0, TooltipContent.TextLine(captionText));
             }
 
-            // The tooltip-line
-            // half of the affordance only - see this class's own doc
-            // comment for why the actual right-click wiring stays in
-            // TreeSectionController. WikiLinkBuilder.HasWikiPage/
-            // BuildItemPageUrl additionally suppress the affordance
-            // entirely for the known placeholder names (see
-            // WikiLinkBuilder's SentinelNames), which never resolve to a
-            // real page at all.
-            if (WikiLinkBuilder.HasWikiPage(node.Name))
-            {
-                extraTooltipLines.Add(TooltipContent.TextLine(
-                    CurrencyTradeUpRow.Matches(node)
-                        ? WikiAcquisitionHintText
-                        : WikiHintText));
-            }
-
             return TooltipContent.FromLines(extraTooltipLines);
         }
 
         /// <summary>
-        /// The page the row's right-click opens. A currency trade-up row
+        /// The page a tree row's right-click opens. A currency trade-up row
         /// (see <see cref="CurrencyTradeUpRow"/>) opens the item's
         /// Acquisition section, because the module deliberately plans no
         /// route to the currency and that section is where the player's
-        /// options are listed. Every other row opens the plain item page.
-        /// Null when the name has no wiki page, which is the same test the
-        /// tooltip line above uses, so the affordance and the link can
-        /// never disagree.
+        /// options are listed. Every other row opens the plain page.
         /// </summary>
-        public static string BuildWikiUrl(CraftingTreeNode node)
+        public static IconWikiTarget WikiTargetFor(CraftingTreeNode node)
         {
             if (node == null)
             {
-                return null;
+                return IconWikiTarget.ItemPage(null);
             }
 
             return CurrencyTradeUpRow.Matches(node)
-                ? WikiLinkBuilder.BuildItemAcquisitionUrl(node.Name)
-                : WikiLinkBuilder.BuildItemPageUrl(node.Name);
+                ? IconWikiTarget.Acquisition(node.Name)
+                : IconWikiTarget.ItemPage(node.Name);
+        }
+
+        /// <summary>
+        /// Whether the row's subject is a wallet CURRENCY rather than an
+        /// item, which is what gives its tooltip header the ring frame its
+        /// transparent art needs instead of a plate that shows through as a
+        /// grey background. Read off the decision and the cost-component
+        /// discriminator, never off the name: id 24 is both a real item and
+        /// the currency "Pristine Fractal Relics".
+        /// </summary>
+        public static bool RowSubjectIsACurrency(CraftingTreeNode node)
+        {
+            if (node == null)
+            {
+                return false;
+            }
+
+            if (node.Decision == CraftingDecision.Currency)
+            {
+                return true;
+            }
+
+            // A vendor cost-component leaf carries BuyFromVendor whether it
+            // is a barter ITEM or a CURRENCY; only the item half gets a
+            // SubtreeCost, because a currency's cost cell is deliberately
+            // blank. Same discriminator RowIdIsAnItemId uses above.
+            return node.IsCostComponent && !node.SubtreeCost.HasValue;
         }
     }
 }

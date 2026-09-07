@@ -2987,14 +2987,16 @@ namespace TaimisToolbench.Views
             // inside the stat block's own line order, not appended after it
             // as prose. Everything is read at hover time, so a stat block
             // the socket top-up lands after the row was built still shows.
-            return ItemIconTooltip.Composed(identity, () =>
-            {
-                var stats = hasStats ? _getItemStatBlock(itemId) : null;
-                return ItemRowTooltipComposer.BuildRowContent(
-                    ItemStatTooltipComposer.BuildContent(stats, SocketsFor(itemId), row.Skin),
-                    identity,
-                    null);
-            });
+            return ItemIconTooltip.Composed(
+                identity,
+                () =>
+                {
+                    var stats = hasStats ? _getItemStatBlock(itemId) : null;
+                    return ItemStatTooltipComposer.BuildContent(
+                        stats, SocketsFor(itemId), row.Skin);
+                },
+                null,
+                IconWikiTarget.ItemPage(row.Name));
         }
 
         /// <summary>
@@ -3141,7 +3143,8 @@ namespace TaimisToolbench.Views
                         currencyIconUrl,
                         _getCurrencyMetadata == null
                             ? null : _getCurrencyMetadata(currencyId)?.Description,
-                        walletValue)));
+                        walletValue),
+                    IconWikiTarget.ItemPage(currencyName)));
 
             // Never display raw currency IDs (repo invariant). Same two
             // columns as the item run above, so one header pair shape

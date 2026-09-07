@@ -33,7 +33,11 @@ namespace TaimisToolbench.Services
             // Which disciplines the account actually has, used only to
             // break the Pass 2 greedy-cover tie below. Null falls back to
             // the coverage-then-alphabetical order.
-            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null)
+            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null,
+            // recipe id -> unlocking sheet item id
+            // (ref/recipe_sheet_items.json). Null or a miss leaves
+            // RequiredRecipe.SheetItemId at 0.
+            IReadOnlyDictionary<int, int> recipeSheetItemIdByRecipeId = null)
         {
             var debugLog = new List<string>();
 
@@ -299,6 +303,17 @@ namespace TaimisToolbench.Services
                         : null;
                 }
 
+                // Only a LearnedFromItem recipe has a sheet to buy, and
+                // the seed is built from that flag, so the gate keeps a
+                // stale seed row from inventing one for a recipe learned
+                // some other way.
+                int sheetItemId = 0;
+                if (isLearnedFromItem && recipeSheetItemIdByRecipeId != null &&
+                    recipeSheetItemIdByRecipeId.TryGetValue(step.RecipeId, out int mappedSheetItemId))
+                {
+                    sheetItemId = mappedSheetItemId;
+                }
+
                 requiredRecipes.Add(new RequiredRecipe
                 {
                     RecipeId = step.RecipeId,
@@ -308,6 +323,7 @@ namespace TaimisToolbench.Services
                     MinRating = option.MinRating,
                     Disciplines = new List<string>(option.Disciplines),
                     IsMissing = isMissing,
+                    SheetItemId = sheetItemId,
                 });
             }
 

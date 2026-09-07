@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TaimisToolbench.Services;
 
 namespace TaimisToolbench.Models
 {
@@ -360,18 +361,20 @@ namespace TaimisToolbench.Models
 
         public string StatusTag { get; set; }
 
-        // Wiki-derived acquisition guidance for unknown-source rows,
-        // tooltip-only. Deliberately separate from Sublabel, which renders
-        // inline in the row itself - HintText never renders inline.
+        // What this row's hover adds in its second box, above the wiki
+        // line: acquisition guidance on an unknown-source row, the crafted
+        // item a recipe sheet unlocks on a RecipeRow. Deliberately separate
+        // from Sublabel, which renders inline in the row itself - HintText
+        // never renders inline.
         public string HintText { get; set; }
 
-        // The GW2 wiki page
-        // this row's row-level wiki affordance should open (see
-        // WikiLinkBuilder). Currently populated only for RecipeRow rows
-        // (RequiredRecipes section - see PlanViewModelBuilder.
-        // BuildRecipesSection); null for every other row type, which
-        // suppresses the affordance entirely rather than guessing a URL.
-        public string WikiUrl { get; set; }
+        // The wiki page this row's icon and its row-level right-click
+        // both open, and the affordance line its hover ends with - one
+        // value so the two can never disagree (see IconWikiTarget).
+        // Currently named only for RecipeRow rows (RequiredRecipes - see
+        // PlanViewModelBuilder.BuildRecipesSection); every other row type
+        // leaves it at the default, which opens nothing.
+        public IconWikiTarget WikiTarget { get; set; }
 
         // Short pill/tag label (e.g. "SALVAGE", "EXPLORE") for
         // ShoppingUnknown rows, from the same seeded hint entry as

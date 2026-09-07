@@ -160,10 +160,12 @@ namespace TaimisToolbench.Views.Rendering
             };
 
             int itemId = row.ItemId;
+            string fullLabel = row.Label ?? "";
             var hover = ItemIconTooltip.ForItem(
-                ItemTooltipIdentity.ForItem(row.Label ?? "", row.IconUrl, row.Rarity),
+                ItemTooltipIdentity.ForItem(fullLabel, row.IconUrl, row.Rarity),
                 _getItemStatBlock == null || itemId <= 0 ? (Func<ItemStatBlock>)null
-                    : () => _getItemStatBlock(itemId));
+                    : () => _getItemStatBlock(itemId),
+                IconWikiTarget.ItemPage(fullLabel));
 
             IconControls.CreateItemIcon(
                 rowPanel, row.IconUrl, ItemIconFrame.ForRarity(row.Rarity),

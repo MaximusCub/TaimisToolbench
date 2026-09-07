@@ -381,7 +381,6 @@ namespace TaimisToolbench.Views.Rendering
             // subtracted: the badge is a column, so it no longer moves with
             // the name and no longer has to be reserved out of it.
             string fullName = row.Label ?? "";
-            string hintText = row.HintText;
 
             // Composed at HOVER time (see UsedMaterialsSectionRenderer's
             // matching note): a stat block that lands after this render
@@ -395,7 +394,8 @@ namespace TaimisToolbench.Views.Rendering
             var hover = ItemIconTooltip.ForItem(
                 ItemTooltipIdentity.ForItem(fullName, row.IconUrl, row.Rarity),
                 _getItemStatBlock == null || itemId <= 0 ? (Func<ItemStatBlock>)null
-                    : () => _getItemStatBlock(itemId));
+                    : () => _getItemStatBlock(itemId),
+                IconWikiTarget.ItemPage(fullName));
 
             var nameHandle = IconNameRowHelpers.CreateIconAndEllipsizedName(
                 rowPanel, row.IconUrl, row.Rarity,

@@ -1661,9 +1661,22 @@ namespace TaimisToolbench.Services
                     continue;
                 }
 
-                string name = ResolveName(recipe.OutputItemId, result.ItemMetadata);
-                string iconUrl = ResolveIconUrl(recipe.OutputItemId, result.ItemMetadata);
-                string rarity = ResolveRarity(recipe.OutputItemId, result.ItemMetadata);
+                // The row's subject is the recipe SHEET where the module
+                // knows which one unlocks this recipe: a sheet is what the
+                // player buys and consumes, and the crafted item is not
+                // sold as a recipe. Only when the sheet's own metadata
+                // arrived, so a fetch that missed it names the crafted
+                // item rather than "Unknown Item".
+                string craftedName = ResolveName(recipe.OutputItemId, result.ItemMetadata);
+                string sheetName = recipe.SheetItemId > 0
+                    ? ResolvedNameOrNull(recipe.SheetItemId, result.ItemMetadata)
+                    : null;
+                bool namesTheSheet = sheetName != null;
+                int subjectItemId = namesTheSheet ? recipe.SheetItemId : recipe.OutputItemId;
+
+                string name = namesTheSheet ? sheetName : craftedName;
+                string iconUrl = ResolveIconUrl(subjectItemId, result.ItemMetadata);
+                string rarity = ResolveRarity(subjectItemId, result.ItemMetadata);
 
                 string statusTag;
                 if (recipe.IsAutoLearned)
@@ -1686,27 +1699,37 @@ namespace TaimisToolbench.Services
                 string sublabel = FormatDisciplineSublabel(
                     recipe.Disciplines, recipe.MinRating, planDiscNames);
 
-                // Wiki links only on Missing rows - a Learned/Auto-learned
-                // row has nothing left to unlock. A LearnedFromItem recipe
-                // links to its "Recipe: <name>" sheet page; every other
-                // recipe to the item's "#Acquisition" anchor. Gated on the
-                // semantic flags (not the display string) so a tag rename
-                // cannot drop every link; IsAutoLearned is excluded
-                // explicitly - it can be IsMissing yet has nothing to
-                // unlock via the wiki.
-                string wikiUrl = !recipe.IsAutoLearned && recipe.IsMissing == true
-                    ? WikiLinkBuilder.BuildRequiredRecipeUrl(name, recipe.IsLearnedFromItem)
-                    : null;
+                // Every row gets a page, Learned rows included: the icon
+                // standard is that a right-click always reaches the wiki.
+                // A sheet-named row opens the sheet's own page; a recipe
+                // learned from an item whose sheet the module cannot name
+                // opens the same "Recipe: <crafted name>" page it always
+                // did; anything else opens the crafted item's Acquisition
+                // section, where the player's unlock options are listed.
+                IconWikiTarget wikiTarget;
+                if (namesTheSheet || recipe.IsLearnedFromItem)
+                {
+                    wikiTarget = IconWikiTarget.RecipeSheet(craftedName);
+                }
+                else
+                {
+                    wikiTarget = IconWikiTarget.Acquisition(craftedName);
+                }
 
                 section.Rows.Add(new PlanRowViewModel
                 {
                     RowType = PlanRowType.RecipeRow,
+                    ItemId = subjectItemId,
                     Label = name,
                     Sublabel = sublabel,
                     IconUrl = iconUrl,
                     Rarity = rarity,
                     StatusTag = statusTag,
-                    WikiUrl = wikiUrl,
+                    WikiTarget = wikiTarget,
+                    // Named only on a sheet row, where the sheet's name is
+                    // all the reader sees and the crafted item it unlocks
+                    // is the thing they were planning.
+                    HintText = namesTheSheet ? $"Unlocks {craftedName}." : null,
                 });
             }
 
@@ -1761,6 +1784,20 @@ namespace TaimisToolbench.Services
 
         // Internal so TreeSectionController can resolve a Subdued pill's
         // item-kind delta to a display name too.
+        /// <summary>The item's real name, or null when the fetch did not
+        /// return one. For a caller that has a better fallback than the
+        /// "Unknown Item" placeholder <see cref="ResolveName"/> hands
+        /// back.</summary>
+        private static string ResolvedNameOrNull(
+            int itemId, IReadOnlyDictionary<int, ItemMetadata> metadata)
+        {
+            return metadata != null &&
+                metadata.TryGetValue(itemId, out var meta) &&
+                !string.IsNullOrEmpty(meta.Name)
+                    ? meta.Name
+                    : null;
+        }
+
         internal static string ResolveName(
             int itemId, IReadOnlyDictionary<int, ItemMetadata> metadata)
         {

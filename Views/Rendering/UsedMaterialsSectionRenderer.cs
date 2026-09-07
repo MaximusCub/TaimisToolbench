@@ -171,7 +171,8 @@ namespace TaimisToolbench.Views.Rendering
             var hover = ItemIconTooltip.ForItem(
                 ItemTooltipIdentity.ForItem(fullName, row.IconUrl, row.Rarity),
                 _getItemStatBlock == null || itemId <= 0 ? (Func<ItemStatBlock>)null
-                    : () => _getItemStatBlock(itemId));
+                    : () => _getItemStatBlock(itemId),
+                IconWikiTarget.ItemPage(fullName));
 
             var nameHandle = IconNameRowHelpers.CreateIconAndEllipsizedName(
                 rowPanel, row.IconUrl, row.Rarity,

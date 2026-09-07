@@ -736,7 +736,9 @@ namespace TaimisToolbench.Views
                 ? (Func<ItemStatBlock>)null
                 : () => _getItemStatBlock(singleItemId);
 
-            return ItemIconTooltip.ForItem(identity, stats, () => extras);
+            return ItemIconTooltip.ForItem(
+                identity, stats, () => extras,
+                IconWikiTarget.ItemPage(itemLines.Count > 0 ? itemLines[0] : null));
         }
 
         /// <summary>
@@ -924,7 +926,8 @@ namespace TaimisToolbench.Views
                 var lineHover = ItemIconTooltip.ForItem(
                     ItemTooltipIdentity.ForItem(full, summary.IconUrl, rarity),
                     _getItemStatBlock == null || summaryItemId <= 0 ? (Func<ItemStatBlock>)null
-                        : () => _getItemStatBlock(summaryItemId));
+                        : () => _getItemStatBlock(summaryItemId),
+                    IconWikiTarget.ItemPage(full));
 
                 IconControls.CreateItemIcon(
                     panel, summary.IconUrl, ItemIconFrame.ForRarity(rarity),

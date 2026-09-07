@@ -218,6 +218,7 @@ RequiredRecipe.IsMissing:Nullable`1<Boolean>
 RequiredRecipe.MinRating:Int32
 RequiredRecipe.OutputItemId:Int32
 RequiredRecipe.RecipeId:Int32
+RequiredRecipe.SheetItemId:Int32
 SeasonalVendorTip.CostLines:List`1<CostLine>
 SeasonalVendorTip.DailyCap:Nullable`1<Int32>
 SeasonalVendorTip.Festival:String
