@@ -44,6 +44,13 @@ are in tells you whether a page is safe to edit.
   Blish HUD binary (the `ContinueWith`/ThreadPool path that puts `Build()`
   off the main thread, the `ControlCollection` lock correction, the
   `WheelDelta` `N*120-65536` sign-unwrap bug).
+- [`api-client-contracts.md`](api-client-contracts.md) - per host, what the
+  published contract asks of a client (User-Agent, rate limits, `maxlag`,
+  `Retry-After`, concurrency, caching), which rules this repository meets
+  and where, and which it breaches. Every rule cites the page that states
+  it; every limit not published anywhere cites the request that measured
+  it. Also says which parts of the runtime API path are Blish HUD's rather
+  than ours.
 - [`DECISIONS.md`](DECISIONS.md) - designs that were considered and
   rejected, with the reasoning and a link to the full record. Kept separate
   from ARCHITECTURE so that document can stay a map rather than a defence.

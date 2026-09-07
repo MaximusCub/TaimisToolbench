@@ -432,6 +432,8 @@ namespace TaimisToolbench
             _lastStatus = _statusStore.Load();
 
             _httpClient = new HttpClient();
+            Gw2ApiUserAgent.Apply(_httpClient, Gw2ApiUserAgent.ModuleProduct,
+                Gw2ApiUserAgent.ReadManifestVersion(ModuleParameters?.Manifest));
             var rawRecipeApi = new Gw2RecipeApiClient(_httpClient);
             var mfSource = new ContentsManagerRecipeSource(ContentsManager);
             var mfData = RecipeClientFactory.LoadData(mfSource);

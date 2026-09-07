@@ -272,6 +272,7 @@
     <Compile Include="Services\Gw2PriceApiClient.cs" />
     <Compile Include="Services\Gw2ItemApiClient.cs" />
     <Compile Include="Services\Gw2BuildApiClient.cs" />
+    <Compile Include="Services\Gw2ApiUserAgent.cs" />
     <Compile Include="Views\MainView.cs" />
     <Compile Include="Views\AutocompleteTextBox.cs" />
     <Compile Include="Views\SuggestionPanel.cs" />

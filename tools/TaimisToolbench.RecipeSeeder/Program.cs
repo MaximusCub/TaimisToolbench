@@ -19,6 +19,10 @@ namespace TaimisToolbench.RecipeSeeder
         private const string BaseUrl = "https://api.guildwars2.com/v2";
         private const int BatchSize = 200;
         private const int MaxConcurrency = 4;
+        private const int MaxAttempts = 3;
+
+        private const string SeederProduct = "TaimisToolbench-RecipeSeeder";
+        private const string SeederVersion = "1.0";
 
         // Mirrors Gw2RecipeApiClient.SchemaVersion, including the
         // rationale for pinning a literal date instead of "v=latest" -
@@ -88,6 +92,7 @@ namespace TaimisToolbench.RecipeSeeder
             using (var httpClient = new HttpClient())
             {
                 httpClient.Timeout = TimeSpan.FromMinutes(5);
+                Gw2ApiUserAgent.Apply(httpClient, SeederProduct, SeederVersion);
                 var totalSw = Stopwatch.StartNew();
 
                 // Step 1: Fetch GW2 build ID
@@ -343,9 +348,71 @@ namespace TaimisToolbench.RecipeSeeder
         internal static async Task<List<int>> FetchAllRecipeIdsAsync(
             HttpClient httpClient)
         {
-            string json = await httpClient.GetStringAsync(
-                $"{BaseUrl}/recipes?v={SchemaVersion}");
+            string json = await GetJsonAsync(
+                httpClient, $"{BaseUrl}/recipes?v={SchemaVersion}");
             return JsonSerializer.Deserialize<List<int>>(json);
+        }
+
+        /// <summary>
+        /// GETs one GW2 API URL, retrying only what the API says is worth
+        /// retrying, and throwing rather than returning nothing.
+        /// </summary>
+        /// <remarks>
+        /// The seed is written from whatever the batches returned, so a
+        /// caller that swallows a refusal writes a short corpus and exits
+        /// zero. A run that cannot reach the API has to fail instead. The
+        /// published limits this respects are in
+        /// docs/api-client-contracts.md.
+        /// </remarks>
+        private static async Task<string> GetJsonAsync(
+            HttpClient httpClient, string url)
+        {
+            string lastFailure = null;
+
+            for (int attempt = 0; attempt < MaxAttempts; attempt++)
+            {
+                var wait = TimeSpan.FromSeconds(attempt + 1);
+                bool retryable;
+
+                try
+                {
+                    using (var response = await httpClient.GetAsync(url))
+                    {
+                        if (response.IsSuccessStatusCode)
+                        {
+                            return await response.Content.ReadAsStringAsync();
+                        }
+
+                        lastFailure =
+                            $"HTTP {(int)response.StatusCode} from {url}";
+                        retryable = HttpRetry.IsRetryable(response.StatusCode);
+                        if (retryable)
+                        {
+                            wait = HttpRetry.ResolveDelay(
+                                response, wait, DateTimeOffset.UtcNow);
+                        }
+                    }
+                }
+                catch (HttpRequestException ex)
+                {
+                    lastFailure = $"{ex.Message} ({url})";
+                    retryable = true;
+                }
+
+                if (!retryable)
+                {
+                    break;
+                }
+
+                if (attempt < MaxAttempts - 1)
+                {
+                    Console.Error.WriteLine(
+                        $"  {lastFailure}; retrying in {wait.TotalSeconds:0.#}s");
+                    await Task.Delay(wait);
+                }
+            }
+
+            throw new HttpRequestException("GW2 API: " + lastFailure);
         }
 
         private static async Task<Dictionary<int, RawRecipe>> FetchAllRecipesAsync(
@@ -399,20 +466,7 @@ namespace TaimisToolbench.RecipeSeeder
                 ids.Select(id => id.ToString(CultureInfo.InvariantCulture)));
             string url = $"{BaseUrl}/recipes?ids={idsParam}&v={SchemaVersion}";
 
-            for (int attempt = 0; attempt < 3; attempt++)
-            {
-                try
-                {
-                    string json = await httpClient.GetStringAsync(url);
-                    return ParseRecipeBatch(json);
-                }
-                catch (HttpRequestException) when (attempt < 2)
-                {
-                    await Task.Delay(1000 * (attempt + 1));
-                }
-            }
-
-            return new List<RawRecipe>();
+            return ParseRecipeBatch(await GetJsonAsync(httpClient, url));
         }
 
         private static List<RawRecipe> ParseRecipeBatch(string json)
@@ -656,20 +710,7 @@ namespace TaimisToolbench.RecipeSeeder
                 ids.Select(id => id.ToString(CultureInfo.InvariantCulture)));
             string url = $"{BaseUrl}/items?ids={idsParam}";
 
-            for (int attempt = 0; attempt < 3; attempt++)
-            {
-                try
-                {
-                    string json = await httpClient.GetStringAsync(url);
-                    return ParseItemBatch(json);
-                }
-                catch (HttpRequestException) when (attempt < 2)
-                {
-                    await Task.Delay(1000 * (attempt + 1));
-                }
-            }
-
-            return new List<ItemNameInfo>();
+            return ParseItemBatch(await GetJsonAsync(httpClient, url));
         }
 
         private static List<ItemNameInfo> ParseItemBatch(string json)
