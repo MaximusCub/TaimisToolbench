@@ -426,7 +426,7 @@ tests/TaimisToolbench.Tests/Services/CraftingTreeBuilderTests.cs                
 tests/TaimisToolbench.Tests/Services/CurrencyDisplayResolverTests.cs                    459
 tests/TaimisToolbench.Tests/Services/CurrencyMetadataServiceTests.cs                    409
 tests/TaimisToolbench.Tests/Services/CurrencyTooltipComposerTests.cs                    169
-tests/TaimisToolbench.Tests/Services/CurrencyTradeUpCoalescingTests.cs                  326
+tests/TaimisToolbench.Tests/Services/CurrencyTradeUpCoalescingTests.cs                  504
 tests/TaimisToolbench.Tests/Services/CurrencyTradeUpRowTests.cs                         249
 tests/TaimisToolbench.Tests/Services/CurrencyValuationSerializerTests.cs                274
 tests/TaimisToolbench.Tests/Services/DailyCooldownItemServiceTests.cs                   209
