@@ -111,6 +111,8 @@ namespace TaimisToolbench.Services
             // fetches its own.
             ISet<int> learnedRecipeIds = null)
         {
+            Gw2ApiConnectionLimit.Apply();
+
             var valuation = currencyValuation ?? CurrencyValuation.None;
             var tiers = homesteadTiers ?? HomesteadEfficiencyTiers.Default;
             var sw = new Stopwatch();
@@ -581,6 +583,8 @@ namespace TaimisToolbench.Services
             IProgress<PlanPhaseEvent> phaseProgress,
             IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null)
         {
+            Gw2ApiConnectionLimit.Apply();
+
             var valuation = currencyValuation ?? CurrencyValuation.None;
             var tiers = homesteadTiers ?? HomesteadEfficiencyTiers.Default;
             var sw = new Stopwatch();

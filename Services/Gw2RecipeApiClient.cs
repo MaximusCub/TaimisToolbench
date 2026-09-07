@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -29,10 +30,17 @@ namespace TaimisToolbench.Services
         internal const int BatchSize = 200;
 
         private readonly HttpClient _http;
+        private readonly Func<TimeSpan, CancellationToken, Task> _retryDelay;
 
-        public Gw2RecipeApiClient(HttpClient http)
+        /// <summary>
+        /// <paramref name="retryDelay"/> is injected by tests so a scripted
+        /// refusal costs no wall-clock time; null uses Task.Delay.
+        /// </summary>
+        public Gw2RecipeApiClient(
+            HttpClient http, Func<TimeSpan, CancellationToken, Task> retryDelay = null)
         {
             _http = http;
+            _retryDelay = retryDelay;
         }
 
         public async Task<RecipeSearchResult> SearchByOutputAsync(int itemId, CancellationToken ct)
@@ -112,12 +120,15 @@ namespace TaimisToolbench.Services
             return result;
         }
 
-        // GetAsync(url, ct) rather than GetStringAsync: net472's
-        // GetStringAsync has no CancellationToken overload, which made ct
-        // a silent no-op here.
+        // Gw2ApiRequest rather than HttpClient directly: this method turns
+        // every non-success status into an exception, and a thrown recipe
+        // fetch degrades that recipe to UNKNOWN in the plan, so a refusal
+        // the API said to retry must not reach the throw below. It also
+        // keeps ct honoured, which the classic GetStringAsync overload
+        // (no CancellationToken parameter on net472) silently did not.
         private async Task<string> GetJsonAsync(string url, CancellationToken ct)
         {
-            using (var response = await _http.GetAsync(url, ct))
+            using (var response = await Gw2ApiRequest.GetAsync(_http, url, ct, _retryDelay))
             {
                 if (response.StatusCode == HttpStatusCode.NotFound)
                 {

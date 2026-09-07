@@ -1925,6 +1925,10 @@ namespace TaimisToolbench
 
             _iconPrimeBatch.Clear();
             _iconPrime.Take(SnapshotIconWindow.BackgroundPrimePerFrame, _iconPrimeBatch);
+            if (_iconPrimeBatch.Count > 0)
+            {
+                IconAssetConnectionLimit.Apply();
+            }
 
             for (int i = 0; i < _iconPrimeBatch.Count; i++)
             {

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -12,10 +13,17 @@ namespace TaimisToolbench.Services
         private const string BaseUrl = "https://api.guildwars2.com/v2";
 
         private readonly HttpClient _http;
+        private readonly Func<TimeSpan, CancellationToken, Task> _retryDelay;
 
-        public Gw2ItemApiClient(HttpClient http)
+        /// <summary>
+        /// <paramref name="retryDelay"/> is injected by tests so a scripted
+        /// refusal costs no wall-clock time; null uses Task.Delay.
+        /// </summary>
+        public Gw2ItemApiClient(
+            HttpClient http, Func<TimeSpan, CancellationToken, Task> retryDelay = null)
         {
             _http = http;
+            _retryDelay = retryDelay;
         }
 
         public async Task<IReadOnlyList<RawItem>> GetItemsAsync(
@@ -29,8 +37,10 @@ namespace TaimisToolbench.Services
             var ids = string.Join(",", itemIds);
             var url = $"{BaseUrl}/items?ids={ids}";
 
-            using (var request = new HttpRequestMessage(HttpMethod.Get, url))
-            using (var response = await _http.SendAsync(request, ct))
+            // Gw2ApiRequest rather than HttpClient directly: the throw
+            // below would otherwise turn a refusal the API said to retry
+            // into a batch of items with no names.
+            using (var response = await Gw2ApiRequest.GetAsync(_http, url, ct, _retryDelay))
             {
                 if (response.StatusCode == HttpStatusCode.NotFound)
                 {

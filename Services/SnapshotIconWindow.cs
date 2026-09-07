@@ -40,18 +40,22 @@ namespace TaimisToolbench.Services
         /// allocation and starting the load task.
         /// </para>
         /// <para>
-        /// Asking faster would not finish sooner. Every request queues a
-        /// decode that takes one process-wide graphics device lock at low
-        /// priority, so past a point the lock is the limit and a higher
-        /// request rate only moves work onto the frame thread.
+        /// Asking faster would not finish sooner. Warm, every request queues
+        /// a decode that takes one process-wide graphics device lock at low
+        /// priority, so the lock is the limit. Cold, the transport is: 16 a
+        /// frame issues a 927-picture prime inside a second, and the
+        /// connection pool takes tens of seconds to drain it.
         /// </para>
         /// </summary>
         public const int PrimePerFrame = 16;
 
         /// <summary>
         /// Pictures one frame asks for while the Snapshot tab is NOT the tab
-        /// on screen, so its icons are already fetched the first time it is
-        /// opened.
+        /// on screen, so its icons are already asked for the first time it
+        /// is opened. Asked for, not necessarily arrived: on a cold asset
+        /// cache the answers come back at the rate
+        /// <see cref="IconAssetConnectionLimit.ConnectionsPerServer"/>
+        /// allows, which is slower than this.
         /// <para>
         /// A quarter of <see cref="PrimePerFrame"/>, because this spends
         /// frames the player is giving to some other tab. At the 0.015ms per
