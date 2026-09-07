@@ -85,7 +85,7 @@ Models/UsedMaterial.cs                                                          
 Models/VendorItemCostLine.cs                                                            42
 Models/VendorOffer.cs                                                                   73
 Models/VendorOfferDataset.cs                                                            15
-Module.cs                                                                               2873
+Module.cs                                                                               2953
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
@@ -243,7 +243,7 @@ Services/SnapshotHeaderLayout.cs                                                
 Services/SnapshotHelpers.cs                                                             79
 Services/SnapshotHoldLine.cs                                                            355
 Services/SnapshotItemGridLayout.cs                                                      313
-Services/SnapshotIconWindow.cs                                                          159
+Services/SnapshotIconWindow.cs                                                          181
 Services/SnapshotRefreshSlot.cs                                                         93
 Services/SnapshotResultLayout.cs                                                        90
 Services/SnapshotSearchResultBuilder.cs                                                 572
@@ -576,7 +576,7 @@ tests/TaimisToolbench.Tests/Services/SnapshotHeaderLayoutTests.cs               
 tests/TaimisToolbench.Tests/Services/SnapshotHelpersTests.cs                            95
 tests/TaimisToolbench.Tests/Services/SnapshotHoldLineTests.cs                           320
 tests/TaimisToolbench.Tests/Services/SnapshotItemGridLayoutTests.cs                     407
-tests/TaimisToolbench.Tests/Services/SnapshotIconWindowTests.cs                         249
+tests/TaimisToolbench.Tests/Services/SnapshotIconWindowTests.cs                         279
 tests/TaimisToolbench.Tests/Services/SnapshotRefreshSlotTests.cs                        241
 tests/TaimisToolbench.Tests/Services/SnapshotResultLayoutTests.cs                       94
 tests/TaimisToolbench.Tests/Services/SnapshotSearchResultBuilderTests.cs                1286
