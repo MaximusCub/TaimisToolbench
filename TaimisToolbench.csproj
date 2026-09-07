@@ -133,6 +133,9 @@
     <Compile Include="Services\RecipeService.cs" />
     <Compile Include="Services\ResizeSettleDebounce.cs" />
     <Compile Include="Services\BoundedConcurrency.cs" />
+    <Compile Include="Services\CharacterSnapshotCollector.cs" />
+    <Compile Include="Services\Gw2ApiConnectionLimit.cs" />
+    <Compile Include="Services\SnapshotFetchBudget.cs" />
     <Compile Include="Models\ItemPrice.cs" />
     <Compile Include="Models\PriceBasis.cs" />
     <Compile Include="Models\PlanSolveContext.cs" />
