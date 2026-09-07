@@ -252,6 +252,8 @@ namespace TaimisToolbench.Tests.Services
 
             Assert.Equal(4, harvest.CharacterCount);
             Assert.Equal(0, harvest.IncompleteCharacterCount);
+            Assert.Empty(harvest.IncompleteCharacterNames);
+            Assert.True(harvest.IsComplete);
         }
 
         [Fact]
@@ -276,6 +278,11 @@ namespace TaimisToolbench.Tests.Services
 
             Assert.Equal(4, harvest.CharacterCount);
             Assert.Equal(1, harvest.IncompleteCharacterCount);
+
+            // Named, not just counted: the caller refuses the whole fetch
+            // over this and has to say which character it was.
+            Assert.Equal(new[] { "Bex" }, harvest.IncompleteCharacterNames);
+            Assert.False(harvest.IsComplete);
             Assert.Equal(
                 new[] { "Ayn", "Bex", "Cyd", "Dov" },
                 harvest.Items.Select(i => i.Source).ToArray());
@@ -303,6 +310,7 @@ namespace TaimisToolbench.Tests.Services
                 CancellationToken.None);
 
             Assert.Equal(1, harvest.IncompleteCharacterCount);
+            Assert.Equal(new[] { "Cyd" }, harvest.IncompleteCharacterNames);
             Assert.Null(harvest.Disciplines);
         }
 
@@ -326,6 +334,7 @@ namespace TaimisToolbench.Tests.Services
                 CancellationToken.None);
 
             Assert.Equal(1, harvest.IncompleteCharacterCount);
+            Assert.Equal(new[] { "Dov" }, harvest.IncompleteCharacterNames);
         }
 
         [Fact]
@@ -352,6 +361,7 @@ namespace TaimisToolbench.Tests.Services
 
             Assert.Equal(4, harvest.CharacterCount);
             Assert.Equal(4, harvest.IncompleteCharacterCount);
+            Assert.Equal(FourNames, harvest.IncompleteCharacterNames);
         }
 
         [Fact]

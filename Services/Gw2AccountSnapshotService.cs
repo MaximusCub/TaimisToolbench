@@ -59,9 +59,9 @@ namespace TaimisToolbench.Services
         }
 
         // The 6 independent top-level account-data sources tallied for
-        // success/failure. Per-character inventory and equipment failures
-        // are not counted individually - they are tolerated as a partial
-        // Characters-source degradation.
+        // success/failure. A per-character failure is not one of these; it
+        // is named by character instead, and it refuses the fetch the same
+        // way a failed source does.
         private const int SourceCount = 6;
 
         // /v2/account/legendaryarmory needs the "unlocks" scope, which
@@ -99,13 +99,13 @@ namespace TaimisToolbench.Services
             // another. The results are then applied in a fixed order on
             // this thread, which keeps snapshot.Items single-threaded and
             // its ordering unchanged.
-            var walletTask = CallAsync(c => _apiManager.Gw2ApiClient.V2.Account.Wallet.GetAsync(c), ct);
-            var bankTask = CallAsync(c => _apiManager.Gw2ApiClient.V2.Account.Bank.GetAsync(c), ct);
-            var sharedTask = CallAsync(c => _apiManager.Gw2ApiClient.V2.Account.Inventory.GetAsync(c), ct);
-            var materialsTask = CallAsync(c => _apiManager.Gw2ApiClient.V2.Account.Materials.GetAsync(c), ct);
-            var namesTask = CallAsync(c => _apiManager.Gw2ApiClient.V2.Characters.IdsAsync(c), ct);
+            var walletTask = RetriedCallAsync(c => _apiManager.Gw2ApiClient.V2.Account.Wallet.GetAsync(c), ct);
+            var bankTask = RetriedCallAsync(c => _apiManager.Gw2ApiClient.V2.Account.Bank.GetAsync(c), ct);
+            var sharedTask = RetriedCallAsync(c => _apiManager.Gw2ApiClient.V2.Account.Inventory.GetAsync(c), ct);
+            var materialsTask = RetriedCallAsync(c => _apiManager.Gw2ApiClient.V2.Account.Materials.GetAsync(c), ct);
+            var namesTask = RetriedCallAsync(c => _apiManager.Gw2ApiClient.V2.Characters.IdsAsync(c), ct);
             var armoryTask = canReadLegendaryArmory
-                ? CallAsync(c => _apiManager.Gw2ApiClient.V2.Account.LegendaryArmory.GetAsync(c), ct)
+                ? RetriedCallAsync(c => _apiManager.Gw2ApiClient.V2.Account.LegendaryArmory.GetAsync(c), ct)
                 : null;
 
             await SettleAsync(walletTask, bankTask, sharedTask, materialsTask, namesTask, armoryTask);
@@ -266,13 +266,14 @@ namespace TaimisToolbench.Services
             // Character inventories, equipment and crafting disciplines.
             // CharacterSnapshotCollector owns the fan-out and the rule that
             // one failed character discards every discipline.
+            CharacterSnapshotHarvest harvest = null;
             try
             {
                 var characterNames = await namesTask;
                 var names = characterNames == null ? new List<string>() : characterNames.ToList();
                 onCharacterCountKnown?.Invoke(names.Count);
 
-                var harvest = await CharacterSnapshotCollector.CollectAsync(
+                harvest = await CharacterSnapshotCollector.CollectAsync(
                     names,
                     CharacterSnapshotCollector.DefaultMaxCharactersInFlight,
                     name => FetchCharacterAsync(name, ct),
@@ -281,12 +282,6 @@ namespace TaimisToolbench.Services
                 snapshot.Items.AddRange(harvest.Items);
                 snapshot.LegendaryArmoryEquipped.AddRange(harvest.ArmoryEquipped);
                 snapshot.CharacterDisciplines = harvest.Disciplines;
-
-                // A character whose bags, equipment or disciplines failed
-                // is tolerated: the rest of the account is still worth
-                // committing, and dropping it would lose a good bank and
-                // wallet over one 500. What is not tolerated is calling the
-                // result complete - see AccountSnapshot for what that costs.
                 snapshot.CharacterCount = harvest.CharacterCount;
                 snapshot.IncompleteCharacterCount = harvest.IncompleteCharacterCount;
             }
@@ -312,10 +307,18 @@ namespace TaimisToolbench.Services
 
             // A partial failure must never masquerade as a full snapshot:
             // throw instead of returning a snapshot with holes relative to
-            // a prior good fetch (see SnapshotFetchFailedException).
-            if (failedSources > 0)
+            // a prior good fetch (see SnapshotFetchFailedException). A
+            // character whose bags or equipment could not be read is such a
+            // hole, and a plan acts on it by telling the user to buy an
+            // item their own bags already hold.
+            bool charactersIncomplete = harvest != null && !harvest.IsComplete;
+            if (failedSources > 0 || charactersIncomplete)
             {
-                throw new SnapshotFetchFailedException(failedSources, totalSources, failedSourceExceptionTypeNames);
+                throw new SnapshotFetchFailedException(
+                    failedSources,
+                    totalSources,
+                    failedSourceExceptionTypeNames,
+                    harvest?.IncompleteCharacterNames);
             }
 
             // The three resolve passes write disjoint fields (item
@@ -351,6 +354,23 @@ namespace TaimisToolbench.Services
                     throw new TimeoutException($"GW2 API request exceeded {PerCallTimeout.TotalSeconds:0}s.");
                 }
             }
+        }
+
+        /// <summary>
+        /// One GW2 API call, repeated in place when the failure is worth
+        /// another attempt (see <see cref="SnapshotCallRetry"/>). Every
+        /// account-wide and per-character call goes through here, so a
+        /// single transient refusal is paid for inside this fetch rather
+        /// than costing the whole snapshot and the caller's failure
+        /// backoff. <paramref name="isUsable"/> rejects a result the caller
+        /// cannot use even though the call returned.
+        /// </summary>
+        private static Task<T> RetriedCallAsync<T>(
+            Func<CancellationToken, Task<T>> call,
+            CancellationToken ct,
+            Func<T, bool> isUsable = null)
+        {
+            return SnapshotCallRetry.RunAsync(token => CallAsync(call, token), isUsable, null, ct);
         }
 
         /// <summary>
@@ -416,7 +436,7 @@ namespace TaimisToolbench.Services
             var items = new List<SnapshotItemEntry>();
             try
             {
-                var inventory = await CallAsync(c => _apiManager.Gw2ApiClient.V2.Characters[characterName].Inventory.GetAsync(c), ct);
+                var inventory = await RetriedCallAsync(c => _apiManager.Gw2ApiClient.V2.Characters[characterName].Inventory.GetAsync(c), ct);
                 if (inventory?.Bags != null)
                 {
                     foreach (var bag in inventory.Bags)
@@ -479,7 +499,7 @@ namespace TaimisToolbench.Services
             var armoryItemIds = new List<int>();
             try
             {
-                var equipment = await CallAsync(c => _apiManager.Gw2ApiClient.V2.Characters[characterName].Equipment.GetAsync(c), ct);
+                var equipment = await RetriedCallAsync(c => _apiManager.Gw2ApiClient.V2.Characters[characterName].Equipment.GetAsync(c), ct);
                 if (equipment?.Equipment != null)
                 {
                     foreach (var item in equipment.Equipment)
@@ -546,66 +566,54 @@ namespace TaimisToolbench.Services
             return string.IsNullOrEmpty(raw) ? location.Value.ToString() : raw;
         }
 
-        // One bounded retry: the all-or-nothing rule means a single
-        // transient 429/500 on one character would otherwise wipe
-        // CharacterDisciplines for the whole account. Never throws (except
-        // genuine cancellation) - the Degraded flag reports failure.
+        // The all-or-nothing rule means a single transient failure on one
+        // character would otherwise wipe CharacterDisciplines for the whole
+        // account, so the call is repeated in place. A response carrying no
+        // crafting payload is repeated too: that is not the same answer as
+        // a character with no disciplines. Never throws (except genuine
+        // cancellation) - the Degraded flag reports failure.
         private async Task<(bool Degraded, List<SnapshotCharacterDiscipline> Disciplines)> FetchCharacterCraftingAsync(string characterName, CancellationToken ct)
         {
             var disciplines = new List<SnapshotCharacterDiscipline>();
-            const int maxAttempts = 2;
-            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            try
             {
-                try
+                var crafting = await RetriedCallAsync(
+                    c => _apiManager.Gw2ApiClient.V2.Characters[characterName].Crafting.GetAsync(c),
+                    ct,
+                    result => result?.Crafting != null);
+                if (crafting?.Crafting == null)
                 {
-                    var crafting = await CallAsync(c => _apiManager.Gw2ApiClient.V2.Characters[characterName].Crafting.GetAsync(c), ct);
-                    if (crafting?.Crafting == null)
-                    {
-                        if (attempt < maxAttempts)
-                        {
-                            continue;
-                        }
-
-                        return (true, disciplines);
-                    }
-
-                    foreach (var cd in crafting.Crafting)
-                    {
-                        if (cd == null)
-                        {
-                            continue;
-                        }
-
-                        disciplines.Add(new SnapshotCharacterDiscipline
-                        {
-                            CharacterName = characterName,
-                            // RawValue preserves the literal API string
-                            // even for a discipline Gw2Sharp's enum does
-                            // not recognize, matching the plain-string
-                            // shape RequiredDiscipline.Discipline uses.
-                            Discipline = cd.Discipline?.RawValue ?? "",
-                            Rating = cd.Rating,
-                            Active = cd.Active,
-                        });
-                    }
-
-                    return (false, disciplines);
+                    return (true, disciplines);
                 }
-                catch (Exception ex) when (!(ex is OperationCanceledException))
+
+                foreach (var cd in crafting.Crafting)
                 {
-                    if (attempt < maxAttempts)
+                    if (cd == null)
                     {
-                        disciplines.Clear();
                         continue;
                     }
 
-                    Logger.Warn(ex, "Failed to fetch crafting disciplines for character {CharacterName}", characterName);
-                    ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch crafting disciplines for character {characterName}: {ex.GetType().Name} - {ex.Message}");
-                    return (true, disciplines);
+                    disciplines.Add(new SnapshotCharacterDiscipline
+                    {
+                        CharacterName = characterName,
+                        // RawValue preserves the literal API string even for
+                        // a discipline Gw2Sharp's enum does not recognize,
+                        // matching the plain-string shape
+                        // RequiredDiscipline.Discipline uses.
+                        Discipline = cd.Discipline?.RawValue ?? "",
+                        Rating = cd.Rating,
+                        Active = cd.Active,
+                    });
                 }
-            }
 
-            return (true, disciplines);
+                return (false, disciplines);
+            }
+            catch (Exception ex) when (!(ex is OperationCanceledException))
+            {
+                Logger.Warn(ex, "Failed to fetch crafting disciplines for character {CharacterName}", characterName);
+                ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch crafting disciplines for character {characterName}: {ex.GetType().Name} - {ex.Message}");
+                return (true, disciplines);
+            }
         }
 
         /// <summary>
