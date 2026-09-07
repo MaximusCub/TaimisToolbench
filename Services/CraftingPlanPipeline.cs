@@ -396,13 +396,14 @@ namespace TaimisToolbench.Services
             // Owned-currency annotation, cosmetic only - never fed back
             // into any decision or total (see BuildOwnedCurrencyAmounts).
             IReadOnlyDictionary<int, int> ownedCurrencyAmounts =
-                BuildOwnedCurrencyAmounts(snapshot, plan.CurrencyCosts, vendorOffers);
+                BuildOwnedCurrencyAmounts(snapshot, plan.CurrencyCosts, vendorOffers, plan.BarterItemCosts);
             result.OwnedCurrencyAmounts = ownedCurrencyAmounts;
 
             // Owned-item annotation for vendor cost-component leaves,
             // cosmetic only (see BuildOwnedVendorItemComponentAmounts).
             IReadOnlyDictionary<int, int> ownedVendorItemAmounts =
-                BuildOwnedVendorItemComponentAmounts(snapshot, solveResult.Decisions, vendorOffers);
+                BuildOwnedVendorItemComponentAmounts(
+                    snapshot, solveResult.Decisions, vendorOffers, plan.BarterItemCosts);
             result.OwnedVendorItemAmounts = ownedVendorItemAmounts;
 
             BuildCraftingTreeResult(
@@ -1332,7 +1333,8 @@ namespace TaimisToolbench.Services
         /// </summary>
         private static IReadOnlyDictionary<int, int> BuildOwnedCurrencyAmounts(
             AccountSnapshot snapshot, List<CurrencyCost> currencyCosts,
-            IReadOnlyDictionary<int, IReadOnlyList<VendorOffer>> vendorOffers = null)
+            IReadOnlyDictionary<int, IReadOnlyList<VendorOffer>> vendorOffers = null,
+            List<BarterItemCost> barterItemCosts = null)
         {
             if (snapshot == null)
             {
@@ -1345,6 +1347,20 @@ namespace TaimisToolbench.Services
                 foreach (var cc in currencyCosts)
                 {
                     currencyIds.Add(cc.CurrencyId);
+                }
+            }
+
+            // A coalesced trade-up item states no currency cost of its own,
+            // so its sub-currency reaches this set only from here. The
+            // Total Cost table's note needs the holding.
+            if (barterItemCosts != null)
+            {
+                foreach (var bc in barterItemCosts)
+                {
+                    if (bc != null && bc.TradeUpCurrencyId.HasValue)
+                    {
+                        currencyIds.Add(bc.TradeUpCurrencyId.Value);
+                    }
                 }
             }
 
@@ -1520,7 +1536,8 @@ namespace TaimisToolbench.Services
         /// </summary>
         private static IReadOnlyDictionary<int, int> BuildOwnedVendorItemComponentAmounts(
             AccountSnapshot snapshot, IReadOnlyDictionary<int, SolverDecision> decisions,
-            IReadOnlyDictionary<int, IReadOnlyList<VendorOffer>> vendorOffers)
+            IReadOnlyDictionary<int, IReadOnlyList<VendorOffer>> vendorOffers,
+            List<BarterItemCost> barterItemCosts = null)
         {
             if (snapshot == null)
             {
@@ -1530,6 +1547,21 @@ namespace TaimisToolbench.Services
             var itemIds = new HashSet<int>();
             AddVendorItemComponentIds(decisions, itemIds);
             AddAllVendorOfferItemComponentIds(vendorOffers, itemIds);
+
+            // A coalesced trade-up item need not be any offer's cost line,
+            // so the two scans above can miss it while the table still
+            // shows it a Have column.
+            if (barterItemCosts != null)
+            {
+                foreach (var bc in barterItemCosts)
+                {
+                    if (bc != null)
+                    {
+                        itemIds.Add(bc.ItemId);
+                    }
+                }
+            }
+
             if (itemIds.Count == 0)
             {
                 return null;
