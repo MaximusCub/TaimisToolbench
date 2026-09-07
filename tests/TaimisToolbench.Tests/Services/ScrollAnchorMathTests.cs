@@ -792,5 +792,135 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(300, ScrollAnchorMath.ClampOffset(
                 offset: 300, contentHeight: 1000, viewportHeight: 560));
         }
+
+        // --- The trailing spacer, for the shrink case ---
+        //
+        // Anchoring cannot hold a row still when the plan gets shorter
+        // than the scroll position: the offset the row needs is past the
+        // new legal maximum, so it clamps and the row slides down the
+        // screen. A spacer sized to exactly the shortfall gives that
+        // offset back. Screen y is top minus offset throughout.
+        private static List<ScrollAnchorCandidate> OneRowAt(string key, int top)
+        {
+            return new List<ScrollAnchorCandidate>
+            {
+                new ScrollAnchorCandidate(key, top, 30),
+            };
+        }
+
+        [Fact]
+        public void PlanShrinksBelowTheAnchoredRow_TheSpacerCoversExactlyTheShortfall()
+        {
+            // The row was 100px down the viewport and has not moved in
+            // content space; the content under it went from 2000px to
+            // 1000px, so the offset it needs is 360px past the end.
+            var after = OneRowAt("node:7", 900);
+            var anchor = new ScrollAnchor("node:7", 900);
+
+            var plan = ScrollAnchorMath.PlanRestore(
+                after, anchor, savedOffset: 800, contentHeight: 1000, viewportHeight: 560);
+
+            Assert.Equal(360, plan.TailSpacerHeight);
+            Assert.Equal(800, plan.Offset);
+            Assert.Equal(100, 900 - plan.Offset);
+
+            // The spacer is the whole difference. Without it the offset
+            // clamps and the row drops 360px down the screen.
+            Assert.Equal(440, ScrollAnchorMath.ClampOffset(800, 1000, 560));
+            Assert.Equal(460, 900 - 440);
+        }
+
+        [Fact]
+        public void PaddedContentIsExactlyLongEnough_AndNoLonger()
+        {
+            var after = OneRowAt("node:7", 900);
+            var anchor = new ScrollAnchor("node:7", 900);
+
+            var plan = ScrollAnchorMath.PlanRestore(
+                after, anchor, savedOffset: 800, contentHeight: 1000, viewportHeight: 560);
+
+            int paddedMaxOffset = 1000 + plan.TailSpacerHeight - 560;
+            Assert.Equal(plan.Offset, paddedMaxOffset);
+        }
+
+        [Fact]
+        public void NothingSurvivedTheRebuild_ThereIsNoSpacerAtAll()
+        {
+            // A user parked in a previous spacer's blank space has nothing
+            // to hold still. Sizing a spacer from the saved offset would
+            // preserve a position in emptiness and go on doing it, so this
+            // case clamps back onto content instead.
+            var after = OneRowAt("node:99", 100);
+            var anchor = new ScrollAnchor("node:7", 900);
+
+            var plan = ScrollAnchorMath.PlanRestore(
+                after, anchor, savedOffset: 800, contentHeight: 1000, viewportHeight: 560);
+
+            Assert.Equal(0, plan.TailSpacerHeight);
+            Assert.Equal(440, plan.Offset);
+        }
+
+        [Fact]
+        public void ContentStillLongEnough_NoSpacerIsAdded()
+        {
+            var after = OneRowAt("node:7", 900);
+            var anchor = new ScrollAnchor("node:7", 900);
+
+            var plan = ScrollAnchorMath.PlanRestore(
+                after, anchor, savedOffset: 800, contentHeight: 2000, viewportHeight: 560);
+
+            Assert.Equal(0, plan.TailSpacerHeight);
+            Assert.Equal(800, plan.Offset);
+        }
+
+        [Fact]
+        public void TheReportedGrowthCase_NeedsNoSpacer()
+        {
+            // Part one's case, run through the same planner: the plan grew,
+            // so there is nothing to make up and the scrollbar thumb is
+            // untouched. This is what demand-sizing buys over a constant
+            // pad of one viewport.
+            var before = CostTableLayout(WalletIds(1));
+            var after = CostTableLayout(WalletIds(1 + ReportedRowsGained));
+            Assert.True(ScrollAnchorMath.TryCaptureFor(
+                before, "node:1", scrollOffset: 0, viewportHeight: ReportedViewportHeight,
+                cursorYInViewport: null, topInset: 0, out var anchor));
+
+            var plan = ScrollAnchorMath.PlanRestore(
+                after, anchor, 0, ContentHeight(after), ReportedViewportHeight);
+
+            Assert.Equal(0, plan.TailSpacerHeight);
+            Assert.Equal(546, plan.Offset);
+        }
+
+        [Fact]
+        public void ASpacerIsNeverSizedForAnOffsetOfZeroOrLess()
+        {
+            Assert.Equal(0, ScrollAnchorMath.TailSpacerHeight(
+                targetOffset: 0, contentHeight: 100, viewportHeight: 560));
+
+            Assert.Equal(0, ScrollAnchorMath.TailSpacerHeight(
+                targetOffset: -300, contentHeight: 100, viewportHeight: 560));
+
+            // A viewport with no height yet measures nothing worth padding.
+            Assert.Equal(0, ScrollAnchorMath.TailSpacerHeight(
+                targetOffset: 800, contentHeight: 1000, viewportHeight: 0));
+        }
+
+        [Fact]
+        public void AnUpwardAnchorNeedsNoSpacer()
+        {
+            // The row moved up as much as the content shrank, which is the
+            // ordinary shrink-above case anchoring already handles.
+            var after = OneRowAt("node:7", 400);
+            var anchor = new ScrollAnchor("node:7", 900);
+
+            var plan = ScrollAnchorMath.PlanRestore(
+                after, anchor, savedOffset: 800, contentHeight: 1000, viewportHeight: 560);
+
+            Assert.Equal(0, plan.TailSpacerHeight);
+            Assert.Equal(300, plan.Offset);
+            Assert.Equal(100, 400 - plan.Offset);
+        }
     }
 }
