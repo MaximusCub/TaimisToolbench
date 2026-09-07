@@ -1304,19 +1304,19 @@ namespace TaimisToolbench.Views
 
         /// <summary>
         /// This render's anchor candidates in content space. A registered
-        /// control that no longer hangs under the content panel, or one
-        /// hidden inside a collapsed container, is skipped: its Top means
-        /// nothing (see ContentSpaceTop).
+        /// control that no longer hangs under the content panel is
+        /// skipped; one inside a collapsed container reports the row it is
+        /// drawn under and is marked hidden (see TryContentSpaceTop).
         /// </summary>
         private List<ScrollAnchorCandidate> CollectScrollAnchorCandidates()
         {
             var candidates = new List<ScrollAnchorCandidate>(_scrollAnchors.Count);
             foreach (var entry in _scrollAnchors)
             {
-                int? top = ContentSpaceTop(entry.Value);
-                if (top.HasValue)
+                if (TryContentSpaceTop(entry.Value, out int top, out bool hidden))
                 {
-                    candidates.Add(new ScrollAnchorCandidate(entry.Key, top.Value, entry.Value.Height));
+                    candidates.Add(
+                        new ScrollAnchorCandidate(entry.Key, top, entry.Value.Height, hidden));
                 }
             }
 
@@ -1325,33 +1325,58 @@ namespace TaimisToolbench.Views
 
         /// <summary>
         /// A control's top in the content panel's own coordinate space -
-        /// its Top plus every intermediate container's - or null when the
-        /// walk never reaches the content panel (a disposed or detached
-        /// control) or passes through an invisible container (a collapsed
-        /// section holds its rows at their last laid-out positions, which
-        /// are not where anything is drawn).
+        /// its Top plus every intermediate container's. False when the walk
+        /// never reaches the content panel (a disposed or detached
+        /// control).
+        /// <para>
+        /// Blish's FlowPanel reflow skips invisible children, so anything
+        /// inside a collapsed container keeps the Top it was last laid out
+        /// at, which is not where anything is drawn. The sum therefore
+        /// restarts above each invisible container and reports the nearest
+        /// ancestor that IS drawn, with hidden set: a collapsed node's rows
+        /// are drawn as part of the row they hang under, so that row's
+        /// position is the honest answer for them. False when no drawn
+        /// ancestor is left between the invisible container and the content
+        /// panel - a collapsed section's rows have no row to stand in for
+        /// them.
+        /// </para>
         /// </summary>
-        private int? ContentSpaceTop(Control control)
+        private bool TryContentSpaceTop(Control control, out int top, out bool hidden)
         {
-            if (control == null || !control.Visible)
+            top = 0;
+            hidden = false;
+            if (control == null)
             {
-                return null;
+                return false;
             }
 
-            int top = 0;
+            int sum = 0;
+            bool drawnAncestor = false;
             var current = control;
             while (current != null && current != _contentPanel)
             {
-                if (!current.Visible)
+                if (current.Visible)
                 {
-                    return null;
+                    sum += current.Top;
+                    drawnAncestor = true;
+                }
+                else
+                {
+                    sum = 0;
+                    drawnAncestor = false;
+                    hidden = true;
                 }
 
-                top += current.Top;
                 current = current.Parent;
             }
 
-            return current == _contentPanel ? top : (int?)null;
+            if (current != _contentPanel || (hidden && !drawnAncestor))
+            {
+                return false;
+            }
+
+            top = sum;
+            return true;
         }
 
         private bool TryCaptureScrollAnchor(int savedOffset, out ScrollAnchor anchor)

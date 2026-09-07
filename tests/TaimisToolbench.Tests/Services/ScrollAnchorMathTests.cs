@@ -386,6 +386,77 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void AnchoredRowIsCollapsedAway_RestoreHoldsTheRowItIsDrawnUnder()
+        {
+            // A decision toggle can leave the anchored row inside a
+            // collapsed subtree. The row still exists and is still
+            // registered, but it is drawn as part of the row it hangs
+            // under, so that row reports its position. Holding that row
+            // still is what keeps the view where the user left it; the
+            // alternative is no anchor at all and the raw pre-mutate
+            // offset.
+            var before = Layout(summaryHeight: 200);
+            int savedOffset = 250;
+            int anchorLine = ScrollAnchorMath.AnchorLine(savedOffset, ViewportHeight, 60);
+            Assert.True(ScrollAnchorMath.TryCapture(before, anchorLine, out var anchor));
+            Assert.Equal("node:3", anchor.Key);
+            int screenYBefore = anchor.CapturedTop - savedOffset;
+
+            // The re-solve drops 60px of currency rows above the tree and
+            // collapses node:3 into node:1.
+            var after = new List<ScrollAnchorCandidate>
+            {
+                new ScrollAnchorCandidate("section:Summary", 0, 140),
+                new ScrollAnchorCandidate("section:RecipeTree", 140, 40),
+                new ScrollAnchorCandidate("node:1", 180, 30),
+                new ScrollAnchorCandidate("node:2", 180, 30, hidden: true),
+                new ScrollAnchorCandidate("node:3", 180, 30, hidden: true),
+            };
+
+            int? newTop = ScrollAnchorMath.FindTop(after, anchor);
+            Assert.Equal(180, newTop);
+
+            int restored = ScrollAnchorMath.RestoredOffset(
+                savedOffset, anchor, newTop.Value, ContentHeight(after), ViewportHeight);
+
+            Assert.Equal(130, restored);
+            Assert.Equal(screenYBefore, TopOf(after, "node:1") - restored);
+        }
+
+        [Fact]
+        public void HiddenCandidates_AreNeverChosenAsTheAnchor()
+        {
+            // A collapsed row reports the top of the row it is drawn
+            // under, so it ties with that row and is never taller. The
+            // tie-break prefers the shortest candidate, which would hand
+            // the anchor to something nobody can see.
+            var layout = new List<ScrollAnchorCandidate>
+            {
+                new ScrollAnchorCandidate("section:RecipeTree", 100, 500),
+                new ScrollAnchorCandidate("node:1", 100, 30),
+                new ScrollAnchorCandidate("node:2", 100, 10, hidden: true),
+            };
+
+            Assert.True(ScrollAnchorMath.TryCapture(layout, 110, out var anchor));
+            Assert.Equal("node:1", anchor.Key);
+        }
+
+        [Fact]
+        public void EveryCandidateHidden_CapturesNothing()
+        {
+            // Nothing on the line is drawn, so there is nothing to hold
+            // still and the caller stays on plain offset preservation.
+            var layout = new List<ScrollAnchorCandidate>
+            {
+                new ScrollAnchorCandidate("node:1", 100, 30, hidden: true),
+                new ScrollAnchorCandidate("node:2", 100, 30, hidden: true),
+            };
+
+            Assert.False(ScrollAnchorMath.TryCapture(layout, 110, out var anchor));
+            Assert.False(anchor.IsValid);
+        }
+
+        [Fact]
         public void LineAboveEveryCandidate_CapturesNothing()
         {
             var layout = new List<ScrollAnchorCandidate>
