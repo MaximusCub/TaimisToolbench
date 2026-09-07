@@ -521,5 +521,406 @@ namespace TaimisToolbench.Tests.Services
                 savedOffset: 250, anchor: anchor, newAnchorTop: 300,
                 contentHeight: 100, viewportHeight: ViewportHeight));
         }
+
+        // --- Scroll offset zero: the clicked row ---
+        //
+        // The reported case, with the numbers measured from the report.
+        // The content panel was 560px tall, the plan was scrolled to the
+        // very top, and re-solving grew the Total Cost table by thirteen
+        // currency rows. The offset was preserved exactly and the tree
+        // still left the screen, because the rows appeared above it.
+        private const int ReportedViewportHeight = 560;
+        private const int ReportedRowsGained = 13;
+
+        private static int[] WalletIds(int count)
+        {
+            var ids = new int[count];
+            for (int i = 0; i < count; i++)
+            {
+                ids[i] = i + 1;
+            }
+
+            return ids;
+        }
+
+        /// <summary>
+        /// The restore a capture-then-rebuild produces: the surviving
+        /// anchor's offset, or the saved offset clamped to the new
+        /// content, which is what the view does when nothing survived.
+        /// </summary>
+        private static int Restore(
+            List<ScrollAnchorCandidate> after, ScrollAnchor anchor, int savedOffset, int viewportHeight)
+        {
+            if (!ScrollAnchorMath.TryFindSurvivingAnchor(after, anchor, out var survivor, out int newTop))
+            {
+                return ScrollAnchorMath.ClampOffset(savedOffset, ContentHeight(after), viewportHeight);
+            }
+
+            return ScrollAnchorMath.RestoredOffset(
+                savedOffset, survivor, newTop, ContentHeight(after), viewportHeight);
+        }
+
+        [Fact]
+        public void AtOffsetZero_TheClickedRowHoldsWhileThirteenRowsAppearAboveIt()
+        {
+            var before = CostTableLayout(WalletIds(1));
+            var after = CostTableLayout(WalletIds(1 + ReportedRowsGained));
+
+            // The table grows by 546px, which is the report's own figure.
+            int grew = TopOf(after, "node:1") - TopOf(before, "node:1");
+            Assert.Equal(ReportedRowsGained * PlanContentHeightMath.CurrencyRowHeight, grew);
+            Assert.Equal(546, grew);
+
+            // Offset zero, and the click names the row it landed on.
+            Assert.True(ScrollAnchorMath.TryCaptureFor(
+                before, "node:1", scrollOffset: 0, viewportHeight: ReportedViewportHeight,
+                cursorYInViewport: null, topInset: 0, out var anchor));
+            Assert.Equal("node:1", anchor.Key);
+
+            int rowScreenYBefore = TopOf(before, "node:1");
+            int restored = Restore(after, anchor, 0, ReportedViewportHeight);
+
+            Assert.Equal(grew, restored);
+            Assert.Equal(rowScreenYBefore, TopOf(after, "node:1") - restored);
+        }
+
+        [Fact]
+        public void AtOffsetZero_WithoutAKey_TheCarveOutStillSuppresses()
+        {
+            var before = CostTableLayout(WalletIds(1));
+            var after = CostTableLayout(WalletIds(1 + ReportedRowsGained));
+
+            // The cursor sits squarely on the tree row. That alone must
+            // not anchor: a background rebuild would then scroll the plan
+            // out from under a user who did nothing.
+            int cursorY = TopOf(before, "node:1") + 10;
+            Assert.False(ScrollAnchorMath.TryCaptureFor(
+                before, null, scrollOffset: 0, viewportHeight: ReportedViewportHeight,
+                cursorYInViewport: cursorY, topInset: 0, out var anchor));
+            Assert.False(anchor.IsValid);
+
+            // The offset stays where it was, which is what the view did
+            // for every rebuild at the top before the key existed. The
+            // tree row then moves down by the whole 546px and leaves a
+            // 560px viewport - the reported symptom, kept here because
+            // this is the case the carve-out is meant to cover.
+            int restored = Restore(after, anchor, 0, ReportedViewportHeight);
+            Assert.Equal(0, restored);
+            Assert.Equal(
+                TopOf(before, "node:1") + (ReportedRowsGained * PlanContentHeightMath.CurrencyRowHeight),
+                TopOf(after, "node:1") - restored);
+            Assert.True(TopOf(after, "node:1") - restored >= ReportedViewportHeight);
+        }
+
+        [Fact]
+        public void AboveOffsetZero_TheCursorTierStillAnchors()
+        {
+            var before = CostTableLayout(WalletIds(2));
+            string rowKey = WalletRowKey(2);
+            int savedOffset = 30;
+            int cursorY = TopOf(before, rowKey) + 6 - savedOffset;
+
+            Assert.True(ScrollAnchorMath.TryCaptureFor(
+                before, null, savedOffset, ViewportHeight, cursorY, topInset: 0, out var anchor));
+
+            Assert.Equal(rowKey, anchor.Key);
+        }
+
+        [Fact]
+        public void AnExplicitKeyThatNamesNothing_FallsBackToTheOrdinaryTiers()
+        {
+            var before = CostTableLayout(WalletIds(2));
+
+            // Above zero the cursor tier picks up the slack.
+            Assert.True(ScrollAnchorMath.TryCaptureFor(
+                before, "node:9999", scrollOffset: 30, viewportHeight: ViewportHeight,
+                cursorYInViewport: null, topInset: 0, out var anchor));
+            Assert.Equal("section:Summary", anchor.Key);
+
+            // At zero there is no slack to pick up.
+            Assert.False(ScrollAnchorMath.TryCaptureFor(
+                before, "node:9999", scrollOffset: 0, viewportHeight: ViewportHeight,
+                cursorYInViewport: null, topInset: 0, out _));
+        }
+
+        // --- The pinned sticky band inset ---
+        [Fact]
+        public void PinnedBandInset_MovesTheTopEdgeLineBelowTheBand()
+        {
+            Assert.Equal(100, ScrollAnchorMath.AnchorLine(
+                scrollOffset: 100, viewportHeight: 400, cursorYInViewport: null));
+
+            Assert.Equal(140, ScrollAnchorMath.AnchorLine(
+                scrollOffset: 100, viewportHeight: 400, cursorYInViewport: null, topInset: 40));
+        }
+
+        [Fact]
+        public void ACursorUnderThePinnedBand_IsTreatedAsNoCursor()
+        {
+            // The band is drawn over the content there, so the row under
+            // the cursor is not the row the user can see.
+            Assert.Equal(140, ScrollAnchorMath.AnchorLine(
+                scrollOffset: 100, viewportHeight: 400, cursorYInViewport: 12, topInset: 40));
+
+            Assert.Equal(160, ScrollAnchorMath.AnchorLine(
+                scrollOffset: 100, viewportHeight: 400, cursorYInViewport: 60, topInset: 40));
+        }
+
+        [Fact]
+        public void AnInsetTallerThanTheViewport_HoldsThePlainTopEdge()
+        {
+            Assert.Equal(100, ScrollAnchorMath.AnchorLine(
+                scrollOffset: 100, viewportHeight: 400, cursorYInViewport: null, topInset: 400));
+
+            Assert.Equal(100, ScrollAnchorMath.AnchorLine(
+                scrollOffset: 100, viewportHeight: 400, cursorYInViewport: null, topInset: -5));
+        }
+
+        [Fact]
+        public void InsetLine_AnchorsBelowTheBandNotOnTheRowItCovers()
+        {
+            var layout = CostTableLayout(WalletIds(3));
+            string coveredRow = WalletRowKey(1);
+            string visibleRow = WalletRowKey(2);
+            int savedOffset = TopOf(layout, coveredRow);
+            int inset = PlanContentHeightMath.CurrencyRowHeight;
+
+            int line = ScrollAnchorMath.AnchorLine(savedOffset, ViewportHeight, null, inset);
+            Assert.True(ScrollAnchorMath.TryCapture(layout, line, out var anchor));
+
+            Assert.Equal(visibleRow, anchor.Key);
+            Assert.NotEqual(coveredRow, anchor.Key);
+        }
+
+        // --- On-screen fallbacks ---
+        [Fact]
+        public void AnchoredRowDisappears_TheNearestOnScreenSurvivorTakesOver()
+        {
+            var before = CostTableLayout(WalletIds(3));
+            string goneRow = WalletRowKey(2);
+            int savedOffset = 0;
+
+            Assert.True(ScrollAnchorMath.TryCaptureFor(
+                before, goneRow, savedOffset, ReportedViewportHeight,
+                cursorYInViewport: null, topInset: 0, out var anchor));
+            Assert.Equal(goneRow, anchor.Key);
+            Assert.NotEmpty(anchor.Fallbacks);
+
+            // The re-solve dropped that currency and added four others.
+            var after = CostTableLayout(1, 3, 4, 5, 6, 7);
+            Assert.Null(ScrollAnchorMath.FindTop(after, anchor));
+
+            Assert.True(ScrollAnchorMath.TryFindSurvivingAnchor(
+                after, anchor, out var survivor, out int newTop));
+
+            // Row 1 sits one row above the one that vanished and row 3 one
+            // row below, so the walk reaches row 1 first and holds it.
+            Assert.Equal(WalletRowKey(1), survivor.Key);
+
+            int restored = ScrollAnchorMath.RestoredOffset(
+                savedOffset, survivor, newTop, ContentHeight(after), ReportedViewportHeight);
+            Assert.Equal(
+                TopOf(before, WalletRowKey(1)), TopOf(after, WalletRowKey(1)) - restored);
+        }
+
+        [Fact]
+        public void Fallbacks_LeaveOutWhateverWasOffScreenAtCapture()
+        {
+            var before = CostTableLayout(WalletIds(12));
+
+            // A viewport that stops part-way down the table.
+            int viewportHeight = TopOf(before, WalletRowKey(4));
+            Assert.True(ScrollAnchorMath.TryCaptureFor(
+                before, WalletRowKey(1), scrollOffset: 0, viewportHeight: viewportHeight,
+                cursorYInViewport: null, topInset: 0, out var anchor));
+
+            foreach (var fallback in anchor.Fallbacks)
+            {
+                int top = TopOf(before, fallback.Key);
+                Assert.InRange(top, 0, viewportHeight - 1);
+            }
+
+            Assert.DoesNotContain(anchor.Fallbacks, f => f.Key == WalletRowKey(11));
+            Assert.DoesNotContain(anchor.Fallbacks, f => f.Key == anchor.Key);
+        }
+
+        [Fact]
+        public void Fallbacks_AreOrderedNearestToTheAnchorFirst()
+        {
+            var before = CostTableLayout(WalletIds(6));
+            Assert.True(ScrollAnchorMath.TryCaptureFor(
+                before, WalletRowKey(3), scrollOffset: 0, viewportHeight: ReportedViewportHeight,
+                cursorYInViewport: null, topInset: 0, out var anchor));
+
+            int previous = -1;
+            foreach (var fallback in anchor.Fallbacks)
+            {
+                int distance = Math.Abs(TopOf(before, fallback.Key) - anchor.CapturedTop);
+                Assert.True(distance >= previous, "fallbacks must not get nearer as the walk goes on");
+                previous = distance;
+            }
+        }
+
+        [Fact]
+        public void ADefaultAnchorHasNoFallbacksAndSurvivesNothing()
+        {
+            var anchor = default(ScrollAnchor);
+
+            Assert.NotNull(anchor.Fallbacks);
+            Assert.Empty(anchor.Fallbacks);
+            Assert.False(ScrollAnchorMath.TryFindSurvivingAnchor(
+                CostTableLayout(WalletIds(2)), anchor, out _, out _));
+        }
+
+        // --- The shrink case: a deliberate landing, not an accidental one ---
+        [Fact]
+        public void NothingSurvives_TheSavedOffsetIsClampedNotHandedOnRaw()
+        {
+            // ScrollMath.RatioForOffset saturates at 1.0, so an offset
+            // past the end of shorter content would land the viewport at
+            // the very bottom. The clamp names the last real position
+            // instead.
+            Assert.Equal(440, ScrollAnchorMath.ClampOffset(
+                offset: 5000, contentHeight: 1000, viewportHeight: 560));
+
+            Assert.Equal(0, ScrollAnchorMath.ClampOffset(
+                offset: 900, contentHeight: 400, viewportHeight: 560));
+
+            Assert.Equal(0, ScrollAnchorMath.ClampOffset(
+                offset: -20, contentHeight: 1000, viewportHeight: 560));
+
+            Assert.Equal(300, ScrollAnchorMath.ClampOffset(
+                offset: 300, contentHeight: 1000, viewportHeight: 560));
+        }
+
+        // --- The trailing spacer, for the shrink case ---
+        //
+        // Anchoring cannot hold a row still when the plan gets shorter
+        // than the scroll position: the offset the row needs is past the
+        // new legal maximum, so it clamps and the row slides down the
+        // screen. A spacer sized to exactly the shortfall gives that
+        // offset back. Screen y is top minus offset throughout.
+        private static List<ScrollAnchorCandidate> OneRowAt(string key, int top)
+        {
+            return new List<ScrollAnchorCandidate>
+            {
+                new ScrollAnchorCandidate(key, top, 30),
+            };
+        }
+
+        [Fact]
+        public void PlanShrinksBelowTheAnchoredRow_TheSpacerCoversExactlyTheShortfall()
+        {
+            // The row was 100px down the viewport and has not moved in
+            // content space; the content under it went from 2000px to
+            // 1000px, so the offset it needs is 360px past the end.
+            var after = OneRowAt("node:7", 900);
+            var anchor = new ScrollAnchor("node:7", 900);
+
+            var plan = ScrollAnchorMath.PlanRestore(
+                after, anchor, savedOffset: 800, contentHeight: 1000, viewportHeight: 560);
+
+            Assert.Equal(360, plan.TailSpacerHeight);
+            Assert.Equal(800, plan.Offset);
+            Assert.Equal(100, 900 - plan.Offset);
+
+            // The spacer is the whole difference. Without it the offset
+            // clamps and the row drops 360px down the screen.
+            Assert.Equal(440, ScrollAnchorMath.ClampOffset(800, 1000, 560));
+            Assert.Equal(460, 900 - 440);
+        }
+
+        [Fact]
+        public void PaddedContentIsExactlyLongEnough_AndNoLonger()
+        {
+            var after = OneRowAt("node:7", 900);
+            var anchor = new ScrollAnchor("node:7", 900);
+
+            var plan = ScrollAnchorMath.PlanRestore(
+                after, anchor, savedOffset: 800, contentHeight: 1000, viewportHeight: 560);
+
+            int paddedMaxOffset = 1000 + plan.TailSpacerHeight - 560;
+            Assert.Equal(plan.Offset, paddedMaxOffset);
+        }
+
+        [Fact]
+        public void NothingSurvivedTheRebuild_ThereIsNoSpacerAtAll()
+        {
+            // A user parked in a previous spacer's blank space has nothing
+            // to hold still. Sizing a spacer from the saved offset would
+            // preserve a position in emptiness and go on doing it, so this
+            // case clamps back onto content instead.
+            var after = OneRowAt("node:99", 100);
+            var anchor = new ScrollAnchor("node:7", 900);
+
+            var plan = ScrollAnchorMath.PlanRestore(
+                after, anchor, savedOffset: 800, contentHeight: 1000, viewportHeight: 560);
+
+            Assert.Equal(0, plan.TailSpacerHeight);
+            Assert.Equal(440, plan.Offset);
+        }
+
+        [Fact]
+        public void ContentStillLongEnough_NoSpacerIsAdded()
+        {
+            var after = OneRowAt("node:7", 900);
+            var anchor = new ScrollAnchor("node:7", 900);
+
+            var plan = ScrollAnchorMath.PlanRestore(
+                after, anchor, savedOffset: 800, contentHeight: 2000, viewportHeight: 560);
+
+            Assert.Equal(0, plan.TailSpacerHeight);
+            Assert.Equal(800, plan.Offset);
+        }
+
+        [Fact]
+        public void TheReportedGrowthCase_NeedsNoSpacer()
+        {
+            // Part one's case, run through the same planner: the plan grew,
+            // so there is nothing to make up and the scrollbar thumb is
+            // untouched. This is what demand-sizing buys over a constant
+            // pad of one viewport.
+            var before = CostTableLayout(WalletIds(1));
+            var after = CostTableLayout(WalletIds(1 + ReportedRowsGained));
+            Assert.True(ScrollAnchorMath.TryCaptureFor(
+                before, "node:1", scrollOffset: 0, viewportHeight: ReportedViewportHeight,
+                cursorYInViewport: null, topInset: 0, out var anchor));
+
+            var plan = ScrollAnchorMath.PlanRestore(
+                after, anchor, 0, ContentHeight(after), ReportedViewportHeight);
+
+            Assert.Equal(0, plan.TailSpacerHeight);
+            Assert.Equal(546, plan.Offset);
+        }
+
+        [Fact]
+        public void ASpacerIsNeverSizedForAnOffsetOfZeroOrLess()
+        {
+            Assert.Equal(0, ScrollAnchorMath.TailSpacerHeight(
+                targetOffset: 0, contentHeight: 100, viewportHeight: 560));
+
+            Assert.Equal(0, ScrollAnchorMath.TailSpacerHeight(
+                targetOffset: -300, contentHeight: 100, viewportHeight: 560));
+
+            // A viewport with no height yet measures nothing worth padding.
+            Assert.Equal(0, ScrollAnchorMath.TailSpacerHeight(
+                targetOffset: 800, contentHeight: 1000, viewportHeight: 0));
+        }
+
+        [Fact]
+        public void AnUpwardAnchorNeedsNoSpacer()
+        {
+            // The row moved up as much as the content shrank, which is the
+            // ordinary shrink-above case anchoring already handles.
+            var after = OneRowAt("node:7", 400);
+            var anchor = new ScrollAnchor("node:7", 900);
+
+            var plan = ScrollAnchorMath.PlanRestore(
+                after, anchor, savedOffset: 800, contentHeight: 1000, viewportHeight: 560);
+
+            Assert.Equal(0, plan.TailSpacerHeight);
+            Assert.Equal(300, plan.Offset);
+            Assert.Equal(100, 400 - plan.Offset);
+        }
     }
 }

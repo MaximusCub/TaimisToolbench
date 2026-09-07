@@ -134,7 +134,7 @@ Services/IMysticForgeRecipeSource.cs                                            
 Services/IPriceApiClient.cs                                                             47
 Services/IRecipeApiClient.cs                                                            100
 Services/IconFrameGeometry.cs                                                           90
-Services/InlineSpinnerLayout.cs                                                         81
+Services/InlineSpinnerLayout.cs                                                         111
 Services/InventoryReducer.cs                                                            383
 Services/ItemDescriptionSanitizer.cs                                                    204
 Services/ItemIconTiers.cs                                                               180
@@ -189,7 +189,7 @@ Services/PlanStripStatusBoard.cs                                                
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     597
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        1809
+Services/PlanViewModelBuilder.cs                                                        1903
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
@@ -221,7 +221,7 @@ Services/RecipesColumnMath.cs                                                   
 Services/RequestLabelFormatter.cs                                                       63
 Services/RequiredRecipesVisibility.cs                                                   99
 Services/ResizeSettleDebounce.cs                                                        153
-Services/ScrollAnchorMath.cs                                                            218
+Services/ScrollAnchorMath.cs                                                            595
 Services/ScrollMath.cs                                                                  66
 Services/SeasonalOfferFilter.cs                                                         107
 Services/SeasonalVendorTipCalculator.cs                                                 136
@@ -293,7 +293,7 @@ Services/WindowSizing.cs                                                        
 Views/AboutTabContent.cs                                                                1000
 Views/ApiAccessDialog.cs                                                                231
 Views/AutocompleteTextBox.cs                                                            45
-Views/CraftingPlanView.cs                                                               5253
+Views/CraftingPlanView.cs                                                               5362
 Views/FocusRelease.cs                                                                   159
 Views/ItemInputRowStrip.cs                                                              465
 Views/ItemRowState.cs                                                                   39
@@ -303,7 +303,7 @@ Views/MainView.cs                                                               
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    425
-Views/PlanHistoryTabContent.cs                                                          1487
+Views/PlanHistoryTabContent.cs                                                          1509
 Views/RankerTabContent.cs                                                               3025
 Views/Rendering/ClickSound.cs                                                           197
 Views/Rendering/CaretKeyButton.cs                                                       109
@@ -319,7 +319,7 @@ Views/Rendering/HeaderBands.cs                                                  
 Views/Rendering/HeaderCellPlan.cs                                                       99
 Views/Rendering/HoverChainResync.cs                                                     75
 Views/Rendering/ISectionRelayoutSink.cs                                                 86
-Views/Rendering/ITreePlanHost.cs                                                        88
+Views/Rendering/ITreePlanHost.cs                                                        95
 Views/Rendering/IconControls.cs                                                         357
 Views/Rendering/IconNameRowHelpers.cs                                                   182
 Views/Rendering/InlineSpinner.cs                                                        65
@@ -435,7 +435,7 @@ tests/TaimisToolbench.Tests/Services/Gw2RecipeApiClientHttpTests.cs             
 tests/TaimisToolbench.Tests/Services/Gw2RecipeApiClientParseTests.cs                    248
 tests/TaimisToolbench.Tests/Services/HeaderCellMathTests.cs                             221
 tests/TaimisToolbench.Tests/Services/IconFrameGeometryTests.cs                          127
-tests/TaimisToolbench.Tests/Services/InlineSpinnerLayoutTests.cs                        87
+tests/TaimisToolbench.Tests/Services/InlineSpinnerLayoutTests.cs                        141
 tests/TaimisToolbench.Tests/Services/InventoryReducerTests.cs                           1775
 tests/TaimisToolbench.Tests/Services/ItemDescriptionSanitizerTests.cs                   155
 tests/TaimisToolbench.Tests/Services/ItemIconTiersTests.cs                              164
@@ -556,7 +556,7 @@ tests/TaimisToolbench.Tests/Services/RequiredRecipesVisibilityTests.cs          
 tests/TaimisToolbench.Tests/Services/ResizeSettleDebounceTests.cs                       353
 tests/TaimisToolbench.Tests/Services/RestoredRequestInputsTests.cs                      240
 tests/TaimisToolbench.Tests/Services/RowDividerScissorSimulationTests.cs                265
-tests/TaimisToolbench.Tests/Services/ScrollAnchorMathTests.cs                           525
+tests/TaimisToolbench.Tests/Services/ScrollAnchorMathTests.cs                           926
 tests/TaimisToolbench.Tests/Services/ScrollMathTests.cs                                 104
 tests/TaimisToolbench.Tests/Services/SeasonalOfferFilterTests.cs                        86
 tests/TaimisToolbench.Tests/Services/SeasonalVendorTipCalculatorTests.cs                237
@@ -611,7 +611,7 @@ tests/TaimisToolbench.Tests/Services/TreeRowShapeGoldenTests.cs                 
 tests/TaimisToolbench.Tests/Services/TreeRowTooltipComposerTests.cs                     538
 tests/TaimisToolbench.Tests/Services/TypeRampMetricsTests.cs                            206
 tests/TaimisToolbench.Tests/Services/ValueDetailTooltipBuilderTests.cs                  191
-tests/TaimisToolbench.Tests/Services/VendorCurrencyTradeUpRoutingTests.cs               241
+tests/TaimisToolbench.Tests/Services/VendorCurrencyTradeUpRoutingTests.cs               248
 tests/TaimisToolbench.Tests/Services/VendorOfferStoreTests.cs                           576
 tests/TaimisToolbench.Tests/Services/VendorUnlockRecipeTests.cs                         233
 tests/TaimisToolbench.Tests/Services/WheelDeltaSanitizerTests.cs                        183
