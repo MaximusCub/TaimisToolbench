@@ -233,6 +233,86 @@ namespace TaimisToolbench.Tests.Services
             Assert.False(secondRecipe.IsMissing);
         }
 
+        // A caller generating several plans in a row fetches the ids once
+        // and hands them to each generation. The Crafting Ranker does this:
+        // it solves two plans per watchlist row, and one fetch answers the
+        // whole refresh.
+        [Fact]
+        public async Task GenerateStructuredAsync_SuppliedLearnedRecipeIds_AsksTheAccountClientOnce()
+        {
+            var accountClient = new InMemoryAccountRecipeClient();
+            accountClient.AddLearnedRecipe(10);
+
+            var pipeline = PipelineBuilder.Create()
+                .WithSearchResult(1, 10)
+                .WithRecipe(new RawRecipe
+                {
+                    Id = 10,
+                    OutputItemId = 1,
+                    OutputItemCount = 1,
+                    Ingredients = new List<RawIngredient>
+                    {
+                        new RawIngredient { Type = "Item", Id = 2, Count = 1 },
+                    },
+                })
+                .WithPrice(1, buyUnitPrice: 50, sellUnitPrice: 1000)
+                .WithPrice(2, buyUnitPrice: 10, sellUnitPrice: 100)
+                .WithItem(1, "Target Item", "target.png")
+                .WithItem(2, "Ingredient", "ingredient.png")
+                .WithAccountRecipeClient(accountClient)
+                .Build();
+
+            var learned = await pipeline.GetLearnedRecipeIdsAsync(CancellationToken.None);
+            Assert.Equal(1, accountClient.GetCallCount);
+
+            var first = await pipeline.GenerateStructuredAsync(1, 1, null, CancellationToken.None,
+                priceBasis: PriceBasis.InstantBuy, learnedRecipeIds: learned);
+            var second = await pipeline.GenerateStructuredAsync(1, 1, null, CancellationToken.None,
+                priceBasis: PriceBasis.InstantBuy, learnedRecipeIds: learned);
+
+            Assert.Equal(1, accountClient.GetCallCount);
+
+            // The supplied ids still drive the annotation on both plans.
+            Assert.False(first.RequiredRecipes.FirstOrDefault(r => r.RecipeId == 10)?.IsMissing);
+            Assert.False(second.RequiredRecipes.FirstOrDefault(r => r.RecipeId == 10)?.IsMissing);
+        }
+
+        // The batch fetch degrades the way the per-generation one does, so a
+        // Ranker refresh survives a failing /v2/account/recipes with every
+        // recipe state unknown instead of no plans at all.
+        [Fact]
+        public async Task GetLearnedRecipeIdsAsync_ClientFails_ReturnsNull()
+        {
+            var accountClient = new InMemoryAccountRecipeClient { ThrowOnGet = true };
+
+            var pipeline = PipelineBuilder.Create()
+                .WithAccountRecipeClient(accountClient)
+                .Build();
+
+            var learned = await pipeline.GetLearnedRecipeIdsAsync(CancellationToken.None);
+
+            Assert.Null(learned);
+            Assert.Equal(1, accountClient.GetCallCount);
+        }
+
+        // No permission means no request at all, and the plan reports every
+        // recipe state as unknown.
+        [Fact]
+        public async Task GetLearnedRecipeIdsAsync_NoPermission_MakesNoRequest()
+        {
+            var accountClient = new InMemoryAccountRecipeClient();
+            accountClient.SetHasPermission(false);
+
+            var pipeline = PipelineBuilder.Create()
+                .WithAccountRecipeClient(accountClient)
+                .Build();
+
+            var learned = await pipeline.GetLearnedRecipeIdsAsync(CancellationToken.None);
+
+            Assert.Null(learned);
+            Assert.Equal(0, accountClient.GetCallCount);
+        }
+
         [Fact]
         public async Task MissingItemMetadata_StillProducesValidPlan()
         {

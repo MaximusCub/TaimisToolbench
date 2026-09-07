@@ -3383,6 +3383,16 @@ a wrong plan, only a wrong recommendation. The cost of the removal is one
 extra fetch per generation, measured at 1129ms and 1453ms in a tester's log
 on the day it was removed.
 
+A caller generating several plans in a row fetches once instead. The
+Crafting Ranker does: `Views/RankerTabContent.cs` calls
+`CraftingPlanPipeline.GetLearnedRecipeIdsAsync` once per refresh and passes
+the ids to the `learnedRecipeIds` parameter of every generation, which
+solves two plans for each watchlist row. Those generations make no call, so
+their `Fetch learned recipes` timing line reads about 0ms. A refresh is one
+user action, and the account cannot learn a recipe part way through it
+without the player leaving the tab. This is a per-run argument, not a clock:
+the next refresh fetches again.
+
 `Services/Diagnostics/PlanPhaseTimingSummary.cs` buckets the raw per-step
 `timingLog` lines `PlanTimingAnalyzer` already parses (Build recipe
 tree/trees, Collect item IDs, Fetch TP prices, Query vendor offers,
