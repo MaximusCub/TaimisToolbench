@@ -58,7 +58,7 @@ Models/PlanRequestItem.cs                                                       
 Models/PlanSolveContext.cs                                                              212
 Models/PlanStatus.cs                                                                    11
 Models/PlanStep.cs                                                                      72
-Models/PlanViewModel.cs                                                                 466
+Models/PlanViewModel.cs                                                                 475
 Models/PriceBasis.cs                                                                    32
 Models/RankerRowMetrics.cs                                                              152
 Models/RankerSlotAvailability.cs                                                        59
@@ -168,7 +168,7 @@ Services/PanelChromeMath.cs                                                     
 Services/PhaseOrdinalGuard.cs                                                           40
 Services/PillSubduingEvaluator.cs                                                       280
 Services/PillSubduingTooltipBuilder.cs                                                  101
-Services/PillTooltipTextComposer.cs                                                     249
+Services/PillTooltipTextComposer.cs                                                     262
 Services/PlanContentHeightMath.cs                                                       500
 Services/PlanHistoryBlobStore.cs                                                        216
 Services/PlanHistoryDedupKey.cs                                                         104
@@ -188,7 +188,7 @@ Services/PlanStripStatusBoard.cs                                                
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     597
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        1733
+Services/PlanViewModelBuilder.cs                                                        1761
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
@@ -464,11 +464,12 @@ tests/TaimisToolbench.Tests/Services/MysticForgeRecipeDataTests.cs              
 tests/TaimisToolbench.Tests/Services/MysticForgeSeedStalenessTests.cs                   480
 tests/TaimisToolbench.Tests/Services/NotesSectionLayoutMathTests.cs                     197
 tests/TaimisToolbench.Tests/Services/OwnedMaterialsForceBuyPrePassTests.cs              178
+tests/TaimisToolbench.Tests/Services/OwnedStockBadgeCoverageTests.cs                    243
 tests/TaimisToolbench.Tests/Services/PanelChromeMathTests.cs                            317
 tests/TaimisToolbench.Tests/Services/PhaseOrdinalGuardTests.cs                          46
 tests/TaimisToolbench.Tests/Services/PillSubduingEvaluatorTests.cs                      357
 tests/TaimisToolbench.Tests/Services/PillSubduingTooltipBuilderTests.cs                 130
-tests/TaimisToolbench.Tests/Services/PillTooltipTextComposerTests.cs                    306
+tests/TaimisToolbench.Tests/Services/PillTooltipTextComposerTests.cs                    321
 tests/TaimisToolbench.Tests/Services/PlanCompatibilityFixtureTests.cs                   371
 tests/TaimisToolbench.Tests/Services/PlanContentHeightMathTests.cs                      657
 tests/TaimisToolbench.Tests/Services/PlanHistoryBlobStoreTests.cs                       324

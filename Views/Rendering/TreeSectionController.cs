@@ -912,7 +912,8 @@ namespace TaimisToolbench.Views.Rendering
             int required = TreePillColumnMath.Scan(roots, node =>
             {
                 var specs = DecisionPillPlanner.BuildPillSpecs(
-                    node, plan?.CurrencyPlanTotals, plan?.OwnedCurrencyAmounts);
+                    node, plan?.CurrencyPlanTotals, plan?.OwnedCurrencyAmounts,
+                    plan?.OwnedStockDrawnItemIds);
                 int leadingCount = FlowedPillCount(specs);
 
                 leading.Clear();
@@ -1892,7 +1893,9 @@ namespace TaimisToolbench.Views.Rendering
             // for the new HAVE/TOTAL pill - see PlanViewModel.
             // CurrencyPlanTotals/OwnedCurrencyAmounts' own doc comments.
             var plan = _host.CurrentPlan;
-            var specs = DecisionPillPlanner.BuildPillSpecs(node, plan?.CurrencyPlanTotals, plan?.OwnedCurrencyAmounts);
+            var specs = DecisionPillPlanner.BuildPillSpecs(
+                node, plan?.CurrencyPlanTotals, plan?.OwnedCurrencyAmounts,
+                plan?.OwnedStockDrawnItemIds);
             var font = UiFonts.Caption;
             pillPanels.Clear();
             pillOffsets.Clear();

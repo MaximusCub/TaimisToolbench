@@ -115,28 +115,27 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// One pill per feasible acquisition source: 2-3 pills means a real
-        /// choice, exactly 1 pill means the source is locked - the pill count
-        /// itself is the affordance. HAVE/CURRENCY/GUILD UPGRADE/
-        /// UNRECOGNIZED are always single, non-interactive pills; UNKNOWN
-        /// alone also gets the interactive IGNORE toggle, except on a plan
-        /// root (see AppendOwnershipPills).
-        /// The selected pill always matches node.Decision - the solver's
-        /// committed Source, never a guessed "cheapest looking" option.
+        /// choice, exactly 1 means the source is locked - the pill count is
+        /// the affordance. HAVE/CURRENCY/GUILD UPGRADE/UNRECOGNIZED are
+        /// always single, non-interactive pills; UNKNOWN alone also gets
+        /// the interactive IGNORE toggle, except on a plan root (see
+        /// AppendOwnershipPills). The selected pill always matches
+        /// node.Decision - the solver's committed Source, never a guess.
         /// Derivation: docs/ARCHITECTURE.md section S1.6.
         /// </summary>
         /// <param name="node">The tree node to build pills for.</param>
-        /// <param name="currencyPlanTotals">
-        /// The whole plan's real currency need, keyed by currency id.
-        /// Null omits the plan-scope currency pill.
-        /// </param>
-        /// <param name="ownedCurrencyAmounts">
-        /// Raw wallet holding, keyed by currency id. Null (no snapshot)
-        /// suppresses the HAVE/TOTAL pill rather than implying 0 owned.
-        /// </param>
+        /// <param name="currencyPlanTotals">The whole plan's real currency
+        /// need, keyed by currency id. Null omits the currency pill.</param>
+        /// <param name="ownedCurrencyAmounts">Raw wallet holding, keyed by
+        /// currency id. Null (no snapshot) suppresses the HAVE/TOTAL pill
+        /// rather than implying 0 owned.</param>
+        /// <param name="ownedStockDrawnItemIds">Every item id the plan drew
+        /// owned stock for - see AppendOwnershipPills.</param>
         public static List<PillSpec> BuildPillSpecs(
             CraftingTreeNode node,
             IReadOnlyDictionary<int, long> currencyPlanTotals = null,
-            IReadOnlyDictionary<int, int> ownedCurrencyAmounts = null)
+            IReadOnlyDictionary<int, int> ownedCurrencyAmounts = null,
+            ISet<int> ownedStockDrawnItemIds = null)
         {
             var specs = new List<PillSpec>(3);
 
@@ -265,14 +264,14 @@ namespace TaimisToolbench.Services
                     ? node.AcquisitionBadge
                     : "UNKNOWN";
                 specs.Add(new PillSpec(badgeText, null, PillKind.Locked));
-                AppendOwnershipPills(specs, node, ownedCurrencyAmounts);
+                AppendOwnershipPills(specs, node, ownedStockDrawnItemIds);
                 return specs;
             }
 
             if (options.Count == 1)
             {
                 specs.Add(new PillSpec(options[0].text, null, PillKind.Locked));
-                AppendOwnershipPills(specs, node, ownedCurrencyAmounts);
+                AppendOwnershipPills(specs, node, ownedStockDrawnItemIds);
                 return specs;
             }
 
@@ -323,7 +322,7 @@ namespace TaimisToolbench.Services
                     subduingResult));
             }
 
-            AppendOwnershipPills(specs, node, ownedCurrencyAmounts);
+            AppendOwnershipPills(specs, node, ownedStockDrawnItemIds);
             return specs;
         }
 
@@ -412,29 +411,33 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// Appends the annotation pills shared by every
-        /// non-Have/non-Currency return path: the non-interactive
-        /// "HAVE {used}/{total} NEEDED" annotation (only when this node's
-        /// demand was partly covered by real inventory; total =
-        /// OwnedQuantityUsed + Quantity, the original pre-reduction
-        /// demand) and the interactive "IGNORE" toggle (offered on every
-        /// real item node, matching gw2e's always-offered Ignore pill).
-        /// A node reaching this method is never already ignored, so the
-        /// toggle always starts as "IGNORE".
+        /// Appends the annotation pills shared by every non-Have/
+        /// non-Currency return path: the non-interactive
+        /// "HAVE {used}/{total} NEEDED" annotation and the interactive
+        /// "IGNORE" toggle. A node reaching this method is never already
+        /// ignored, so it starts as "IGNORE".
         /// <para>
-        /// Except on a plan root (see CraftingTreeNode.IsPlanRoot):
-        /// ignoring the item you asked to plan zeroes the whole plan, so
-        /// the toggle is not offered there. The un-ignore half of the
-        /// toggle is NOT suppressed - see the Have branch in
-        /// BuildPillSpecs.
+        /// The badge goes on every node of an item the plan drew owned
+        /// stock for, not only the nodes that received some. One item can
+        /// sit at several places in one tree and the reducer gives the
+        /// stock to whichever it reaches first, so later nodes read
+        /// "HAVE 0/{total} NEEDED". Total is OwnedQuantityUsed +
+        /// Quantity, the pre-reduction demand.</para>
+        /// <para>
+        /// The toggle is not offered on a plan root (see
+        /// CraftingTreeNode.IsPlanRoot): ignoring the item you asked to
+        /// plan zeroes the whole plan. The un-ignore half is NOT
+        /// suppressed - see the Have branch in BuildPillSpecs.
         /// </para>
         /// </summary>
         private static void AppendOwnershipPills(
             List<PillSpec> specs,
             CraftingTreeNode node,
-            IReadOnlyDictionary<int, int> ownedCurrencyAmounts)
+            ISet<int> ownedStockDrawnItemIds)
         {
-            if (node.OwnedQuantityUsed > 0)
+            bool drawnElsewhere = ownedStockDrawnItemIds != null &&
+                ownedStockDrawnItemIds.Contains(node.ItemId);
+            if (node.OwnedQuantityUsed > 0 || drawnElsewhere)
             {
                 int totalDemand = node.OwnedQuantityUsed + node.Quantity;
                 specs.Add(new PillSpec(
