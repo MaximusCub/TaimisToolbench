@@ -173,6 +173,54 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void PrimeFrames_CoversEveryPictureIncludingAPartialLastFrame()
+        {
+            int perFrame = SnapshotIconWindow.PrimePerFrame;
+
+            Assert.Equal(0, SnapshotIconWindow.PrimeFrames(0));
+            Assert.Equal(1, SnapshotIconWindow.PrimeFrames(1));
+            Assert.Equal(1, SnapshotIconWindow.PrimeFrames(perFrame));
+            Assert.Equal(2, SnapshotIconWindow.PrimeFrames(perFrame + 1));
+            Assert.Equal(3, SnapshotIconWindow.PrimeFrames(perFrame * 3));
+        }
+
+        [Fact]
+        public void PrimeFrames_IsNeverShortOfWhatTheWalkNeeds()
+        {
+            // The estimate is what the tab tells the log, so it must not
+            // under-report: every picture has to fit inside the frames it
+            // claims.
+            for (int pictures = 0; pictures <= 2000; pictures++)
+            {
+                int frames = SnapshotIconWindow.PrimeFrames(pictures);
+
+                Assert.True(
+                    frames * SnapshotIconWindow.PrimePerFrame >= pictures,
+                    $"{frames} frames cannot cover {pictures} pictures");
+            }
+        }
+
+        [Fact]
+        public void PrimeFrames_NeverGoesBackwards()
+        {
+            int previous = 0;
+            for (int pictures = 0; pictures <= 2000; pictures++)
+            {
+                int frames = SnapshotIconWindow.PrimeFrames(pictures);
+
+                Assert.True(frames >= previous, $"{pictures} pictures reported fewer frames");
+                previous = frames;
+            }
+        }
+
+        [Fact]
+        public void PrimeFrames_NegativeCountIsNoWork()
+        {
+            Assert.Equal(0, SnapshotIconWindow.PrimeFrames(-1));
+            Assert.Equal(0, SnapshotIconWindow.PrimeFrames(int.MinValue));
+        }
+
+        [Fact]
         public void EveryCellTheViewportShowsIsInTheSpan()
         {
             // Drives the whole scroll of a 963-cell list past a 500px

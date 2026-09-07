@@ -366,6 +366,13 @@ namespace TaimisToolbench.Views
         private int _iconWindowTop = int.MinValue;
         private int _iconWindowHeight = -1;
 
+        // How far the background prime has walked each run, in placement
+        // order, so the pictures below the fold are already there when the
+        // reader scrolls to them. Reset whenever the cells move, because a
+        // cursor into the previous list means nothing in the new one.
+        private int _itemPrimeCursor;
+        private int _walletPrimeCursor;
+
         // Session-sticky like the search text. One state per run: sorting
         // the items must not disturb the currencies beneath them.
         private readonly TableSortState<SnapshotTableColumn> _itemSortState =
@@ -1703,8 +1710,71 @@ namespace TaimisToolbench.Views
             _walletGrid = layout.Wallet.Grid;
 
             // Every cell just moved, so whatever the window held is stale
-            // even if the viewport did not move.
+            // even if the viewport did not move, and a cursor into the old
+            // placement order means nothing in the new one. Restarting the
+            // prime is close to free: a cell already asked for is skipped
+            // without spending any of the frame's budget.
+            _itemPrimeCursor = 0;
+            _walletPrimeCursor = 0;
             LoadNearIcons(force: true);
+        }
+
+        /// <summary>
+        /// One frame of icon loading, in the order that matters. What the
+        /// reader can see is asked for first and in full, however much the
+        /// prime below still has to do; only then does the prime spend its
+        /// own small budget on the rest.
+        /// </summary>
+        private void UpdateIconLoading()
+        {
+            LoadNearIcons(force: false);
+            PrimeRemainingIcons(SnapshotIconWindow.PrimePerFrame);
+        }
+
+        /// <summary>
+        /// Walks the rest of the list in reading order, a few pictures per
+        /// frame, so a scroll that arrives later finds them already asked
+        /// for. The budget is spent on the items run first and the
+        /// currencies get what is left, which is why this threads the
+        /// remainder through rather than giving each run its own.
+        /// </summary>
+        private void PrimeRemainingIcons(int budget)
+        {
+            if (_resultGridPanel == null || _resultGridPanel.Parent == null)
+            {
+                return;
+            }
+
+            budget = PrimeRun(_itemCells, _itemOrder, ref _itemPrimeCursor, budget);
+            PrimeRun(_walletCells, _walletOrder, ref _walletPrimeCursor, budget);
+        }
+
+        /// <summary>One run's share of a prime frame, returning the budget
+        /// left over. <paramref name="order"/> is the sort over the cells,
+        /// so the walk runs down the list the reader would scroll and not
+        /// down the order the search happened to return.</summary>
+        private static int PrimeRun(
+            List<ResultCell> cells, IReadOnlyList<int> order, ref int cursor, int budget)
+        {
+            bool ordered = order != null && order.Count == cells.Count;
+            while (budget > 0 && cursor < cells.Count)
+            {
+                int placement = cursor++;
+                var icon = cells[ordered ? order[placement] : placement].Icon;
+
+                // A picture the near window already asked for costs nothing
+                // to walk past and must not spend budget - otherwise the
+                // first screenful would be paid for twice.
+                if (icon == null || !icon.Pending)
+                {
+                    continue;
+                }
+
+                icon.Load();
+                budget--;
+            }
+
+            return budget;
         }
 
         /// <summary>
@@ -1931,6 +2001,8 @@ namespace TaimisToolbench.Views
             _walletGrid = null;
             _iconWindowTop = int.MinValue;
             _iconWindowHeight = -1;
+            _itemPrimeCursor = 0;
+            _walletPrimeCursor = 0;
             _lastRowLayoutWidth = _contentPanel.Width;
 
             // BEFORE the disposal loop: a pinned band is not a child of the
@@ -2124,6 +2196,16 @@ namespace TaimisToolbench.Views
             // already runs once per pause in typing over a list that can
             // reach into the thousands of rows.
             LayoutResultGrid(refitText: false);
+
+            // One line per rebuild, at Debug, because this is the tab's own
+            // answer to "how long until every picture is there". The row
+            // count is the upper bound on requests: the prime asks once per
+            // row and skips whatever the viewport already asked for.
+            int primeRows = _itemCells.Count + _walletCells.Count;
+            ModuleLog.Shared.Write(
+                ModuleLogLevel.Debug, "ui",
+                $"Snapshot icons: {primeRows} rows, priming over about "
+                + $"{SnapshotIconWindow.PrimeFrames(primeRows)} frames.");
         }
 
         /// <summary>Amount column text: the module's "30x" quantity
@@ -2525,9 +2607,10 @@ namespace TaimisToolbench.Views
         }
 
         /// <summary>
-        /// Re-derives the icon window each frame, because Blish raises no
-        /// event when a panel is scrolled. Zero-sized on purpose: a control
-        /// with no area is in no hit test.
+        /// Drives icon loading once a frame: the viewport's own pictures,
+        /// then a few of the rest. It has to be per-frame because Blish
+        /// raises no event when a panel is scrolled. Zero-sized on purpose:
+        /// a control with no area is in no hit test.
         /// <para>
         /// A throw stands the ticker down for good rather than repeating
         /// once a frame. The rows keep whatever pictures they already have,
@@ -2556,7 +2639,7 @@ namespace TaimisToolbench.Views
 
                 try
                 {
-                    _view.LoadNearIcons(force: false);
+                    _view.UpdateIconLoading();
                 }
                 catch (Exception ex)
                 {

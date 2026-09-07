@@ -27,6 +27,39 @@ namespace TaimisToolbench.Services
         /// </summary>
         public const int MarginPx = 240;
 
+        /// <summary>
+        /// Pictures one frame of the background prime asks for, once the
+        /// viewport's own are on their way.
+        /// <para>
+        /// MEASURED: the frame-thread half of one
+        /// request - the <c>Directory.CreateDirectory</c> and
+        /// <c>File.Exists</c> Blish runs before its work goes async - costs
+        /// 0.015ms over 1000 probes of the real asset cache, hit or miss. 16
+        /// of those is 0.24ms, under 1.5% of a 16.67ms frame, which leaves
+        /// room for the rest of the call that was not measured: the texture
+        /// allocation and starting the load task.
+        /// </para>
+        /// <para>
+        /// Asking faster would not finish sooner. Every request queues a
+        /// decode that takes one process-wide graphics device lock at low
+        /// priority, so past a point the lock is the limit and a higher
+        /// request rate only moves work onto the frame thread.
+        /// </para>
+        /// </summary>
+        public const int PrimePerFrame = 16;
+
+        /// <summary>Frames a prime of <paramref name="pictures"/> takes at
+        /// <see cref="PrimePerFrame"/>.</summary>
+        public static int PrimeFrames(int pictures)
+        {
+            if (pictures <= 0)
+            {
+                return 0;
+            }
+
+            return ((pictures - 1) / PrimePerFrame) + 1;
+        }
+
         /// <summary>A contiguous run of placement indices, or an empty
         /// one.</summary>
         public readonly struct Span

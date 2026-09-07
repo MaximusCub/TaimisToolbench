@@ -241,7 +241,7 @@ Services/SnapshotFetchFailedException.cs                                        
 Services/SnapshotHeaderLayout.cs                                                        209
 Services/SnapshotHelpers.cs                                                             79
 Services/SnapshotHoldLine.cs                                                            300
-Services/SnapshotIconWindow.cs                                                          126
+Services/SnapshotIconWindow.cs                                                          159
 Services/SnapshotItemGridLayout.cs                                                      258
 Services/SnapshotRefreshSlot.cs                                                         93
 Services/SnapshotResultLayout.cs                                                        90
@@ -298,7 +298,7 @@ Views/ItemInputRowStrip.cs                                                      
 Views/ItemRowState.cs                                                                   39
 Views/LogTabContent.cs                                                                  1538
 Views/MainThreadMarshal.cs                                                              141
-Views/MainView.cs                                                                       3138
+Views/MainView.cs                                                                       3221
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    425
@@ -572,7 +572,7 @@ tests/TaimisToolbench.Tests/Services/SnapshotFetchFailedExceptionTests.cs       
 tests/TaimisToolbench.Tests/Services/SnapshotHeaderLayoutTests.cs                       441
 tests/TaimisToolbench.Tests/Services/SnapshotHelpersTests.cs                            95
 tests/TaimisToolbench.Tests/Services/SnapshotHoldLineTests.cs                           264
-tests/TaimisToolbench.Tests/Services/SnapshotIconWindowTests.cs                         201
+tests/TaimisToolbench.Tests/Services/SnapshotIconWindowTests.cs                         249
 tests/TaimisToolbench.Tests/Services/SnapshotItemGridLayoutTests.cs                     336
 tests/TaimisToolbench.Tests/Services/SnapshotRefreshSlotTests.cs                        241
 tests/TaimisToolbench.Tests/Services/SnapshotResultLayoutTests.cs                       94
