@@ -630,9 +630,17 @@ namespace TaimisToolbench.Tests.Services
         // ---------------------------------------------------------------
         // The recipes gate
         // ---------------------------------------------------------------
-        private static RequiredRecipe Recipe(bool? isMissing, bool autoLearned = false)
+        private static RequiredRecipe Recipe(
+            bool? isMissing, bool autoLearned = false, params string[] disciplines)
         {
-            return new RequiredRecipe { RecipeId = 1, OutputItemId = 2, IsMissing = isMissing, IsAutoLearned = autoLearned };
+            return new RequiredRecipe
+            {
+                RecipeId = 1,
+                OutputItemId = 2,
+                IsMissing = isMissing,
+                IsAutoLearned = autoLearned,
+                Disciplines = new List<string>(disciplines),
+            };
         }
 
         [Fact]
@@ -685,6 +693,56 @@ namespace TaimisToolbench.Tests.Services
             var metrics = RankerReadinessCalculator.Compute(Result(coin: 100), owned, Availability(), 0);
 
             Assert.False(GateApplies(metrics, RankerGate.Recipes));
+        }
+
+        [Fact]
+        public void RecipesGate_IgnoresMysticForgeOnlyRecipes()
+        {
+            // The Mystic Forge has no unlock, so PlanResultBuilder marks a
+            // forge recipe as not missing. Counting it padded both halves of
+            // this fraction and lifted the cell above the plan's own count.
+            var owned = Result(coin: 50);
+            owned.RequiredRecipes = new List<RequiredRecipe>
+            {
+                Recipe(isMissing: false, autoLearned: false, "MysticForge"),
+                Recipe(isMissing: false, autoLearned: false, "MysticForge"),
+                Recipe(isMissing: true, autoLearned: false, "Weaponsmith"),
+            };
+
+            var metrics = RankerReadinessCalculator.Compute(Result(coin: 100), owned, Availability(), 0);
+
+            Assert.True(GateApplies(metrics, RankerGate.Recipes));
+            Assert.Equal(0.0, GateCompletion(metrics, RankerGate.Recipes), 9);
+        }
+
+        [Fact]
+        public void RecipesGate_KeepsARecipeThatPairsTheForgeWithALeveledDiscipline()
+        {
+            // A recipe combining the forge with a real discipline still has
+            // something to learn, so it stays in the score.
+            var owned = Result(coin: 50);
+            owned.RequiredRecipes = new List<RequiredRecipe>
+            {
+                Recipe(isMissing: true, autoLearned: false, "MysticForge", "Artificer"),
+            };
+
+            var metrics = RankerReadinessCalculator.Compute(Result(coin: 100), owned, Availability(), 0);
+
+            Assert.True(GateApplies(metrics, RankerGate.Recipes));
+            Assert.Equal(0.0, GateCompletion(metrics, RankerGate.Recipes), 9);
+        }
+
+        [Fact]
+        public void RecipesGate_StillScoresARecipeWithNoDisciplineData()
+        {
+            // An empty discipline list is absent data, not a forge recipe.
+            var owned = Result(coin: 50);
+            owned.RequiredRecipes = new List<RequiredRecipe> { Recipe(isMissing: false) };
+
+            var metrics = RankerReadinessCalculator.Compute(Result(coin: 100), owned, Availability(), 0);
+
+            Assert.True(GateApplies(metrics, RankerGate.Recipes));
+            Assert.Equal(1.0, GateCompletion(metrics, RankerGate.Recipes), 9);
         }
 
         [Fact]

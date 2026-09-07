@@ -1554,15 +1554,12 @@ namespace TaimisToolbench.Services
 
             foreach (var recipe in result.RequiredRecipes)
             {
-                // A sole-Mystic-Forge recipe has nothing to learn - there
-                // is no unlock concept - so it is skipped rather than
-                // shown as an always-"Learned" row. Only a recipe whose
-                // ENTIRE Disciplines list is MysticForge is filtered; one
-                // combining the forge with a real leveled discipline still
-                // has something to learn. Touches only this section's row
-                // list - a Mystic Forge craft STEP keeps its location
-                // sublabel.
-                if (IsMysticForgeOnly(recipe.Disciplines))
+                // A sole-Mystic-Forge recipe has nothing to learn, so it is
+                // skipped rather than shown as an always-"Learned" row. The
+                // rule lives in RequiredRecipesVisibility.IsMysticForgeOnly.
+                // Touches only this section's row list - a Mystic Forge
+                // craft STEP keeps its location sublabel.
+                if (RequiredRecipesVisibility.IsMysticForgeOnly(recipe.Disciplines))
                 {
                     continue;
                 }
@@ -1623,27 +1620,6 @@ namespace TaimisToolbench.Services
             // filter-off baseline.
             section.Title = $"Required Recipes ({section.Rows.Count})";
             return section;
-        }
-
-        // True only when EVERY entry in Disciplines is "MysticForge".
-        // Empty/null Disciplines is NOT Mystic-Forge-only - vacuous truth
-        // would wrongly match a recipe with no discipline data.
-        private static bool IsMysticForgeOnly(List<string> disciplines)
-        {
-            if (disciplines == null || disciplines.Count == 0)
-            {
-                return false;
-            }
-
-            foreach (var discipline in disciplines)
-            {
-                if (discipline != "MysticForge")
-                {
-                    return false;
-                }
-            }
-
-            return true;
         }
 
         /// <summary>

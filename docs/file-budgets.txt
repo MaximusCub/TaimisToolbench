@@ -189,11 +189,11 @@ Services/PlanStripStatusBoard.cs                                                
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     597
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        1809
+Services/PlanViewModelBuilder.cs                                                        1785
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
-Services/RankerReadinessCalculator.cs                                                   699
+Services/RankerReadinessCalculator.cs                                                   707
 Services/RankerReadinessRamp.cs                                                         265
 Services/RankerReadinessWeights.cs                                                      61
 Services/RankerResultCache.cs                                                           263
@@ -219,7 +219,7 @@ Services/Recipes/RecipeCorpusVerifier.cs                                        
 Services/Recipes/SeededRecipeCacheStore.cs                                              215
 Services/RecipesColumnMath.cs                                                           101
 Services/RequestLabelFormatter.cs                                                       63
-Services/RequiredRecipesVisibility.cs                                                   99
+Services/RequiredRecipesVisibility.cs                                                   140
 Services/ResizeSettleDebounce.cs                                                        153
 Services/ScrollAnchorMath.cs                                                            218
 Services/ScrollMath.cs                                                                  66
@@ -531,8 +531,9 @@ tests/TaimisToolbench.Tests/Services/RankerCascadeIntegrationTests.cs           
 tests/TaimisToolbench.Tests/Services/RankerPriorityCascadeTests.cs                      377
 tests/TaimisToolbench.Tests/Services/RankerPriorityOrderingTests.cs                     256
 tests/TaimisToolbench.Tests/Services/RankerRarityAdoptionTests.cs                       130
-tests/TaimisToolbench.Tests/Services/RankerReadinessCalculatorTests.cs                  779
+tests/TaimisToolbench.Tests/Services/RankerReadinessCalculatorTests.cs                  837
 tests/TaimisToolbench.Tests/Services/RankerReadinessRampTests.cs                        225
+tests/TaimisToolbench.Tests/Services/RankerRecipeGateAgreesWithPlanTests.cs             128
 tests/TaimisToolbench.Tests/Services/RankerResultCacheTests.cs                          215
 tests/TaimisToolbench.Tests/Services/RankerRowLayoutTests.cs                            933
 tests/TaimisToolbench.Tests/Services/RankerSnapshotWatchTests.cs                        141

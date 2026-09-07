@@ -448,12 +448,20 @@ namespace TaimisToolbench.Services
             // IsMissing null means the learned-recipes check never ran (no
             // account recipe data) - same never-fabricate rule as the
             // disciplines gate's null-characters branch. Auto-learned
-            // recipes carry no unlock barrier and are excluded outright.
+            // recipes carry no unlock barrier and are excluded outright, and
+            // so are Mystic-Forge-only ones - see
+            // RequiredRecipesVisibility.IsMysticForgeOnly, which the plan's
+            // own Required Recipes section calls for the same purpose.
             int counted = 0;
             int known = 0;
             foreach (var recipe in required)
             {
                 if (recipe == null || recipe.IsAutoLearned || !recipe.IsMissing.HasValue)
+                {
+                    continue;
+                }
+
+                if (RequiredRecipesVisibility.IsMysticForgeOnly(recipe.Disciplines))
                 {
                     continue;
                 }
