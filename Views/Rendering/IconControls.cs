@@ -118,11 +118,9 @@ namespace TaimisToolbench.Views.Rendering
         /// advance, a term in the minimum-window-width derivation, does not
         /// move.
         /// </para>
-        /// <paramref name="tooltip"/> is an <see cref="ItemIconTooltip"/>
-        /// like every other icon's, not a bare name string: these icons
-        /// mostly draw with no name text beside them, so the hover is the
-        /// only thing that can identify one, and it earns the same second
-        /// box and the same right-click as the rest.
+        /// Takes the same <see cref="ItemIconTooltip"/> every other icon
+        /// does, so a currency icon gets the same second box and the same
+        /// right-click.
         /// </summary>
         internal static Panel CreateCurrencyIcon(
             Panel parent, string iconUrl, int x, int y, ItemIconTier tier, ItemIconTooltip tooltip)

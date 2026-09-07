@@ -361,9 +361,11 @@ namespace TaimisToolbench.Models
 
         public string StatusTag { get; set; }
 
-        // Wiki-derived acquisition guidance for unknown-source rows,
-        // tooltip-only. Deliberately separate from Sublabel, which renders
-        // inline in the row itself - HintText never renders inline.
+        // What this row's hover adds in its second box, above the wiki
+        // line: acquisition guidance on an unknown-source row, the crafted
+        // item a recipe sheet unlocks on a RecipeRow. Deliberately separate
+        // from Sublabel, which renders inline in the row itself - HintText
+        // never renders inline.
         public string HintText { get; set; }
 
         // The wiki page this row's icon and its row-level right-click

@@ -1668,14 +1668,13 @@ namespace TaimisToolbench.Services
                 // arrived, so a fetch that missed it names the crafted
                 // item rather than "Unknown Item".
                 string craftedName = ResolveName(recipe.OutputItemId, result.ItemMetadata);
-                bool namesTheSheet = recipe.SheetItemId > 0 &&
-                    result.ItemMetadata != null &&
-                    result.ItemMetadata.ContainsKey(recipe.SheetItemId);
+                string sheetName = recipe.SheetItemId > 0
+                    ? ResolvedNameOrNull(recipe.SheetItemId, result.ItemMetadata)
+                    : null;
+                bool namesTheSheet = sheetName != null;
                 int subjectItemId = namesTheSheet ? recipe.SheetItemId : recipe.OutputItemId;
 
-                string name = namesTheSheet
-                    ? ResolveName(subjectItemId, result.ItemMetadata)
-                    : craftedName;
+                string name = namesTheSheet ? sheetName : craftedName;
                 string iconUrl = ResolveIconUrl(subjectItemId, result.ItemMetadata);
                 string rarity = ResolveRarity(subjectItemId, result.ItemMetadata);
 
@@ -1785,6 +1784,20 @@ namespace TaimisToolbench.Services
 
         // Internal so TreeSectionController can resolve a Subdued pill's
         // item-kind delta to a display name too.
+        /// <summary>The item's real name, or null when the fetch did not
+        /// return one. For a caller that has a better fallback than the
+        /// "Unknown Item" placeholder <see cref="ResolveName"/> hands
+        /// back.</summary>
+        private static string ResolvedNameOrNull(
+            int itemId, IReadOnlyDictionary<int, ItemMetadata> metadata)
+        {
+            return metadata != null &&
+                metadata.TryGetValue(itemId, out var meta) &&
+                !string.IsNullOrEmpty(meta.Name)
+                    ? meta.Name
+                    : null;
+        }
+
         internal static string ResolveName(
             int itemId, IReadOnlyDictionary<int, ItemMetadata> metadata)
         {
