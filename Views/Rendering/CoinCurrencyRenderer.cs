@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Blish_HUD.Controls;
 using Microsoft.Xna.Framework;
 using MonoGame.Extended.BitmapFonts;
@@ -443,11 +445,37 @@ namespace TaimisToolbench.Views.Rendering
         /// valid, currency-only case (not a "zero width" special case).
         /// </summary>
         internal static int MeasureValueWidth(
-            long copper, IReadOnlyList<CurrencyAmountViewModel> currencyAmounts, BitmapFont font)
+            long copper, IReadOnlyList<CurrencyAmountViewModel> currencyAmounts, BitmapFont font,
+            int coinBundleQuantity = 0)
         {
             int coinWidth = copper > 0 ? TotalCoinSegmentsWidth(BuildCoinSegments(copper, font)) : 0;
             int currencyWidth = TotalCurrencySegmentsWidth(BuildCurrencySegments(currencyAmounts, font));
-            return (coinWidth > 0 && currencyWidth > 0) ? coinWidth + CoinSegmentMath.CoinSegmentGap + currencyWidth : coinWidth + currencyWidth;
+            int mixed = (coinWidth > 0 && currencyWidth > 0)
+                ? coinWidth + CoinSegmentMath.CoinSegmentGap + currencyWidth
+                : coinWidth + currencyWidth;
+            return mixed + CoinBundleSuffixWidth(coinBundleQuantity, coinWidth, font);
+        }
+
+        /// <summary>
+        /// The " for N" a coin value wears when it buys N units rather than
+        /// one. Zero when the row has no bundle, or when there is no coin
+        /// value for the suffix to qualify. See
+        /// PlanRowViewModel.UnitCoinBundleQuantity.
+        /// </summary>
+        private static string CoinBundleSuffixText(int coinBundleQuantity)
+        {
+            return " for " + coinBundleQuantity.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static int CoinBundleSuffixWidth(int coinBundleQuantity, int coinWidth, BitmapFont font)
+        {
+            if (coinBundleQuantity <= 1 || coinWidth <= 0)
+            {
+                return 0;
+            }
+
+            return CoinSegmentMath.CoinSegmentGap
+                + (int)Math.Ceiling(font.MeasureString(CoinBundleSuffixText(coinBundleQuantity)).Width);
         }
 
         /// <summary>
@@ -464,6 +492,10 @@ namespace TaimisToolbench.Views.Rendering
             public SegmentLayoutHandle CoinSegments;
             public SegmentLayoutHandle CurrencySegments;
             public Label DashLabel;
+
+            // The " for N" that follows the coin run when the coin value
+            // buys N units. Null on every other cell.
+            public Label CoinBundleLabel;
         }
 
         /// <summary>
@@ -475,19 +507,39 @@ namespace TaimisToolbench.Views.Rendering
         /// </summary>
         internal static ValueCellHandle LayoutValueSegmentsRightAligned(
             Panel parent, long copper, IReadOnlyList<CurrencyAmountViewModel> currencyAmounts,
-            int rightEdgeX, int y, BitmapFont font, float alphaScale = 1f)
+            int rightEdgeX, int y, BitmapFont font, float alphaScale = 1f,
+            int coinBundleQuantity = 0)
         {
             var coinSegments = copper > 0 ? BuildCoinSegments(copper, font) : new List<CoinSegmentMath.CoinSegmentSpec>();
             var currencySegments = BuildCurrencySegments(currencyAmounts, font);
             int coinWidth = TotalCoinSegmentsWidth(coinSegments);
             int currencyWidth = TotalCurrencySegmentsWidth(currencySegments);
             int gap = (coinWidth > 0 && currencyWidth > 0) ? CoinSegmentMath.CoinSegmentGap : 0;
+            int suffixWidth = CoinBundleSuffixWidth(coinBundleQuantity, coinWidth, font);
 
-            int startX = rightEdgeX - (coinWidth + gap + currencyWidth);
+            int startX = rightEdgeX - (coinWidth + gap + currencyWidth + suffixWidth);
             var coinHandle = LayoutCoinSegments(parent, coinSegments, startX, y, font, alphaScale);
-            var currencyHandle = LayoutCurrencySegments(parent, currencySegments, startX + coinWidth + gap, y, font, alphaScale);
 
-            return new ValueCellHandle { CoinSegments = coinHandle, CurrencySegments = currencyHandle };
+            // Straight after the coin run and before any currency run: the
+            // suffix qualifies the coin value and nothing else.
+            Label bundleLabel = null;
+            if (suffixWidth > 0)
+            {
+                Color suffixColor = alphaScale < 1f ? Color.White * alphaScale : Color.White;
+                bundleLabel = LabelHelpers.CreateRightAlignedLabel(
+                    parent, CoinBundleSuffixText(coinBundleQuantity), font, suffixColor,
+                    startX + coinWidth + suffixWidth, y);
+            }
+
+            var currencyHandle = LayoutCurrencySegments(
+                parent, currencySegments, startX + coinWidth + suffixWidth + gap, y, font, alphaScale);
+
+            return new ValueCellHandle
+            {
+                CoinSegments = coinHandle,
+                CurrencySegments = currencyHandle,
+                CoinBundleLabel = bundleLabel,
+            };
         }
 
         /// <summary>
@@ -502,7 +554,8 @@ namespace TaimisToolbench.Views.Rendering
         /// </summary>
         internal static ValueCellHandle RenderValueCellRightAligned(
             Panel parent, long copper, IReadOnlyList<CurrencyAmountViewModel> currencyAmounts,
-            int rightEdgeX, int y, BitmapFont font, float alphaScale = 1f)
+            int rightEdgeX, int y, BitmapFont font, float alphaScale = 1f,
+            int coinBundleQuantity = 0)
         {
             bool hasCoin = copper > 0;
             bool hasCurrency = currencyAmounts != null && currencyAmounts.Count > 0;
@@ -519,7 +572,8 @@ namespace TaimisToolbench.Views.Rendering
                 };
             }
 
-            return LayoutValueSegmentsRightAligned(parent, copper, currencyAmounts, rightEdgeX, y, font, alphaScale);
+            return LayoutValueSegmentsRightAligned(
+                parent, copper, currencyAmounts, rightEdgeX, y, font, alphaScale, coinBundleQuantity);
         }
 
         /// <summary>
@@ -543,9 +597,21 @@ namespace TaimisToolbench.Views.Rendering
             int currencyWidth = ShoppingColumnMath.SegmentRunWidth(handle.CurrencySegments.TextWidths, CoinSegmentMath.CoinIconSize, CoinSegmentMath.CoinLabelIconGap, CoinSegmentMath.CoinSegmentGap);
             int gap = (coinWidth > 0 && currencyWidth > 0) ? CoinSegmentMath.CoinSegmentGap : 0;
 
-            int startX = rightEdgeX - (coinWidth + gap + currencyWidth);
+            // The label already knows its own width, so the bundle suffix
+            // costs no MeasureString here either.
+            int suffixWidth = handle.CoinBundleLabel != null
+                ? CoinSegmentMath.CoinSegmentGap + handle.CoinBundleLabel.Width
+                : 0;
+
+            int startX = rightEdgeX - (coinWidth + gap + currencyWidth + suffixWidth);
             RepositionSegments(handle.CoinSegments, startX, y);
-            RepositionSegments(handle.CurrencySegments, startX + coinWidth + gap, y);
+            if (handle.CoinBundleLabel != null)
+            {
+                handle.CoinBundleLabel.Location = new Point(
+                    startX + coinWidth + CoinSegmentMath.CoinSegmentGap, y);
+            }
+
+            RepositionSegments(handle.CurrencySegments, startX + coinWidth + suffixWidth + gap, y);
         }
 
         // --- Per-denomination sub-columns (recipe tree cost column) ---

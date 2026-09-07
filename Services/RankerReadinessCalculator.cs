@@ -58,7 +58,7 @@ namespace TaimisToolbench.Services
 
             metrics.BaselineCoinCost = baseline.Plan.TotalCoinCost;
             metrics.RemainingCoinCost = owned.Plan.TotalCoinCost;
-            metrics.VendorCappedItems = FilterVendorCappedItems(owned);
+            metrics.VendorCappedItems = VendorCapNotices.Filter(owned);
 
             var claimedGated = availability?.ClaimedGatedUnits ?? EmptyIntMap;
             var heldCurrency = availability?.Currency ?? EmptyIntMap;
@@ -205,6 +205,32 @@ namespace TaimisToolbench.Services
             }
 
             return FormatPercent(gate.Applies ? gate.Completion : 1.0);
+        }
+
+        /// <summary>
+        /// What a currency shortfall chip's "N short" is measured against.
+        /// <para>
+        /// In Cascade mode <see cref="RankerCurrencyShortfall.Held"/> is the
+        /// wallet left after the higher-priority rows took theirs, not the
+        /// account balance, so the bare chip states a number the wallet does
+        /// not show. The coin chip carries the same qualifier in its own
+        /// hover.
+        /// </para>
+        /// </summary>
+        public static string ShortfallTooltip(
+            RankerCurrencyShortfall shortfall, string currencyName, RankerMode mode)
+        {
+            if (shortfall == null)
+            {
+                return null;
+            }
+
+            string amount = shortfall.Short.ToString("N0", CultureInfo.InvariantCulture);
+            string name = string.IsNullOrEmpty(currencyName) ? "this currency" : currencyName;
+            return mode == RankerMode.Independent
+                ? "You are " + amount + " " + name + " short for this item, measured against your full wallet."
+                : "You are " + amount + " " + name +
+                  " short for this item, counting what the higher-priority items above it would already have spent.";
         }
 
         public static string GateLabel(RankerGate gate)
@@ -387,8 +413,14 @@ namespace TaimisToolbench.Services
                 string bestCharacter = null;
                 foreach (var learned in characters)
                 {
+                    // Ordinal, matching CraftCompetencyEvaluator and
+                    // PlanViewModelBuilder.BuildCharacterAvailabilityText.
+                    // Those decide whether the plan prints "not trained on
+                    // any character" for the same requirement, so a looser
+                    // comparison here would score a discipline the plan
+                    // reports as untrained.
                     if (learned == null ||
-                        !string.Equals(learned.Discipline, requirement.Discipline, StringComparison.OrdinalIgnoreCase))
+                        !string.Equals(learned.Discipline, requirement.Discipline, StringComparison.Ordinal))
                     {
                         continue;
                     }
@@ -448,12 +480,20 @@ namespace TaimisToolbench.Services
             // IsMissing null means the learned-recipes check never ran (no
             // account recipe data) - same never-fabricate rule as the
             // disciplines gate's null-characters branch. Auto-learned
-            // recipes carry no unlock barrier and are excluded outright.
+            // recipes carry no unlock barrier and are excluded outright, and
+            // so are Mystic-Forge-only ones - see
+            // RequiredRecipesVisibility.IsMysticForgeOnly, which the plan's
+            // own Required Recipes section calls for the same purpose.
             int counted = 0;
             int known = 0;
             foreach (var recipe in required)
             {
                 if (recipe == null || recipe.IsAutoLearned || !recipe.IsMissing.HasValue)
+                {
+                    continue;
+                }
+
+                if (RequiredRecipesVisibility.IsMysticForgeOnly(recipe.Disciplines))
                 {
                     continue;
                 }
@@ -473,48 +513,6 @@ namespace TaimisToolbench.Services
             gate.Applies = true;
             gate.Completion = Clamp01((double)known / counted);
             return gate;
-        }
-
-        /// <summary>
-        /// Vendor purchase caps that are genuinely a wait, not merely a
-        /// route. The solver only emits a TimegatedItem when the plan buys
-        /// the item from the capped vendor, but a TP-listed item (field
-        /// case: Mystic Coin behind a weekly-capped vendor) can cover the
-        /// remainder with coin - that is a price, not a time gate, so no
-        /// cap notice. A result with no price data keeps the notice rather
-        /// than inventing liquidity.
-        /// </summary>
-        private static IReadOnlyList<TimegatedItem> FilterVendorCappedItems(CraftingPlanResult owned)
-        {
-            var capped = owned.Plan.TimegatedItems;
-            if (capped == null || capped.Count == 0)
-            {
-                return Array.Empty<TimegatedItem>();
-            }
-
-            var prices = owned.SolveContext?.Prices;
-            if (prices == null)
-            {
-                return capped;
-            }
-
-            var kept = new List<TimegatedItem>(capped.Count);
-            foreach (var item in capped)
-            {
-                if (item == null)
-                {
-                    continue;
-                }
-
-                bool tpLiquid = prices.TryGetValue(item.ItemId, out var price) &&
-                    price != null && (price.BuyInstant > 0 || price.SellInstant > 0);
-                if (!tpLiquid)
-                {
-                    kept.Add(item);
-                }
-            }
-
-            return kept;
         }
 
         private static void ApplyAffordability(RankerSlotAvailability availability, RankerRowMetrics metrics)

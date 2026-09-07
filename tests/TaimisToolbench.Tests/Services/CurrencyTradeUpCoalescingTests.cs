@@ -131,21 +131,31 @@ namespace TaimisToolbench.Tests.Services
         }
 
         /// <summary>
-        /// Without currency metadata the note can name nothing on screen -
-        /// the offline fallback for these ids is the word "Currency" - so
-        /// the plan states the whole requirement rather than a Needed no
-        /// visible note accounts for.
+        /// Needed is arithmetic on the player's own wallet, so whether
+        /// /v2/currencies has answered yet cannot move it. The same plan
+        /// used to read 18 before the fetch landed and 14 after.
         /// </summary>
         [Fact]
-        public async Task WithNoCurrencyMetadata_NothingComesOffNeeded()
+        public async Task WithNoCurrencyMetadata_NeededIsStillTheSameNumber()
         {
-            var vm = new PlanViewModelBuilder().Build(
+            var withMetadata = new PlanViewModelBuilder().Build(
+                await GenerateAsync(WalletHolding(1013)));
+            var without = new PlanViewModelBuilder().Build(
                 await GenerateAsync(WalletHolding(1013), currencyMetadata: false));
-            var row = Assert.Single(NonCoinRows(vm));
 
-            Assert.Equal(18, row.Quantity);
-            Assert.Equal(18, row.CurrencyNeededQuantity);
-            Assert.Null(row.TradeUpCurrencyHeld);
+            var before = Assert.Single(NonCoinRows(without));
+            var after = Assert.Single(NonCoinRows(withMetadata));
+
+            Assert.Equal(18, before.Quantity);
+            Assert.Equal(14, before.CurrencyNeededQuantity);
+            Assert.Equal(after.CurrencyNeededQuantity, before.CurrencyNeededQuantity);
+
+            // The note is still seated. Its icon frame carries the currency
+            // name on hover, so the number keeps a derivation on screen even
+            // with no art to draw.
+            Assert.Equal(1013, before.TradeUpCurrencyHeld);
+            Assert.Equal(4, before.TradeUpBuysQuantity);
+            Assert.False(string.IsNullOrEmpty(before.TradeUpCurrencyName));
         }
 
         /// <summary>

@@ -85,6 +85,23 @@ namespace TaimisToolbench.Services
             return 0;
         }
 
+        /// <summary>
+        /// How many distinct items the account actually holds. The
+        /// constructor drops an entry with a count of zero or less and one
+        /// with a blank source, so this counts exactly the ids that can
+        /// produce a Snapshot tab row when no filter is applied.
+        /// <para>
+        /// The Snapshot tab's "N of M items" line reads this. It used to
+        /// read the representative-entry map, which keys on every id the
+        /// capture mentioned, so a zero-count entry raised M without ever
+        /// being showable and no filter change could reveal it.
+        /// </para>
+        /// </summary>
+        public int DistinctItemCount
+        {
+            get { return _index.Count; }
+        }
+
         public IReadOnlyList<string> GetSources(int itemId)
         {
             if (_index.TryGetValue(itemId, out var sourceMap))

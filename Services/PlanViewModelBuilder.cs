@@ -126,7 +126,7 @@ namespace TaimisToolbench.Services
             // timegated notice to show) - last, per gw2e order. Vendor-cap
             // notices are pre-filtered so a plan whose only "notice" is a
             // TP-liquid item's vendor cap gets no notices-only section.
-            var vendorCapNotices = FilterVendorCapNotices(result);
+            var vendorCapNotices = VendorCapNotices.Filter(result);
             if (craftSteps.Count > 0 || vendorCapNotices.Count > 0)
             {
                 vm.Sections.Add(BuildCraftingStepsSection(craftSteps, vendorCapNotices, result));
@@ -731,12 +731,12 @@ namespace TaimisToolbench.Services
         /// the currency converts it up before acquiring the rest any other
         /// way.
         /// <para>
-        /// The note and that subtraction are one decision, never two: a
-        /// Needed the note cannot account for is a number with no visible
-        /// derivation. So both are skipped together whenever the currency
-        /// resolves no icon - without one the note names nothing on screen,
-        /// because the offline fallback for these ids is the word
-        /// "Currency" (Gw2Constants.ResolveCurrencyName).
+        /// The subtraction does not depend on currency metadata. It used to
+        /// be skipped whenever the currency resolved no icon, so the same
+        /// plan showed a different Needed before and after /v2/currencies
+        /// answered. The note is still drawn: the renderer seats an icon
+        /// frame whether or not art resolved, and that frame carries the
+        /// currency's name on hover.
         /// </para>
         /// </summary>
         private static int ApplyTradeUpNote(
@@ -777,14 +777,9 @@ namespace TaimisToolbench.Services
             int buys = CurrencyTradeUpCoalescing.BuysNow(
                 heldCurrency.Value, cost.TradeUpCurrencyPerUnit.Value, outstanding);
 
-            string iconUrl = CurrencyDisplayResolver.ResolveIconUrl(currencyId, result.CurrencyMetadata);
-            if (string.IsNullOrEmpty(iconUrl))
-            {
-                return 0;
-            }
-
             row.TradeUpCurrencyName = CurrencyDisplayResolver.ResolveName(currencyId, result.CurrencyMetadata);
-            row.TradeUpCurrencyIconUrl = iconUrl;
+            row.TradeUpCurrencyIconUrl =
+                CurrencyDisplayResolver.ResolveIconUrl(currencyId, result.CurrencyMetadata);
             row.TradeUpCurrencyHeld = heldCurrency.Value;
             row.TradeUpBuysQuantity = buys;
             return buys;
@@ -922,52 +917,6 @@ namespace TaimisToolbench.Services
             return byItemId;
         }
 
-        /// <summary>
-        /// Vendor purchase caps that are genuinely a wait, not merely a
-        /// route - same filter as RankerReadinessCalculator's
-        /// FilterVendorCappedItems. The solver only emits a TimegatedItem
-        /// when the plan buys the item from the capped vendor, but a
-        /// TP-listed item (field case: Mystic Coin behind a weekly-capped
-        /// vendor) can cover the remainder with coin - that is a price,
-        /// not a time gate, so no cap notice. A result with no price data
-        /// keeps the notice rather than inventing liquidity. Distinct from
-        /// VendorCapsByItemId, which stays unfiltered: the value-detail
-        /// tooltip states the cap only on a node the plan actually routes
-        /// through that vendor, where the fact remains worth surfacing.
-        /// </summary>
-        private static IReadOnlyList<TimegatedItem> FilterVendorCapNotices(CraftingPlanResult result)
-        {
-            var capped = result.Plan.TimegatedItems;
-            if (capped == null || capped.Count == 0)
-            {
-                return Array.Empty<TimegatedItem>();
-            }
-
-            var prices = result.SolveContext?.Prices;
-            if (prices == null)
-            {
-                return capped;
-            }
-
-            var kept = new List<TimegatedItem>(capped.Count);
-            foreach (var item in capped)
-            {
-                if (item == null)
-                {
-                    continue;
-                }
-
-                bool tpLiquid = prices.TryGetValue(item.ItemId, out var price) &&
-                    price != null && (price.BuyInstant > 0 || price.SellInstant > 0);
-                if (!tpLiquid)
-                {
-                    kept.Add(item);
-                }
-            }
-
-            return kept;
-        }
-
         private PlanSectionViewModel BuildUsedMaterialsSection(CraftingPlanResult result)
         {
             var section = new PlanSectionViewModel
@@ -1030,6 +979,7 @@ namespace TaimisToolbench.Services
                 string iconUrl = ResolveIconUrl(step.ItemId, result.ItemMetadata);
                 string rarity = ResolveRarity(step.ItemId, result.ItemMetadata);
                 PlanRowType rowType = MapShoppingRowType(step.Source);
+                ResolveUnitCoin(step, out long unitCoin, out int unitCoinBundle);
 
                 section.Rows.Add(new PlanRowViewModel
                 {
@@ -1041,7 +991,8 @@ namespace TaimisToolbench.Services
                     Rarity = rarity,
                     Quantity = isTradeUp ? purchase.Buys : step.Quantity,
                     CoinValue = step.TotalCost,
-                    UnitCoinValue = step.UnitCost,
+                    UnitCoinValue = unitCoin,
+                    UnitCoinBundleQuantity = unitCoinBundle,
                     HintText = ResolveHintText(rowType, step.ItemId, result.AcquisitionHints),
                     BadgeText = ResolveBadgeText(rowType, step.ItemId, result.AcquisitionHints),
                     // Owned/needed split, cosmetic only - Total column
@@ -1082,6 +1033,58 @@ namespace TaimisToolbench.Services
                     Count = purchase.Buys * purchase.CurrencyPerUnit,
                 },
             };
+        }
+
+        /// <summary>
+        /// What the shopping list's coin "Each" cell says: a per-unit price,
+        /// or a price and the number of units that price buys.
+        /// <para>
+        /// A remainder means no whole coin value is the per-unit price, so
+        /// the pair is reported rather than a truncated division. Same rule
+        /// and same shape as CurrencyDisplayResolver.ResolveDividedAmounts,
+        /// which the currency half of this same cell already uses.
+        /// </para>
+        /// </summary>
+        private static void ResolveUnitCoin(PlanStep step, out long unitCoin, out int bundleQuantity)
+        {
+            long total = step.TotalCost;
+            int divisor = step.Quantity;
+
+            // A uniform vendor step's total is the offer's per-purchase coin
+            // cost times whole purchases, so dividing by the purchase count
+            // recovers that cost exactly. The offer's own batch is what the
+            // player is charged; the step's quantity can sit inside a
+            // part-used purchase, and dividing by that instead invents a
+            // rate no purchase of this offer ever charges. VendorBatchSolver
+            // sets VendorOfferOutputCount only when every occurrence merged
+            // into this step resolved to one offer.
+            if (step.VendorOfferOutputCount > 0 && step.Quantity > 0)
+            {
+                int purchases = (step.Quantity + step.VendorOfferOutputCount - 1)
+                    / step.VendorOfferOutputCount;
+                if (purchases > 0)
+                {
+                    total = step.TotalCost / purchases;
+                    divisor = step.VendorOfferOutputCount;
+                }
+            }
+
+            if (divisor <= 1 || total <= 0)
+            {
+                unitCoin = divisor == 0 ? 0 : total;
+                bundleQuantity = 0;
+                return;
+            }
+
+            if (total % divisor == 0)
+            {
+                unitCoin = total / divisor;
+                bundleQuantity = 0;
+                return;
+            }
+
+            unitCoin = total;
+            bundleQuantity = divisor;
         }
 
         /// <summary>
@@ -1186,7 +1189,7 @@ namespace TaimisToolbench.Services
             // Timegated (vendor purchase cap) notices - caps are surfaced,
             // never solved around. Appended after the real craft steps so
             // a notices-only section still renders correctly. The list
-            // arrives pre-filtered (see FilterVendorCapNotices): a cap on
+            // arrives pre-filtered (see VendorCapNotices.Filter): a cap on
             // a TP-liquid item never reaches this loop. The label names
             // the vendor limit for what it is - same wording as the
             // Ranker's vendor-cap note (RankerTabContent).
@@ -1648,15 +1651,12 @@ namespace TaimisToolbench.Services
 
             foreach (var recipe in result.RequiredRecipes)
             {
-                // A sole-Mystic-Forge recipe has nothing to learn - there
-                // is no unlock concept - so it is skipped rather than
-                // shown as an always-"Learned" row. Only a recipe whose
-                // ENTIRE Disciplines list is MysticForge is filtered; one
-                // combining the forge with a real leveled discipline still
-                // has something to learn. Touches only this section's row
-                // list - a Mystic Forge craft STEP keeps its location
-                // sublabel.
-                if (IsMysticForgeOnly(recipe.Disciplines))
+                // A sole-Mystic-Forge recipe has nothing to learn, so it is
+                // skipped rather than shown as an always-"Learned" row. The
+                // rule lives in RequiredRecipesVisibility.IsMysticForgeOnly.
+                // Touches only this section's row list - a Mystic Forge
+                // craft STEP keeps its location sublabel.
+                if (RequiredRecipesVisibility.IsMysticForgeOnly(recipe.Disciplines))
                 {
                     continue;
                 }
@@ -1668,15 +1668,15 @@ namespace TaimisToolbench.Services
                 string statusTag;
                 if (recipe.IsAutoLearned)
                 {
-                    statusTag = "Auto-learned";
+                    statusTag = RequiredRecipesVisibility.AutoLearnedStatusTag;
                 }
                 else if (recipe.IsMissing == true)
                 {
-                    statusTag = "Missing!";
+                    statusTag = RequiredRecipesVisibility.MissingStatusTag;
                 }
                 else if (recipe.IsMissing == false)
                 {
-                    statusTag = "Learned";
+                    statusTag = RequiredRecipesVisibility.LearnedStatusTag;
                 }
                 else
                 {
@@ -1717,27 +1717,6 @@ namespace TaimisToolbench.Services
             // filter-off baseline.
             section.Title = $"Required Recipes ({section.Rows.Count})";
             return section;
-        }
-
-        // True only when EVERY entry in Disciplines is "MysticForge".
-        // Empty/null Disciplines is NOT Mystic-Forge-only - vacuous truth
-        // would wrongly match a recipe with no discipline data.
-        private static bool IsMysticForgeOnly(List<string> disciplines)
-        {
-            if (disciplines == null || disciplines.Count == 0)
-            {
-                return false;
-            }
-
-            foreach (var discipline in disciplines)
-            {
-                if (discipline != "MysticForge")
-                {
-                    return false;
-                }
-            }
-
-            return true;
         }
 
         /// <summary>

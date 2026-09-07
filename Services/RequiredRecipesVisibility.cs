@@ -4,33 +4,80 @@ using TaimisToolbench.Models;
 namespace TaimisToolbench.Services
 {
     /// <summary>
-    /// Pure "Hide Unlocked Recipes" filter/header-text logic for the plan
-    /// view's Required Recipes section. Blish-free by design (works only on
-    /// PlanRowViewModel/List/bool) so it can be exercised by a real test
+    /// Which required recipes a surface counts, and the plan view's
+    /// "Hide Unlocked Recipes" header text. Blish-free by design (works only
+    /// on PlanRowViewModel/List/bool) so it can be exercised by a real test
     /// without any Blish HUD dependency - CraftingPlanView calls this from
     /// its RequiredRecipes render branch instead of embedding the filter
     /// predicate inline where it could not be unit-tested.
     ///
-    /// A row is "unlocked" here iff its StatusTag is exactly "Learned" or
-    /// "Auto-learned" (PlanViewModelBuilder.BuildRecipesSection's own two
-    /// unlocked-status strings). A row with StatusTag == "Missing!" is kept
-    /// (that is the whole point of the filter); a row with an EMPTY
-    /// StatusTag ("" - recipe permission was not available, so unlock
-    /// status could not be determined at all, see
-    /// PlanViewModelBuilderStepSectionsTests.RequiredRecipes_NullMissing_EmptyStatusTag)
-    /// is also kept, deliberately - hiding a row whose status is unknown
-    /// would silently claim "you have nothing to do here" for a recipe this
-    /// module simply could not check, which is worse than a harmless extra
-    /// row.
+    /// A row is "unlocked" here iff its StatusTag is Learned or
+    /// Auto-learned. A Missing row is kept, which is the whole point of the
+    /// filter. A row with an EMPTY StatusTag is kept too, deliberately: the
+    /// account had no recipe permission, so unlock status could not be
+    /// determined at all. Hiding it would claim "you have nothing to do
+    /// here" for a recipe the module could not check.
     /// </summary>
     internal static class RequiredRecipesVisibility
     {
-        private const string LearnedStatusTag = "Learned";
-        private const string AutoLearnedStatusTag = "Auto-learned";
+        /// <summary>
+        /// The three status tags a Required Recipes row can carry, plus the
+        /// absence of one. PlanViewModelBuilder writes them,
+        /// RecipesSectionRenderer colours them and this class reads them, so
+        /// they are declared once here rather than spelled out at each site.
+        /// An empty tag means the module could not check the recipe.
+        /// </summary>
+        public const string LearnedStatusTag = "Learned";
+
+        public const string AutoLearnedStatusTag = "Auto-learned";
+
+        public const string MissingStatusTag = "Missing!";
+
+        private const string MysticForgeDiscipline = "MysticForge";
 
         public static bool IsUnlocked(string statusTag)
         {
             return statusTag == LearnedStatusTag || statusTag == AutoLearnedStatusTag;
+        }
+
+        /// <summary>
+        /// True when every discipline on a required recipe is "MysticForge".
+        /// The forge is a facility with no unlock, so such a recipe is not
+        /// one a player can be missing and no surface may count it.
+        /// <para>
+        /// Both PlanViewModelBuilder.BuildRecipesSection and
+        /// RankerReadinessCalculator.ScoreRecipes call this, so the plan's
+        /// "N missing of M" header and the Ranker's Recipes cell score the
+        /// same set of recipes. PlanResultBuilder marks a forge recipe
+        /// IsMissing = false, so counting it padded both halves of the
+        /// Ranker's fraction and pulled the cell above the plan's own count.
+        /// </para>
+        /// <para>
+        /// A recipe combining the forge with a real leveled discipline still
+        /// has something to learn and is kept. Empty or null disciplines is
+        /// NOT a match: vacuous truth would drop a recipe whose discipline
+        /// data is simply absent.
+        /// </para>
+        /// </summary>
+        public static bool IsMysticForgeOnly(IReadOnlyList<string> disciplines)
+        {
+            if (disciplines == null || disciplines.Count == 0)
+            {
+                return false;
+            }
+
+            // Indexed rather than foreach: the parameter is an interface, so
+            // foreach would heap-allocate an enumerator once per recipe, and
+            // the Ranker calls this for every recipe of every watchlist row.
+            for (int i = 0; i < disciplines.Count; i++)
+            {
+                if (disciplines[i] != MysticForgeDiscipline)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -67,22 +114,49 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// Section header title. Always states the TOTAL recipe count
-        /// (after the Mystic Forge filter applied upstream by
-        /// PlanViewModelBuilder.BuildRecipesSection) so the header is never
-        /// dishonest about how many recipes the plan actually needs -
-        /// "(showing K missing of N)" only replaces the bare "(N)" when the
-        /// filter is actually active and there is at least one recipe to
-        /// count.
+        /// Section header title. Always states the TOTAL recipe count, after
+        /// the Mystic Forge filter BuildRecipesSection applied upstream, so
+        /// the header never understates what the plan needs.
+        /// <para>
+        /// The word "missing" is used only when every visible row is
+        /// actually Missing. The filter also keeps rows the module could not
+        /// check, and calling one of those missing states a fact the module
+        /// does not have. With no recipe permission every row is unchecked,
+        /// which used to render as "showing 8 missing of 8" for an account
+        /// the module had learned nothing about.
+        /// </para>
         /// </summary>
-        public static string BuildHeaderTitle(int totalCount, int visibleCount, bool hideUnlocked)
+        public static string BuildHeaderTitle(
+            IReadOnlyList<PlanRowViewModel> rows,
+            IReadOnlyList<PlanRowViewModel> visibleRows,
+            bool hideUnlocked)
         {
-            if (hideUnlocked && totalCount > 0)
+            int totalCount = rows?.Count ?? 0;
+            if (!hideUnlocked || totalCount == 0)
+            {
+                return $"Required Recipes ({totalCount})";
+            }
+
+            int visibleCount = visibleRows?.Count ?? 0;
+            if (visibleCount > 0 && AllMissing(visibleRows))
             {
                 return $"Required Recipes (showing {visibleCount} missing of {totalCount})";
             }
 
-            return $"Required Recipes ({totalCount})";
+            return $"Required Recipes (showing {visibleCount} of {totalCount})";
+        }
+
+        private static bool AllMissing(IReadOnlyList<PlanRowViewModel> rows)
+        {
+            for (int i = 0; i < rows.Count; i++)
+            {
+                if (rows[i]?.StatusTag != MissingStatusTag)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         /// <summary>

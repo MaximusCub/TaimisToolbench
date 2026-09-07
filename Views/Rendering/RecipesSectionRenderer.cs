@@ -309,11 +309,11 @@ namespace TaimisToolbench.Views.Rendering
             if (!string.IsNullOrEmpty(row.StatusTag))
             {
                 Color statusColor = Color.White;
-                if (row.StatusTag == "Missing!")
+                if (row.StatusTag == RequiredRecipesVisibility.MissingStatusTag)
                 {
                     statusColor = new Color(255, 100, 100);
                 }
-                else if (row.StatusTag == "Auto-learned")
+                else if (row.StatusTag == RequiredRecipesVisibility.AutoLearnedStatusTag)
                 {
                     statusColor = new Color(150, 200, 150);
                 }

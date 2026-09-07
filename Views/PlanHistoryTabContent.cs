@@ -323,6 +323,12 @@ namespace TaimisToolbench.Views
                     ColumnHeaderLabelY, HeaderTitles[i], _sortState.DirectionFor(column));
                 SortableHeaderLabel.MarkSortable(block.Title);
                 SortableHeaderLabel.MarkSortable(block.IndicatorLabel);
+                string headerTooltip = HeaderTooltips[i];
+                if (headerTooltip != null)
+                {
+                    TooltipFacility.ApplyPlain(block.Title, headerTooltip);
+                }
+
                 _columnHeaderLabels.Add(block);
                 _headerCellPlan.Set(
                     i, block.Title, block.Width, () => SortBy(column), block.IndicatorLabel);
@@ -337,6 +343,17 @@ namespace TaimisToolbench.Views
         };
 
         private static readonly string[] HeaderTitles = { "Plan", "Cost", "Generated" };
+
+        // The Cost column is the one figure this tab shares with the plan
+        // tab, and it is a record rather than a live number. Changing a
+        // decision there moves the Total Cost table and leaves this alone,
+        // so the header says which of the two it is.
+        private static readonly string[] HeaderTooltips =
+        {
+            null,
+            "What the plan cost when it was generated. Changing a decision on the plan tab does not update it.",
+            null,
+        };
 
         /// <summary>Cycles one column and rebuilds the list in the new
         /// order. A full rebuild, not a re-place: these rows carry an

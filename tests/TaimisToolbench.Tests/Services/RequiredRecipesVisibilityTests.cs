@@ -97,18 +97,36 @@ namespace TaimisToolbench.Tests.Services
         }
 
         // --- BuildHeaderTitle ---
-        [Fact]
-        public void BuildHeaderTitle_FilterOff_ShowsBareTotal()
+        private static List<PlanRowViewModel> Rows(params string[] statusTags)
         {
-            Assert.Equal("Required Recipes (5)", RequiredRecipesVisibility.BuildHeaderTitle(totalCount: 5, visibleCount: 5, hideUnlocked: false));
+            var rows = new List<PlanRowViewModel>(statusTags.Length);
+            foreach (var tag in statusTags)
+            {
+                rows.Add(Row(tag));
+            }
+
+            return rows;
         }
 
         [Fact]
-        public void BuildHeaderTitle_FilterOn_ShowsShowingKOfN()
+        public void BuildHeaderTitle_FilterOff_ShowsBareTotal()
         {
+            var rows = Rows("Learned", "Learned", "Missing!", "Missing!", "Missing!");
+
+            Assert.Equal(
+                "Required Recipes (5)",
+                RequiredRecipesVisibility.BuildHeaderTitle(rows, rows, hideUnlocked: false));
+        }
+
+        [Fact]
+        public void BuildHeaderTitle_FilterOn_EveryVisibleRowMissing_SaysMissing()
+        {
+            var rows = Rows("Learned", "Learned", "Learned", "Missing!", "Missing!");
+            var visible = RequiredRecipesVisibility.ApplyFilter(rows, hideUnlocked: true);
+
             Assert.Equal(
                 "Required Recipes (showing 2 missing of 5)",
-                RequiredRecipesVisibility.BuildHeaderTitle(totalCount: 5, visibleCount: 2, hideUnlocked: true));
+                RequiredRecipesVisibility.BuildHeaderTitle(rows, visible, hideUnlocked: true));
         }
 
         [Fact]
@@ -116,18 +134,58 @@ namespace TaimisToolbench.Tests.Services
         {
             // Nothing to filter at all - avoid a confusing "(showing 0
             // missing of 0)" when the section would not even exist.
-            Assert.Equal("Required Recipes (0)", RequiredRecipesVisibility.BuildHeaderTitle(totalCount: 0, visibleCount: 0, hideUnlocked: true));
+            var rows = new List<PlanRowViewModel>();
+
+            Assert.Equal(
+                "Required Recipes (0)",
+                RequiredRecipesVisibility.BuildHeaderTitle(rows, rows, hideUnlocked: true));
         }
 
         [Fact]
         public void BuildHeaderTitle_FilterOn_NothingHidden_StillShowsShowingFormat()
         {
-            // Honest even when the filter happens not to hide anything
-            // (every recipe is Missing!) - K == N is still stated plainly
-            // rather than silently collapsing back to the bare form.
+            // Honest even when the filter happens not to hide anything -
+            // K == N is stated plainly rather than collapsing to the bare
+            // form.
+            var rows = Rows("Missing!", "Missing!", "Missing!", "Missing!", "Missing!");
+            var visible = RequiredRecipesVisibility.ApplyFilter(rows, hideUnlocked: true);
+
             Assert.Equal(
                 "Required Recipes (showing 5 missing of 5)",
-                RequiredRecipesVisibility.BuildHeaderTitle(totalCount: 5, visibleCount: 5, hideUnlocked: true));
+                RequiredRecipesVisibility.BuildHeaderTitle(rows, visible, hideUnlocked: true));
+        }
+
+        [Fact]
+        public void BuildHeaderTitle_NoRecipePermission_NeverClaimsAnythingIsMissing()
+        {
+            // Every row carries an empty status tag: the account had no
+            // recipe permission, so the module checked nothing. The header
+            // used to read "showing 8 missing of 8".
+            var rows = Rows("", "", "", "", "", "", "", "");
+            var visible = RequiredRecipesVisibility.ApplyFilter(rows, hideUnlocked: true);
+
+            Assert.Equal(
+                "Required Recipes (showing 8 of 8)",
+                RequiredRecipesVisibility.BuildHeaderTitle(rows, visible, hideUnlocked: true));
+        }
+
+        [Fact]
+        public void BuildHeaderTitle_OneUncheckedRowAmongMissing_DropsTheWordMissing()
+        {
+            var rows = Rows("Learned", "Missing!", "");
+            var visible = RequiredRecipesVisibility.ApplyFilter(rows, hideUnlocked: true);
+
+            Assert.Equal(
+                "Required Recipes (showing 2 of 3)",
+                RequiredRecipesVisibility.BuildHeaderTitle(rows, visible, hideUnlocked: true));
+        }
+
+        [Fact]
+        public void BuildHeaderTitle_NullRows_DoesNotThrow()
+        {
+            Assert.Equal(
+                "Required Recipes (0)",
+                RequiredRecipesVisibility.BuildHeaderTitle(null, null, hideUnlocked: true));
         }
 
         // --- AllUnlockedMessage ---

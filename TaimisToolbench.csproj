@@ -118,6 +118,7 @@
     <Compile Include="Services\PlanHistoryRetention.cs" />
     <Compile Include="Services\PlanHistoryTableSorter.cs" />
     <Compile Include="Services\PlanHistoryRowLayout.cs" />
+    <Compile Include="Services\PlanHistoryIndexEdits.cs" />
     <Compile Include="Services\PlanHistoryItemIds.cs" />
     <Compile Include="Services\PlanHistoryLabels.cs" />
     <Compile Include="Views\PlanHistoryTabContent.cs" />
@@ -198,6 +199,7 @@
     <Compile Include="Models\TimegatedItem.cs" />
     <Compile Include="Services\PlanSolver.cs" />
     <Compile Include="Services\VendorBatchSolver.cs" />
+    <Compile Include="Services\VendorCapNotices.cs" />
     <Compile Include="Services\VendorCostLineSubtrees.cs" />
     <Compile Include="Services\VendorOfferDomination.cs" />
     <Compile Include="Services\StatusUpdateGuard.cs" />

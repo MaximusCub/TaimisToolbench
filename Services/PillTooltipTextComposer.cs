@@ -96,6 +96,17 @@ namespace TaimisToolbench.Services
 
             if (spec.Kind == PillKind.Have)
             {
+                // An ignored node wears the same Have pill but keeps its
+                // Quantity and owns none of it, so the covered-by-materials
+                // wording put "Needs 0" beside a row still reading "10x".
+                // CraftingTreeBuilder returns early for these without
+                // touching Quantity.
+                if (node.IsIgnored)
+                {
+                    return new PillTooltipPlan(
+                        $"Ignored - the plan leaves all {node.Quantity} to you", appendSubduing: false);
+                }
+
                 // An ITEM cost-component leaf can never reach here (it gets
                 // only badges, never PillKind.Have); a currency leaf CAN,
                 // but is always intercepted above - so this wording only

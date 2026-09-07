@@ -111,7 +111,8 @@ namespace TaimisToolbench.Views.Rendering
                     maxNameWidth = nameW;
                 }
 
-                int eachW = CoinCurrencyRenderer.MeasureValueWidth(row.UnitCoinValue, row.UnitCurrencyCosts, coinFont);
+                int eachW = CoinCurrencyRenderer.MeasureValueWidth(
+                    row.UnitCoinValue, row.UnitCurrencyCosts, coinFont, row.UnitCoinBundleQuantity);
                 if (eachW > maxEachWidth)
                 {
                     maxEachWidth = eachW;
@@ -430,7 +431,9 @@ namespace TaimisToolbench.Views.Rendering
             // alongside/instead of coin; a row with neither (genuinely
             // unpriceable - gw2e: "Not sold or crafted") renders a dash,
             // never a blank cell.
-            var eachCell = CoinCurrencyRenderer.RenderValueCellRightAligned(rowPanel, row.UnitCoinValue, row.UnitCurrencyCosts, edges.EachRightEdge, RowTextY, font);
+            var eachCell = CoinCurrencyRenderer.RenderValueCellRightAligned(
+                rowPanel, row.UnitCoinValue, row.UnitCurrencyCosts, edges.EachRightEdge, RowTextY, font,
+                coinBundleQuantity: row.UnitCoinBundleQuantity);
             var totalCell = CoinCurrencyRenderer.RenderValueCellRightAligned(rowPanel, row.CoinValue, row.CurrencyCosts, edges.TotalRightEdge, RowTextY, font);
 
             // An UNKNOWN row's dash takes the badge's own red, so "no

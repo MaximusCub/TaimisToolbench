@@ -237,10 +237,16 @@ namespace TaimisToolbench.Models
     }
 
     /// <summary>
-    /// A single non-coin currency amount, already resolved to display-ready
-    /// name/icon (never a raw currency id - see CurrencyDisplayResolver).
-    /// Used for BuyFromVendor rows/nodes priced wholly or partly in a
-    /// non-coin currency (spirit shards, karma, etc.) - KNOWN-ISSUES #16.
+    /// A single non-coin amount, already resolved to display-ready
+    /// name/icon (never a raw id - see CurrencyDisplayResolver). Used for
+    /// BuyFromVendor rows/nodes priced wholly or partly in something other
+    /// than coin - KNOWN-ISSUES #16.
+    /// <para>
+    /// Usually a wallet currency such as a spirit shard or karma. Not
+    /// always: NonCoinCostTotals also projects barter-item rows into this
+    /// type, where Amount is a count of items rather than of currency. Read
+    /// the source list to know which, and never label one as the other.
+    /// </para>
     /// </summary>
     internal class CurrencyAmountViewModel
     {
@@ -338,6 +344,19 @@ namespace TaimisToolbench.Models
         // Only populated for shopping rows, which show both a unit-price and
         // a total-price table column.
         public long UnitCoinValue { get; set; }
+
+        // How many units UnitCoinValue actually buys, when it does not buy
+        // one. Zero means UnitCoinValue is a true per-unit price and the
+        // Each cell renders it alone.
+        //
+        // A vendor offer selling 2 for 5 copper has no per-unit coin price,
+        // and a merged step whose occurrences paid different prices has no
+        // single price either. Dividing produced a number that failed the
+        // reader's own check, because Each times Amount did not reach
+        // Total. The Each cell instead renders UnitCoinValue followed by
+        // "for N", the same shape CurrencyAmountViewModel.BundleLabel
+        // already uses for the currency half of the same cell.
+        public int UnitCoinBundleQuantity { get; set; }
 
         public string StatusTag { get; set; }
 

@@ -223,6 +223,23 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void AnIgnoredItemsHavePillDoesNotClaimYourMaterialsCoveredIt()
+        {
+            // CraftingTreeBuilder collapses an ignored node to Have without
+            // touching Quantity, and it owns none of it. The covered wording
+            // put "Needs 0" beside a row still reading "10x".
+            var node = Node();
+            node.Quantity = 10;
+            node.OwnedQuantityUsed = 0;
+            node.Decision = CraftingDecision.Have;
+            node.IsIgnored = true;
+
+            var plan = Compose(Spec("HAVE", null, PillKind.Have), node);
+
+            Assert.Equal("Ignored - the plan leaves all 10 to you", plan.Text);
+        }
+
+        [Fact]
         public void APartiallyOwnedItemsAnnotationSplitsCoveredFromRemaining()
         {
             var node = Node();

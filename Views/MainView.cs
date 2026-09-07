@@ -2120,7 +2120,7 @@ namespace TaimisToolbench.Views
             // would report a filter the user chose as if it were a result.
             SetResultLine(
                 itemRows?.Count ?? 0,
-                itemRows == null ? 0 : (_itemsById?.Count ?? 0),
+                itemRows == null ? 0 : (_accountItemIndex?.DistinctItemCount ?? 0),
                 walletRows?.Count ?? 0,
                 walletRows == null ? 0 : (_snapshot.Wallet?.Count ?? 0));
 
@@ -3104,13 +3104,29 @@ namespace TaimisToolbench.Views
             // the icon takes the list tier, whose art is already inset by the
             // module's 1px frame so the framed box occupies exactly the
             // measured 32px window rather than overflowing it to 34.
-            string currencyName = string.IsNullOrEmpty(entry.CurrencyName)
-                ? "Unknown Currency"
-                : entry.CurrencyName;
             // Read out of the entry rather than closed over with it: the
             // hover builder outlives this call and would otherwise retain
             // the whole snapshot entry per row.
             int currencyId = entry.CurrencyId;
+
+            // The snapshot only carries a name once /v2/currencies has
+            // answered, and this row used to print "Unknown Currency" until
+            // it did. Every other surface falls back through the shipped
+            // name table instead, so one id read as three different names
+            // across three tabs. Same chain as
+            // CurrencyDisplayResolver.ResolveName, reached through the
+            // per-id lookup this view is given rather than a dictionary.
+            string currencyName = entry.CurrencyName;
+            if (string.IsNullOrEmpty(currencyName))
+            {
+                currencyName = _getCurrencyMetadata?.Invoke(currencyId)?.Name;
+            }
+
+            if (string.IsNullOrEmpty(currencyName))
+            {
+                currencyName = Gw2Constants.ResolveCurrencyName(currencyId);
+            }
+
             int walletValue = entry.Value;
             string currencyIconUrl = entry.IconUrl;
             var icon = IconControls.CreateItemIconDeferredArt(
