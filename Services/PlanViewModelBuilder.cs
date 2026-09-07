@@ -116,7 +116,7 @@ namespace TaimisToolbench.Services
             // timegated notice to show) - last, per gw2e order. Vendor-cap
             // notices are pre-filtered so a plan whose only "notice" is a
             // TP-liquid item's vendor cap gets no notices-only section.
-            var vendorCapNotices = FilterVendorCapNotices(result);
+            var vendorCapNotices = VendorCapNotices.Filter(result);
             if (craftSteps.Count > 0 || vendorCapNotices.Count > 0)
             {
                 vm.Sections.Add(BuildCraftingStepsSection(craftSteps, vendorCapNotices, result));
@@ -872,52 +872,6 @@ namespace TaimisToolbench.Services
             return byItemId;
         }
 
-        /// <summary>
-        /// Vendor purchase caps that are genuinely a wait, not merely a
-        /// route - same filter as RankerReadinessCalculator's
-        /// FilterVendorCappedItems. The solver only emits a TimegatedItem
-        /// when the plan buys the item from the capped vendor, but a
-        /// TP-listed item (field case: Mystic Coin behind a weekly-capped
-        /// vendor) can cover the remainder with coin - that is a price,
-        /// not a time gate, so no cap notice. A result with no price data
-        /// keeps the notice rather than inventing liquidity. Distinct from
-        /// VendorCapsByItemId, which stays unfiltered: the value-detail
-        /// tooltip states the cap only on a node the plan actually routes
-        /// through that vendor, where the fact remains worth surfacing.
-        /// </summary>
-        private static IReadOnlyList<TimegatedItem> FilterVendorCapNotices(CraftingPlanResult result)
-        {
-            var capped = result.Plan.TimegatedItems;
-            if (capped == null || capped.Count == 0)
-            {
-                return Array.Empty<TimegatedItem>();
-            }
-
-            var prices = result.SolveContext?.Prices;
-            if (prices == null)
-            {
-                return capped;
-            }
-
-            var kept = new List<TimegatedItem>(capped.Count);
-            foreach (var item in capped)
-            {
-                if (item == null)
-                {
-                    continue;
-                }
-
-                bool tpLiquid = prices.TryGetValue(item.ItemId, out var price) &&
-                    price != null && (price.BuyInstant > 0 || price.SellInstant > 0);
-                if (!tpLiquid)
-                {
-                    kept.Add(item);
-                }
-            }
-
-            return kept;
-        }
-
         private PlanSectionViewModel BuildUsedMaterialsSection(CraftingPlanResult result)
         {
             var section = new PlanSectionViewModel
@@ -1092,7 +1046,7 @@ namespace TaimisToolbench.Services
             // Timegated (vendor purchase cap) notices - caps are surfaced,
             // never solved around. Appended after the real craft steps so
             // a notices-only section still renders correctly. The list
-            // arrives pre-filtered (see FilterVendorCapNotices): a cap on
+            // arrives pre-filtered (see VendorCapNotices.Filter): a cap on
             // a TP-liquid item never reaches this loop. The label names
             // the vendor limit for what it is - same wording as the
             // Ranker's vendor-cap note (RankerTabContent).
@@ -1571,15 +1525,15 @@ namespace TaimisToolbench.Services
                 string statusTag;
                 if (recipe.IsAutoLearned)
                 {
-                    statusTag = "Auto-learned";
+                    statusTag = RequiredRecipesVisibility.AutoLearnedStatusTag;
                 }
                 else if (recipe.IsMissing == true)
                 {
-                    statusTag = "Missing!";
+                    statusTag = RequiredRecipesVisibility.MissingStatusTag;
                 }
                 else if (recipe.IsMissing == false)
                 {
-                    statusTag = "Learned";
+                    statusTag = RequiredRecipesVisibility.LearnedStatusTag;
                 }
                 else
                 {

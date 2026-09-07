@@ -89,7 +89,7 @@ Module.cs                                                                       
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
-Services/AccountItemIndex.cs                                                            232
+Services/AccountItemIndex.cs                                                            240
 Services/AchievementBitDedupPrePass.cs                                                  197
 Services/AcquisitionHintService.cs                                                      75
 Services/BoundedConcurrency.cs                                                          51
@@ -189,11 +189,11 @@ Services/PlanStripStatusBoard.cs                                                
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     597
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        1785
+Services/PlanViewModelBuilder.cs                                                        1739
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
-Services/RankerReadinessCalculator.cs                                                   707
+Services/RankerReadinessCalculator.cs                                                   671
 Services/RankerReadinessRamp.cs                                                         265
 Services/RankerReadinessWeights.cs                                                      61
 Services/RankerResultCache.cs                                                           263
@@ -219,7 +219,7 @@ Services/Recipes/RecipeCorpusVerifier.cs                                        
 Services/Recipes/SeededRecipeCacheStore.cs                                              215
 Services/RecipesColumnMath.cs                                                           101
 Services/RequestLabelFormatter.cs                                                       63
-Services/RequiredRecipesVisibility.cs                                                   140
+Services/RequiredRecipesVisibility.cs                                                   173
 Services/ResizeSettleDebounce.cs                                                        153
 Services/ScrollAnchorMath.cs                                                            218
 Services/ScrollMath.cs                                                                  66
@@ -283,6 +283,7 @@ Services/UiSpacing.cs                                                           
 Services/UpgradeEffectLines.cs                                                          182
 Services/ValueDetailTooltipBuilder.cs                                                   159
 Services/VendorBatchSolver.cs                                                           1242
+Services/VendorCapNotices.cs                                                            60
 Services/VendorOfferLoader.cs                                                           51
 Services/VendorOfferStore.cs                                                            218
 Services/WheelDeltaSanitizer.cs                                                         92
@@ -299,7 +300,7 @@ Views/ItemInputRowStrip.cs                                                      
 Views/ItemRowState.cs                                                                   39
 Views/LogTabContent.cs                                                                  1538
 Views/MainThreadMarshal.cs                                                              141
-Views/MainView.cs                                                                       3316
+Views/MainView.cs                                                                       3315
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    425
@@ -331,7 +332,7 @@ Views/Rendering/PlanHeaderRenderer.cs                                           
 Views/Rendering/PressFeedback.cs                                                        118
 Views/Rendering/RankerReadinessColors.cs                                                99
 Views/Rendering/RarityColors.cs                                                         199
-Views/Rendering/RecipesSectionRenderer.cs                                               365
+Views/Rendering/RecipesSectionRenderer.cs                                               363
 Views/Rendering/RichTooltipSurface.cs                                                   738
 Views/Rendering/RowRelayoutHelpers.cs                                                   72
 Views/Rendering/RowActionKey.cs                                                         103
@@ -385,7 +386,7 @@ tests/TaimisToolbench.Tests/Models/PlanHistorySchemaMemberSetTests.cs           
 tests/TaimisToolbench.Tests/Models/SettingsFormStateTests.cs                            326
 tests/TaimisToolbench.Tests/Services/AboutLayoutMathTests.cs                            209
 tests/TaimisToolbench.Tests/Services/AccountCurrencyIndexTests.cs                       80
-tests/TaimisToolbench.Tests/Services/AccountItemIndexTests.cs                           417
+tests/TaimisToolbench.Tests/Services/AccountItemIndexTests.cs                           465
 tests/TaimisToolbench.Tests/Services/AchievementBitDedupPrePassTests.cs                 290
 tests/TaimisToolbench.Tests/Services/AcquisitionHintSeedVendorAgreementTests.cs         142
 tests/TaimisToolbench.Tests/Services/AcquisitionHintServiceTests.cs                     245
@@ -531,7 +532,7 @@ tests/TaimisToolbench.Tests/Services/RankerCascadeIntegrationTests.cs           
 tests/TaimisToolbench.Tests/Services/RankerPriorityCascadeTests.cs                      377
 tests/TaimisToolbench.Tests/Services/RankerPriorityOrderingTests.cs                     256
 tests/TaimisToolbench.Tests/Services/RankerRarityAdoptionTests.cs                       130
-tests/TaimisToolbench.Tests/Services/RankerReadinessCalculatorTests.cs                  837
+tests/TaimisToolbench.Tests/Services/RankerReadinessCalculatorTests.cs                  866
 tests/TaimisToolbench.Tests/Services/RankerReadinessRampTests.cs                        225
 tests/TaimisToolbench.Tests/Services/RankerRecipeGateAgreesWithPlanTests.cs             128
 tests/TaimisToolbench.Tests/Services/RankerResultCacheTests.cs                          215
@@ -553,7 +554,7 @@ tests/TaimisToolbench.Tests/Services/Recipes/RecipeCorpusVerifierTests.cs       
 tests/TaimisToolbench.Tests/Services/Recipes/SeedFinalizeIndexTests.cs                  112
 tests/TaimisToolbench.Tests/Services/RecipesColumnMathTests.cs                          119
 tests/TaimisToolbench.Tests/Services/RequestLabelFormatterTests.cs                      76
-tests/TaimisToolbench.Tests/Services/RequiredRecipesVisibilityTests.cs                  144
+tests/TaimisToolbench.Tests/Services/RequiredRecipesVisibilityTests.cs                  198
 tests/TaimisToolbench.Tests/Services/ResizeSettleDebounceTests.cs                       353
 tests/TaimisToolbench.Tests/Services/RestoredRequestInputsTests.cs                      240
 tests/TaimisToolbench.Tests/Services/RowDividerScissorSimulationTests.cs                265
@@ -580,7 +581,7 @@ tests/TaimisToolbench.Tests/Services/SnapshotItemGridLayoutTests.cs             
 tests/TaimisToolbench.Tests/Services/SnapshotIconWindowTests.cs                         279
 tests/TaimisToolbench.Tests/Services/SnapshotRefreshSlotTests.cs                        241
 tests/TaimisToolbench.Tests/Services/SnapshotResultLayoutTests.cs                       94
-tests/TaimisToolbench.Tests/Services/SnapshotSearchResultBuilderTests.cs                1286
+tests/TaimisToolbench.Tests/Services/SnapshotSearchResultBuilderTests.cs                1329
 tests/TaimisToolbench.Tests/Services/SnapshotSerializationTests.cs                      283
 tests/TaimisToolbench.Tests/Services/SnapshotStoreTests.cs                              433
 tests/TaimisToolbench.Tests/Services/SnapshotTableSorterTests.cs                        147
@@ -612,6 +613,7 @@ tests/TaimisToolbench.Tests/Services/TreeRowShapeGoldenTests.cs                 
 tests/TaimisToolbench.Tests/Services/TreeRowTooltipComposerTests.cs                     538
 tests/TaimisToolbench.Tests/Services/TypeRampMetricsTests.cs                            206
 tests/TaimisToolbench.Tests/Services/ValueDetailTooltipBuilderTests.cs                  191
+tests/TaimisToolbench.Tests/Services/VendorCapNoticeAgreementTests.cs                   124
 tests/TaimisToolbench.Tests/Services/VendorCurrencyTradeUpRoutingTests.cs               241
 tests/TaimisToolbench.Tests/Services/VendorOfferStoreTests.cs                           576
 tests/TaimisToolbench.Tests/Services/VendorUnlockRecipeTests.cs                         233

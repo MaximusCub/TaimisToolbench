@@ -538,6 +538,35 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void ADisciplineNameThatDiffersOnlyInCaseDoesNotCount()
+        {
+            // CraftCompetencyEvaluator and the plan's "not trained on any
+            // character" line both compare ordinal. This used to compare
+            // case-insensitively, so it could score a discipline the plan
+            // reported as untrained.
+            var owned = Result(
+                coin: 50,
+                disciplines: new List<RequiredDiscipline>
+                {
+                    new RequiredDiscipline { Discipline = "Huntsman", MinRating = 400 },
+                },
+                characters: new List<SnapshotCharacterDiscipline>
+                {
+                    new SnapshotCharacterDiscipline
+                    {
+                        CharacterName = "Alice",
+                        Discipline = "huntsman",
+                        Rating = 400,
+                    },
+                });
+
+            var metrics = RankerReadinessCalculator.Compute(Result(coin: 100), owned, Availability(), 0);
+
+            Assert.True(GateApplies(metrics, RankerGate.Disciplines));
+            Assert.Equal(0.0, GateCompletion(metrics, RankerGate.Disciplines), 9);
+        }
+
+        [Fact]
         public void SeveralRequiredDisciplinesAverageUnweighted()
         {
             var owned = Result(

@@ -86,12 +86,12 @@ namespace TaimisToolbench.Tests.Services
             var result = await PlanGiftOfDedicationAsync();
             var rows = RecipeRows(result);
 
-            int missing = rows.Count(r => !RequiredRecipesVisibility.IsUnlocked(r.StatusTag));
+            var visible = RequiredRecipesVisibility.ApplyFilter(rows, hideUnlocked: true);
             Assert.Single(rows);
-            Assert.Equal(1, missing);
+            Assert.Single(visible);
             Assert.Equal(
                 "Required Recipes (showing 1 missing of 1)",
-                RequiredRecipesVisibility.BuildHeaderTitle(rows.Count, missing, hideUnlocked: true));
+                RequiredRecipesVisibility.BuildHeaderTitle(rows, visible, hideUnlocked: true));
         }
 
         [Fact]

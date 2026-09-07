@@ -58,7 +58,7 @@ namespace TaimisToolbench.Services
 
             metrics.BaselineCoinCost = baseline.Plan.TotalCoinCost;
             metrics.RemainingCoinCost = owned.Plan.TotalCoinCost;
-            metrics.VendorCappedItems = FilterVendorCappedItems(owned);
+            metrics.VendorCappedItems = VendorCapNotices.Filter(owned);
 
             var claimedGated = availability?.ClaimedGatedUnits ?? EmptyIntMap;
             var heldCurrency = availability?.Currency ?? EmptyIntMap;
@@ -387,8 +387,14 @@ namespace TaimisToolbench.Services
                 string bestCharacter = null;
                 foreach (var learned in characters)
                 {
+                    // Ordinal, matching CraftCompetencyEvaluator and
+                    // PlanViewModelBuilder.BuildCharacterAvailabilityText.
+                    // Those decide whether the plan prints "not trained on
+                    // any character" for the same requirement, so a looser
+                    // comparison here would score a discipline the plan
+                    // reports as untrained.
                     if (learned == null ||
-                        !string.Equals(learned.Discipline, requirement.Discipline, StringComparison.OrdinalIgnoreCase))
+                        !string.Equals(learned.Discipline, requirement.Discipline, StringComparison.Ordinal))
                     {
                         continue;
                     }
@@ -481,48 +487,6 @@ namespace TaimisToolbench.Services
             gate.Applies = true;
             gate.Completion = Clamp01((double)known / counted);
             return gate;
-        }
-
-        /// <summary>
-        /// Vendor purchase caps that are genuinely a wait, not merely a
-        /// route. The solver only emits a TimegatedItem when the plan buys
-        /// the item from the capped vendor, but a TP-listed item (field
-        /// case: Mystic Coin behind a weekly-capped vendor) can cover the
-        /// remainder with coin - that is a price, not a time gate, so no
-        /// cap notice. A result with no price data keeps the notice rather
-        /// than inventing liquidity.
-        /// </summary>
-        private static IReadOnlyList<TimegatedItem> FilterVendorCappedItems(CraftingPlanResult owned)
-        {
-            var capped = owned.Plan.TimegatedItems;
-            if (capped == null || capped.Count == 0)
-            {
-                return Array.Empty<TimegatedItem>();
-            }
-
-            var prices = owned.SolveContext?.Prices;
-            if (prices == null)
-            {
-                return capped;
-            }
-
-            var kept = new List<TimegatedItem>(capped.Count);
-            foreach (var item in capped)
-            {
-                if (item == null)
-                {
-                    continue;
-                }
-
-                bool tpLiquid = prices.TryGetValue(item.ItemId, out var price) &&
-                    price != null && (price.BuyInstant > 0 || price.SellInstant > 0);
-                if (!tpLiquid)
-                {
-                    kept.Add(item);
-                }
-            }
-
-            return kept;
         }
 
         private static void ApplyAffordability(RankerSlotAvailability availability, RankerRowMetrics metrics)

@@ -412,5 +412,54 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(AccountItemIndex.SourceBank, prioritized[0]);
             Assert.Equal("Alice", prioritized[1]);
         }
+
+        // --- DistinctItemCount ---
+        [Fact]
+        public void DistinctItemCount_CountsEachItemOnceAcrossSources()
+        {
+            var index = new AccountItemIndex(new List<SnapshotItemEntry>
+            {
+                Entry(1, 5, AccountItemIndex.SourceBank),
+                Entry(1, 3, AccountItemIndex.SourceMaterialStorage),
+                Entry(2, 1, CharSource("Alice")),
+            });
+
+            Assert.Equal(2, index.DistinctItemCount);
+        }
+
+        [Fact]
+        public void DistinctItemCount_ExcludesAnItemHeldOnlyAsAZeroCountEntry()
+        {
+            // The Snapshot tab cannot render a row for this item under any
+            // filter, so its "N of M items" line must not count it in M.
+            var index = new AccountItemIndex(new List<SnapshotItemEntry>
+            {
+                Entry(1, 5, AccountItemIndex.SourceBank),
+                Entry(2, 0, AccountItemIndex.SourceBank),
+                Entry(3, -4, AccountItemIndex.SourceBank),
+            });
+
+            Assert.Equal(1, index.DistinctItemCount);
+        }
+
+        [Fact]
+        public void DistinctItemCount_ExcludesAnItemWhoseOnlySourceIsBlank()
+        {
+            var index = new AccountItemIndex(new List<SnapshotItemEntry>
+            {
+                Entry(1, 5, AccountItemIndex.SourceBank),
+                Entry(2, 5, ""),
+                Entry(3, 5, null),
+            });
+
+            Assert.Equal(1, index.DistinctItemCount);
+        }
+
+        [Fact]
+        public void DistinctItemCount_IsZeroForANullOrEmptyCapture()
+        {
+            Assert.Equal(0, new AccountItemIndex(null).DistinctItemCount);
+            Assert.Equal(0, new AccountItemIndex(new List<SnapshotItemEntry>()).DistinctItemCount);
+        }
     }
 }

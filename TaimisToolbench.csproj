@@ -195,6 +195,7 @@
     <Compile Include="Models\TimegatedItem.cs" />
     <Compile Include="Services\PlanSolver.cs" />
     <Compile Include="Services\VendorBatchSolver.cs" />
+    <Compile Include="Services\VendorCapNotices.cs" />
     <Compile Include="Services\VendorCostLineSubtrees.cs" />
     <Compile Include="Services\VendorOfferDomination.cs" />
     <Compile Include="Services\StatusUpdateGuard.cs" />

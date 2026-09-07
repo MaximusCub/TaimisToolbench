@@ -2106,7 +2106,7 @@ namespace TaimisToolbench.Views
             // would report a filter the user chose as if it were a result.
             SetResultLine(
                 itemRows?.Count ?? 0,
-                itemRows == null ? 0 : (_itemsById?.Count ?? 0),
+                itemRows == null ? 0 : (_accountItemIndex?.DistinctItemCount ?? 0),
                 walletRows?.Count ?? 0,
                 walletRows == null ? 0 : (_snapshot.Wallet?.Count ?? 0));
 

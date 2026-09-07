@@ -5106,7 +5106,7 @@ namespace TaimisToolbench.Views
         {
             var visibleRows = RequiredRecipesVisibility.ApplyFilter(section.Rows, _hideUnlockedRecipes);
             string headerTitle = RequiredRecipesVisibility.BuildHeaderTitle(
-                section.Rows.Count, visibleRows.Count, _hideUnlockedRecipes);
+                section.Rows, visibleRows, _hideUnlockedRecipes);
 
             // suppressToggle reads the press-time flag (a click that began
             // off the checkbox still toggles the section); the press
