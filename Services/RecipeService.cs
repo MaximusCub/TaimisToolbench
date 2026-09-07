@@ -200,7 +200,7 @@ namespace TaimisToolbench.Services
                 // confirmed the id list yet.
                 if (!staleReported
                     && _cacheStore is CompositeRecipeCacheStore composite
-                    && composite.SeedIsStale
+                    && composite.SeedMayBeStale
                     && !composite.NegativesVerifiedAtCurrentBuild)
                 {
                     int lastVerified = composite.NegativesVerifiedBuildId > 0

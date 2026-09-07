@@ -20,6 +20,13 @@ namespace TaimisToolbench.Services
 
         public List<int> ArmoryItemIds { get; } = new List<int>();
 
+        /// <summary>
+        /// This character's bags or equipment failed to fetch, so
+        /// <see cref="Items"/> is missing holdings rather than empty. The
+        /// items still listed are real, which is why they are kept.
+        /// </summary>
+        public bool ItemsDegraded { get; set; }
+
         public bool DisciplinesDegraded { get; set; }
 
         public List<SnapshotCharacterDiscipline> Disciplines { get; } = new List<SnapshotCharacterDiscipline>();
@@ -39,6 +46,17 @@ namespace TaimisToolbench.Services
         public List<SnapshotArmoryEquip> ArmoryEquipped { get; } = new List<SnapshotArmoryEquip>();
 
         public List<SnapshotCharacterDiscipline> Disciplines { get; set; }
+
+        /// <summary>How many characters the fetch was asked for.</summary>
+        public int CharacterCount { get; set; }
+
+        /// <summary>
+        /// How many of those could not be read in full: bags, equipment or
+        /// disciplines failed. Their holdings are missing from
+        /// <see cref="Items"/>, so a caller that reports this snapshot as
+        /// complete is claiming the account owns less than it does.
+        /// </summary>
+        public int IncompleteCharacterCount { get; set; }
     }
 
     /// <summary>
@@ -52,6 +70,13 @@ namespace TaimisToolbench.Services
     /// all-or-nothing instead: one failed character discards the whole
     /// list, because a partial list reads as an affirmative "not trained"
     /// claim for every character the fetch never reached.
+    /// </para>
+    /// <para>
+    /// Either failure is counted in
+    /// <see cref="CharacterSnapshotHarvest.IncompleteCharacterCount"/>. An
+    /// under-count is conservative for cost and wrong for advice: it makes
+    /// the plan tell the user to buy an item their own bags hold, so the
+    /// snapshot has to say it is incomplete rather than only be incomplete.
     /// </para>
     /// </summary>
     internal static class CharacterSnapshotCollector
@@ -113,6 +138,8 @@ namespace TaimisToolbench.Services
             var harvest = new CharacterSnapshotHarvest();
             var disciplines = new List<SnapshotCharacterDiscipline>();
             bool degraded = false;
+            int incomplete = 0;
+            harvest.CharacterCount = names.Count;
 
             for (int i = 0; i < names.Count; i++)
             {
@@ -120,7 +147,13 @@ namespace TaimisToolbench.Services
                 if (part == null)
                 {
                     degraded = true;
+                    incomplete++;
                     continue;
+                }
+
+                if (part.ItemsDegraded || part.DisciplinesDegraded)
+                {
+                    incomplete++;
                 }
 
                 harvest.Items.AddRange(part.Items);
@@ -144,6 +177,7 @@ namespace TaimisToolbench.Services
             }
 
             harvest.Disciplines = degraded ? null : disciplines;
+            harvest.IncompleteCharacterCount = incomplete;
             return harvest;
         }
     }

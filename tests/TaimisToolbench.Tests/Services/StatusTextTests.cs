@@ -315,6 +315,125 @@ namespace TaimisToolbench.Tests.Services
             Assert.EndsWith("mo ago", StatusText.ForSnapshotAgeSuffix(TimeSpan.MaxValue));
         }
 
+        // ---- ForIncompleteCharacters and ForPlanAccountDataNote: what
+        // the module says about a snapshot it could not read in full. The
+        // plan clause follows a "Plan generated" timestamp, so unlike
+        // ForSnapshotAgeSuffix it must name what the age belongs to.
+        private static readonly TimeSpan DefaultRefreshInterval = TimeSpan.FromMinutes(10);
+
+        [Fact]
+        public void ForIncompleteCharacters_NoneMissing_SaysNothing()
+        {
+            Assert.Null(StatusText.ForIncompleteCharacters(0, 9));
+            Assert.Null(StatusText.ForIncompleteCharacters(-1, 9));
+        }
+
+        [Fact]
+        public void ForIncompleteCharacters_NoCharacters_SaysNothing()
+        {
+            // An account whose character list never loaded is a failed
+            // source, not an incomplete one. Reporting "0 of 0" here would
+            // put a fault on screen that this value does not describe.
+            Assert.Null(StatusText.ForIncompleteCharacters(0, 0));
+            Assert.Null(StatusText.ForIncompleteCharacters(2, 0));
+        }
+
+        [Fact]
+        public void ForIncompleteCharacters_NounAgreesWithTheTotal()
+        {
+            Assert.Equal(
+                "incomplete for 2 of 9 characters",
+                StatusText.ForIncompleteCharacters(2, 9));
+            Assert.Equal(
+                "incomplete for 1 of 1 character",
+                StatusText.ForIncompleteCharacters(1, 1));
+        }
+
+        [Fact]
+        public void ForIncompleteCharacters_MoreMissingThanKnown_ClampsToTheTotal()
+        {
+            // Never claims more characters failed than the fetch asked for.
+            Assert.Equal(
+                "incomplete for 3 of 3 characters",
+                StatusText.ForIncompleteCharacters(5, 3));
+        }
+
+        [Fact]
+        public void ForPlanAccountDataNote_FreshAndComplete_SaysNothing()
+        {
+            // The healthy case is the common one, and a clause on every plan
+            // would be furniture rather than a warning.
+            Assert.Null(StatusText.ForPlanAccountDataNote(
+                TimeSpan.FromMinutes(9), DefaultRefreshInterval, 0, 9));
+            Assert.Null(StatusText.ForPlanAccountDataNote(
+                TimeSpan.Zero, DefaultRefreshInterval, 0, 9));
+        }
+
+        [Fact]
+        public void ForPlanAccountDataNote_AtOrPastThreshold_ReportsTheAge()
+        {
+            // The same boundary IsStale uses, so the clause and the Snapshot
+            // tab's amber recolor can never disagree about one snapshot.
+            Assert.Equal(
+                "account data captured 10m ago",
+                StatusText.ForPlanAccountDataNote(
+                    TimeSpan.FromMinutes(10), DefaultRefreshInterval, 0, 9));
+            Assert.Equal(
+                "account data captured 37m ago",
+                StatusText.ForPlanAccountDataNote(
+                    TimeSpan.FromMinutes(37), DefaultRefreshInterval, 0, 9));
+        }
+
+        [Fact]
+        public void ForPlanAccountDataNote_IncompleteIsReportedAtAnyAge()
+        {
+            // A snapshot captured seconds ago with a character missing is
+            // exactly the fault that makes a plan recommend buying an owned
+            // item, so no age threshold gates this half.
+            Assert.Equal(
+                "account data incomplete for 2 of 9 characters",
+                StatusText.ForPlanAccountDataNote(
+                    TimeSpan.Zero, DefaultRefreshInterval, 2, 9));
+        }
+
+        [Fact]
+        public void ForPlanAccountDataNote_BothFaults_ReportsBothOnOneClause()
+        {
+            Assert.Equal(
+                "account data captured 37m ago, incomplete for 2 of 9 characters",
+                StatusText.ForPlanAccountDataNote(
+                    TimeSpan.FromMinutes(37), DefaultRefreshInterval, 2, 9));
+        }
+
+        [Fact]
+        public void ForPlanAccountDataNote_ThresholdDecidesTheAgeHalf()
+        {
+            var age = TimeSpan.FromMinutes(30);
+            Assert.NotNull(StatusText.ForPlanAccountDataNote(
+                age, TimeSpan.FromMinutes(15), 0, 9));
+            Assert.Null(StatusText.ForPlanAccountDataNote(
+                age, TimeSpan.FromMinutes(120), 0, 9));
+        }
+
+        [Fact]
+        public void ForPlanAccountDataNote_Negative_ClampedToZero()
+        {
+            // CapturedAt momentarily ahead of the local clock must never
+            // render as a negative duration, nor read as stale.
+            Assert.Null(StatusText.ForPlanAccountDataNote(
+                TimeSpan.FromSeconds(-5), DefaultRefreshInterval, 0, 9));
+        }
+
+        [Theory]
+        [InlineData(60, "account data captured 1h 0m ago")]
+        [InlineData(1440, "account data captured 1d ago")]
+        [InlineData(43200, "account data captured 1mo ago")]
+        public void ForPlanAccountDataNote_RidesTheSameLadder(double minutes, string expected)
+        {
+            Assert.Equal(expected, StatusText.ForPlanAccountDataNote(
+                TimeSpan.FromMinutes(minutes), DefaultRefreshInterval, 0, 9));
+        }
+
         // ForAgeAgo rides the SAME ladder and the same framing - the Plan
         // History detail panel's cost-delta line - and differs only below a
         // minute.

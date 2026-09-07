@@ -25,7 +25,7 @@
 # Format: <path> <max-lines>. Seeded 2026-08-25 from the tree at that
 # commit (git ls-files '*.cs' | xargs wc -l).
 Contracts/IItemSearchProvider.cs                                                        74
-Models/AccountSnapshot.cs                                                               32
+Models/AccountSnapshot.cs                                                               46
 Models/AcquisitionHint.cs                                                               26
 Models/AcquisitionSource.cs                                                             50
 Models/BarterItemDecisionDefaults.cs                                                    153
@@ -85,7 +85,7 @@ Models/UsedMaterial.cs                                                          
 Models/VendorItemCostLine.cs                                                            42
 Models/VendorOffer.cs                                                                   73
 Models/VendorOfferDataset.cs                                                            15
-Module.cs                                                                               2946
+Module.cs                                                                               3000
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
@@ -93,7 +93,7 @@ Services/AccountItemIndex.cs                                                    
 Services/AchievementBitDedupPrePass.cs                                                  197
 Services/AcquisitionHintService.cs                                                      75
 Services/BoundedConcurrency.cs                                                          51
-Services/CharacterSnapshotCollector.cs                                                  150
+Services/CharacterSnapshotCollector.cs                                                  184
 Services/ClickSoundVolume.cs                                                            90
 Services/CoinSegmentMath.cs                                                             303
 Services/ColumnBoardLayout.cs                                                           130
@@ -123,7 +123,7 @@ Services/FirstLoadSnapshotGate.cs                                               
 Services/GlyphButtonMetrics.cs                                                          69
 Services/GridLayout.cs                                                                  93
 Services/Gw2AccountRecipeClient.cs                                                      30
-Services/Gw2AccountSnapshotService.cs                                                   866
+Services/Gw2AccountSnapshotService.cs                                                   889
 Services/Gw2ApiConnectionLimit.cs                                                       45
 Services/Gw2ItemApiClient.cs                                                            261
 Services/Gw2PriceApiClient.cs                                                           66
@@ -218,7 +218,7 @@ Services/Recipes/PriorityRecipeIds.cs                                           
 Services/Recipes/RecipeCacheSerializer.cs                                               256
 Services/Recipes/RecipeCorpusRefresher.cs                                               434
 Services/Recipes/RecipeCorpusVerifier.cs                                                257
-Services/Recipes/SeededRecipeCacheStore.cs                                              215
+Services/Recipes/SeededRecipeCacheStore.cs                                              232
 Services/RecipesColumnMath.cs                                                           101
 Services/RequestLabelFormatter.cs                                                       63
 Services/RequiredRecipesVisibility.cs                                                   99
@@ -260,7 +260,7 @@ Services/SortIndicatorLayout.cs                                                 
 Services/SourceFilterFlowLayout.cs                                                      85
 Services/StaticItemSearchProvider.cs                                                    42
 Services/StatusStore.cs                                                                 73
-Services/StatusText.cs                                                                  326
+Services/StatusText.cs                                                                  391
 Services/StatusUpdateGuard.cs                                                           38
 Services/StickyHeaderLayout.cs                                                          117
 Services/SummarySectionLayoutMath.cs                                                   1037
@@ -296,13 +296,13 @@ Services/WindowSizing.cs                                                        
 Views/AboutTabContent.cs                                                                1000
 Views/ApiAccessDialog.cs                                                                231
 Views/AutocompleteTextBox.cs                                                            45
-Views/CraftingPlanView.cs                                                               5362
+Views/CraftingPlanView.cs                                                               5403
 Views/FocusRelease.cs                                                                   159
 Views/ItemInputRowStrip.cs                                                              465
 Views/ItemRowState.cs                                                                   39
 Views/LogTabContent.cs                                                                  1538
 Views/MainThreadMarshal.cs                                                              141
-Views/MainView.cs                                                                       3316
+Views/MainView.cs                                                                       3329
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    425
@@ -542,7 +542,7 @@ tests/TaimisToolbench.Tests/Services/RankerRowLayoutTests.cs                    
 tests/TaimisToolbench.Tests/Services/RankerSnapshotWatchTests.cs                        141
 tests/TaimisToolbench.Tests/Services/RankerStoreTests.cs                                285
 tests/TaimisToolbench.Tests/Services/ReceiptCaptionHelperTests.cs                       124
-tests/TaimisToolbench.Tests/Services/RecipeCacheStoreTests.cs                           998
+tests/TaimisToolbench.Tests/Services/RecipeCacheStoreTests.cs                           1081
 tests/TaimisToolbench.Tests/Services/RecipeClientFactoryTests.cs                        143
 tests/TaimisToolbench.Tests/Services/RecipeServiceConcurrencyTests.cs                   226
 tests/TaimisToolbench.Tests/Services/RecipeServiceTests.cs                              949
@@ -585,13 +585,13 @@ tests/TaimisToolbench.Tests/Services/SnapshotRefreshSlotTests.cs                
 tests/TaimisToolbench.Tests/Services/SnapshotResultLayoutTests.cs                       94
 tests/TaimisToolbench.Tests/Services/SnapshotSearchResultBuilderTests.cs                1286
 tests/TaimisToolbench.Tests/Services/SnapshotSerializationTests.cs                      283
-tests/TaimisToolbench.Tests/Services/SnapshotStoreTests.cs                              433
+tests/TaimisToolbench.Tests/Services/SnapshotStoreTests.cs                              469
 tests/TaimisToolbench.Tests/Services/SnapshotTableSorterTests.cs                        147
 tests/TaimisToolbench.Tests/Services/SocketedUpgradeTests.cs                            321
 tests/TaimisToolbench.Tests/Services/SortIndicatorLayoutTests.cs                        151
 tests/TaimisToolbench.Tests/Services/SourceFilterFlowLayoutTests.cs                     127
 tests/TaimisToolbench.Tests/Services/StatusStoreTests.cs                                116
-tests/TaimisToolbench.Tests/Services/StatusTextTests.cs                                 386
+tests/TaimisToolbench.Tests/Services/StatusTextTests.cs                                 505
 tests/TaimisToolbench.Tests/Services/StatusUpdateGuardTests.cs                          33
 tests/TaimisToolbench.Tests/Services/StickyHeaderLayoutTests.cs                         266
 tests/TaimisToolbench.Tests/Services/SummarySectionLayoutMathTests.cs                   1610

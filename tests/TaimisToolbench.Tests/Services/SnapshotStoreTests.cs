@@ -54,6 +54,42 @@ namespace TaimisToolbench.Tests.Services
             };
         }
 
+        // ---- The incomplete-character counts. They ride the snapshot
+        // rather than the refresh status because they describe the DATA,
+        // and a status string is replaced by the next refresh attempt.
+        [Fact]
+        public void Save_Load_PreservesTheIncompleteCharacterCounts()
+        {
+            var snapshot = CreateSnapshot();
+            snapshot.CharacterCount = 9;
+            snapshot.IncompleteCharacterCount = 2;
+
+            _store.Save(snapshot);
+            var loaded = _store.LoadLatest();
+
+            Assert.Equal(9, loaded.CharacterCount);
+            Assert.Equal(2, loaded.IncompleteCharacterCount);
+        }
+
+        [Fact]
+        public void Load_SnapshotWrittenBeforeTheCountsExisted_ReadsAsNothingMissing()
+        {
+            // A snapshot.json from an older build carries neither field.
+            // Defaulting both to 0 keeps exactly the claim that build made,
+            // rather than inventing a fault it never measured.
+            File.WriteAllText(
+                SnapshotPath,
+                "{\"CapturedAt\":\"2025-06-15T12:00:00Z\",\"CoinCopper\":7,"
+                + "\"Items\":[],\"Wallet\":[]}");
+
+            var loaded = _store.LoadLatest();
+
+            Assert.NotNull(loaded);
+            Assert.Equal(7, loaded.CoinCopper);
+            Assert.Equal(0, loaded.CharacterCount);
+            Assert.Equal(0, loaded.IncompleteCharacterCount);
+        }
+
         [Fact]
         public void Save_Load_PreservesCapturedAtAndCoinCopper()
         {

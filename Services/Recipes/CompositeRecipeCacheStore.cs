@@ -18,7 +18,7 @@ namespace TaimisToolbench.Services.Recipes
 
         public RecipeCacheStats Stats => _stats;
 
-        public bool SeedIsStale => _seed.SeedIsStale;
+        public bool SeedMayBeStale => _seed.SeedMayBeStale;
 
         public int? SeedBuildId => _seed.SeedBuildId;
 

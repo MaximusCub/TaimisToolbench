@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 
 namespace TaimisToolbench.Services
@@ -272,6 +273,70 @@ namespace TaimisToolbench.Services
             }
 
             return AgeMagnitude(age) + " ago";
+        }
+
+        /// <summary>
+        /// How much of the account's character data a snapshot is missing,
+        /// or null when it is missing none. A character counts when its
+        /// bags, its equipment or its disciplines failed to fetch, so its
+        /// holdings are absent and the plan can tell the user to buy an item
+        /// their own bags hold.
+        /// <para>
+        /// The noun agrees with the total, so a one-character account reads
+        /// "1 of 1 character" rather than "1 of 1 characters".
+        /// </para>
+        /// </summary>
+        public static string ForIncompleteCharacters(int incompleteCharacters, int characterCount)
+        {
+            if (incompleteCharacters <= 0 || characterCount <= 0)
+            {
+                return null;
+            }
+
+            int incomplete = Math.Min(incompleteCharacters, characterCount);
+            return "incomplete for " + incomplete + " of " + Count(characterCount, "character");
+        }
+
+        /// <summary>
+        /// The Crafting Plan status line's account-data clause, or null when
+        /// there is nothing to say about the snapshot the plan subtracted
+        /// owned materials from. It reports two separate faults: data older
+        /// than <paramref name="staleThreshold"/>, and characters the fetch
+        /// could not read in full.
+        /// <para>
+        /// The age half is gated on the same threshold as the Snapshot tab's
+        /// recolor and Module.Update()'s auto-refresh, so the three cannot
+        /// disagree. The incomplete half has no threshold: a snapshot taken
+        /// ten seconds ago with a character missing is exactly the fault
+        /// that makes a plan recommend buying an owned item.
+        /// </para>
+        /// <para>
+        /// It names account data rather than following the Crafting
+        /// Ranker's bare "(37m ago)": this clause follows a "Plan
+        /// generated" timestamp that a bare age would read as restating.
+        /// </para>
+        /// </summary>
+        public static string ForPlanAccountDataNote(
+            TimeSpan age, TimeSpan staleThreshold, int incompleteCharacters, int characterCount)
+        {
+            if (age < TimeSpan.Zero)
+            {
+                age = TimeSpan.Zero;
+            }
+
+            var parts = new List<string>(2);
+            if (IsStale(age, staleThreshold))
+            {
+                parts.Add("captured " + ForAgeAgo(age));
+            }
+
+            string incomplete = ForIncompleteCharacters(incompleteCharacters, characterCount);
+            if (incomplete != null)
+            {
+                parts.Add(incomplete);
+            }
+
+            return parts.Count == 0 ? null : "account data " + string.Join(", ", parts);
         }
 
         /// <summary>

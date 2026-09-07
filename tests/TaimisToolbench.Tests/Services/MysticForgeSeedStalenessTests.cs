@@ -98,7 +98,7 @@ namespace TaimisToolbench.Tests.Services
                 },
                 SeedBuild, CurrentBuild);
 
-            Assert.True(store.SeedIsStale);
+            Assert.True(store.SeedMayBeStale);
             Assert.Equal(new[] { GiftOfRaysRecipe }, store.TryGetSearch(GiftOfRays));
             Assert.NotNull(store.TryGetRecipe(GiftOfRaysRecipe));
         }
@@ -171,7 +171,7 @@ namespace TaimisToolbench.Tests.Services
 
             var seed = LoadShippedSeed(out int seedBuildId);
             seed.SetCurrentBuildId(seedBuildId + 275);
-            Assert.True(seed.SeedIsStale);
+            Assert.True(seed.SeedMayBeStale);
 
             IReadOnlyDictionary<int, AcquisitionHint> hints;
             using (var hintStream = File.OpenRead(
@@ -272,7 +272,7 @@ namespace TaimisToolbench.Tests.Services
             }
 
             seed.SetCurrentBuildId(seed.SeedBuildId.Value + 275);
-            Assert.True(seed.SeedIsStale);
+            Assert.True(seed.SeedMayBeStale);
 
             using (var temp = new TempDirectory())
             {

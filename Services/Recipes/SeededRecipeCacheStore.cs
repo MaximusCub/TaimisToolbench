@@ -43,13 +43,30 @@ namespace TaimisToolbench.Services.Recipes
             get { return Volatile.Read(ref _hasCurrent) == 1 ? (int?)Volatile.Read(ref _currentBuildId) : null; }
         }
 
-        public bool SeedIsStale
+        /// <summary>
+        /// Whether the seed is not known to match the live game build.
+        /// True when the live build differs, and also when the live build is
+        /// UNKNOWN - a /v2/build fetch that failed leaves the module unable
+        /// to vouch for the seed, which is not the same as vouching for it.
+        /// Reading unknown as fresh silenced the staleness status for the
+        /// whole of any session that launched offline.
+        /// <para>
+        /// False when the seed carries no build id of its own: there is then
+        /// no claim to make either way.
+        /// </para>
+        /// </summary>
+        public bool SeedMayBeStale
         {
             get
             {
-                if (!_seedBuildId.HasValue || Volatile.Read(ref _hasCurrent) == 0)
+                if (!_seedBuildId.HasValue)
                 {
                     return false;
+                }
+
+                if (Volatile.Read(ref _hasCurrent) == 0)
+                {
+                    return true;
                 }
 
                 return _seedBuildId.Value != Volatile.Read(ref _currentBuildId);
