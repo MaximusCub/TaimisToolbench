@@ -93,6 +93,13 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(currencyId, cost.TradeUpCurrencyId);
             Assert.Equal(CurrencyPerUnit, cost.TradeUpCurrencyPerUnit);
 
+            // The step covers only the 5 the solver routed through the
+            // vendor, so it is not the requirement and is not what to buy.
+            // PlanViewModelBuilder.BuildShoppingListSection lists what the
+            // held currency buys instead.
+            var step = Assert.Single(result.Plan.Steps, s => s.ItemId == itemId);
+            Assert.Equal(5, step.Quantity);
+
             // What survives on the wallet side is a genuinely different
             // requirement: one other offer in this plan charges 250 of each
             // of the three, and that has nothing to do with the trade-up.
