@@ -582,16 +582,21 @@
     a VERBATIM FORK of BlishHUD 1.3.0's target, character for character, except
     that the RefFiles Include gains an Exclude. See docs/RELEASING.md.
 
-    Excluded, and why each earns it - all four are inputs to the offline tools
-    under tools/, none has a runtime consumer anywhere in Services/, Views/ or
-    Models/, so none of them belongs in a player's download:
+    Excluded, and why each earns it - all six are inputs to or run state of the
+    offline tools under tools/, none has a runtime consumer anywhere in
+    Services/, Views/ or Models/, so none of them belongs in a player's
+    download:
       wiki_vendor_cache.json, item_id_cache.json  VendorOfferUpdater caches
+      seasonal_wikitext_cache.json                VendorOfferUpdater cache
+      vendor_offers_unresolved.json               VendorOfferUpdater sidecar
       mf_item_id_cache.json                       MysticForgeSeeder cache
       vendor_offer_exclusions.json                VendorOfferUpdater input
-    The first three are gitignored; the fourth is tracked, because it is
-    hand-verified data the refresh tool needs, not a regenerable cache. Tracked
-    or not makes no difference here - this Exclude is what decides what ships,
-    and .gitignore only decides what git stores.
+    All but the last are gitignored; vendor_offer_exclusions.json is tracked,
+    because it is hand-verified data the refresh tool needs, not a regenerable
+    cache. Tracked or not makes no difference here - this Exclude is what
+    decides what ships, and .gitignore only decides what git stores. Adding a
+    ref/ line to .gitignore is therefore only half the job; the file also has
+    to be named here, and nothing yet fails a build that forgets.
 
     BEING A FORK IS THE HAZARD. It is pinned to 1.3.0 by hand and cannot notice
     an upstream change: bump the BlishHUD package and this file keeps packaging
@@ -608,7 +613,7 @@
 
     <!-- Copy ref files -->
     <ItemGroup>
-      <RefFiles Include="$(ProjectDir)ref\**" Exclude="$(ProjectDir)ref\wiki_vendor_cache.json;$(ProjectDir)ref\item_id_cache.json;$(ProjectDir)ref\mf_item_id_cache.json;$(ProjectDir)ref\vendor_offer_exclusions.json" />
+      <RefFiles Include="$(ProjectDir)ref\**" Exclude="$(ProjectDir)ref\wiki_vendor_cache.json;$(ProjectDir)ref\item_id_cache.json;$(ProjectDir)ref\seasonal_wikitext_cache.json;$(ProjectDir)ref\vendor_offers_unresolved.json;$(ProjectDir)ref\mf_item_id_cache.json;$(ProjectDir)ref\vendor_offer_exclusions.json" />
     </ItemGroup>
     <Copy SourceFiles="@(RefFiles)" DestinationFolder="$(OutDir)ref\%(RecursiveDir)" />
 
