@@ -221,7 +221,7 @@ Services/RecipesColumnMath.cs                                                   
 Services/RequestLabelFormatter.cs                                                       63
 Services/RequiredRecipesVisibility.cs                                                   99
 Services/ResizeSettleDebounce.cs                                                        153
-Services/ScrollAnchorMath.cs                                                            218
+Services/ScrollAnchorMath.cs                                                            595
 Services/ScrollMath.cs                                                                  66
 Services/SeasonalOfferFilter.cs                                                         107
 Services/SeasonalVendorTipCalculator.cs                                                 136
@@ -293,7 +293,7 @@ Services/WindowSizing.cs                                                        
 Views/AboutTabContent.cs                                                                1000
 Views/ApiAccessDialog.cs                                                                231
 Views/AutocompleteTextBox.cs                                                            45
-Views/CraftingPlanView.cs                                                               5253
+Views/CraftingPlanView.cs                                                               5362
 Views/FocusRelease.cs                                                                   159
 Views/ItemInputRowStrip.cs                                                              465
 Views/ItemRowState.cs                                                                   39
@@ -319,7 +319,7 @@ Views/Rendering/HeaderBands.cs                                                  
 Views/Rendering/HeaderCellPlan.cs                                                       99
 Views/Rendering/HoverChainResync.cs                                                     75
 Views/Rendering/ISectionRelayoutSink.cs                                                 86
-Views/Rendering/ITreePlanHost.cs                                                        88
+Views/Rendering/ITreePlanHost.cs                                                        95
 Views/Rendering/IconControls.cs                                                         357
 Views/Rendering/IconNameRowHelpers.cs                                                   182
 Views/Rendering/InlineSpinner.cs                                                        65
@@ -556,7 +556,7 @@ tests/TaimisToolbench.Tests/Services/RequiredRecipesVisibilityTests.cs          
 tests/TaimisToolbench.Tests/Services/ResizeSettleDebounceTests.cs                       353
 tests/TaimisToolbench.Tests/Services/RestoredRequestInputsTests.cs                      240
 tests/TaimisToolbench.Tests/Services/RowDividerScissorSimulationTests.cs                265
-tests/TaimisToolbench.Tests/Services/ScrollAnchorMathTests.cs                           525
+tests/TaimisToolbench.Tests/Services/ScrollAnchorMathTests.cs                           926
 tests/TaimisToolbench.Tests/Services/ScrollMathTests.cs                                 104
 tests/TaimisToolbench.Tests/Services/SeasonalOfferFilterTests.cs                        86
 tests/TaimisToolbench.Tests/Services/SeasonalVendorTipCalculatorTests.cs                237

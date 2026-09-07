@@ -33,7 +33,16 @@ namespace TaimisToolbench.Views.Rendering
         /// Every tree mutation that changes content height (expand,
         /// collapse, re-solve) goes through it.
         /// </summary>
-        void PreserveScrollAcross(Action mutate);
+        /// <param name="anchorNodeId">
+        /// The solver NodeId of the row the user just acted on, or null
+        /// when the mutation is not one click on one row. Naming it holds
+        /// that row still even at scroll offset zero, where the host
+        /// otherwise refuses to anchor - see
+        /// Services/ScrollAnchorMath. The id rather than the anchor key
+        /// itself, because the key format is the host's, the same way
+        /// row anchor registration already takes an id.
+        /// </param>
+        void PreserveScrollAcross(Action mutate, int? anchorNodeId = null);
 
         /// <summary>Writes the strip's status line.</summary>
         void SetStatus(string status);
