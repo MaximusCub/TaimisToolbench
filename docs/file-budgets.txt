@@ -260,7 +260,7 @@ Services/StatusStore.cs                                                         
 Services/StatusText.cs                                                                  289
 Services/StatusUpdateGuard.cs                                                           38
 Services/StickyHeaderLayout.cs                                                          117
-Services/SummarySectionLayoutMath.cs                                                   1031
+Services/SummarySectionLayoutMath.cs                                                   1037
 Services/TableSortState.cs                                                              114
 Services/TransmutedNameIndex.cs                                                         215
 Services/UiGlyphs.cs                                                                    124
@@ -342,7 +342,7 @@ Views/Rendering/SortableHeaderBlock.cs                                          
 Views/Rendering/SortableHeaderCells.cs                                                  249
 Views/Rendering/SortableHeaderLabel.cs                                                  38
 Views/Rendering/StickyHeaderHost.cs                                                     408
-Views/Rendering/SummarySectionRenderer.cs                                               1291
+Views/Rendering/SummarySectionRenderer.cs                                               1310
 Views/Rendering/TextRowRenderer.cs                                                      36
 Views/Rendering/TooltipFacility.cs                                                      288
 Views/Rendering/TreeSectionController.cs                                                2530
@@ -590,7 +590,7 @@ tests/TaimisToolbench.Tests/Services/StatusStoreTests.cs                        
 tests/TaimisToolbench.Tests/Services/StatusTextTests.cs                                 351
 tests/TaimisToolbench.Tests/Services/StatusUpdateGuardTests.cs                          33
 tests/TaimisToolbench.Tests/Services/StickyHeaderLayoutTests.cs                         266
-tests/TaimisToolbench.Tests/Services/SummarySectionLayoutMathTests.cs                   1537
+tests/TaimisToolbench.Tests/Services/SummarySectionLayoutMathTests.cs                   1610
 tests/TaimisToolbench.Tests/Services/TableSortStateTests.cs                             198
 tests/TaimisToolbench.Tests/Services/GlyphButtonMetricsTests.cs                         143
 tests/TaimisToolbench.Tests/Services/GlyphFontDescriptorTests.cs                        332
