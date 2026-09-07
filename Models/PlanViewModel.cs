@@ -187,6 +187,15 @@ namespace TaimisToolbench.Models
 
         public IReadOnlyDictionary<int, int> OwnedCurrencyAmounts { get; set; }
 
+        // Every item id the plan drew owned stock for, projected from
+        // CraftingPlanResult.UsedMaterials (the reducer's own per-item
+        // total). One item can sit at several places in one tree and the
+        // reducer gives its stock to whichever node it reaches first, so
+        // this plan-scope set is what lets the Recipe Tree draw the
+        // "HAVE {used}/{total} NEEDED" badge on the later nodes too, at
+        // "HAVE 0/{total}". Null when the plan drew no owned stock at all.
+        public ISet<int> OwnedStockDrawnItemIds { get; set; }
+
         // currency-ux-package (Feature 3, KNOWN-ISSUES #21
         // resolution): passthrough of CraftingPlan.TimegatedItems
         // (informational-only vendor purchase caps - see that class's own

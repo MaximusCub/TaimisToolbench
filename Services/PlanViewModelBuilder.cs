@@ -27,6 +27,7 @@ namespace TaimisToolbench.Services
                 // branching is needed.
                 CurrencyPlanTotals = BuildCurrencyPlanTotals(result.Plan.CurrencyCosts),
                 OwnedCurrencyAmounts = result.OwnedCurrencyAmounts,
+                OwnedStockDrawnItemIds = BuildOwnedStockDrawnItemIds(result.UsedMaterials),
                 VendorCapsByItemId = BuildVendorCapsByItemId(result.Plan.TimegatedItems),
             };
 
@@ -773,6 +774,33 @@ namespace TaimisToolbench.Services
             }
 
             return totals;
+        }
+
+        /// <summary>
+        /// Projects the item ids out of the reducer's used-materials list.
+        /// The list is already aggregated per item id over the whole tree,
+        /// so this is the plan-scope answer to "was any owned stock of
+        /// this item drawn", which the Recipe Tree's HAVE badge needs per
+        /// node in O(1). Null when nothing was drawn, matching how the
+        /// other plan-scope pill lookups here report "nothing to show".
+        /// </summary>
+        private static ISet<int> BuildOwnedStockDrawnItemIds(List<UsedMaterial> usedMaterials)
+        {
+            if (usedMaterials == null || usedMaterials.Count == 0)
+            {
+                return null;
+            }
+
+            var itemIds = new HashSet<int>();
+            foreach (var used in usedMaterials)
+            {
+                if (used != null && used.QuantityUsed > 0)
+                {
+                    itemIds.Add(used.ItemId);
+                }
+            }
+
+            return itemIds.Count > 0 ? itemIds : null;
         }
 
         /// <summary>

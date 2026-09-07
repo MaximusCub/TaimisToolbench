@@ -136,6 +136,19 @@ namespace TaimisToolbench.Services
                         appendSubduing: false);
                 }
 
+                if (node.OwnedQuantityUsed == 0)
+                {
+                    // The badge only reaches zero when the plan drew this
+                    // item's owned stock at some OTHER node (see
+                    // DecisionPillPlanner.AppendOwnershipPills), so the
+                    // tooltip can say where it went. The plain wording
+                    // below would read "0 covered by your materials" and
+                    // leave the reader guessing why the badge is there.
+                    return new PillTooltipPlan(
+                        $"Needs {node.Quantity} - your materials went to other rows of this item",
+                        appendSubduing: false);
+                }
+
                 // Matches the "HAVE {used}/{total} NEEDED" pill wording;
                 // remaining (node.Quantity) is total minus used.
                 int totalDemand = node.OwnedQuantityUsed + node.Quantity;
