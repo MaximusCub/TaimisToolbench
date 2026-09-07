@@ -11,9 +11,11 @@ namespace TaimisToolbench.Services
     /// unlearned, LearnedFromItem recipe that a purchasable recipe sheet
     /// would unlock - and would be cheaper to craft than to keep buying.
     ///
-    /// recipeSheetItemIdByRecipeId is a curated, injectable lookup (no
-    /// API endpoint maps a recipe id to its unlocking item), deliberately
-    /// not a discovery pipeline; a recipe not in the map emits nothing.
+    /// recipeSheetItemIdByRecipeId is an injectable lookup, loaded from
+    /// ref/recipe_sheet_items.json; a recipe not in the map emits nothing.
+    /// The GW2 API states the link from the item side only, so the map is
+    /// built ahead of time by tools/VendorOfferUpdater rather than
+    /// discovered here.
     ///
     /// Writes only CraftingPlanResult.RecipeSheetSavingsOpportunities -
     /// advisory, never fed back into a decision.
