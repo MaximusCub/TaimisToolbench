@@ -66,6 +66,10 @@ namespace TaimisToolbench.Views
         private static readonly Color CaretColor = Color.White;
 
         private static readonly Color StatusColor = new Color(200, 200, 200);
+
+        /// <summary>The expanded row's detail lines, at the same white
+        /// every other standard label in the module uses.</summary>
+        private static readonly Color DetailTextColor = Color.White;
         private static readonly Color ErrorColor = new Color(255, 100, 100);
 
         private const string EmptyStateText =
@@ -984,9 +988,7 @@ namespace TaimisToolbench.Views
 
         /// <summary>
         /// A detail line that re-ellipsizes on resize. color overrides the
-        /// tier's own default, which is the hierarchy this panel reads in:
-        /// Body lines are content at StatusColor, Caption lines are muted
-        /// notes at DimColor.
+        /// default, which is DetailTextColor for every line the panel owns.
         /// </summary>
         private void AddFlexLabel(
             RenderedRow row, Panel panel, string full, BitmapFont font,
@@ -997,7 +999,7 @@ namespace TaimisToolbench.Views
             {
                 Font = font,
                 Text = shown,
-                TextColor = color ?? (font == UiFonts.Caption ? DimColor : StatusColor),
+                TextColor = color ?? DetailTextColor,
                 AutoSizeWidth = true,
                 AutoSizeHeight = true,
                 Location = new Point(x, y),
@@ -1051,7 +1053,7 @@ namespace TaimisToolbench.Views
             {
                 Font = UiFonts.Caption,
                 Text = suffix,
-                TextColor = DimColor,
+                TextColor = DetailTextColor,
                 AutoSizeWidth = true,
                 AutoSizeHeight = true,
                 Location = new Point(x + coinWidth + 4, y),

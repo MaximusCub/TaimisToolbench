@@ -939,14 +939,14 @@ namespace TaimisToolbench.Views
             // The stamped half goes through StatusText.Stamp, which owns
             // the module's one timestamp format and its InvariantCulture
             // policy (English-only strings; several locales' short time
-            // pattern has no AM/PM designator at all). ONE trailing hyphen
-            // clause: the dash separates verb from timestamp, a hyphen
-            // separates clauses, and two hyphen clauses at one level put
-            // two unrelated facts on the same footing. It also names a
-            // button that exists, and states the payoff (fresh prices)
-            // rather than the fear ("prices may have changed").
+            // pattern has no AM/PM designator at all). The advice is
+            // parenthesised because Stamp's own separator is a hyphen, so
+            // a trailing hyphen clause would put two unrelated facts on
+            // the same footing. It names a button that exists, and states
+            // the payoff (fresh prices) rather than the fear ("prices may
+            // have changed").
             _statusBoard.SeedRestored(
-                StatusText.Stamp("Generated", generatedAt) + " - Generate Plan to refresh prices");
+                StatusText.Stamp("Generated", generatedAt) + " (Generate Plan to refresh prices)");
             RenderFromBoard(_statusBoard.Snapshot());
 
             // Started BEFORE the render below and regardless of whether
@@ -999,14 +999,14 @@ namespace TaimisToolbench.Views
         {
             RestoreRequestControls(requestItems, null, useOwnMaterials, priceBasis, valueOwnMaterials);
 
-            // Same one-trailing-clause shape as the full restore's line,
-            // and it names a button that exists. It says what was kept, not
-            // what was lost: the items ARE back, and the only thing asked
-            // of the user is the click that would have refreshed prices
+            // Same parenthesised shape as the full restore's line, and it
+            // names a button that exists. It says what was kept, not what
+            // was lost: the items ARE back, and the only thing asked of
+            // the user is the click that would have refreshed prices
             // anyway.
             _statusBoard.SeedRestored(
                 StatusText.Stamp("Last planned", generatedAt)
-                + " - items restored, Generate Plan to rebuild the plan");
+                + " (items restored, Generate Plan to rebuild the plan)");
             RenderFromBoard(_statusBoard.Snapshot());
         }
 
