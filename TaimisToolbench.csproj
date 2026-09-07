@@ -210,6 +210,7 @@
     <Compile Include="Services\PlanStripTickDecision.cs" />
     <Compile Include="Services\OwnMaterialsGate.cs" />
     <Compile Include="Services\RequestLabelFormatter.cs" />
+    <Compile Include="Services\SnapshotCallRetry.cs" />
     <Compile Include="Services\SnapshotEpochGuard.cs" />
     <Compile Include="Services\SnapshotCommitGate.cs" />
     <Compile Include="Services\SnapshotRefreshSlot.cs" />
