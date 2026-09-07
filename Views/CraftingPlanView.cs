@@ -495,7 +495,9 @@ namespace TaimisToolbench.Views
         // nothing else, and none of them becomes part of this class's own
         // callable surface. Every one forwards to the private member that
         // used to be handed over as a constructor delegate.
-        void ITreePlanHost.PreserveScrollAcross(Action mutate) => PreserveScrollAcross(mutate);
+        void ITreePlanHost.PreserveScrollAcross(Action mutate, int? anchorNodeId) =>
+            PreserveScrollAcross(
+                mutate, anchorNodeId.HasValue ? TreeRowAnchorKey(anchorNodeId.Value) : null);
 
         void ITreePlanHost.SetStatus(string status) => SetStatus(status);
 
@@ -1212,7 +1214,7 @@ namespace TaimisToolbench.Views
         /// against a late Blish-internal scrollbar reset
         /// (StartScrollVerify).
         /// </summary>
-        private void PreserveScrollAcross(Action mutate)
+        private void PreserveScrollAcross(Action mutate, string anchorKey = null)
         {
             int saved = _contentPanel?.VerticalScrollOffset ?? 0;
             int capturedGeneration = ++_scrollRestoreGeneration;
@@ -1223,23 +1225,15 @@ namespace TaimisToolbench.Views
             // stale-offset verify against the new content.
             _resizeScrollRestorePending = false;
 
-            // Nothing to hold still at the very top of the content, and a
-            // restore is skipped there anyway.
-            ScrollAnchor anchor = default(ScrollAnchor);
-            bool anchored = false;
-            if (saved > 0)
+            ScrollAnchor anchor;
+            if (!TryCaptureScrollAnchor(saved, anchorKey, out anchor))
             {
-                anchored = TryCaptureScrollAnchor(saved, out anchor);
+                anchor = default(ScrollAnchor);
             }
 
             mutate();
-            if (saved <= 0)
-            {
-                return;
-            }
 
-            int restore = anchored ? ResolveAnchoredOffset(anchor, saved) : saved;
-            ApplySavedScrollSynchronously(restore, capturedGeneration);
+            ApplySavedScrollSynchronously(ResolveAnchoredOffset(anchor, saved), capturedGeneration);
         }
 
         /// <summary>
@@ -1379,7 +1373,14 @@ namespace TaimisToolbench.Views
             return true;
         }
 
-        private bool TryCaptureScrollAnchor(int savedOffset, out ScrollAnchor anchor)
+        /// <summary>
+        /// The element this restore must hold still. The three-tier rule
+        /// itself is ScrollAnchorMath.TryCaptureFor's, which is where its
+        /// derivation and its tests live; this reads the two inputs only
+        /// the view can see - where the cursor is, and how much of the
+        /// viewport's top edge a pinned sticky band covers.
+        /// </summary>
+        private bool TryCaptureScrollAnchor(int savedOffset, string anchorKey, out ScrollAnchor anchor)
         {
             anchor = default(ScrollAnchor);
             if (_contentPanel == null || _scrollAnchors.Count == 0)
@@ -1387,11 +1388,32 @@ namespace TaimisToolbench.Views
                 return false;
             }
 
-            int anchorLine = ScrollAnchorMath.AnchorLine(
-                savedOffset, _contentPanel.Height, CursorYInContentViewport());
+            return ScrollAnchorMath.TryCaptureFor(
+                CollectScrollAnchorCandidates(),
+                anchorKey,
+                savedOffset,
+                _contentPanel.Height,
+                CursorYInContentViewport(),
+                PinnedBandTopInset(),
+                out anchor);
+        }
 
-            return ScrollAnchorMath.TryCapture(
-                CollectScrollAnchorCandidates(), anchorLine, out anchor);
+        /// <summary>
+        /// How many pixels of the content viewport's top edge a pinned
+        /// sticky header band is drawn over, or zero when none is pinned.
+        /// StickyHeaderHost publishes an absolute y, so this subtracts the
+        /// viewport's own absolute top.
+        /// </summary>
+        private int PinnedBandTopInset()
+        {
+            int? pinnedBottom = _stickyHeaders?.PinnedBandBottom;
+            if (!pinnedBottom.HasValue || _contentPanel == null)
+            {
+                return 0;
+            }
+
+            int inset = pinnedBottom.Value - _contentPanel.AbsoluteBounds.Y;
+            return inset > 0 ? inset : 0;
         }
 
         /// <summary>
@@ -1420,9 +1442,16 @@ namespace TaimisToolbench.Views
 
         /// <summary>
         /// The offset that puts the anchored element back under the line
-        /// it was on. Falls back to the pre-mutate offset when the element
-        /// is gone from the rebuilt content - a jump to wherever a missing
-        /// row "would" be is worse than the reflow this fixes.
+        /// it was on. Walks the anchor's on-screen fallbacks when the
+        /// anchor itself is gone, then falls back to the pre-mutate
+        /// offset clamped to what the rebuilt content can scroll to.
+        /// <para>
+        /// The clamp is the point. An unclamped offset past the end of
+        /// shorter content saturates ScrollMath.RatioForOffset at 1.0 and
+        /// lands the viewport at the very bottom, which is a jump nobody
+        /// chose. Clamping cannot hold a row still when the content below
+        /// it is gone, but it stops at the last position that exists.
+        /// </para>
         /// </summary>
         private int ResolveAnchoredOffset(ScrollAnchor anchor, int savedOffset)
         {
@@ -1431,15 +1460,17 @@ namespace TaimisToolbench.Views
                 return savedOffset;
             }
 
-            int? newTop = ScrollAnchorMath.FindTop(CollectScrollAnchorCandidates(), anchor);
-            if (!newTop.HasValue)
+            int contentHeight = MeasureContentHeight(_contentPanel);
+            int viewportHeight = _contentPanel.Height;
+
+            if (!ScrollAnchorMath.TryFindSurvivingAnchor(
+                    CollectScrollAnchorCandidates(), anchor, out var survivor, out int newTop))
             {
-                return savedOffset;
+                return ScrollAnchorMath.ClampOffset(savedOffset, contentHeight, viewportHeight);
             }
 
             return ScrollAnchorMath.RestoredOffset(
-                savedOffset, anchor, newTop.Value,
-                MeasureContentHeight(_contentPanel), _contentPanel.Height);
+                savedOffset, survivor, newTop, contentHeight, viewportHeight);
         }
 
         #endregion // Scroll preserve/restore/verify: the reflection handle and PreserveScrollAcross - KNOWN-ISSUES #12/#14/#19

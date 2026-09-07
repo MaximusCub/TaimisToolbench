@@ -734,7 +734,13 @@ namespace TaimisToolbench.Views.Rendering
         // IsBestPathPreset must come from which
         // control fired this call, not be inferred from the resulting
         // _nodeOverrides count - see StatusText.ForOverrideResolve for why.
-        private void ApplyOverridesAndResolve(bool isBestPathPreset = false)
+        //
+        // anchorNodeId names the row a pill click landed on, so the
+        // restore can hold that row still even at scroll offset zero,
+        // where the host will not anchor on the cursor alone. Null for
+        // the toolbar presets, which act on the whole tree at once and
+        // name no row.
+        private void ApplyOverridesAndResolve(bool isBestPathPreset = false, int? anchorNodeId = null)
         {
             // Edit since the move: this used to return silently on a
             // missing solve context, which made EVERY local change - a pill
@@ -760,7 +766,7 @@ namespace TaimisToolbench.Views.Rendering
                 _host.SetLastDebugLog(result.DebugLog);
                 var vm = _vmBuilder.Build(result);
                 _host.CurrentPlan = vm;
-                _host.PreserveScrollAcross(() => _host.RenderPlanAfterResolve(vm));
+                _host.PreserveScrollAcross(() => _host.RenderPlanAfterResolve(vm), anchorNodeId);
                 // The click that got us here came from a cursor that has
                 // not moved, and the render just replaced controls under
                 // it - see HoverChainResync.
@@ -2081,10 +2087,11 @@ namespace TaimisToolbench.Views.Rendering
                 if (interactive)
                 {
                     var source = spec.Source.Value;
+                    int anchorNodeId = node.NodeId;
                     outer.Click += (_, __) =>
                     {
-                        _nodeOverrides[node.NodeId] = source;
-                        ApplyOverridesAndResolve();
+                        _nodeOverrides[anchorNodeId] = source;
+                        ApplyOverridesAndResolve(anchorNodeId: anchorNodeId);
                     };
                     Color restingBorder = borderColor;
                     outer.MouseEntered += (_, __) => outer.BackgroundColor = Color.White;
@@ -2097,6 +2104,7 @@ namespace TaimisToolbench.Views.Rendering
                     // or out of _ignoredItemIds, matching gw2e's own
                     // tree-wide-by-item-id "Ignore" semantics.
                     int itemId = node.ItemId;
+                    int anchorNodeId = node.NodeId;
                     outer.Click += (_, __) =>
                     {
                         if (!_ignoredItemIds.Remove(itemId))
@@ -2104,7 +2112,7 @@ namespace TaimisToolbench.Views.Rendering
                             _ignoredItemIds.Add(itemId);
                         }
 
-                        ApplyOverridesAndResolve();
+                        ApplyOverridesAndResolve(anchorNodeId: anchorNodeId);
                     };
 
                     // No hand-rolled wash-and-restore here: ignoreInteractive
