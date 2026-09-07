@@ -21,10 +21,8 @@ namespace TaimisToolbench.Views.Rendering
     /// both a thousand times, on the frame it builds them.
     /// </para>
     /// <para>
-    /// The square is built either way, so nothing about the control tree or
-    /// the icon's hover changes. Only the picture waits. Until it lands the
-    /// square draws its rarity frame with nothing in it, which is the same
-    /// thing it drew while a request was in flight.
+    /// The square itself is built either way, so neither the control tree
+    /// nor the icon's hover changes. Only the picture waits.
     /// </para>
     /// </summary>
     internal sealed class DeferredIconArt

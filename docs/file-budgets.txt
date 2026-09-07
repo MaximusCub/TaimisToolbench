@@ -310,7 +310,7 @@ Views/Rendering/CloseKeyButton.cs                                               
 Views/Rendering/CoinCurrencyRenderer.cs                                                 671
 Views/Rendering/ColumnHeaderRowRenderer.cs                                              221
 Views/Rendering/CraftStepsSectionRenderer.cs                                            264
-Views/Rendering/DeferredIconArt.cs                                                      90
+Views/Rendering/DeferredIconArt.cs                                                      88
 Views/Rendering/DisciplinesSectionRenderer.cs                                           288
 Views/Rendering/EmptyPlanStateRenderer.cs                                               81
 Views/Rendering/FeedbackButton.cs                                                       240
