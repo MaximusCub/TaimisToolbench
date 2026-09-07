@@ -3015,20 +3015,15 @@ namespace TaimisToolbench.Views
             var snapshot = _getSnapshot();
             if (snapshot != null)
             {
-                string detail = StatusText.ForSnapshotAgeSuffix(
-                    DateTime.UtcNow - snapshot.CapturedAt);
-
                 // Every row here is scored against what the account owns, so
                 // a character the snapshot could not read in full moves the
-                // readiness numbers the same way it moves a plan.
-                string incomplete = StatusText.ForIncompleteCharacters(
-                    snapshot.IncompleteCharacterCount, snapshot.CharacterCount);
-                if (incomplete != null)
-                {
-                    detail += ", " + incomplete;
-                }
-
-                text += " (" + detail + ")";
+                // readiness numbers the same way it moves a plan. This is
+                // the module's narrowest status band, and the widest line it
+                // composes is pinned in StatusText.RankerStatusBudgetChars.
+                text += " (" + StatusText.ForSnapshotDetail(
+                    DateTime.UtcNow - snapshot.CapturedAt,
+                    snapshot.IncompleteCharacterCount,
+                    snapshot.CharacterCount) + ")";
             }
 
             ApplyStatusText(text, isError: false);
