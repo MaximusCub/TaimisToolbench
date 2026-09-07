@@ -134,7 +134,7 @@ Services/IMysticForgeRecipeSource.cs                                            
 Services/IPriceApiClient.cs                                                             47
 Services/IRecipeApiClient.cs                                                            100
 Services/IconFrameGeometry.cs                                                           90
-Services/InlineSpinnerLayout.cs                                                         81
+Services/InlineSpinnerLayout.cs                                                         111
 Services/InventoryReducer.cs                                                            383
 Services/ItemDescriptionSanitizer.cs                                                    204
 Services/ItemIconTiers.cs                                                               180
@@ -303,7 +303,7 @@ Views/MainView.cs                                                               
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    425
-Views/PlanHistoryTabContent.cs                                                          1487
+Views/PlanHistoryTabContent.cs                                                          1509
 Views/RankerTabContent.cs                                                               3025
 Views/Rendering/ClickSound.cs                                                           197
 Views/Rendering/CaretKeyButton.cs                                                       109
@@ -435,7 +435,7 @@ tests/TaimisToolbench.Tests/Services/Gw2RecipeApiClientHttpTests.cs             
 tests/TaimisToolbench.Tests/Services/Gw2RecipeApiClientParseTests.cs                    248
 tests/TaimisToolbench.Tests/Services/HeaderCellMathTests.cs                             221
 tests/TaimisToolbench.Tests/Services/IconFrameGeometryTests.cs                          127
-tests/TaimisToolbench.Tests/Services/InlineSpinnerLayoutTests.cs                        87
+tests/TaimisToolbench.Tests/Services/InlineSpinnerLayoutTests.cs                        141
 tests/TaimisToolbench.Tests/Services/InventoryReducerTests.cs                           1775
 tests/TaimisToolbench.Tests/Services/ItemDescriptionSanitizerTests.cs                   155
 tests/TaimisToolbench.Tests/Services/ItemIconTiersTests.cs                              164

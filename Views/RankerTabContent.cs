@@ -819,8 +819,8 @@ namespace TaimisToolbench.Views
                 toolbar.FirstToggleX + CheckboxArtOverhang, _categoriesCheckbox.Location.Y);
             _currenciesCheckbox.Location = new Point(
                 toolbar.SecondToggleX + CheckboxArtOverhang, _currenciesCheckbox.Location.Y);
-            _statusLabel.Width = toolbar.StatusWidth;
-            InlineSpinner.PlaceAfter(_spinner, _statusLabel, InlineSpinnerLayout.LabelGap);
+            _statusBudget = toolbar.StatusWidth;
+            ApplyStatusText();
 
             PositionModeStrip(barWidth);
 
@@ -2977,10 +2977,36 @@ namespace TaimisToolbench.Views
                 return;
             }
 
-            string shown = LabelHelpers.EllipsizeToWidth(UiFonts.Status, text, Math.Max(0, _statusLabel.Width));
-            _statusLabel.Text = shown;
+            _statusFullText = text ?? "";
             _statusLabel.TextColor = isError ? ErrorColor : StatusColor;
-            TooltipFacility.ApplyPlain(_statusLabel, string.Equals(shown, text, StringComparison.Ordinal) ? null : text);
+            ApplyStatusText();
+        }
+
+        // The status line's whole text, so a resize re-takes the ellipsis
+        // from the original rather than compounding it onto an
+        // already-shortened string.
+        private string _statusFullText = "";
+
+        // Budget the line ellipsizes against. Held separately from
+        // Label.Width, which stays the width of the TEXT: see
+        // InlineSpinnerLayout.LabelWidthForText.
+        private int _statusBudget;
+
+        private void ApplyStatusText()
+        {
+            if (_statusLabel == null)
+            {
+                return;
+            }
+
+            var font = UiFonts.Status;
+            string shown = LabelHelpers.EllipsizeToWidth(font, _statusFullText, Math.Max(0, _statusBudget));
+            _statusLabel.Text = shown;
+            _statusLabel.Width = InlineSpinnerLayout.LabelWidthForText(
+                LabelHelpers.MeasureWith(font)(shown), _statusBudget);
+            TooltipFacility.ApplyPlain(
+                _statusLabel,
+                string.Equals(shown, _statusFullText, StringComparison.Ordinal) ? null : _statusFullText);
             InlineSpinner.PlaceAfter(_spinner, _statusLabel, InlineSpinnerLayout.LabelGap);
         }
 

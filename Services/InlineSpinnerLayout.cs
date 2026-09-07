@@ -2,10 +2,10 @@ namespace TaimisToolbench.Services
 {
     /// <summary>
     /// Where an inline loading spinner sits relative to the status label it
-    /// trails (Blish-free, unit-testable). Both status rows that show one
-    /// are a fixed-height strip with an auto-width label pinned to the left
-    /// edge, so the spinner's position is pure arithmetic over the label's
-    /// live bounds - which is the whole of what the view has to get right.
+    /// trails (Blish-free, unit-testable). Every status row that shows one
+    /// is a fixed-height strip with the label pinned to its left edge, so
+    /// the spinner's position is pure arithmetic over the label's live
+    /// bounds - which is the whole of what the view has to get right.
     /// <para>See docs/ARCHITECTURE.md section 4.</para>
     /// </summary>
     internal static class InlineSpinnerLayout
@@ -44,6 +44,36 @@ namespace TaimisToolbench.Services
         /// Gap between the label's right edge and the spinner.
         /// </summary>
         public const int LabelGap = 6;
+
+        /// <summary>
+        /// Width to give a status label, once its text has been shortened
+        /// to fit <paramref name="budget"/>. The label takes the width of
+        /// the TEXT, never the width of the reserved band.
+        /// <para>
+        /// <see cref="Place"/> seats the spinner after the label's right
+        /// edge. A label sized to the whole budget therefore pushes the
+        /// spinner to the far end of the band, where it sits alone with a
+        /// wide gap between it and the text it belongs to.
+        /// </para>
+        /// <para>
+        /// The budget still caps the result, so a measurement that rounds a
+        /// pixel past it cannot push the spinner out of the band.
+        /// </para>
+        /// </summary>
+        public static int LabelWidthForText(int textWidth, int budget)
+        {
+            if (budget < 0)
+            {
+                budget = 0;
+            }
+
+            if (textWidth < 0)
+            {
+                textWidth = 0;
+            }
+
+            return textWidth > budget ? budget : textWidth;
+        }
 
         /// <summary>
         /// Places a square spinner of <paramref name="spinnerSize"/> to the
