@@ -45,6 +45,48 @@ namespace TaimisToolbench.Tests.Services
                 BoldInkFor(TypeRampMetrics.SectionTitlePointSize), TypeRampMetrics.SectionTitleInk);
             Assert.Equal(
                 BoldInkFor(TypeRampMetrics.StatusPointSize), TypeRampMetrics.StatusInk);
+            Assert.Equal(
+                BoldInkFor(TypeRampMetrics.AmountColumnPointSize), TypeRampMetrics.AmountColumnInk);
+        }
+
+        [Fact]
+        public void TheAmountColumnReadsAboveTheRowsBesideIt()
+        {
+            Assert.True(
+                TypeRampMetrics.AmountColumnInk.CapHeight > TypeRampMetrics.BodyInk.CapHeight,
+                "the amount has to outrank the body rows in ink, not only in nominal size");
+        }
+
+        [Fact]
+        public void CapCentredY_PutsEqualSlackAboveAndBelowTheCapInk()
+        {
+            // The Snapshot tab's amount against its 54px item icon frame.
+            var font = TypeRampMetrics.AmountColumnInk;
+            const int BoxTop = 1;
+            const int BoxHeight = 54;
+
+            int y = TypeRampMetrics.CapCentredY(font, BoxTop, BoxHeight);
+
+            int capTop = y + font.CapTopY;
+            int capBottom = capTop + font.CapHeight;
+            int above = capTop - BoxTop;
+            int below = (BoxTop + BoxHeight) - capBottom;
+
+            Assert.True(above >= 0 && below >= 0, "the cap ink has to stay inside the box");
+            Assert.True(System.Math.Abs(above - below) <= 1, "the slack has to split evenly");
+        }
+
+        [Fact]
+        public void CapCentredY_MovesWithTheBoxItCentresIn()
+        {
+            var font = TypeRampMetrics.AmountColumnInk;
+
+            int first = TypeRampMetrics.CapCentredY(font, 0, 40);
+            int lower = TypeRampMetrics.CapCentredY(font, 10, 40);
+            int taller = TypeRampMetrics.CapCentredY(font, 0, 60);
+
+            Assert.Equal(first + 10, lower);
+            Assert.Equal(first + 10, taller);
         }
 
         [Fact]

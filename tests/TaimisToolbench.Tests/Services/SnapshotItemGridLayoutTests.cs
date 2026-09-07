@@ -363,6 +363,41 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(expected, SnapshotItemGridLayout.Compute(count, 1200, 52).Height);
         }
 
+        [Theory]
+        [InlineData(0, 0)]
+        [InlineData(1, 0)]
+        [InlineData(2, 1)]
+        [InlineData(3, 2)]
+        public void ColumnDividerCount_LeavesTheLastColumnUnruled(int columnCount, int expected)
+        {
+            Assert.Equal(expected, SnapshotItemGridLayout.ColumnDividerCount(columnCount));
+        }
+
+        [Fact]
+        public void ColumnDividerX_ClearsBothCellsItSitsBetween()
+        {
+            const int ColumnWidth = 626;
+
+            int x = SnapshotItemGridLayout.ColumnDividerX(0, ColumnWidth);
+            int right = x + SnapshotItemGridLayout.ColumnDividerWidth;
+
+            // Left of it, the first cell's text ends; right of it, the
+            // second cell's Amount column begins. The rule touches neither.
+            Assert.True(x >= SnapshotItemGridLayout.CellContentRightEdge(ColumnWidth));
+            Assert.True(right <= ColumnWidth + SnapshotItemGridLayout.CellAmountX);
+        }
+
+        [Fact]
+        public void ColumnDividerX_SitsOnEveryColumnBoundary()
+        {
+            const int ColumnWidth = 626;
+
+            int first = SnapshotItemGridLayout.ColumnDividerX(0, ColumnWidth);
+            int second = SnapshotItemGridLayout.ColumnDividerX(1, ColumnWidth);
+
+            Assert.Equal(ColumnWidth, second - first);
+        }
+
         private static (int, int, int, int) Cell(SnapshotItemGridLayout.Grid grid, int index)
         {
             var cell = grid.Cells[index];

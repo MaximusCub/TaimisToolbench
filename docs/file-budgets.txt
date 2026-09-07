@@ -85,7 +85,7 @@ Models/UsedMaterial.cs                                                          
 Models/VendorItemCostLine.cs                                                            42
 Models/VendorOffer.cs                                                                   73
 Models/VendorOfferDataset.cs                                                            15
-Module.cs                                                                               2873
+Module.cs                                                                               2953
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
@@ -242,8 +242,8 @@ Services/SnapshotFetchFailedException.cs                                        
 Services/SnapshotHeaderLayout.cs                                                        209
 Services/SnapshotHelpers.cs                                                             79
 Services/SnapshotHoldLine.cs                                                            355
-Services/SnapshotItemGridLayout.cs                                                      279
-Services/SnapshotIconWindow.cs                                                          159
+Services/SnapshotItemGridLayout.cs                                                      313
+Services/SnapshotIconWindow.cs                                                          181
 Services/SnapshotRefreshSlot.cs                                                         93
 Services/SnapshotResultLayout.cs                                                        90
 Services/SnapshotSearchResultBuilder.cs                                                 572
@@ -278,7 +278,7 @@ Services/TreeRowIdentity.cs                                                     
 Services/TreeRowShapePlanner.cs                                                         133
 Services/TreeRowTooltipComposer.cs                                                      271
 Services/TreeToolbarRowLayout.cs                                                        112
-Services/TypeRampMetrics.cs                                                             171
+Services/TypeRampMetrics.cs                                                             195
 Services/UiSpacing.cs                                                                   53
 Services/UpgradeEffectLines.cs                                                          182
 Services/ValueDetailTooltipBuilder.cs                                                   159
@@ -299,7 +299,7 @@ Views/ItemInputRowStrip.cs                                                      
 Views/ItemRowState.cs                                                                   39
 Views/LogTabContent.cs                                                                  1538
 Views/MainThreadMarshal.cs                                                              141
-Views/MainView.cs                                                                       3234
+Views/MainView.cs                                                                       3316
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    425
@@ -347,7 +347,7 @@ Views/Rendering/TextRowRenderer.cs                                              
 Views/Rendering/TooltipFacility.cs                                                      288
 Views/Rendering/TreeSectionController.cs                                                2530
 Views/Rendering/TreeToolbarCommands.cs                                                  81
-Views/Rendering/UiFonts.cs                                                              248
+Views/Rendering/UiFonts.cs                                                              250
 Views/Rendering/GlyphFont.cs                                                            123
 Views/Rendering/UiMetrics.cs                                                            60
 Views/Rendering/UsedMaterialsSectionRenderer.cs                                         223
@@ -575,8 +575,8 @@ tests/TaimisToolbench.Tests/Services/SnapshotFetchFailedExceptionTests.cs       
 tests/TaimisToolbench.Tests/Services/SnapshotHeaderLayoutTests.cs                       441
 tests/TaimisToolbench.Tests/Services/SnapshotHelpersTests.cs                            95
 tests/TaimisToolbench.Tests/Services/SnapshotHoldLineTests.cs                           320
-tests/TaimisToolbench.Tests/Services/SnapshotItemGridLayoutTests.cs                     372
-tests/TaimisToolbench.Tests/Services/SnapshotIconWindowTests.cs                         249
+tests/TaimisToolbench.Tests/Services/SnapshotItemGridLayoutTests.cs                     407
+tests/TaimisToolbench.Tests/Services/SnapshotIconWindowTests.cs                         279
 tests/TaimisToolbench.Tests/Services/SnapshotRefreshSlotTests.cs                        241
 tests/TaimisToolbench.Tests/Services/SnapshotResultLayoutTests.cs                       94
 tests/TaimisToolbench.Tests/Services/SnapshotSearchResultBuilderTests.cs                1286
@@ -609,7 +609,7 @@ tests/TaimisToolbench.Tests/Services/TreeCostColumnMathTests.cs                 
 tests/TaimisToolbench.Tests/Services/TreeRowIdentityTests.cs                            246
 tests/TaimisToolbench.Tests/Services/TreeRowShapeGoldenTests.cs                         145
 tests/TaimisToolbench.Tests/Services/TreeRowTooltipComposerTests.cs                     538
-tests/TaimisToolbench.Tests/Services/TypeRampMetricsTests.cs                            164
+tests/TaimisToolbench.Tests/Services/TypeRampMetricsTests.cs                            206
 tests/TaimisToolbench.Tests/Services/ValueDetailTooltipBuilderTests.cs                  191
 tests/TaimisToolbench.Tests/Services/VendorCurrencyTradeUpRoutingTests.cs               207
 tests/TaimisToolbench.Tests/Services/VendorOfferStoreTests.cs                           576
