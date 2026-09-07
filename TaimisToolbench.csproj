@@ -280,6 +280,7 @@
     <Compile Include="Views\ItemRowState.cs" />
     <Compile Include="Views\Rendering\RarityColors.cs" />
     <Compile Include="Views\Rendering\InlineSpinner.cs" />
+    <Compile Include="Views\Rendering\DeferredIconArt.cs" />
     <Compile Include="Views\Rendering\IconControls.cs" />
     <Compile Include="Views\Rendering\OutlineFramePanel.cs" />
     <Compile Include="Views\Rendering\ItemIconTooltip.cs" />
@@ -365,6 +366,7 @@
     <Compile Include="Services\SnapshotItemGridLayout.cs" />
     <Compile Include="Services\HeaderCellMath.cs" />
     <Compile Include="Services\ColumnHeaderLabelMath.cs" />
+    <Compile Include="Services\SnapshotIconWindow.cs" />
     <Compile Include="Services\SnapshotResultLayout.cs" />
     <Compile Include="Services\SnapshotTableSorter.cs" />
     <Compile Include="Services\ModuleLogLevel.cs" />

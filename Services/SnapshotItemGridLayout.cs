@@ -194,14 +194,22 @@ namespace TaimisToolbench.Services
 
             public int Height { get; }
 
+            /// <summary>Y of this section's first row - the offsetY it was
+            /// computed at, which every cell's own Y already includes. Read
+            /// by SnapshotIconWindow, which needs the section's origin and
+            /// cannot get it from an empty section's cell list.</summary>
+            public int Top { get; }
+
             internal Grid(
-                IReadOnlyList<CellPlacement> cells, int columnCount, int columnWidth, int rowCount, int height)
+                IReadOnlyList<CellPlacement> cells, int columnCount, int columnWidth, int rowCount,
+                int height, int top)
             {
                 Cells = cells;
                 ColumnCount = columnCount;
                 ColumnWidth = columnWidth;
                 RowCount = rowCount;
                 Height = height;
+                Top = top;
             }
         }
 
@@ -265,7 +273,7 @@ namespace TaimisToolbench.Services
             }
 
             int rowCount = GridLayout.RowCount(safeCount, columnCount);
-            return new Grid(cells, columnCount, columnWidth, rowCount, rowCount * safeRowHeight);
+            return new Grid(cells, columnCount, columnWidth, rowCount, rowCount * safeRowHeight, offsetY);
         }
     }
 }

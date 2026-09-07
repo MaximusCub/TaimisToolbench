@@ -242,7 +242,8 @@ Services/SnapshotFetchFailedException.cs                                        
 Services/SnapshotHeaderLayout.cs                                                        209
 Services/SnapshotHelpers.cs                                                             79
 Services/SnapshotHoldLine.cs                                                            355
-Services/SnapshotItemGridLayout.cs                                                      271
+Services/SnapshotItemGridLayout.cs                                                      279
+Services/SnapshotIconWindow.cs                                                          159
 Services/SnapshotRefreshSlot.cs                                                         93
 Services/SnapshotResultLayout.cs                                                        90
 Services/SnapshotSearchResultBuilder.cs                                                 572
@@ -298,7 +299,7 @@ Views/ItemInputRowStrip.cs                                                      
 Views/ItemRowState.cs                                                                   39
 Views/LogTabContent.cs                                                                  1538
 Views/MainThreadMarshal.cs                                                              141
-Views/MainView.cs                                                                       2976
+Views/MainView.cs                                                                       3234
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    425
@@ -310,6 +311,7 @@ Views/Rendering/CloseKeyButton.cs                                               
 Views/Rendering/CoinCurrencyRenderer.cs                                                 671
 Views/Rendering/ColumnHeaderRowRenderer.cs                                              221
 Views/Rendering/CraftStepsSectionRenderer.cs                                            264
+Views/Rendering/DeferredIconArt.cs                                                      88
 Views/Rendering/DisciplinesSectionRenderer.cs                                           288
 Views/Rendering/EmptyPlanStateRenderer.cs                                               81
 Views/Rendering/FeedbackButton.cs                                                       240
@@ -318,7 +320,7 @@ Views/Rendering/HeaderCellPlan.cs                                               
 Views/Rendering/HoverChainResync.cs                                                     75
 Views/Rendering/ISectionRelayoutSink.cs                                                 86
 Views/Rendering/ITreePlanHost.cs                                                        88
-Views/Rendering/IconControls.cs                                                         304
+Views/Rendering/IconControls.cs                                                         357
 Views/Rendering/IconNameRowHelpers.cs                                                   182
 Views/Rendering/InlineSpinner.cs                                                        65
 Views/Rendering/LabelHelpers.cs                                                         273
@@ -574,6 +576,7 @@ tests/TaimisToolbench.Tests/Services/SnapshotHeaderLayoutTests.cs               
 tests/TaimisToolbench.Tests/Services/SnapshotHelpersTests.cs                            95
 tests/TaimisToolbench.Tests/Services/SnapshotHoldLineTests.cs                           320
 tests/TaimisToolbench.Tests/Services/SnapshotItemGridLayoutTests.cs                     372
+tests/TaimisToolbench.Tests/Services/SnapshotIconWindowTests.cs                         249
 tests/TaimisToolbench.Tests/Services/SnapshotRefreshSlotTests.cs                        241
 tests/TaimisToolbench.Tests/Services/SnapshotResultLayoutTests.cs                       94
 tests/TaimisToolbench.Tests/Services/SnapshotSearchResultBuilderTests.cs                1286

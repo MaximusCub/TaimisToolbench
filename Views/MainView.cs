@@ -364,6 +364,26 @@ namespace TaimisToolbench.Views
         private SectionChrome _itemChrome;
         private SectionChrome _walletChrome;
 
+        // Where each run's cells were last placed, so the icon window knows
+        // a section's origin, its column count and how far down the reader
+        // has scrolled into it. Written by LayoutResultGrid, which is the
+        // only thing that moves a cell.
+        private SnapshotItemGridLayout.Grid _itemGrid;
+        private SnapshotItemGridLayout.Grid _walletGrid;
+
+        // The viewport the icon window was last computed for. The ticker
+        // re-reads the viewport every frame and does nothing at all unless
+        // one of these two changed, so scrolling is what costs, not idling.
+        private int _iconWindowTop = int.MinValue;
+        private int _iconWindowHeight = -1;
+
+        // How far the background prime has walked each run, in placement
+        // order, so the pictures below the fold are already there when the
+        // reader scrolls to them. Reset whenever the cells move, because a
+        // cursor into the previous list means nothing in the new one.
+        private int _itemPrimeCursor;
+        private int _walletPrimeCursor;
+
         // Session-sticky like the search text. One state per run: sorting
         // the items must not disturb the currencies beneath them.
         private readonly TableSortState<SnapshotTableColumn> _itemSortState =
@@ -780,6 +800,12 @@ namespace TaimisToolbench.Views
             // After the content panel, and on the tab panel rather than
             // inside it: the clip a pinned band is drawn in must not scroll.
             _stickyHeaders = new StickyHeaderHost(buildPanel, _contentPanel);
+
+            // Held only by its parent, which disposes it - the same idiom
+            // Views/Rendering/StickyHeaderHost uses for its own ticker, and
+            // for the same reason: Blish raises nothing when a panel is
+            // scrolled.
+            new IconWindowTicker(this) { Parent = buildPanel };
 
             // Subscribe to resize
             buildPanel.Resized += OnPanelResized;
@@ -1692,6 +1718,135 @@ namespace TaimisToolbench.Views
 
             PlaceCells(_itemCells, _itemOrder, layout.Items.Grid, ItemRowHeight, refitText);
             PlaceCells(_walletCells, _walletOrder, layout.Wallet.Grid, WalletRowHeight, refitText);
+
+            _itemGrid = layout.Items.Grid;
+            _walletGrid = layout.Wallet.Grid;
+
+            // Every cell just moved, so whatever the window held is stale
+            // even if the viewport did not move, and a cursor into the old
+            // placement order means nothing in the new one. Restarting the
+            // prime is close to free: a cell already asked for is skipped
+            // without spending any of the frame's budget.
+            _itemPrimeCursor = 0;
+            _walletPrimeCursor = 0;
+            LoadNearIcons(force: true);
+        }
+
+        /// <summary>
+        /// One frame of icon loading, in the order that matters. What the
+        /// reader can see is asked for first and in full, however much the
+        /// prime below still has to do; only then does the prime spend its
+        /// own small budget on the rest.
+        /// </summary>
+        private void UpdateIconLoading()
+        {
+            LoadNearIcons(force: false);
+            PrimeRemainingIcons(SnapshotIconWindow.PrimePerFrame);
+        }
+
+        /// <summary>
+        /// Walks the rest of the list in reading order, a few pictures per
+        /// frame, so a scroll that arrives later finds them already asked
+        /// for. The budget is spent on the items run first and the
+        /// currencies get what is left, which is why this threads the
+        /// remainder through rather than giving each run its own.
+        /// </summary>
+        private void PrimeRemainingIcons(int budget)
+        {
+            if (_resultGridPanel == null || _resultGridPanel.Parent == null)
+            {
+                return;
+            }
+
+            budget = PrimeRun(_itemCells, _itemOrder, ref _itemPrimeCursor, budget);
+            PrimeRun(_walletCells, _walletOrder, ref _walletPrimeCursor, budget);
+        }
+
+        /// <summary>One run's share of a prime frame, returning the budget
+        /// left over. <paramref name="order"/> is the sort over the cells,
+        /// so the walk runs down the list the reader would scroll and not
+        /// down the order the search happened to return.</summary>
+        private static int PrimeRun(
+            List<ResultCell> cells, IReadOnlyList<int> order, ref int cursor, int budget)
+        {
+            bool ordered = order != null && order.Count == cells.Count;
+            while (budget > 0 && cursor < cells.Count)
+            {
+                int placement = cursor++;
+                var icon = cells[ordered ? order[placement] : placement].Icon;
+
+                // A picture the near window already asked for costs nothing
+                // to walk past and must not spend budget - otherwise the
+                // first screenful would be paid for twice.
+                if (icon == null || !icon.Pending)
+                {
+                    continue;
+                }
+
+                icon.Load();
+                budget--;
+            }
+
+            return budget;
+        }
+
+        /// <summary>
+        /// Asks Blish for the pictures of the cells at or near the viewport,
+        /// and for no others. Cheap to call every frame: the viewport read is
+        /// two rectangles, and nothing past it runs unless the viewport moved
+        /// or <paramref name="force"/> says the cells did.
+        /// </summary>
+        private void LoadNearIcons(bool force)
+        {
+            if (_contentPanel == null || _resultGridPanel == null || _resultGridPanel.Parent == null)
+            {
+                return;
+            }
+
+            var viewRegion = _contentPanel.ContentRegion;
+            var gridRegion = _resultGridPanel.ContentRegion;
+
+            // The grid panel's absolute position already carries the scroll,
+            // so the viewport's top in grid coordinates falls out of the two
+            // without this view knowing how Blish applies a scroll offset.
+            // Views/Rendering/StickyHeaderHost reads the same pair.
+            int viewTop = _contentPanel.AbsoluteBounds.Y + viewRegion.Y
+                - (_resultGridPanel.AbsoluteBounds.Y + gridRegion.Y);
+            int viewHeight = viewRegion.Height;
+
+            if (!force && viewTop == _iconWindowTop && viewHeight == _iconWindowHeight)
+            {
+                return;
+            }
+
+            _iconWindowTop = viewTop;
+            _iconWindowHeight = viewHeight;
+
+            LoadNearIcons(_itemCells, _itemOrder, _itemGrid, ItemRowHeight, viewTop, viewHeight);
+            LoadNearIcons(_walletCells, _walletOrder, _walletGrid, WalletRowHeight, viewTop, viewHeight);
+        }
+
+        /// <summary>One run's near cells. <paramref name="order"/> is the
+        /// sort over them, so placement index i holds cell order[i] - the
+        /// same mapping <see cref="PlaceCells"/> uses.</summary>
+        private static void LoadNearIcons(
+            List<ResultCell> cells, IReadOnlyList<int> order, SnapshotItemGridLayout.Grid grid,
+            int rowHeight, int viewTop, int viewHeight)
+        {
+            if (grid == null || cells.Count == 0)
+            {
+                return;
+            }
+
+            var span = SnapshotIconWindow.Compute(
+                cells.Count, grid.ColumnCount, rowHeight, grid.Top,
+                viewTop, viewHeight, SnapshotIconWindow.MarginPx);
+
+            bool ordered = order != null && order.Count == cells.Count;
+            for (int i = span.Start; i < span.End; i++)
+            {
+                cells[ordered ? order[i] : i].Icon?.Load();
+            }
         }
 
         /// <summary>Places one run's cells. They are held in the search's
@@ -1855,6 +2010,12 @@ namespace TaimisToolbench.Views
             _resultGridPanel = null;
             _itemChrome = null;
             _walletChrome = null;
+            _itemGrid = null;
+            _walletGrid = null;
+            _iconWindowTop = int.MinValue;
+            _iconWindowHeight = -1;
+            _itemPrimeCursor = 0;
+            _walletPrimeCursor = 0;
             _lastRowLayoutWidth = _contentPanel.Width;
 
             // BEFORE the disposal loop: a pinned band is not a child of the
@@ -2049,6 +2210,16 @@ namespace TaimisToolbench.Views
             // already runs once per pause in typing over a list that can
             // reach into the thousands of rows.
             LayoutResultGrid(refitText: false);
+
+            // One line per rebuild, at Debug, because this is the tab's own
+            // answer to "how long until every picture is there". The row
+            // count is the upper bound on requests: the prime asks once per
+            // row and skips whatever the viewport already asked for.
+            int primeRows = _itemCells.Count + _walletCells.Count;
+            ModuleLog.Shared.Write(
+                ModuleLogLevel.Debug, "ui",
+                $"Snapshot icons: {primeRows} rows, priming over about "
+                + $"{SnapshotIconWindow.PrimeFrames(primeRows)} frames.");
         }
 
         /// <summary>Amount column text: the module's "30x" quantity
@@ -2452,6 +2623,58 @@ namespace TaimisToolbench.Views
         }
 
         /// <summary>
+        /// Drives icon loading once a frame: the viewport's own pictures,
+        /// then a few of the rest. It has to be per-frame because Blish
+        /// raises no event when a panel is scrolled. Zero-sized on purpose:
+        /// a control with no area is in no hit test.
+        /// <para>
+        /// A throw stands the ticker down for good rather than repeating
+        /// once a frame. The rows keep whatever pictures they already have,
+        /// which is the pre-existing empty-frame state and not an error a
+        /// player needs to hear about more than once.
+        /// </para>
+        /// </summary>
+        private sealed class IconWindowTicker : Control
+        {
+            private readonly MainView _view;
+            private bool _stopped;
+
+            internal IconWindowTicker(MainView view)
+            {
+                _view = view;
+                Size = Point.Zero;
+                Location = Point.Zero;
+            }
+
+            public override void DoUpdate(GameTime gameTime)
+            {
+                if (_stopped)
+                {
+                    return;
+                }
+
+                try
+                {
+                    _view.UpdateIconLoading();
+                }
+                catch (Exception ex)
+                {
+                    _stopped = true;
+                    Logger.Warn(ex, "Icon window update failed; stopping");
+                    ModuleLog.Shared.Write(
+                        ModuleLogLevel.Warn, "ui",
+                        "Snapshot icon loading stopped after a failure: "
+                        + ex.GetType().Name + " - " + ex.Message);
+                }
+            }
+
+            protected override void Paint(
+                Microsoft.Xna.Framework.Graphics.SpriteBatch spriteBatch, Rectangle bounds)
+            {
+            }
+        }
+
+        /// <summary>
         /// One placed result cell: the row Panel the grid moves and sizes,
         /// and the closure that re-ellipsizes its text lines against a new
         /// column width. The amount is not in it: that column sits at the
@@ -2462,9 +2685,15 @@ namespace TaimisToolbench.Views
             public readonly Panel Panel;
             public readonly Action<int> Fit;
 
-            public ResultCell(Panel panel, Action<int> fit)
+            /// <summary>The row's icon, whose picture has not been asked
+            /// for until this cell comes near the viewport - see
+            /// Views/Rendering/DeferredIconArt.cs.</summary>
+            public readonly DeferredIconArt Icon;
+
+            public ResultCell(Panel panel, DeferredIconArt icon, Action<int> fit)
             {
                 Panel = panel;
+                Icon = icon;
                 Fit = fit;
             }
         }
@@ -2522,6 +2751,25 @@ namespace TaimisToolbench.Views
             return shown != full;
         }
 
+        /// <summary>
+        /// Puts the whole source-breakdown line on its label's hover while
+        /// the fit had to shorten it, and takes the hover away again when it
+        /// did not. Called at build and from every re-fit: a resize moves a
+        /// line between shortened and whole in both directions.
+        /// <para>
+        /// This label is the only text on a snapshot cell with no rich
+        /// surface on it, so a plain note here has nothing to drop - the
+        /// item's own hover lives on the icon tree alone
+        /// (ItemIconTooltip.StampOnIconTree). Do not copy this into
+        /// <see cref="FitRowTextLabel"/>, which also fits labels that do
+        /// carry one.
+        /// </para>
+        /// </summary>
+        private static void SetBreakdownHover(Label label, string breakdown, bool shortened)
+        {
+            TooltipFacility.ApplyPlain(label, shortened ? breakdown : null);
+        }
+
         private void CreateItemRow(SnapshotSearchRow row, int columnWidth, SectionChrome chrome)
         {
             // ClippedPanel: rows re-assert the viewport's published cutoff.
@@ -2553,7 +2801,7 @@ namespace TaimisToolbench.Views
             // over the row - the icon included, by CreateItemIcon itself.
             var hover = ItemRowHover(row, rarity);
 
-            IconControls.CreateItemIcon(
+            var icon = IconControls.CreateItemIconDeferredArt(
                 rowPanel, row.IconUrl, ItemIconFrame.ForRarity(rarity),
                 SnapshotItemGridLayout.CellIconX(chrome.AmountBand), 1,
                 ItemIconTier.BagSlot, hover);
@@ -2585,20 +2833,25 @@ namespace TaimisToolbench.Views
             var breakdownLabel = CreateRowTextLabel(
                 rowPanel, breakdown, textX,
                 SnapshotItemGridLayout.CellTextMaxWidth(columnWidth, chrome.AmountBand),
-                26, InfoTextColor, out _);
+                26, InfoTextColor, out bool breakdownShortened);
+            SetBreakdownHover(breakdownLabel, breakdown, breakdownShortened);
 
-            // NOTHING else on the cell answers a hover: the item's tooltip
-            // is carried by its icon alone (ItemIconTooltip.StampOnIconTree),
-            // and the name, the amount, the source breakdown and the strip
-            // between them are not the item.
+            // The breakdown line is the only text on the cell that answers a
+            // hover, and only while it is too long to read in full. The
+            // item's own tooltip is carried by its icon alone
+            // (ItemIconTooltip.StampOnIconTree); the name, the amount and
+            // the strip between them are not the item.
 
             // The cell's own Size is the grid's to write (LayoutResultGrid),
             // so this closure only re-fits what the new column width changed.
-            _itemCells.Add(new ResultCell(rowPanel, w =>
+            _itemCells.Add(new ResultCell(rowPanel, icon, w =>
             {
                 int fitWidth = SnapshotItemGridLayout.CellTextMaxWidth(w, chrome.AmountBand);
                 FitRowTextLabel(nameLabel, nameText, fitWidth);
-                FitRowTextLabel(breakdownLabel, breakdown, fitWidth);
+                SetBreakdownHover(
+                    breakdownLabel,
+                    breakdown,
+                    FitRowTextLabel(breakdownLabel, breakdown, fitWidth));
             }));
         }
 
@@ -2765,7 +3018,7 @@ namespace TaimisToolbench.Views
             int currencyId = entry.CurrencyId;
             int walletValue = entry.Value;
             string currencyIconUrl = entry.IconUrl;
-            IconControls.CreateItemIcon(
+            var icon = IconControls.CreateItemIconDeferredArt(
                 rowPanel, currencyIconUrl, ItemIconFrame.Currency(),
                 SnapshotItemGridLayout.CellIconX(chrome.AmountBand), 2,
                 ItemIconTier.CurrencyListRow,
@@ -2797,7 +3050,7 @@ namespace TaimisToolbench.Views
             int amountWidth = (int)Math.Ceiling(UiFonts.Body.MeasureString(amountText).Width);
             CreateAmountLabel(rowPanel, amountText, amountWidth, chrome.AmountBand, 6);
 
-            _walletCells.Add(new ResultCell(rowPanel, w =>
+            _walletCells.Add(new ResultCell(rowPanel, icon, w =>
             {
                 FitRowTextLabel(
                     label, name, SnapshotItemGridLayout.CellTextMaxWidth(w, chrome.AmountBand));
