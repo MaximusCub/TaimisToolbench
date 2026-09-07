@@ -3275,6 +3275,34 @@ decisions are made in Blish-free classes -
 `DecisionPillPlanner.AppendCurrencyTradeUpPill` and
 `TreeRowTooltipComposer.BuildWikiUrl` - so the view only wires them up.
 
+The Total Cost table states such an item ONCE, whatever mix of routes the
+plan took to it. `Services/CurrencyTradeUpCoalescing.cs` is the rule:
+a finished vendor step that pays one wallet currency and nothing else, for a
+currency the module puts no coin value on, contributes its own item count to
+`CraftingPlan.BarterItemCosts` instead of its currency to
+`CraftingPlan.CurrencyCosts`. The reported case was the Obsidian Heavy
+Breastplate, whose plan needs each of the three materials twice over: another
+vendor offer takes 13 in barter, and the plan buys 5 more with the map
+currency. The table used to read "13 Case of Captured Lightning" beside "1,250
+Static Charge" - one item, two lines, and neither number was 18.
+
+Two exclusions keep the rule where it belongs. A currency the curated table
+prices has a coin equivalent, so the plan can compare a route to it and the
+wallet line is the honest statement; only an unvalued one coalesces. And a
+requested item is what the plan produces, so its own acquisition is never
+folded into a requirement for itself.
+
+A coalesced row carries a Note column saying what a held sub-currency converts
+into - the holding, that currency's icon, then how many of the row's item it
+buys, capped at what the row still needs. That count comes off Needed, because
+a player holding the currency converts it up before acquiring the rest any
+other way. Have stays the literal count of the item itself. The note and the
+subtraction are one decision in
+`PlanViewModelBuilder.ApplyTradeUpNote`: both are skipped when the currency
+resolves no icon, so a Needed no visible note accounts for cannot ship. The
+column reserves nothing at all when no row carries a note, which is every plan
+without one of these items.
+
 `Services/PlanRelayoutMath.cs` fits those pills into the row.
 `ComputeVisiblePillCount` is the primitive: at least one pill is always
 drawn even when it alone overruns, because a completely empty pill column

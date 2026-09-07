@@ -58,7 +58,7 @@ Models/PlanRequestItem.cs                                                       
 Models/PlanSolveContext.cs                                                              212
 Models/PlanStatus.cs                                                                    11
 Models/PlanStep.cs                                                                      72
-Models/PlanViewModel.cs                                                                 475
+Models/PlanViewModel.cs                                                                 492
 Models/PriceBasis.cs                                                                    32
 Models/RankerRowMetrics.cs                                                              152
 Models/RankerSlotAvailability.cs                                                        59
@@ -102,7 +102,7 @@ Services/CompositeRecipeApiClient.cs                                            
 Services/CostLineValuation.cs                                                           121
 Services/CraftCompetencyEvaluator.cs                                                    125
 Services/CraftableItemSearchProvider.cs                                                 127
-Services/CraftingPlanPipeline.cs                                                        1669
+Services/CraftingPlanPipeline.cs                                                        1697
 Services/CraftingTreeBuilder.cs                                                         626
 Services/CurrencyDisplayResolver.cs                                                     236
 Services/CurrencyMetadataService.cs                                                     159
@@ -182,18 +182,18 @@ Services/PlanPhaseEvent.cs                                                      
 Services/PlanRelayoutMath.cs                                                            479
 Services/PlanResultBuilder.cs                                                           416
 Services/PlanRootNodes.cs                                                               46
-Services/PlanSolver.cs                                                                  2323
+Services/PlanSolver.cs                                                                  2346
 Services/PlanStore.cs                                                                   219
 Services/PlanStoreHelpers.cs                                                            374
 Services/PlanStripStatusBoard.cs                                                        307
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     597
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        1761
+Services/PlanViewModelBuilder.cs                                                        1809
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
-Services/RankerReadinessCalculator.cs                                                   698
+Services/RankerReadinessCalculator.cs                                                   699
 Services/RankerReadinessRamp.cs                                                         265
 Services/RankerReadinessWeights.cs                                                      61
 Services/RankerResultCache.cs                                                           263
@@ -260,7 +260,7 @@ Services/StatusStore.cs                                                         
 Services/StatusText.cs                                                                  289
 Services/StatusUpdateGuard.cs                                                           38
 Services/StickyHeaderLayout.cs                                                          117
-Services/SummarySectionLayoutMath.cs                                                    913
+Services/SummarySectionLayoutMath.cs                                                   1031
 Services/TableSortState.cs                                                              114
 Services/TransmutedNameIndex.cs                                                         215
 Services/UiGlyphs.cs                                                                    124
@@ -282,7 +282,7 @@ Services/TypeRampMetrics.cs                                                     
 Services/UiSpacing.cs                                                                   53
 Services/UpgradeEffectLines.cs                                                          182
 Services/ValueDetailTooltipBuilder.cs                                                   159
-Services/VendorBatchSolver.cs                                                           1206
+Services/VendorBatchSolver.cs                                                           1242
 Services/VendorOfferLoader.cs                                                           51
 Services/VendorOfferStore.cs                                                            218
 Services/WheelDeltaSanitizer.cs                                                         92
@@ -342,7 +342,7 @@ Views/Rendering/SortableHeaderBlock.cs                                          
 Views/Rendering/SortableHeaderCells.cs                                                  249
 Views/Rendering/SortableHeaderLabel.cs                                                  38
 Views/Rendering/StickyHeaderHost.cs                                                     408
-Views/Rendering/SummarySectionRenderer.cs                                               1137
+Views/Rendering/SummarySectionRenderer.cs                                               1291
 Views/Rendering/TextRowRenderer.cs                                                      36
 Views/Rendering/TooltipFacility.cs                                                      288
 Views/Rendering/TreeSectionController.cs                                                2530
@@ -590,7 +590,7 @@ tests/TaimisToolbench.Tests/Services/StatusStoreTests.cs                        
 tests/TaimisToolbench.Tests/Services/StatusTextTests.cs                                 351
 tests/TaimisToolbench.Tests/Services/StatusUpdateGuardTests.cs                          33
 tests/TaimisToolbench.Tests/Services/StickyHeaderLayoutTests.cs                         266
-tests/TaimisToolbench.Tests/Services/SummarySectionLayoutMathTests.cs                   1445
+tests/TaimisToolbench.Tests/Services/SummarySectionLayoutMathTests.cs                   1537
 tests/TaimisToolbench.Tests/Services/TableSortStateTests.cs                             198
 tests/TaimisToolbench.Tests/Services/GlyphButtonMetricsTests.cs                         143
 tests/TaimisToolbench.Tests/Services/GlyphFontDescriptorTests.cs                        332
@@ -611,7 +611,7 @@ tests/TaimisToolbench.Tests/Services/TreeRowShapeGoldenTests.cs                 
 tests/TaimisToolbench.Tests/Services/TreeRowTooltipComposerTests.cs                     538
 tests/TaimisToolbench.Tests/Services/TypeRampMetricsTests.cs                            206
 tests/TaimisToolbench.Tests/Services/ValueDetailTooltipBuilderTests.cs                  191
-tests/TaimisToolbench.Tests/Services/VendorCurrencyTradeUpRoutingTests.cs               207
+tests/TaimisToolbench.Tests/Services/VendorCurrencyTradeUpRoutingTests.cs               241
 tests/TaimisToolbench.Tests/Services/VendorOfferStoreTests.cs                           576
 tests/TaimisToolbench.Tests/Services/VendorUnlockRecipeTests.cs                         233
 tests/TaimisToolbench.Tests/Services/WheelDeltaSanitizerTests.cs                        183
