@@ -164,10 +164,10 @@ namespace TaimisToolbench.Tests.Services
             // caption. The row height has to hold that stack plus the pad.
             //
             // AmountRunHeight, not CoinIconSize: the run is as tall as the
-            // taller of its text and its icon, and since the coins moved
-            // onto the 16px wallet BAR tier that is the text. Modelling the
-            // icon here would understate the run by 4px and let a band that
-            // actually overflows pass.
+            // taller of its text and its icon, and at the 18px wallet BAR
+            // tier that is the text. Modelling the icon here would
+            // understate the run by 2px and let a band that actually
+            // overflows pass.
             int amountY = PlanContentHeightMath.CostTileCaptionY
                 + TypeRampMetrics.ColumnHeaderInk.LineHeight
                 + PlanContentHeightMath.CostTileLabelToValueGap;
@@ -321,53 +321,85 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void RecipeRowHeight_ExactlyFitsIconFramePlusDividerPlusClearance()
+        public void RecipeRowHeight_FitsThePaddedIconFramePlusDividerPlusClearance()
         {
-            // Views/Rendering/RecipesSectionRenderer.CreateRecipeRow
-            // places a tier-2 rarity-framed icon at y=0 and a
-            // bottom-anchored 2px row divider inside rowHeight - the
-            // constant must equal exactly icon frame + divider + the one
-            // clearance pixel the scissor simulation demands at this
-            // height (42 + 2 + 1 = 45), with no overlap or slack. The
-            // pre-tier-2 shape (34 + 2 + 0 = 36) needed no clearance; 44
-            // is in the vulnerable class (KNOWN-ISSUES #23 / M36b), so
-            // the pixel is part of the height rather than an overlap of
-            // the icon - see RowDividerScissorSimulationTests.
+            // Views/Rendering/RecipesSectionRenderer.CreateRecipeRow places
+            // a tier-2 rarity-framed icon at IconRowIconY and a
+            // bottom-anchored 2px row divider inside rowHeight. The height
+            // must equal the icon's own y, the frame, the padding under it,
+            // the divider and the one clearance pixel the scissor
+            // simulation demands (2 + 42 + 3 + 2 + 1 = 50), with no overlap
+            // or slack. The clearance pixel is part of the height rather
+            // than an overlap of the icon - see
+            // RowDividerScissorSimulationTests.
             Assert.Equal(
-                ItemIconTiers.BagSidebarIconSize + 2 * PlanContentHeightMath.RowIconBorder
+                PlanContentHeightMath.IconRowIconY
+                    + ItemIconTiers.BagSidebarIconSize + 2 * PlanContentHeightMath.RowIconBorder
+                    + PlanContentHeightMath.IconRowFramePadding
                     + PlanContentHeightMath.RowDividerHeight
                     + PlanContentHeightMath.IconRowDividerClearance,
                 PlanContentHeightMath.RecipeRowHeight);
-            Assert.Equal(45, PlanContentHeightMath.RecipeRowHeight);
+            Assert.Equal(50, PlanContentHeightMath.RecipeRowHeight);
         }
 
         [Fact]
-        public void IconLedRowHeights_ShareTheTierTwoFlushFit()
+        public void IconLedRowHeights_ShareTheTierTwoPaddedFit()
         {
-            // Used Materials, Shopping List and Required Recipes rows are
-            // the same flush shape: tier-2 icon frame at y=0, divider
-            // directly beneath, clearance pixel absorbed by the height.
+            // Used Materials, Shopping List, Required Recipes and Crafting
+            // Steps rows are the same padded shape: tier-2 icon frame at
+            // IconRowIconY, IconRowFramePadding of clear space between the
+            // frame and the divider on either side, clearance pixel
+            // absorbed by the height.
             Assert.Equal(PlanContentHeightMath.RecipeRowHeight, PlanContentHeightMath.UsedMaterialRowHeight);
             Assert.Equal(PlanContentHeightMath.RecipeRowHeight, PlanContentHeightMath.ShoppingRowHeight);
+            Assert.Equal(PlanContentHeightMath.RecipeRowHeight, PlanContentHeightMath.CraftStepRowHeight);
         }
 
         [Fact]
-        public void CraftStepRowHeight_InsetsTheTierTwoIconSymmetrically()
+        public void CraftStepRowHeight_PadsTheIconEquallyAboveAndBelow()
         {
-            // The craft-step icon sits CraftStepIconY below the row top
-            // with the same margin below the frame (5 + 42 + 5 = 52). The
-            // divider then lands at rowHeight - 2 - clearance = 49, 2px
-            // below the icon frame bottom (47) - the same icon-to-divider
-            // gap the pre-tier-2 44px shape had.
-            Assert.Equal(
-                2 * PlanContentHeightMath.CraftStepIconY + PlanContentHeightMath.RowIconFrameSize,
-                PlanContentHeightMath.CraftStepRowHeight);
-            Assert.Equal(52, PlanContentHeightMath.CraftStepRowHeight);
+            // Reported in game: the craft-step rule sat 2px under the icon
+            // frame and 6px over the next one. The row now uses the shared
+            // padded fit, so the reader sees IconRowFramePadding on both
+            // sides. The numbered badge beside the icon centres itself in
+            // whatever the row height is, so it needs no separate inset.
+            Assert.Equal(50, PlanContentHeightMath.CraftStepRowHeight);
             int dividerTop = PlanContentHeightMath.CraftStepRowHeight
                 - PlanContentHeightMath.RowDividerHeight
                 - PlanContentHeightMath.IconRowDividerClearance;
-            int iconFrameBottom = PlanContentHeightMath.CraftStepIconY + PlanContentHeightMath.RowIconFrameSize;
-            Assert.Equal(2, dividerTop - iconFrameBottom);
+            int iconFrameBottom = PlanContentHeightMath.IconRowIconY + PlanContentHeightMath.RowIconFrameSize;
+            Assert.Equal(PlanContentHeightMath.IconRowFramePadding, dividerTop - iconFrameBottom);
+
+            int previousDividerBottom = dividerTop + PlanContentHeightMath.RowDividerHeight;
+            Assert.Equal(
+                PlanContentHeightMath.IconRowFramePadding,
+                (PlanContentHeightMath.CraftStepRowHeight + PlanContentHeightMath.IconRowIconY)
+                    - previousDividerBottom);
+        }
+
+        [Fact]
+        public void CraftStepBadge_CentresOnTheBandAReaderSees()
+        {
+            // The numbered badge used to centre on the full row height,
+            // which counts the rule and its clearance pixel as space. That
+            // put 8px over the badge and 4px under it. Centred on
+            // IconLedRowVisibleHeight the two gaps match.
+            Assert.Equal(47, PlanContentHeightMath.IconLedRowVisibleHeight);
+
+            int dividerTop = PlanContentHeightMath.CraftStepRowHeight
+                - PlanContentHeightMath.RowDividerHeight
+                - PlanContentHeightMath.IconRowDividerClearance;
+            int badgeTop = PlanContentHeightMath.CraftStepBadgeY;
+            int badgeBottom = badgeTop + PlanContentHeightMath.CraftStepBadgeSize;
+
+            // Below: the rule this row draws. Above: the rule the row
+            // before it drew, whose clearance pixel is already blank.
+            int gapBelow = dividerTop - badgeBottom;
+            int gapAbove = (PlanContentHeightMath.CraftStepRowHeight + badgeTop)
+                - (dividerTop + PlanContentHeightMath.RowDividerHeight);
+
+            Assert.Equal(gapAbove, gapBelow);
+            Assert.Equal(6, gapBelow);
         }
 
         [Fact]

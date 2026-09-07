@@ -38,8 +38,8 @@ namespace TaimisToolbench.Services
         // Gw2Constants.ResolveCurrencyName's unknown-id fallback
         // ("Currency"), and PlanViewModelBuilder.ResolveName ("Unknown
         // Item" again). None of these describe a real wiki page - a row
-        // carrying one of them still advertises "Right-click: Open wiki
-        // page" and, on click, opens a guaranteed-404 URL while stealing
+        // carrying one of them still advertises the right-click wiki
+        // affordance and, on click, opens a guaranteed-404 URL while stealing
         // focus into the browser. Centralized here (rather than at each of
         // the several call sites that build a link from a resolved name)
         // so every BuildXxxUrl method below returns null for these names

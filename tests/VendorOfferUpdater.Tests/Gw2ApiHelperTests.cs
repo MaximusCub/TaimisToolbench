@@ -136,5 +136,92 @@ namespace VendorOfferUpdater.Tests
             using var __ = httpClient;
             Assert.Null(helper.ResolveCurrencyId(input));
         }
+
+        // -- Wiki page titles against API currency names ------------
+        [Fact]
+        public async Task MatchCurrencyName_SingularWikiTitle_FindsThePluralApiName()
+        {
+            var (helper, handler, httpClient) = CreateHelper();
+            using var _ = httpClient;
+            SetupCurrencyResponses(handler,
+                "[33,69]",
+                "[{\"id\":33,\"name\":\"Ascended Shards of Glory\"}," +
+                "{\"id\":69,\"name\":\"Tales of Dungeon Delving\"}]");
+
+            await helper.LoadCurrenciesAsync();
+
+            Assert.Equal(
+                "Tales of Dungeon Delving", helper.MatchCurrencyName("Tale of Dungeon Delving"));
+            Assert.Equal(
+                "Ascended Shards of Glory", helper.MatchCurrencyName("Ascended Shard of Glory"));
+        }
+
+        [Fact]
+        public async Task MatchCurrencyName_ExactName_IsReturnedUnchanged()
+        {
+            var (helper, handler, httpClient) = CreateHelper();
+            using var _ = httpClient;
+            SetupCurrencyResponses(handler, "[66]", "[{\"id\":66,\"name\":\"Ancient Coin\"}]");
+
+            await helper.LoadCurrenciesAsync();
+
+            Assert.Equal("Ancient Coin", helper.MatchCurrencyName("Ancient Coin"));
+        }
+
+        [Fact]
+        public async Task MatchCurrencyName_TwoCurrenciesSharingAStem_MatchesNeither()
+        {
+            var (helper, handler, httpClient) = CreateHelper();
+            using var _ = httpClient;
+            SetupCurrencyResponses(handler,
+                "[90,91]",
+                "[{\"id\":90,\"name\":\"Prophet Shard\"},{\"id\":91,\"name\":\"Prophet Shards\"}]");
+
+            await helper.LoadCurrenciesAsync();
+
+            // Both are still reachable by their exact names; only the guess
+            // between them is refused.
+            Assert.Equal(90, helper.ResolveCurrencyId("Prophet Shard"));
+            Assert.Null(helper.MatchCurrencyName("Prophets Shard"));
+        }
+
+        [Fact]
+        public async Task MatchCurrencyName_ACurrencyTheApiDoesNotHave_ReturnsNull()
+        {
+            var (helper, handler, httpClient) = CreateHelper();
+            using var _ = httpClient;
+            SetupCurrencyResponses(handler, "[2]", "[{\"id\":2,\"name\":\"Karma\"}]");
+
+            await helper.LoadCurrenciesAsync();
+
+            Assert.Null(helper.MatchCurrencyName("Glory"));
+            Assert.Null(helper.MatchCurrencyName("Influence"));
+        }
+
+        [Fact]
+        public async Task AddCurrencyAlias_MakesTheDisplayStringResolve()
+        {
+            var (helper, handler, httpClient) = CreateHelper();
+            using var _ = httpClient;
+            SetupCurrencyResponses(handler, "[3]", "[{\"id\":3,\"name\":\"Laurel\"}]");
+
+            await helper.LoadCurrenciesAsync();
+
+            Assert.True(helper.AddCurrencyAlias("Laurels", "Laurel"));
+            Assert.Equal(3, helper.ResolveCurrencyId("Laurels"));
+        }
+
+        [Fact]
+        public async Task AddCurrencyAlias_RefusesANameTheApiDoesNotHave()
+        {
+            var (helper, handler, httpClient) = CreateHelper();
+            using var _ = httpClient;
+            SetupCurrencyResponses(handler, "[2]", "[{\"id\":2,\"name\":\"Karma\"}]");
+
+            await helper.LoadCurrenciesAsync();
+
+            Assert.False(helper.AddCurrencyAlias("Glory", "Glory"));
+            Assert.Null(helper.ResolveCurrencyId("Glory"));
+        }
     }
 }

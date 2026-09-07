@@ -31,7 +31,7 @@ namespace TaimisToolbench.Tests.Services
         // CoinIconY's; everything else still centres here.
         [Theory]
         [InlineData(3, 14, CoinSegmentMath.CoinIconSize)]
-        [InlineData(2, 13, CoinSegmentMath.CoinIconSize)]
+        [InlineData(2, 15, CoinSegmentMath.CoinIconSize)]
         [InlineData(6, 24, CurrencyIconTiers.WalletListIconSize)]
         [InlineData(4, 17, 12)]
         public void TheInlineIconSeat_CentresTheIconOnTheDigitsInk(
@@ -82,6 +82,10 @@ namespace TaimisToolbench.Tests.Services
         private const int BodyZeroHeight = 15;
         private const int BodyDigitInkBottom = 16;
 
+        // Where MainView draws the coin row's "Coin" caption inside its
+        // block panel. The digits are seated against this.
+        private const int CaptionY = 2;
+
         // The three shipped 32x32 coin textures, DRAWN rows MEASURED by
         // compositing each source row over a dark row ground: gold and
         // silver 5..23, copper 7..23. Rows 24..26 composite darker than the
@@ -119,12 +123,12 @@ namespace TaimisToolbench.Tests.Services
         {
             // The whole seat, end to end, at the face and tier every plan
             // table draws its coin runs in: Menomonia 16's '0' against the
-            // 16px bar-tier box. Pinned as one number because it is what a
+            // 18px bar-tier box. Pinned as one number because it is what a
             // reader compares against the game, and because a drift in the
             // glyph pad, the art's last drawn row or the hang below the
             // baseline each move it without failing anything else.
             Assert.Equal(
-                5, CoinSegmentMath.CoinIconY(BodyZeroYOffset, BodyZeroHeight, CoinSegmentMath.CoinIconSize));
+                4, CoinSegmentMath.CoinIconY(BodyZeroYOffset, BodyZeroHeight, CoinSegmentMath.CoinIconSize));
         }
 
         [Fact]
@@ -143,24 +147,42 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void TheCurrencySeat_IsUnchangedForTheShippedFaceAndTier()
+        public void TheCurrencySeat_CentresTheBoxAtTheShippedFaceAndTier()
         {
-            // Deliberately left alone: the non-coin icons measured centred
-            // to within half a pixel in the same capture that reported the
-            // coin defect. This is the value they have always had.
+            // The non-coin icons measured centred to within half a pixel in
+            // the capture that reported the coin defect, and they still
+            // centre. The seat is 0 at this face and tier because an 18px
+            // box very nearly fills the '0' ink's own reach, not because
+            // the box was parked on the line box top: the ink runs rows
+            // 3..15 and the centred box rows 0..17, half a pixel high.
             Assert.Equal(
-                1, CoinSegmentMath.InlineIconY(BodyZeroYOffset, BodyZeroHeight, CoinSegmentMath.CoinIconSize));
+                0, CoinSegmentMath.InlineIconY(BodyZeroYOffset, BodyZeroHeight, CoinSegmentMath.CoinIconSize));
+        }
+
+        [Fact]
+        public void ACurrencyIconTallerThanTheDigits_StaysInsideTheLineBox()
+        {
+            // A box taller than the ink it marks cannot be centred on that
+            // ink without starting above the label's own top, and the row
+            // above reserved its height from that line box. So the seat
+            // stops at the top edge instead. The first case is the datum
+            // the centring theory above dropped when the tier reached 18.
+            Assert.Equal(0, CoinSegmentMath.InlineIconY(2, 13, CoinSegmentMath.CoinIconSize));
+            Assert.Equal(0, CoinSegmentMath.InlineIconY(BodyZeroYOffset, BodyZeroHeight, 40));
         }
 
         [Theory]
-        [InlineData(CoinSegmentMath.CoinIconSize, 12)]
-        [InlineData(CurrencyIconTiers.WalletListIconSize, 24)]
+        [InlineData(16, 12)]
+        [InlineData(18, 13)]
+        [InlineData(32, 24)]
         [InlineData(12, 9)]
         public void TheCoinArtsInkBottom_ScalesWithTheIconBox(int iconSize, int expected)
         {
             // The art's bottom padding is a fraction of the texture, not a
-            // constant, so a run drawn at another size cannot inherit the
-            // 16px answer.
+            // constant, so a run drawn at another size cannot inherit
+            // another size's answer. The sizes are literal because the fact
+            // under test is the texture's black bottom rim, which no icon
+            // tier moves.
             Assert.Equal(expected, CoinSegmentMath.CoinArtInkBottom(iconSize));
         }
 
@@ -199,6 +221,31 @@ namespace TaimisToolbench.Tests.Services
                     + CoinSegmentMath.CoinInkBelowBaseline,
                 y);
             Assert.Equal(7, y);
+        }
+
+        [Fact]
+        public void TheCoinSeat_HoldsItsRow_WhateverFaceTheDigitsUse()
+        {
+            // The snapshot coin row draws its digits and its "Coin" caption
+            // on one baseline. Whichever face the digits take, aligning it
+            // to that baseline has to leave the digits' ink bottom on the
+            // row it was already on, because the coin is seated on that ink
+            // bottom by measurement.
+            int digitY = TypeRampMetrics.BaselineAlignedY(
+                TypeRampMetrics.CoinDigitInk, CaptionY + TypeRampMetrics.BodyInk.BaselineY);
+
+            // The digits draw at Body, the caption's own face, so aligning
+            // them to its baseline moves them nowhere.
+            Assert.Equal(CaptionY, digitY);
+
+            int digitFace = digitY
+                + CoinSegmentMath.CoinIconY(
+                    BodyZeroYOffset, BodyZeroHeight, CoinSegmentMath.CoinIconSize);
+            int bodyFace = CaptionY
+                + CoinSegmentMath.CoinIconY(
+                    BodyZeroYOffset, BodyZeroHeight, CoinSegmentMath.CoinIconSize);
+
+            Assert.Equal(bodyFace, digitFace);
         }
 
         [Fact]
@@ -328,11 +375,10 @@ namespace TaimisToolbench.Tests.Services
         public void TotalCurrencySegmentsWidth_MultipleSegments_GapBetweenNotAfter()
         {
             // Pins the gap arithmetic exactly (1 gap for 2 segments):
-            // 30 + 2 + 16 = 48 for the first, 10 + 2 + 16 = 28 for the
-            // second, plus a single 6px segmentGap between them = 82.
-            // The 16 is CurrencyIconTiers.WalletBarIconSize, which
-            // CoinIconSize now is - re-baselined from 20 when the inline
-            // runs moved onto the measured wallet bar tier.
+            // 30 + 2 + 18 = 50 for the first, 10 + 2 + 18 = 30 for the
+            // second, plus a single 6px segmentGap between them = 86.
+            // The 18 is CurrencyIconTiers.WalletBarIconSize, which
+            // CoinIconSize now is.
             var segments = new List<CoinSegmentMath.CurrencySegmentSpec>
             {
                 new CoinSegmentMath.CurrencySegmentSpec { IconUrl = "karma.png", Text = "1200", TextWidth = 30 },
@@ -344,7 +390,7 @@ namespace TaimisToolbench.Tests.Services
                 (10 + LabelIconGap + IconSize) +
                 SegmentGap;
             Assert.Equal(expected, CoinSegmentMath.TotalCurrencySegmentsWidth(segments));
-            Assert.Equal(82, expected);
+            Assert.Equal(86, expected);
         }
 
         [Fact]

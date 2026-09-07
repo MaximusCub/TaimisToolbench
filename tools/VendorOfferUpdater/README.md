@@ -152,14 +152,15 @@ datasets, the report is `repriced: 371, retagged: 492, rehashed: 48379`.
 | `ref/vendor_offers.json` | ~14.8 MB | **Baseline vendor offers** - loaded by the Blish HUD module at runtime. Contains deduplicated, ID-resolved vendor offers. Committed to repo and embedded in the `.bhm` package. Marked `-diff -merge linguist-generated` in `.gitattributes`. |
 | `ref/vendor_offers_manifest.json` | ~130 B | **Provenance record** for the file above - schema version, source, offer count, and the run's `generatedAt`. Everything run-scoped lives here so the payload stays byte-stable across a no-op refresh. Committed to repo. |
 | `ref/wiki_vendor_cache.json` | ~19.6 MB | **Wiki query cache** - raw SMW results from Pass 1. Used by Pass 2 for currency resolution. Supports incremental merging across multiple scrape runs. Gitignored (dev-local) since PR #92, and excluded from the packed `.bhm` since M38/WP-29 - see `docs/RELEASING.md`. |
-| `ref/item_id_cache.json` | ~40 KB | **Item ID cache** - maps item currency names to GW2 game IDs, and remembers the names the wiki answered no id for, with the date each was recorded. Avoids re-resolving known names on subsequent runs. See "Remembered misses" below. Gitignored (dev-local), same as the wiki cache above. |
+| `ref/item_id_cache.json` | ~40 KB | **Cost name cache** - settles each wiki cost name as an item's GW2 game ID, as the name of the wallet currency it turns out to be, or as a dated miss the wiki answered no id for. Avoids re-resolving settled names on subsequent runs. See "Resolving a cost name" and "Remembered misses" below. Gitignored (dev-local), same as the wiki cache above. |
 | `ref/vendor_offers_unresolved.json` | small | **Unresolved sections** from the last run - the queries the wiki never answered, for a follow-up run to re-target. Written only when a run leaves something unresolved, and deleted by the next clean run. Gitignored (dev-local, run state rather than data). |
 | `ref/seasonal_wikitext_cache.json` | small | **Seasonal festival tag cache** - maps vendor page name to its raw wiki `{{Temporary\|...}}` seasonal/event value (or `""` for "checked, not tagged"). Only populated by `--tag-seasonal-festivals`. Gitignored (dev-local, like `wiki_vendor_cache.json`/`item_id_cache.json`). |
 
 ## What It Queries
 
 1. **GW2 API** `/v2/currencies` - loads all currency IDs and names so wiki currency strings (e.g. "Coin", "Volatile Magic") can be mapped to numeric IDs.
-2. **GW2 Wiki SMW API** `action=ask` - queries vendor subobject pages (`[[Sells item::+]]`) and pulls:
+2. **GW2 Wiki API** `action=query&redirects=1` - asks which page a cost name actually names, following redirects and title normalization, 50 names to a request. See "Resolving a cost name" below.
+3. **GW2 Wiki SMW API** `action=ask` - queries vendor subobject pages (`[[Sells item::+]]`) and pulls:
    - `Sells item.Has game id` - item's GW2 game ID
    - `Sells item` - item page name
    - `Has item quantity` - output count (defaults to 1)
@@ -270,14 +271,70 @@ overflows at `--max-depth`, whose remaining rows this run will never ask for,
 is recorded the same way; raise `--max-depth` (or `MAX_DEPTH` in the wrapper
 script) to split it further.
 
+## Resolving a cost name
+
+A vendor's price is one of two things: an item, or a wallet currency. The wiki
+gives it as display text in the SMW property `Has item currency`, typed `_txt`,
+and that text and the canonical page title disagree far more often than they
+agree. Matching the text exactly against the GW2 API's currency names and then
+against wiki page titles left 40 names unresolved across 1,639 cost lines, and
+every one of those is a price the module cannot read, so the whole offer is
+dropped.
+
+Two questions are now asked in order.
+
+**Which page does this name point at?** `action=query` with `redirects=1`
+answers it, 50 names to a request. The response carries two separate arrays and
+a name can appear in one, in the other, or in the first and then the second:
+
+| Array | What it reports | Example |
+|---|---|---|
+| `normalized` | title normalization, such as collapsing a doubled space | `Ancient  Coin` to `Ancient Coin` |
+| `redirects` | the page a redirect points at | `Ectoplasm` to `Glob of Ectoplasm` |
+
+Both are followed hop by hop, so a name that is normalized and then redirected
+lands on its real page. This reaches what no string rule can: `Convergences:
+Mount Balrior Wayfinder's Choice Chest` is a redirect to `Convergence: Mount
+Balrior Commander's Choice Chest`, a rewording rather than an inflection. The
+wiki has to answer, which is the same conclusion `FetchWikitextAsync` reached
+on the other endpoint - see `docs/ARCHITECTURE.md` section T.6.
+
+**Is that page an item or a currency?** The page title is matched against the
+GW2 API's currency names first. A title that matches nothing there is asked for
+`Has game id`, and a page that answers with one is an item. A page that answers
+with no id is neither an item nor an exactly-named currency, and only then is
+the title matched against the currency list a second time with every word's
+trailing `s` dropped on both sides. That last step is what closes the wiki's
+singular page title against the API's plural currency name - `Tale of Dungeon
+Delving` against `Tales of Dungeon Delving` - and it is deliberately last,
+because a name that is really an item never reaches it. A stem two currencies
+share is not matched at all.
+
+A currency the API does not name does not resolve, and must not. `Glory` and
+`Influence` still have wiki pages and neither is in the wallet; an offer priced
+in a currency no account can hold is not a route. The same rule drops a cached
+currency name the API has stopped listing, so a currency retired mid-life is
+asked about again rather than priced for ever.
+
+### What it costs
+
+The name pass is batched to MediaWiki's documented limit of 50 titles per
+request, against the item pass's 10 per SMW `ask`. For `N` names the wiki has
+never settled, the worst case is `ceil(N / 50)` requests on top of the
+`ceil(N / 10)` the item pass already made, each with the same `--max-attempts`
+ladder. A measured cold cache carried 1,106 such names, so 23 requests on top
+of 111. A warm cache with 40 unsettled names pays one.
+
+A request that fails is not an answer. A name whose page could not be looked up
+is asked about no further and cached neither way, exactly as an unanswered item
+batch is - see "Remembered misses" below.
+
 ## Remembered misses
 
-Item-based currency names ("Mystic Coin", "Glob of Ectoplasm") are resolved to
-game ids against the wiki and cached in `ref/item_id_cache.json`. Some names
-never resolve, and legitimately so: they are plural forms of a singular item,
-wallet currencies rather than items, or wiki table text with a typo in it (the
-live cache carries `Ancient  Coin`, with two spaces). Those names are cached as
-misses so that every future run does not ask about them again.
+A cost name the wiki answers about with no item id and no currency is cached as
+a miss, so that every future run does not ask about it again. What is left
+after the two passes above is a genuine absence: a name the wiki has no page
+for, or a page that is neither an item nor a currency an account can hold.
 
 A cached miss is permanent - the resolution pass only asks about names the
 cache has never settled - so it must only ever be recorded for a name the wiki
@@ -290,11 +347,19 @@ Every miss records the date it was written:
 
 ```jsonc
 {
-  "cacheVersion": 2,
+  "cacheVersion": 3,
   "ids": { "Mystic Coin": 19976 },
-  "misses": { "Ancient  Coin": "2026-09-05T21:02:41.7712030Z" }
+  "currencies": { "Tale of Dungeon Delving": "Tales of Dungeon Delving" },
+  "misses": { "Glory": "2026-09-05T21:02:41.7712030Z" }
 }
 ```
+
+A name is settled in exactly one of the three sections, and `Contains` covers
+all three, so a name in any of them is not asked about again. The `currencies`
+section stores the API's name rather than its id: the API is loaded fresh every
+run and is the authority on which currencies are live, so an entry it no longer
+names is dropped instead of going on pricing offers. A cache written before
+that section existed loads unchanged, with its names re-resolved once.
 
 A run prints how many misses it is carrying and how old the oldest is.
 `--recheck-misses` drops them all so they are asked about again, which is how

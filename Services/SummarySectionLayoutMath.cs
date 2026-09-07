@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using TaimisToolbench.Models;
 
 namespace TaimisToolbench.Services
@@ -182,8 +183,8 @@ namespace TaimisToolbench.Services
         /// Height of the cost formula band's single tile row: the highlight
         /// box's margin+padding, a caption line, the gap, one amount run
         /// (PlanContentHeightMath.AmountRunHeight - the taller of the amount
-        /// text's line box and the coin icon beside it, which since the coin
-        /// runs moved onto the wallet BAR tier is the text, not the icon),
+        /// text's line box and the coin icon beside it, which at the wallet
+        /// BAR tier is the text, not the icon),
         /// and the disclosure line hanging under the amount when there is
         /// one. That line used to be counted BETWEEN the caption and a
         /// bottom-anchored amount, which dropped all three tiles' coin runs
@@ -379,10 +380,19 @@ namespace TaimisToolbench.Services
             public readonly string Heading;
             public readonly IReadOnlyList<PlanRowViewModel> Rows;
 
-            internal NonCoinRowGroup(string heading, IReadOnlyList<PlanRowViewModel> rows)
+            /// <summary>
+            /// True for the barter-item group, false for the wallet one.
+            /// Carried rather than re-derived from the heading string,
+            /// which is display text.
+            /// </summary>
+            public readonly bool IsInventoryGroup;
+
+            internal NonCoinRowGroup(
+                string heading, IReadOnlyList<PlanRowViewModel> rows, bool isInventoryGroup)
             {
                 Heading = heading;
                 Rows = rows;
+                IsInventoryGroup = isInventoryGroup;
             }
         }
 
@@ -435,15 +445,65 @@ namespace TaimisToolbench.Services
             var groups = new List<NonCoinRowGroup>(2);
             if (wallet != null)
             {
-                groups.Add(new NonCoinRowGroup(WalletGroupHeading, wallet));
+                groups.Add(new NonCoinRowGroup(WalletGroupHeading, wallet, isInventoryGroup: false));
             }
 
             if (inventory != null)
             {
-                groups.Add(new NonCoinRowGroup(InventoryGroupHeading, inventory));
+                groups.Add(new NonCoinRowGroup(InventoryGroupHeading, inventory, isInventoryGroup: true));
             }
 
             return groups;
+        }
+
+        /// <summary>
+        /// Identity of one wallet currency's cost row, for
+        /// <see cref="PlanRowViewModel.NonCoinCostKey"/>. The "currency:"
+        /// half is not decoration: a wallet currency id and an item id are
+        /// different id spaces over the same numbers, so the bare number
+        /// would collide with the barter row for the same number.
+        /// </summary>
+        public static string WalletCurrencyCostKey(int currencyId)
+        {
+            return "currency:" + currencyId.ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>
+        /// Identity of one barter item's cost row. Twin of
+        /// <see cref="WalletCurrencyCostKey"/>; see it for why the id
+        /// space is spelled into the key.
+        /// </summary>
+        public static string BarterItemCostKey(int itemId)
+        {
+            return "item:" + itemId.ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>
+        /// Scroll anchor key of one non-coin cost row, or null when the
+        /// row carries no identity to anchor by. The id underneath is the
+        /// currency or item id, which the solver does not renumber, so the
+        /// key survives a re-solve that adds or drops rows around it -
+        /// that is what lets a restore put this row back on the line it
+        /// was on. Services/ScrollAnchorMath owns what a key is used for.
+        /// </summary>
+        public static string NonCoinRowAnchorKey(PlanRowViewModel row)
+        {
+            if (row == null || string.IsNullOrEmpty(row.NonCoinCostKey))
+            {
+                return null;
+            }
+
+            return "cost:" + row.NonCoinCostKey;
+        }
+
+        /// <summary>
+        /// Scroll anchor key of one group heading row. There are exactly
+        /// two headings and neither depends on the plan, so the group's
+        /// kind is the whole key.
+        /// </summary>
+        public static string NonCoinGroupAnchorKey(bool isInventoryGroup)
+        {
+            return isInventoryGroup ? "costgroup:inventory" : "costgroup:wallet";
         }
 
         /// <summary>

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
-using System.Globalization;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -433,6 +432,8 @@ namespace TaimisToolbench
             _lastStatus = _statusStore.Load();
 
             _httpClient = new HttpClient();
+            Gw2ApiUserAgent.Apply(_httpClient, Gw2ApiUserAgent.ModuleProduct,
+                Gw2ApiUserAgent.ReadManifestVersion(ModuleParameters?.Manifest));
             var rawRecipeApi = new Gw2RecipeApiClient(_httpClient);
             var mfSource = new ContentsManagerRecipeSource(ContentsManager);
             var mfData = RecipeClientFactory.LoadData(mfSource);
@@ -929,7 +930,14 @@ namespace TaimisToolbench
                 // The wallet rows' currency tooltips read the same
                 // session cache WarmCurrencyMetadataForSettings fills, so
                 // the description arrives without a second fetch.
-                _currencyMetadataService.GetCached
+                _currencyMetadataService.GetCached,
+                // A snapshot item's stat block has no other source: the
+                // capture reads name, icon and rarity out of Gw2Sharp and
+                // keeps nothing else, and the socketed runes, sigils and
+                // infusions a row can name are components no plan ever
+                // asks for. Without this the tab shows an identity-only
+                // tooltip for every item no plan happened to touch.
+                _warmItemStatsAsync
             );
 
             // The generate callback is always routed through the list
@@ -1178,10 +1186,10 @@ namespace TaimisToolbench
             _mainWindow.Tabs.Add(new Tab(
                 AsyncTexture2D.FromAssetId(156699),
                 () => new ViewAdapter(
-                    "Snapshot",
+                    "Account Snapshot",
                     c => _snapshotContent.Build(c),
                     b => _snapshotContent.BuildHeaderActions(b)),
-                "Snapshot"));
+                "Account Snapshot"));
 
             _rankerContent = new RankerTabContent(
                 _craftingPipeline,
@@ -2045,7 +2053,7 @@ namespace TaimisToolbench
                 Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
                 if (snapshot != null)
                 {
-                    var status = $"Updated \u2014 {snapshot.CapturedAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt", CultureInfo.InvariantCulture)}";
+                    var status = StatusText.Stamp("Updated", snapshot.CapturedAt.ToLocalTime());
                     SaveStatusThreadSafe(status);
                 }
 
@@ -2076,7 +2084,7 @@ namespace TaimisToolbench
                 // popups are a separate, deferred UX call.
                 var classification = SnapshotFailureClassifier.Classify(ex);
                 string cause = StatusText.ForRefreshFailure(classification.Kind, classification.FailedSourceCount, classification.TotalSourceCount);
-                var status = $"{cause} \u2014 {DateTime.Now.ToString("MMM d, yyyy h:mm tt", CultureInfo.InvariantCulture)}";
+                var status = StatusText.Stamp(cause, DateTime.Now);
                 SaveStatusThreadSafe(status);
             }
             finally

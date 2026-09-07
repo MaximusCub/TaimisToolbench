@@ -34,7 +34,10 @@ namespace TaimisToolbench.Tests.Services
                     SubType = "Gloves",
                     WeightClass = "Heavy",
                     Defense = 191,
-                    InfusionSlotCount = 1,
+                    InfusionSlots = new List<RawInfusionSlot>
+                    {
+                        new RawInfusionSlot { Flags = new List<string> { "Infusion" } },
+                    },
                     InfixAttributes = new List<RawItemAttribute>
                     {
                         new RawItemAttribute { Attribute = "Power", Modifier = 47 },

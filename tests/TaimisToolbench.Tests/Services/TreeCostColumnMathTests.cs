@@ -172,11 +172,11 @@ namespace TaimisToolbench.Tests.Services
         // Pinned as absolute pixel offsets from the column's right edge
         // rather than recomputed from the same constants the formula
         // reads. Segment width is text + CoinLabelIconGap(2) +
-        // CoinIconSize(16, = CurrencyIconTiers.WalletBarIconSize);
+        // CoinIconSize(18, = CurrencyIconTiers.WalletBarIconSize);
         // sub-columns are separated by CoinSegmentGap(6). A deliberate
-        // geometry change re-baselines the literals here - as the move of
-        // the inline coin runs onto the measured wallet bar tier just did,
-        // 20 -> 16.
+        // geometry change re-baselines the literals here - as the coin
+        // icon's re-measurement against the game's own bar just did,
+        // 16 -> 18.
         [Fact]
         public void ComputeEdges_AllThreeDenominations_StackRightToLeft()
         {
@@ -185,8 +185,8 @@ namespace TaimisToolbench.Tests.Services
 
             Assert.Equal(1000, edges.CurrencyRightEdge);
             Assert.Equal(1000, edges.CopperRightEdge);          // no currency band
-            Assert.Equal(1000 - 38 - 6, edges.SilverRightEdge); // copper: 20+2+16
-            Assert.Equal(1000 - 38 - 6 - 38 - 6, edges.GoldRightEdge);
+            Assert.Equal(1000 - 40 - 6, edges.SilverRightEdge); // copper: 20+2+18
+            Assert.Equal(1000 - 40 - 6 - 40 - 6, edges.GoldRightEdge);
         }
 
         [Fact]
@@ -210,8 +210,8 @@ namespace TaimisToolbench.Tests.Services
             var widths = new TreeCostColumnMath.CostColumnWidths(0, 20, 20, 0);
             var edges = TreeCostColumnMath.ComputeEdges(1000, widths);
 
-            Assert.Equal(1000 - 38 - 6, edges.SilverRightEdge);
-            Assert.Equal(38 + 6 + 38, edges.TotalWidth);
+            Assert.Equal(1000 - 40 - 6, edges.SilverRightEdge);
+            Assert.Equal(40 + 6 + 40, edges.TotalWidth);
         }
 
         [Fact]
@@ -341,12 +341,12 @@ namespace TaimisToolbench.Tests.Services
         {
             Assert.Equal(0, TreeCostColumnMath.TotalWidth(TreeCostColumnMath.CostColumnWidths.Empty));
 
-            // copper only: 20 + 2 + 16
-            Assert.Equal(38, TreeCostColumnMath.TotalWidth(
+            // copper only: 20 + 2 + 18
+            Assert.Equal(40, TreeCostColumnMath.TotalWidth(
                 new TreeCostColumnMath.CostColumnWidths(0, 0, 20, 0)));
 
-            // gold(48) + gap + silver(38) + gap + copper(38) + gap + currency(88)
-            Assert.Equal(48 + 6 + 38 + 6 + 38 + 6 + 88, TreeCostColumnMath.TotalWidth(
+            // gold(50) + gap + silver(40) + gap + copper(40) + gap + currency(88)
+            Assert.Equal(50 + 6 + 40 + 6 + 40 + 6 + 88, TreeCostColumnMath.TotalWidth(
                 new TreeCostColumnMath.CostColumnWidths(30, 20, 20, 88)));
         }
 
@@ -485,11 +485,11 @@ namespace TaimisToolbench.Tests.Services
             var widths = Scan(roots, currencyRunWidth: 88);
 
             // One row in each regime. The tie goes to the coin-only one -
-            // "123"/"45"/"67", segments 21/20/20 and two 6px gaps, 73px of
+            // "123"/"45"/"67", segments 23/22/22 and two 6px gaps, 79px of
             // ink - rather than to the currency row's 88px, and either way
-            // both fall well short of the 167px reserve.
-            Assert.Equal(73, widths.WidestRowRunWidth);
-            Assert.Equal(167, TreeCostColumnMath.TotalWidth(widths));
+            // both fall well short of the 173px reserve.
+            Assert.Equal(79, widths.WidestRowRunWidth);
+            Assert.Equal(173, TreeCostColumnMath.TotalWidth(widths));
         }
 
         /// <summary>
@@ -558,9 +558,9 @@ namespace TaimisToolbench.Tests.Services
             var widths = Scan(roots);
 
             // Row 2 is "45"/"67", starting at the silver sub-column's own
-            // edge: 20 + 6 + 20 = 46. Row 1's "1000"/"00"/"00" run is
-            // 22 + 6 + 20 + 6 + 20 = 74, which wins.
-            Assert.Equal(74, widths.WidestRowRunWidth);
+            // edge: 22 + 6 + 22 = 50. Row 1's "1000"/"00"/"00" run is
+            // 24 + 6 + 22 + 6 + 22 = 80, which wins.
+            Assert.Equal(80, widths.WidestRowRunWidth);
         }
 
         [Fact]
@@ -595,12 +595,12 @@ namespace TaimisToolbench.Tests.Services
 
             var widths = Scan(roots, currencyRunWidth: 88);
 
-            Assert.Equal(167, TreeCostColumnMath.TotalWidth(widths));
+            Assert.Equal(173, TreeCostColumnMath.TotalWidth(widths));
             Assert.True(FixedFloor - TreeCostColumnMath.TotalWidth(widths) < 0);
 
             Assert.Equal(88, widths.LeftmostInkReach);
-            Assert.Equal(167, TreeCostColumnMath.Reserve(widths, FixedFloor));
-            Assert.Equal(79, TreeCostColumnMath.RightSlack(widths, FixedFloor));
+            Assert.Equal(173, TreeCostColumnMath.Reserve(widths, FixedFloor));
+            Assert.Equal(85, TreeCostColumnMath.RightSlack(widths, FixedFloor));
         }
 
         /// <summary>
@@ -623,9 +623,9 @@ namespace TaimisToolbench.Tests.Services
 
             var widths = Scan(roots, currencyRunWidth: 88);
 
-            Assert.Equal(73, widths.WidestRowRunWidth);
-            Assert.Equal(140, widths.LeftmostInkReach);
-            Assert.Equal(27, TreeCostColumnMath.RightSlack(widths, FixedFloor));
+            Assert.Equal(79, widths.WidestRowRunWidth);
+            Assert.Equal(144, widths.LeftmostInkReach);
+            Assert.Equal(29, TreeCostColumnMath.RightSlack(widths, FixedFloor));
         }
 
         [Fact]
@@ -673,13 +673,13 @@ namespace TaimisToolbench.Tests.Services
         {
             // A single row's ink does fill the sub-column reserve - every
             // maximum is its own - so what is left to give back is the
-            // fixed floor's surplus over that ink, 76px the old reading
+            // fixed floor's surplus over that ink, 70px the old reading
             // also refused because it compared the floor with itself.
             var widths = Scan(new[] { Node(1, subtreeCost: 12345656) });
 
-            Assert.Equal(74, widths.LeftmostInkReach);
+            Assert.Equal(80, widths.LeftmostInkReach);
             Assert.Equal(TreeCostColumnMath.TotalWidth(widths), widths.LeftmostInkReach);
-            Assert.Equal(FixedFloor - 74, TreeCostColumnMath.RightSlack(widths, FixedFloor));
+            Assert.Equal(FixedFloor - 80, TreeCostColumnMath.RightSlack(widths, FixedFloor));
         }
 
         // --- HeaderX (the "Cost" header centres over the INK, not over
@@ -697,18 +697,18 @@ namespace TaimisToolbench.Tests.Services
         [Fact]
         public void HeaderX_CentresTheHeaderOverTheInk_NotOverTheReserve()
         {
-            // 48 + 6 + 38 + 6 + 38 = 136px of coin ink, then a 6px gap and
-            // an 88px currency band no coin row ever fills: a 230px reserve
-            // over 136px of ink. Centring in the reserve puts the word 47px
+            // 50 + 6 + 40 + 6 + 40 = 142px of coin ink, then a 6px gap and
+            // an 88px currency band no coin row ever fills: a 236px reserve
+            // over 142px of ink. Centring in the reserve puts the word 47px
             // left of the numbers, which is the reported defect.
-            var widths = new TreeCostColumnMath.CostColumnWidths(30, 20, 20, 88, 136);
+            var widths = new TreeCostColumnMath.CostColumnWidths(30, 20, 20, 88, 142);
 
-            int x = TreeCostColumnMath.HeaderX(1000, widths, 40, CostRoom(1000, 136));
+            int x = TreeCostColumnMath.HeaderX(1000, widths, 40, CostRoom(1000, 142));
 
-            Assert.Equal(912, x);
+            Assert.Equal(909, x);
             Assert.Equal(
-                865,
-                JustifiedColumnTracks.CenteredInBand(1000 - 230, 230, 40));
+                862,
+                JustifiedColumnTracks.CenteredInBand(1000 - 236, 236, 40));
         }
 
         [Fact]

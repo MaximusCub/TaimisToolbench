@@ -15,6 +15,42 @@ namespace TaimisToolbench.Tests.Services
         // Leaf comes from Helpers/RecipeNodeBuilders.cs.
 
         /// <summary>
+        /// Reduces <paramref name="subject"/> as an ingredient one level
+        /// below a plan root, and hands back a result whose ReducedTree is
+        /// the reduced subject.
+        /// <para>
+        /// A plan root never spends account stock on itself (see
+        /// InventoryReducer.ReduceNodeSourced), so a test about what stock
+        /// does to a node has to place that node somewhere other than the
+        /// top. The stand-in parent is an ordinary craftable node needing
+        /// one subject per craft; item 9000 appears in no fixture here, so
+        /// the account owns none of it and the subject reduces exactly as
+        /// it would anywhere else in a tree.
+        /// </para>
+        /// </summary>
+        private ReducedTreeResult ReduceBelowRoot(
+            RecipeNode subject,
+            AccountItemIndex index,
+            string activeCharacterName,
+            IReadOnlyDictionary<int, SolverDecision> zeroOwnedDecisions = null)
+        {
+            var option = new RecipeOption { RecipeId = 9001, OutputCount = 1, CraftsNeeded = 1 };
+            option.Ingredients.Add(subject);
+            var root = new RecipeNode
+            {
+                Id = 9000,
+                IngredientType = "Item",
+                Quantity = 1,
+                NodeId = 9000,
+                Recipes = new List<RecipeOption> { option },
+            };
+
+            var result = _reducer.Reduce(root, index, activeCharacterName, zeroOwnedDecisions);
+            result.ReducedTree = result.ReducedTree.Recipes[0].Ingredients[0];
+            return result;
+        }
+
+        /// <summary>
         /// Helper: build a craftable node with one recipe option. Kept
         /// local (not folded into RecipeNodeBuilders.Craftable) because
         /// this one has a genuinely different shape - it takes a
@@ -130,6 +166,74 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(Gw2Constants.MultiItemWrapperItemId, result.ReducedTree.Id);
         }
 
+        // --- The plan root is planned as if the account owns none of it ---
+        [Fact]
+        public void PlanRoot_KeepsItsFullQuantity_AndItsIngredientsStillReduce()
+        {
+            var tree = Craftable(1, 2, 10, 1, Leaf(2, 6));
+            var index = new AccountItemIndex(new List<SnapshotItemEntry>
+            {
+                SnapEntry(1, 100, AccountItemIndex.SourceMaterialStorage),
+                SnapEntry(2, 4, AccountItemIndex.SourceMaterialStorage),
+            });
+
+            var result = _reducer.Reduce(tree, index, null);
+
+            Assert.Equal(2, result.ReducedTree.Quantity);
+            Assert.Single(result.ReducedTree.Recipes);
+            Assert.Equal(2, result.ReducedTree.Recipes[0].Ingredients[0].Quantity);
+            Assert.DoesNotContain(result.UsedMaterials, u => u.ItemId == 1);
+            Assert.Contains(result.UsedMaterials, u => u.ItemId == 2 && u.QuantityUsed == 4);
+        }
+
+        [Fact]
+        public void EveryRequestedRootUnderTheWrapper_KeepsItsFullQuantity()
+        {
+            var tree = WrapperOf(
+                Craftable(1, 1, 10, 1, Leaf(2, 5)),
+                Craftable(3, 1, 12, 1, Leaf(2, 2)));
+            var index = new AccountItemIndex(new List<SnapshotItemEntry>
+            {
+                SnapEntry(1, 9, AccountItemIndex.SourceMaterialStorage),
+                SnapEntry(3, 9, AccountItemIndex.SourceMaterialStorage),
+                SnapEntry(2, 3, AccountItemIndex.SourceMaterialStorage),
+            });
+
+            var result = _reducer.Reduce(tree, index, null);
+
+            var roots = result.ReducedTree.Recipes[0].Ingredients;
+            Assert.Equal(2, roots.Count);
+            Assert.All(roots, r => Assert.Equal(1, r.Quantity));
+            Assert.DoesNotContain(result.UsedMaterials, u => u.ItemId == 1);
+            Assert.DoesNotContain(result.UsedMaterials, u => u.ItemId == 3);
+
+            // The shared ingredient still drains the one pool: 3 owned, so
+            // the first root takes all 3 and the second is left needing 2.
+            Assert.Contains(result.UsedMaterials, u => u.ItemId == 2 && u.QuantityUsed == 3);
+            Assert.Equal(2, roots[0].Recipes[0].Ingredients[0].Quantity);
+            Assert.Equal(2, roots[1].Recipes[0].Ingredients[0].Quantity);
+        }
+
+        [Fact]
+        public void PlanRootStock_IsStillAvailableToADeeperNodeOfTheSameItem()
+        {
+            // Item 1 is the plan root and also an ingredient two levels
+            // down. Only the root occurrence is exempt.
+            var tree = Craftable(1, 1, 10, 1, Craftable(2, 1, 11, 1, Leaf(1, 2)));
+            var index = new AccountItemIndex(new List<SnapshotItemEntry>
+            {
+                SnapEntry(1, 2, AccountItemIndex.SourceMaterialStorage),
+            });
+
+            var result = _reducer.Reduce(tree, index, null);
+
+            Assert.Equal(1, result.ReducedTree.Quantity);
+            var deeper = result.ReducedTree.Recipes[0].Ingredients[0].Recipes[0].Ingredients[0];
+            Assert.Equal(1, deeper.Id);
+            Assert.Equal(0, deeper.Quantity);
+            Assert.Contains(result.UsedMaterials, u => u.ItemId == 1 && u.QuantityUsed == 2);
+        }
+
         [Fact]
         public void LeafFullyOwned_QuantityZero()
         {
@@ -139,7 +243,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(100, 5, AccountItemIndex.SourceMaterialStorage),
             });
 
-            var result = _reducer.Reduce(tree, index, null);
+            var result = ReduceBelowRoot(tree, index, null);
 
             Assert.Equal(0, result.ReducedTree.Quantity);
             Assert.Single(result.UsedMaterials);
@@ -156,7 +260,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(100, 3, AccountItemIndex.SourceMaterialStorage),
             });
 
-            var result = _reducer.Reduce(tree, index, null);
+            var result = ReduceBelowRoot(tree, index, null);
 
             Assert.Equal(2, result.ReducedTree.Quantity);
             Assert.Single(result.UsedMaterials);
@@ -175,7 +279,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(2, 100, AccountItemIndex.SourceMaterialStorage),
             });
 
-            var result = _reducer.Reduce(tree, index, null);
+            var result = ReduceBelowRoot(tree, index, null);
 
             Assert.Equal(0, result.ReducedTree.Quantity);
             Assert.Empty(result.ReducedTree.Recipes);
@@ -200,7 +304,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(1, 4, AccountItemIndex.SourceMaterialStorage),
             });
 
-            var result = _reducer.Reduce(tree, index, null);
+            var result = ReduceBelowRoot(tree, index, null);
 
             Assert.Equal(6, result.ReducedTree.Quantity);
             var option = result.ReducedTree.Recipes[0];
@@ -275,7 +379,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(1, 2, AccountItemIndex.SourceBank),
             });
 
-            var result = _reducer.Reduce(tree, index, null);
+            var result = ReduceBelowRoot(tree, index, null);
 
             Assert.Equal(6, result.ReducedTree.Quantity);
             var reducedOption = result.ReducedTree.Recipes[0];
@@ -312,7 +416,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(1, 4, AccountItemIndex.SourceMaterialStorage),
             });
 
-            var result = _reducer.Reduce(tree, index, null);
+            var result = ReduceBelowRoot(tree, index, null);
 
             Assert.Equal(6, result.ReducedTree.Quantity);
             var reducedOption = result.ReducedTree.Recipes[0];
@@ -459,7 +563,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(1, 1, AccountItemIndex.SourceMaterialStorage),
                 SnapEntry(3, 5, AccountItemIndex.SourceMaterialStorage),
             });
-            var result = _reducer.Reduce(root, index, null);
+            var result = ReduceBelowRoot(root, index, null);
 
             // Root: 4-1=3, newCrafts=ceil(3/2)=2
             Assert.Equal(3, result.ReducedTree.Quantity);
@@ -525,7 +629,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(1, 3, AccountItemIndex.SourceMaterialStorage),
             });
 
-            var result = _reducer.Reduce(tree, index, null);
+            var result = ReduceBelowRoot(tree, index, null);
 
             Assert.Equal(0, result.ReducedTree.Quantity);
             Assert.Empty(result.ReducedTree.Recipes);
@@ -638,7 +742,7 @@ namespace TaimisToolbench.Tests.Services
             {
                 SnapEntry(1, 4, AccountItemIndex.SourceMaterialStorage),
             });
-            var result = _reducer.Reduce(tree, index, null);
+            var result = ReduceBelowRoot(tree, index, null);
 
             Assert.Equal(6, result.ReducedTree.Quantity);
             Assert.Equal(3, result.ReducedTree.Recipes[0].CraftsNeeded);
@@ -658,7 +762,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(100, 3, AccountItemIndex.SourceMaterialStorage),
             });
 
-            var result = _reducer.Reduce(leaf, index, null);
+            var result = ReduceBelowRoot(leaf, index, null);
 
             Assert.Single(result.OwnedQuantityUsedByNode);
             var entry = result.OwnedQuantityUsedByNode.Single();
@@ -709,7 +813,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(100, 3, AccountItemIndex.SourceBank),
             });
 
-            var result = _reducer.Reduce(leaf, index, null);
+            var result = ReduceBelowRoot(leaf, index, null);
 
             Assert.Single(result.OwnedQuantityUsedByNode);
             var entry = result.OwnedQuantityUsedByNode.Single();
@@ -748,7 +852,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(100, 5, AccountItemIndex.SourceMaterialStorage),
             });
 
-            var result = _reducer.Reduce(tree, index, null);
+            var result = ReduceBelowRoot(tree, index, null);
 
             Assert.Equal(0, result.ReducedTree.Quantity);
             Assert.Single(result.UsedMaterials);
@@ -766,7 +870,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(100, 3, AccountItemIndex.SourceBank),
             });
 
-            var result = _reducer.Reduce(tree, index, null);
+            var result = ReduceBelowRoot(tree, index, null);
 
             Assert.Equal(0, result.ReducedTree.Quantity);
             Assert.Single(result.UsedMaterials);
@@ -793,7 +897,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(100, 3, AccountItemIndex.SourceMaterialStorage),
             });
 
-            var result = _reducer.Reduce(tree, index, null);
+            var result = ReduceBelowRoot(tree, index, null);
 
             Assert.Equal(0, result.ReducedTree.Quantity);
             var sources = result.UsedMaterials[0].Sources;
@@ -812,13 +916,74 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(100, 5, AccountItemIndex.CharacterSourcePrefix + "Alice"),
             });
 
-            var result = _reducer.Reduce(tree, index, "Alice");
+            var result = ReduceBelowRoot(tree, index, "Alice");
 
             Assert.Equal(0, result.ReducedTree.Quantity);
             var sources = result.UsedMaterials[0].Sources;
             Assert.Single(sources);
             Assert.Equal(AccountItemIndex.CharacterSourcePrefix + "Alice", sources[0].Source);
             Assert.Equal(5, sources[0].Quantity);
+        }
+
+        [Fact]
+        public void Sourced_WornGearCountsAsOwned()
+        {
+            // Equipment is captured under its own source key. It is still
+            // stock the account holds, so a plan needing that item must
+            // discount it exactly as it discounts a bag stack.
+            var tree = Leaf(100, 1);
+            var index = new AccountItemIndex(new List<SnapshotItemEntry>
+            {
+                SnapEntry(100, 1, AccountItemIndex.CharacterEquipmentSourcePrefix + "Divineaxe"),
+            });
+
+            var result = ReduceBelowRoot(tree, index, "Divineaxe");
+
+            Assert.Equal(0, result.ReducedTree.Quantity);
+            var sources = result.UsedMaterials[0].Sources;
+            Assert.Single(sources);
+            Assert.Equal(
+                AccountItemIndex.CharacterEquipmentSourcePrefix + "Divineaxe", sources[0].Source);
+            Assert.Equal(1, sources[0].Quantity);
+        }
+
+        [Fact]
+        public void Sourced_ActiveCharBagsConsumedBeforeOwnWornGear()
+        {
+            var tree = Leaf(100, 3);
+            var index = new AccountItemIndex(new List<SnapshotItemEntry>
+            {
+                SnapEntry(100, 1, AccountItemIndex.CharacterEquipmentSourcePrefix + "Alice"),
+                SnapEntry(100, 2, AccountItemIndex.CharacterSourcePrefix + "Alice"),
+            });
+
+            var result = ReduceBelowRoot(tree, index, "Alice");
+
+            Assert.Equal(0, result.ReducedTree.Quantity);
+            var sources = result.UsedMaterials[0].Sources;
+            Assert.Equal(2, sources.Count);
+            Assert.Equal(
+                2, sources.First(x => x.Source == AccountItemIndex.CharacterSourcePrefix + "Alice").Quantity);
+            Assert.Equal(
+                1, sources.First(x => x.Source == AccountItemIndex.CharacterEquipmentSourcePrefix + "Alice").Quantity);
+        }
+
+        [Fact]
+        public void Sourced_LegendaryArmoryCountsAsOwned()
+        {
+            var tree = Leaf(100, 1);
+            var index = new AccountItemIndex(new List<SnapshotItemEntry>
+            {
+                SnapEntry(100, 1, AccountItemIndex.SourceLegendaryArmory),
+            });
+
+            var result = ReduceBelowRoot(tree, index, null);
+
+            Assert.Equal(0, result.ReducedTree.Quantity);
+            var sources = result.UsedMaterials[0].Sources;
+            Assert.Single(sources);
+            Assert.Equal(AccountItemIndex.SourceLegendaryArmory, sources[0].Source);
+            Assert.Equal(1, sources[0].Quantity);
         }
 
         [Fact]
@@ -842,7 +1007,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(100, 3, AccountItemIndex.SourceMaterialStorage),
             });
 
-            var result = _reducer.Reduce(tree, index, null);
+            var result = ReduceBelowRoot(tree, index, null);
 
             Assert.Equal(2, result.ReducedTree.Quantity);
             Assert.Single(result.UsedMaterials);
@@ -862,7 +1027,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(100, 4, AccountItemIndex.SourceBank),
             });
 
-            var result = _reducer.Reduce(tree, index, null);
+            var result = ReduceBelowRoot(tree, index, null);
 
             Assert.Equal(3, result.ReducedTree.Quantity);
             Assert.Single(result.UsedMaterials);
@@ -956,7 +1121,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(100, 5, AccountItemIndex.SourceMaterialStorage),
             });
 
-            var result = _reducer.Reduce(tree, index, null);
+            var result = ReduceBelowRoot(tree, index, null);
 
             Assert.Equal(0, result.ReducedTree.Quantity);
             Assert.Single(result.UsedMaterials);
@@ -980,7 +1145,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(100, 4, AccountItemIndex.CharacterSourcePrefix + "ActiveHero"),
             });
 
-            var result = _reducer.Reduce(tree, index, "ActiveHero");
+            var result = ReduceBelowRoot(tree, index, "ActiveHero");
 
             Assert.Equal(0, result.ReducedTree.Quantity);
             Assert.Single(result.UsedMaterials);
@@ -1025,7 +1190,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(100, 3, AccountItemIndex.SourceBank),
             });
 
-            var result = _reducer.Reduce(tree, index, null);
+            var result = ReduceBelowRoot(tree, index, null);
 
             // Only Bank's 3 should be consumed (null/empty excluded from index)
             Assert.Equal(2, result.ReducedTree.Quantity);
@@ -1042,7 +1207,7 @@ namespace TaimisToolbench.Tests.Services
             var tree = Leaf(100, 5);
             var emptyIndex = new AccountItemIndex(null);
 
-            var result = _reducer.Reduce(tree, emptyIndex, null);
+            var result = ReduceBelowRoot(tree, emptyIndex, null);
 
             // Nothing consumed, so UsedMaterials is empty
             Assert.Empty(result.UsedMaterials);
@@ -1052,7 +1217,7 @@ namespace TaimisToolbench.Tests.Services
             {
                 SnapEntry(100, 5, AccountItemIndex.SourceBank),
             });
-            var result2 = _reducer.Reduce(Leaf(100, 5), index, null);
+            var result2 = ReduceBelowRoot(Leaf(100, 5), index, null);
 
             Assert.Single(result2.UsedMaterials);
             Assert.NotNull(result2.UsedMaterials[0].Sources);
@@ -1186,14 +1351,14 @@ namespace TaimisToolbench.Tests.Services
             {
                 SnapEntry(1, 4, AccountItemIndex.SourceMaterialStorage),
             });
-            var singleResult = _reducer.Reduce(tree, singleSource, null);
+            var singleResult = ReduceBelowRoot(tree, singleSource, null);
 
             var splitSource = new AccountItemIndex(new List<SnapshotItemEntry>
             {
                 SnapEntry(1, 2, AccountItemIndex.SourceMaterialStorage),
                 SnapEntry(1, 2, AccountItemIndex.SourceBank),
             });
-            var splitResult = _reducer.Reduce(tree, splitSource, null);
+            var splitResult = ReduceBelowRoot(tree, splitSource, null);
 
             // Absolute anchor: 10-4=6, newCrafts=ceil(6/2)=3
             Assert.Equal(6, singleResult.ReducedTree.Quantity);
@@ -1319,7 +1484,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(1, 1, AccountItemIndex.SourceBank),
                 SnapEntry(2, 5, AccountItemIndex.SourceMaterialStorage),
             });
-            var result = _reducer.Reduce(tree, index, null, guide);
+            var result = ReduceBelowRoot(tree, index, null, guide);
 
             // Node's own quantity discounted from 5 to 2 (3 owned units used).
             Assert.Equal(2, result.ReducedTree.Quantity);
@@ -1513,7 +1678,7 @@ namespace TaimisToolbench.Tests.Services
                 SnapEntry(2, 5, AccountItemIndex.SourceMaterialStorage),
             });
 
-            var result = _reducer.Reduce(tree, index, null, guide);
+            var result = ReduceBelowRoot(tree, index, null, guide);
 
             Assert.Equal(2, result.ReducedTree.Quantity);
             Assert.Contains(result.UsedMaterials, u => u.ItemId == 1 && u.QuantityUsed == 3);

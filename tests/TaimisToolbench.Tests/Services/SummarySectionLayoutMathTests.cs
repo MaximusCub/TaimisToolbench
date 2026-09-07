@@ -212,8 +212,8 @@ namespace TaimisToolbench.Tests.Services
             // 6 margin + 6 pad + 29 caption line + 8 label-to-value gap
             // + 20 amount run + 6 pad + 6 margin. The amount run is 20
             // because the amount TEXT is 20; it read as "the coin icon" only
-            // while inline coins also drew at 20, and stayed 20 when they
-            // moved onto the 16px wallet BAR tier.
+            // while inline coins also drew at 20, and stayed 20 at the 18px
+            // wallet BAR tier.
             Assert.Equal(81, SummarySectionLayoutMath.CostBandHeight(false));
         }
 
@@ -1322,6 +1322,123 @@ namespace TaimisToolbench.Tests.Services
                 widened.HaveRightEdge);
             Assert.Equal(widened.HaveRightEdge - 140 - SummarySectionLayoutMath.CurrencyColumnGap,
                 widened.RequiredRightEdge);
+        }
+
+        // --- Non-coin cost identity and its scroll anchor keys ---
+        [Fact]
+        public void CostKeys_SameNumberInBothIdSpaces_AreDifferentKeys()
+        {
+            // Id 24 is both a real item and the wallet currency "Pristine
+            // Fractal Relics". A bare number would give the two rows one
+            // key, and a restore would put the wrong row on the line.
+            Assert.NotEqual(
+                SummarySectionLayoutMath.WalletCurrencyCostKey(24),
+                SummarySectionLayoutMath.BarterItemCostKey(24));
+        }
+
+        [Fact]
+        public void CostKeys_SameId_ProduceTheSameKeyEveryCall()
+        {
+            Assert.Equal(
+                SummarySectionLayoutMath.WalletCurrencyCostKey(3),
+                SummarySectionLayoutMath.WalletCurrencyCostKey(3));
+            Assert.Equal(
+                SummarySectionLayoutMath.BarterItemCostKey(19721),
+                SummarySectionLayoutMath.BarterItemCostKey(19721));
+            Assert.NotEqual(
+                SummarySectionLayoutMath.WalletCurrencyCostKey(3),
+                SummarySectionLayoutMath.WalletCurrencyCostKey(4));
+        }
+
+        [Fact]
+        public void NonCoinRowAnchorKey_CarriesTheRowsOwnIdentity()
+        {
+            var wallet = new PlanRowViewModel
+            {
+                RowType = PlanRowType.CurrencyCost,
+                NonCoinCostKey = SummarySectionLayoutMath.WalletCurrencyCostKey(24),
+            };
+            var barter = new PlanRowViewModel
+            {
+                RowType = PlanRowType.CurrencyCost,
+                IsBarterItemCost = true,
+                NonCoinCostKey = SummarySectionLayoutMath.BarterItemCostKey(24),
+            };
+
+            string walletKey = SummarySectionLayoutMath.NonCoinRowAnchorKey(wallet);
+            Assert.False(string.IsNullOrEmpty(walletKey));
+            Assert.NotEqual(walletKey, SummarySectionLayoutMath.NonCoinRowAnchorKey(barter));
+        }
+
+        [Fact]
+        public void NonCoinRowAnchorKey_NoIdentity_IsNull()
+        {
+            // A null key is what tells the renderer not to register the
+            // row at all, so a row without an identity can never take a
+            // key another row would answer to.
+            Assert.Null(SummarySectionLayoutMath.NonCoinRowAnchorKey(null));
+            Assert.Null(SummarySectionLayoutMath.NonCoinRowAnchorKey(
+                new PlanRowViewModel { RowType = PlanRowType.CurrencyCost }));
+            Assert.Null(SummarySectionLayoutMath.NonCoinRowAnchorKey(
+                new PlanRowViewModel { RowType = PlanRowType.CurrencyCost, NonCoinCostKey = "" }));
+        }
+
+        [Fact]
+        public void GroupAnchorKeys_TheTwoGroupsDoNotShareAKey()
+        {
+            Assert.NotEqual(
+                SummarySectionLayoutMath.NonCoinGroupAnchorKey(isInventoryGroup: false),
+                SummarySectionLayoutMath.NonCoinGroupAnchorKey(isInventoryGroup: true));
+        }
+
+        [Fact]
+        public void GroupAnchorKeys_DoNotCollideWithARowsKey()
+        {
+            var row = new PlanRowViewModel
+            {
+                RowType = PlanRowType.CurrencyCost,
+                NonCoinCostKey = SummarySectionLayoutMath.WalletCurrencyCostKey(1),
+            };
+            string rowKey = SummarySectionLayoutMath.NonCoinRowAnchorKey(row);
+
+            Assert.NotEqual(rowKey, SummarySectionLayoutMath.NonCoinGroupAnchorKey(false));
+            Assert.NotEqual(rowKey, SummarySectionLayoutMath.NonCoinGroupAnchorKey(true));
+        }
+
+        [Fact]
+        public void GroupNonCoinRows_MarksWhichGroupIsTheInventoryOne()
+        {
+            var rows = new List<PlanRowViewModel>
+            {
+                Row(PlanRowType.CurrencyCost),
+                BarterRow(),
+            };
+
+            var groups = SummarySectionLayoutMath.GroupNonCoinRows(rows);
+
+            Assert.Equal(2, groups.Count);
+            Assert.False(groups[0].IsInventoryGroup);
+            Assert.True(groups[1].IsInventoryGroup);
+        }
+
+        [Fact]
+        public void BodyHeight_FirstNonCoinRow_AddsThe141PixelTable()
+        {
+            // The measured jump the scroll anchors have to absorb: the
+            // cost band's disclosure line (23), the table's top gap (12),
+            // its column header (32), one group heading (32) and the row
+            // itself (42).
+            var withoutTable = new List<PlanRowViewModel> { Row(PlanRowType.CostFormulaTile) };
+            var withOneRow = new List<PlanRowViewModel>
+            {
+                Row(PlanRowType.CostFormulaTile),
+                Row(PlanRowType.CurrencyCost),
+            };
+
+            Assert.Equal(
+                141,
+                SummarySectionLayoutMath.BodyHeight(withOneRow)
+                    - SummarySectionLayoutMath.BodyHeight(withoutTable));
         }
     }
 }

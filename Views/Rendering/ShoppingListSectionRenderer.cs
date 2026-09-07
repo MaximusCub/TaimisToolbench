@@ -35,7 +35,7 @@ namespace TaimisToolbench.Views.Rendering
 
         // Text anchor of the row's single reading line - see the identical
         // derivation note on UsedMaterialsSectionRenderer.RowTextY.
-        private const int RowTextY = 13;
+        private const int RowTextY = PlanContentHeightMath.IconRowIconY + 13;
 
         private readonly ISectionRelayoutSink _sink;
 
@@ -386,17 +386,19 @@ namespace TaimisToolbench.Views.Rendering
             // matching note): a stat block that lands after this render
             // (Q13) is picked up on the next hover, and the compose work
             // stays off the render path.
+            // ONE box, not two. The second box carried this row's currency
+            // holdings and its acquisition hint, and the table already
+            // prints both in its own columns, so the box restated them in
+            // sentences and added nothing.
             int itemId = row.ItemId;
-            var hover = ItemIconTooltip.Composed(
+            var hover = ItemIconTooltip.ForItem(
                 ItemTooltipIdentity.ForItem(fullName, row.IconUrl, row.Rarity),
-                () => ShoppingRowTooltipFormatter.BuildRowContent(
-                    _getItemStatBlock == null || itemId <= 0 ? null : _getItemStatBlock(itemId),
-                    ItemTooltipIdentity.ForItem(fullName, row.IconUrl, row.Rarity),
-                    hintText,
-                    row.CurrencyCosts));
+                _getItemStatBlock == null || itemId <= 0 ? (Func<ItemStatBlock>)null
+                    : () => _getItemStatBlock(itemId));
 
             var nameHandle = IconNameRowHelpers.CreateIconAndEllipsizedName(
-                rowPanel, row.IconUrl, row.Rarity, IconX, 0, fullName, font,
+                rowPanel, row.IconUrl, row.Rarity,
+                IconX, PlanContentHeightMath.IconRowIconY, fullName, font,
                 edges.SourceX, 0, NameToQtyGap, NameX, RowTextY,
                 ItemIconTier.BagSidebar, hover);
             var nameLabel = nameHandle.NameLabel;

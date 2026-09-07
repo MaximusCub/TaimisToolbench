@@ -29,7 +29,13 @@ namespace TaimisToolbench.Services
             var ownedUsageByNode = new Dictionary<RecipeNode, int>();
 
             var clone = CloneNode(tree);
-            ReduceNodeSourced(clone, index, activeCharacterName, pool, usedRaw, ownedUsageByNode, consumeFromPool: true, zeroOwnedDecisions);
+
+            // Identified on the clone, because that is what the walk below
+            // visits. Reference identity: RecipeNode overrides neither
+            // Equals nor GetHashCode, same as ownedUsageByNode above.
+            var planRoots = new HashSet<RecipeNode>(PlanRootNodes.Of(clone));
+
+            ReduceNodeSourced(clone, index, activeCharacterName, pool, usedRaw, ownedUsageByNode, consumeFromPool: true, zeroOwnedDecisions, planRoots);
 
             var aggregated = usedRaw
                 .GroupBy(u => u.ItemId)
@@ -94,7 +100,8 @@ namespace TaimisToolbench.Services
             List<UsedMaterial> used,
             Dictionary<RecipeNode, int> ownedUsageByNode,
             bool consumeFromPool,
-            IReadOnlyDictionary<int, SolverDecision> zeroOwnedDecisions)
+            IReadOnlyDictionary<int, SolverDecision> zeroOwnedDecisions,
+            ISet<RecipeNode> planRootNodes)
         {
             // In the current GW2 recipe model, only "Item" nodes are consumable
             // from inventory and can have recipes. Currency nodes are leaves.
@@ -109,7 +116,11 @@ namespace TaimisToolbench.Services
                 return;
             }
 
-            if (consumeFromPool)
+            // A plan root never discounts its own Quantity, whatever the
+            // account holds: the user asked for that item and wants it
+            // made. Which nodes those are: PlanRootNodes. Descendants are
+            // unaffected and reduce as usual.
+            if (consumeFromPool && !planRootNodes.Contains(node))
             {
                 var prioritized = AccountItemIndex.GetPrioritizedSources(
                     node.Id, index, activeCharacterName);
@@ -197,7 +208,7 @@ namespace TaimisToolbench.Services
                     int perCraft = (ingredient.Quantity + origCraftsNeeded - 1) / origCraftsNeeded;
                     ingredient.Quantity = perCraft * newCraftsNeeded;
 
-                    ReduceNodeSourced(ingredient, index, activeCharacterName, pool, used, ownedUsageByNode, optionConsumes, zeroOwnedDecisions);
+                    ReduceNodeSourced(ingredient, index, activeCharacterName, pool, used, ownedUsageByNode, optionConsumes, zeroOwnedDecisions, planRootNodes);
                 }
             }
         }

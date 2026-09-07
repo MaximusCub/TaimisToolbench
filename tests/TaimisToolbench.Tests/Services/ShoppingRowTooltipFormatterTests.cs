@@ -8,16 +8,51 @@ using Xunit;
 namespace TaimisToolbench.Tests.Services
 {
     /// <summary>
-    /// Pins the exact HAVE/NEED wording ShoppingListSectionRenderer's
-    /// tooltip depends on (finding -
-    /// previously nothing observed these strings, so a regression straight
-    /// back to the banned "N owned, M needed" phrasing passed the full
-    /// suite). Also: the output must never claim
-    /// "plan requires" - cc.Amount is this row's own total, not the whole
-    /// plan's requirement for that currency id.
+    /// Pins the exact wording ShoppingListSectionRenderer's tooltip
+    /// depends on. Nothing observed these strings before, so a regression
+    /// straight back to a banned phrasing passed the full suite. Two rules
+    /// hold for every line: it must say the cost is THIS row's, never the
+    /// whole plan's requirement for that currency id, and it must read as
+    /// a sentence rather than shout.
     /// </summary>
     public class ShoppingRowTooltipFormatterTests
     {
+        [Fact]
+        public void BuildCurrencyLines_EveryLineReadsAsASentence()
+        {
+            // The second box's wording rule: no shouting, no dashes doing
+            // a comma's job, and every line closes.
+            var costs = new List<CurrencyAmountViewModel>
+            {
+                new CurrencyAmountViewModel
+                {
+                    Amount = 3660, Name = "Trade Contract", OwnedQuantity = 2812, RawOwnedQuantity = 2812,
+                },
+                new CurrencyAmountViewModel
+                {
+                    Amount = 100, Name = "Karma", OwnedQuantity = 100, RawOwnedQuantity = 100,
+                },
+                new CurrencyAmountViewModel
+                {
+                    Amount = 10, Name = "Spirit Shards", OwnedQuantity = 10, RawOwnedQuantity = 40,
+                },
+            };
+
+            var lines = ShoppingRowTooltipFormatter.BuildCurrencyLines(costs);
+
+            Assert.Equal(3, lines.Count);
+            foreach (string line in lines)
+            {
+                Assert.EndsWith(".", line);
+                Assert.DoesNotContain("\u2014", line);
+                Assert.DoesNotContain(" - ", line);
+                Assert.DoesNotContain(
+                    line.Split(' ').Where(w => w.Length > 1 && w.All(char.IsLetter)),
+                    w => w == w.ToUpperInvariant());
+                Assert.Contains("this row costs", line);
+            }
+        }
+
         [Fact]
         public void BuildCurrencyLines_NullList_ReturnsEmptyList()
         {
@@ -53,7 +88,7 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void BuildCurrencyLines_Shortfall_RendersHaveNeedWithRowScopeMarker()
+        public void BuildCurrencyLines_Shortfall_NamesTheRowCostTheWalletHoldingAndTheGap()
         {
             var costs = new List<CurrencyAmountViewModel>
             {
@@ -68,11 +103,13 @@ namespace TaimisToolbench.Tests.Services
 
             var lines = ShoppingRowTooltipFormatter.BuildCurrencyLines(costs);
 
-            Assert.Equal(new[] { "Karma: HAVE 200/500 THIS ROW, NEED 300" }, lines);
+            Assert.Equal(
+                new[] { "Karma: this row costs 500. You have 200 in your wallet and need 300 more." },
+                lines);
         }
 
         [Fact]
-        public void BuildCurrencyLines_ExactlyCovered_RendersCoverageFractionWithRowScopeMarkerNoAside()
+        public void BuildCurrencyLines_ExactlyCovered_SaysTheWalletIsEnoughAndNamesNoSurplus()
         {
             var costs = new List<CurrencyAmountViewModel>
             {
@@ -87,11 +124,13 @@ namespace TaimisToolbench.Tests.Services
 
             var lines = ShoppingRowTooltipFormatter.BuildCurrencyLines(costs);
 
-            Assert.Equal(new[] { "Spirit Shards: HAVE 500/500 THIS ROW" }, lines);
+            Assert.Equal(
+                new[] { "Spirit Shards: this row costs 500. You have enough in your wallet." },
+                lines);
         }
 
         [Fact]
-        public void BuildCurrencyLines_CoveredWithSurplus_AppendsWalletAside()
+        public void BuildCurrencyLines_CoveredWithSurplus_NamesTheUnclampedWalletHolding()
         {
             var costs = new List<CurrencyAmountViewModel>
             {
@@ -106,7 +145,9 @@ namespace TaimisToolbench.Tests.Services
 
             var lines = ShoppingRowTooltipFormatter.BuildCurrencyLines(costs);
 
-            Assert.Equal(new[] { "Spirit Shards: HAVE 500/500 THIS ROW (wallet 999999)" }, lines);
+            Assert.Equal(
+                new[] { "Spirit Shards: this row costs 500. Your wallet holds 999999." },
+                lines);
         }
 
         [Fact]
@@ -129,7 +170,9 @@ namespace TaimisToolbench.Tests.Services
 
             var lines = ShoppingRowTooltipFormatter.BuildCurrencyLines(costs);
 
-            Assert.Equal(new[] { "Karma: HAVE 500/500 THIS ROW" }, lines);
+            Assert.Equal(
+                new[] { "Karma: this row costs 500. You have enough in your wallet." },
+                lines);
         }
 
         [Fact]
@@ -146,13 +189,13 @@ namespace TaimisToolbench.Tests.Services
 
             Assert.Equal(new[]
             {
-                "Karma: HAVE 200/500 THIS ROW, NEED 300",
-                "Spirit Shards: HAVE 100/100 THIS ROW (wallet 250)",
+                "Karma: this row costs 500. You have 200 in your wallet and need 300 more.",
+                "Spirit Shards: this row costs 100. Your wallet holds 250.",
             }, lines);
         }
 
         [Fact]
-        public void BuildRowContent_PutsTheStatBlockAheadOfTheHaveNeedLines()
+        public void BuildRowContent_KeepsTheRowsOwnLinesOutOfTheItemsBox()
         {
             var costs = new List<CurrencyAmountViewModel>
             {
@@ -162,22 +205,27 @@ namespace TaimisToolbench.Tests.Services
                 },
             };
 
-            var lines = ShoppingRowTooltipFormatter.BuildRowContent(
+            var content = ShoppingRowTooltipFormatter.BuildRowContent(
                 new ItemStatBlock { ItemId = 1, Name = "Bag of Stuff", Rarity = "Fine", VendorValue = 7 },
                 ItemTooltipIdentity.ForItem("Bag of Stuff", "icon://bag", "Fine"),
                 hintText: "Salvage from level 80 gear.",
-                currencyCosts: costs).ToPlainLines();
+                currencyCosts: costs);
+
+            var lines = content.ToPlainLines();
 
             // The stat block opens the tooltip, so the full-name line it
             // would otherwise duplicate is gone.
             Assert.Equal("Bag of Stuff", lines[0]);
             Assert.Equal(1, lines.Count(l => l == "Bag of Stuff"));
+            Assert.DoesNotContain("Salvage from level 80 gear.", lines);
 
-            int hint = lines.IndexOf("Salvage from level 80 gear.");
-            int have = lines.IndexOf("Karma: HAVE 40/100 THIS ROW, NEED 60");
-            Assert.True(hint > 0);
-            Assert.Equal(hint + 1, have);
-            Assert.Equal("", lines[hint - 1]);
+            Assert.Equal(
+                new[]
+                {
+                    "Salvage from level 80 gear.",
+                    "Karma: this row costs 100. You have 40 in your wallet and need 60 more.",
+                },
+                content.ToExtraLines());
         }
 
         [Fact]
@@ -191,7 +239,8 @@ namespace TaimisToolbench.Tests.Services
 
             Assert.Equal(TooltipLineKind.Header, content.Lines[0].Kind);
             Assert.Equal("icon://long", content.Lines[0].IconUrl);
-            Assert.Equal(new[] { "A Very Long Item Name", "", "A hint." }, content.ToPlainLines());
+            Assert.Equal(new[] { "A Very Long Item Name" }, content.ToPlainLines());
+            Assert.Equal(new[] { "A hint." }, content.ToExtraLines());
         }
 }
 }

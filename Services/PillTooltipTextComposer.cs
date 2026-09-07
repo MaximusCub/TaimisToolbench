@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using TaimisToolbench.Models;
 
@@ -105,6 +106,22 @@ namespace TaimisToolbench.Services
                     $"Needs {node.OwnedQuantityUsed} - all covered by your materials", appendSubduing: false);
             }
 
+            if (spec.Kind == PillKind.OwnedInfo &&
+                spec.Text != null &&
+                spec.Text.StartsWith(DecisionPillPlanner.CurrencyTradeUpPillPrefix, StringComparison.Ordinal) &&
+                CurrencyTradeUpRow.TryGetAffordableNow(node, ownedCurrencyAmounts, out int affordable))
+            {
+                // The row is bought for one wallet currency, and the
+                // module does not plan how that currency is earned (see
+                // CurrencyTradeUpRow). The pill states what the holding
+                // buys; the tooltip adds what is left after that.
+                int remaining = node.Quantity - affordable;
+                return new PillTooltipPlan(
+                    $"Your held currency buys {affordable} of the {node.Quantity} this row needs - " +
+                    $"{remaining} still to acquire",
+                    appendSubduing: false);
+            }
+
             if (spec.Kind == PillKind.OwnedInfo)
             {
                 if (node.IsCostComponent)
@@ -116,6 +133,19 @@ namespace TaimisToolbench.Services
                     return new PillTooltipPlan(
                         $"You own {node.ComponentOwnedQuantity} - informational only, " +
                         "does not change the plan cost",
+                        appendSubduing: false);
+                }
+
+                if (node.OwnedQuantityUsed == 0)
+                {
+                    // The badge only reaches zero when the plan drew this
+                    // item's owned stock at some OTHER node (see
+                    // DecisionPillPlanner.AppendOwnershipPills), so the
+                    // tooltip can say where it went. The plain wording
+                    // below would read "0 covered by your materials" and
+                    // leave the reader guessing why the badge is there.
+                    return new PillTooltipPlan(
+                        $"Needs {node.Quantity} - your materials went to other rows of this item",
                         appendSubduing: false);
                 }
 

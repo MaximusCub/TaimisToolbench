@@ -207,6 +207,32 @@ jobs:
             exit 1
           fi
 
+      - name: Every stack records what is fitted into it and what it wears
+        shell: bash
+        run: |
+          # The snapshot builds a row per stack from five account sources,
+          # and a row that drops its socketed ids or its skin loses them for
+          # good: the tooltip and the Snapshot hover read the stored row,
+          # never the API. Equipped gear reached the snapshot after the bag
+          # sources already recorded sockets, and its rows were built
+          # without them. `item.Id` is what marks a row built from an
+          # account API item; material storage builds from `mat` and
+          # carries neither field.
+          f=Services/Gw2AccountSnapshotService.cs
+          rows=$(grep -c 'ItemId = item.Id,' "$f" || true)
+          ups=$(grep -c 'Upgrades = SocketedIds(item.Upgrades),' "$f" || true)
+          infs=$(grep -c 'Infusions = SocketedIds(item.Infusions),' "$f" || true)
+          skins=$(grep -c 'SkinId = SkinIdOf(item.Skin),' "$f" || true)
+          if [ "$rows" -lt 1 ] || [ "$ups" -ne "$rows" ] || [ "$infs" -ne "$rows" ] \
+              || [ "$skins" -ne "$rows" ]; then
+            echo "$f builds $rows rows from an account API item, but records"
+            echo "Upgrades on $ups of them, Infusions on $infs and SkinId on $skins."
+            echo "Every such row must carry all three, the way the bank rows do."
+            grep -n 'ItemId = item.Id,' "$f"
+            exit 1
+          fi
+          echo "$rows rows built from an account item; all record sockets and skin."
+
       - name: Live docs cite source paths that exist
         shell: bash
         run: |
@@ -573,7 +599,12 @@ jobs:
               'Views/Rendering/IconNameRowHelpers.cs':
                   'forwards the intent its own caller named',
           }
+          # CreateItemIconDeferredArt is the same framed item icon with its
+          # picture request held back, so it is gated the same way. Without
+          # this entry the Snapshot tab's ~960 icons would leave the gate
+          # entirely, which is the tab the gate was written for.
           CALLS = ('IconControls.CreateItemIcon(',
+                   'IconControls.CreateItemIconDeferredArt(',
                    'IconNameRowHelpers.CreateIconAndEllipsizedName(')
 
           files = subprocess.run(
@@ -776,6 +807,85 @@ jobs:
               print('\n'.join(fail))
               sys.exit(1)
           print('The currency frame is still a ring with nothing painted inside it.')
+          PY
+
+      - name: The Total Cost table registers its scroll anchors
+        shell: bash
+        run: |
+          # A renderer takes a Blish Control, and tests reference no UI code
+          # (repo invariant), so no unit test can call the renderer. Delete
+          # the two RegisterScrollAnchor calls and every test stays green
+          # while a re-solve that changes the table's row count drags the
+          # whole tree under the reader's cursor. ScrollAnchorMathTests pins
+          # the arithmetic those keys feed; this pins that the renderer
+          # hands them over, and that the view still spells the two key
+          # prefixes those tests carry as literals.
+          python3 - <<'PY'
+          import sys
+
+          def squeezed(path):
+              return ''.join(open(path, encoding='utf-8').read().split())
+
+          renderer = squeezed('Views/Rendering/SummarySectionRenderer.cs')
+          view = squeezed('Views/CraftingPlanView.cs')
+          fail = []
+
+          for key in ('NonCoinGroupAnchorKey', 'NonCoinRowAnchorKey'):
+              call = 'RegisterScrollAnchor(SummarySectionLayoutMath.%s(' % key
+              if call not in renderer:
+                  fail.append(
+                      'SummarySectionRenderer no longer registers a scroll anchor '
+                      'keyed by SummarySectionLayoutMath.%s.' % key)
+
+          if '_registerScrollAnchor(key,control)' not in renderer:
+              fail.append(
+                  'SummarySectionRenderer.RegisterScrollAnchor no longer forwards to '
+                  'the delegate the view hands it.')
+
+          for prefix in ('"section:"', '"node:"'):
+              if prefix not in view:
+                  fail.append(
+                      'CraftingPlanView no longer spells the %s anchor key prefix that '
+                      'ScrollAnchorMathTests pins as a literal.' % prefix)
+
+          if fail:
+              print('\n'.join(fail))
+              sys.exit(1)
+          print('The Total Cost table still registers its scroll anchors.')
+          PY
+
+      - name: The snapshot coin row seats its digits on the caption baseline
+        shell: bash
+        run: |
+          # MainView is Blish-bound, so CoinSegmentMathTests reproduces this
+          # expression and the caption y it reads instead of calling it.
+          # That makes the test a mirror: change the view alone and it stays
+          # green. Until the seat moves into a Blish-free class the test can
+          # call, this step is what fails on that change.
+          python3 - <<'PY'
+          import sys
+
+          view = ''.join(open('Views/MainView.cs', encoding='utf-8').read().split())
+          fail = []
+
+          if 'privateconstintCoinCaptionY=2;' not in view:
+              fail.append(
+                  'MainView.CoinCaptionY is no longer 2. CoinSegmentMathTests carries '
+                  'that number as its own CaptionY constant; update it too.')
+
+          seat = ('intdigitY=TypeRampMetrics.BaselineAlignedY(TypeRampMetrics.CoinDigitInk,'
+                  'CoinCaptionY+TypeRampMetrics.BodyInk.BaselineY);')
+          if seat not in view:
+              fail.append(
+                  'MainView no longer seats the coin digits with BaselineAlignedY over '
+                  'CoinDigitInk and the caption baseline. CoinSegmentMathTests.'
+                  'TheCoinSeat_HoldsItsRow_WhenTheDigitsDropOneRampStep reproduces that '
+                  'expression; update it too.')
+
+          if fail:
+              print('\n'.join(fail))
+              sys.exit(1)
+          print('The coin row seat still matches the one CoinSegmentMathTests pins.')
           PY
 
       - name: Module source cites no out-of-repo spec sections

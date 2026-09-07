@@ -56,7 +56,9 @@ namespace TaimisToolbench.Views.Rendering
         // Text anchor of the row's single reading line. The tier-2 resize
         // grew the icon frame 34 -> 42, moving its center down 4px; the
         // line keeps its pre-tier-2 offset from that center (9 -> 13).
-        private const int RowTextY = 13;
+        // Carried down with the frame when the row gained its padding, so
+        // the two stay on the same relation.
+        private const int RowTextY = PlanContentHeightMath.IconRowIconY + 13;
 
         /// <summary>
         /// One-pass pre-scan, as every other plan table has: the widest
@@ -154,10 +156,6 @@ namespace TaimisToolbench.Views.Rendering
             string qtyText = $"{row.Quantity}x";
             int qtyWidth = (int)System.Math.Ceiling(font.MeasureString(qtyText).Width);
 
-            // Icon y=0: the tier-2 frame (42) + divider (2) + the
-            // clearance pixel (1) exactly fill rowHeight (45) with no
-            // overlap - the flush-fit law UsedMaterialRowHeight's own
-            // derivation states.
             // maxQtyWidth, not this row's own qtyWidth: the Amount column
             // is a reserved band right-aligned on the pinned edge, so the
             // name's budget stops at the band's LEFT edge. Budgeting
@@ -176,7 +174,8 @@ namespace TaimisToolbench.Views.Rendering
                     : () => _getItemStatBlock(itemId));
 
             var nameHandle = IconNameRowHelpers.CreateIconAndEllipsizedName(
-                rowPanel, row.IconUrl, row.Rarity, IconX, 0, fullName, font,
+                rowPanel, row.IconUrl, row.Rarity,
+                IconX, PlanContentHeightMath.IconRowIconY, fullName, font,
                 qtyRightEdge, maxQtyWidth, NameToQtyGap, NameX, RowTextY,
                 ItemIconTier.BagSidebar, hover);
 
@@ -197,13 +196,11 @@ namespace TaimisToolbench.Views.Rendering
             // only re-ellipsized at settle (RunReellipsis) to avoid a
             // MeasureString call per row per tick.
             //
-            // IconRowDividerClearance, not 0: UsedMaterialRowHeight (45)
-            // absorbs the clearance pixel in its own derivation, so the
-            // divider (top = 45 - 2 - 1 = 42) sits exactly flush under the
-            // 0..42 icon frame - no overlap, and the simulation behind
-            // LabelHelpers.CreateRowDivider (re-run at the tier-2 heights,
-            // executable in RowDividerScissorSimulationTests) proves 45
-            // needs the clearance where the old 36 did not.
+            // IconRowDividerClearance, not 0: the row height absorbs the
+            // clearance pixel in its own derivation, and the simulation
+            // behind LabelHelpers.CreateRowDivider (executable in
+            // RowDividerScissorSimulationTests) proves this height needs
+            // the clearance where the old 36 did not.
             RowRelayoutHelpers.FinishRow(
                 rowPanel, panelWidth, rowHeight, isLast,
                 PlanContentHeightMath.IconRowDividerClearance, _sink,

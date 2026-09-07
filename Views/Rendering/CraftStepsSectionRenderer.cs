@@ -106,12 +106,11 @@ namespace TaimisToolbench.Views.Rendering
         private const int TextX = IconX + PlanContentHeightMath.RowIconFrameSize + 8;
         private const string CraftPrefix = "Craft ";
 
-        // Text anchor of the row's reading line. The tier-2 resize grew
-        // the icon frame 34 -> 42, moving its center down 4px; the line
-        // (13 -> 17) and the right-aligned sublabel (16 -> 20) keep their
-        // pre-tier-2 offsets from that center.
-        private const int RowTextY = 17;
-        private const int SublabelY = 20;
+        // Text anchor of the row's reading line, and of the right-aligned
+        // sublabel under it. Both are offsets from the icon frame's y, so
+        // the line stays level with the icon whenever the frame moves.
+        private const int RowTextY = PlanContentHeightMath.IconRowIconY + 12;
+        private const int SublabelY = PlanContentHeightMath.IconRowIconY + 15;
 
         // Gap the step name's ellipsis budget keeps between itself and the
         // sublabel band, matching the name-to-column gap every other table
@@ -123,12 +122,13 @@ namespace TaimisToolbench.Views.Rendering
             int maxSublabelWidth, bool isLast)
         {
             const int rowHeight = PlanContentHeightMath.CraftStepRowHeight;
-            const int badgeSize = 36;
+            const int badgeSize = PlanContentHeightMath.CraftStepBadgeSize;
             const int badgeX = 8;
 
-            // Centered in the row, as it was in the 44px shape (which
-            // wrote the same rule as a literal 4).
-            const int badgeY = (rowHeight - badgeSize) / 2;
+            // Centred on the band a reader sees, not on rowHeight. The rule
+            // and its clearance pixel are not space, so counting them left
+            // 8px over the badge and 4px under it.
+            const int badgeY = PlanContentHeightMath.CraftStepBadgeY;
 
             var rowPanel = new ClippedPanel() { Size = new Point(panelWidth, rowHeight), Parent = parent };
 
@@ -167,7 +167,7 @@ namespace TaimisToolbench.Views.Rendering
 
             IconControls.CreateItemIcon(
                 rowPanel, row.IconUrl, ItemIconFrame.ForRarity(row.Rarity),
-                IconX, PlanContentHeightMath.CraftStepIconY, ItemIconTier.BagSidebar, hover);
+                IconX, PlanContentHeightMath.IconRowIconY, ItemIconTier.BagSidebar, hover);
 
             var textFont = UiFonts.Body;
             var greyColor = new Color(170, 170, 170);
@@ -222,14 +222,11 @@ namespace TaimisToolbench.Views.Rendering
                     PlanRelayoutMath.PinnedRightEdge(panelWidth), SublabelY);
             }
 
-            // IconRowDividerClearance - CraftStepRowHeight (52) is in the
-            // Container.Paint round-trip defect's vulnerable class like
-            // the 44px shape before it (see LabelHelpers.CreateRowDivider
-            // and the re-run simulation in
-            // RowDividerScissorSimulationTests): its icon frame bottom
-            // (CraftStepIconY 5 + 42 = 47) sits 2px clear of the divider
-            // top (rowHeight - 3 = 49), so the clearance is free of
-            // icon-overlap side effects.
+            // IconRowDividerClearance, not 0: the row height absorbs the
+            // clearance pixel in its own derivation, and the simulation
+            // behind LabelHelpers.CreateRowDivider (executable in
+            // RowDividerScissorSimulationTests) proves this height needs
+            // the clearance.
             //
             // Name/qty labels sit at a fixed x (font-only, not
             // width-dependent - textX never depended on panelWidth); only

@@ -23,11 +23,18 @@ namespace TaimisToolbench.Views.Rendering
         private readonly ISectionRelayoutSink _sink;
         private readonly Func<int, ItemStatBlock> _getItemStatBlock;
 
+        // Registers one control as a scroll anchor under a stable key
+        // (Services/ScrollAnchorMath). Optional - a null one simply leaves
+        // the non-coin table without anchors of its own.
+        private readonly Action<string, Control> _registerScrollAnchor;
+
         internal SummarySectionRenderer(
-            ISectionRelayoutSink sink, Func<int, ItemStatBlock> getItemStatBlock = null)
+            ISectionRelayoutSink sink, Func<int, ItemStatBlock> getItemStatBlock = null,
+            Action<string, Control> registerScrollAnchor = null)
         {
             _sink = sink ?? throw new ArgumentNullException(nameof(sink));
             _getItemStatBlock = getItemStatBlock;
+            _registerScrollAnchor = registerScrollAnchor;
         }
 
         internal void Render(PlanSectionViewModel section, FlowPanel contentFlow, int panelWidth)
@@ -623,12 +630,32 @@ namespace TaimisToolbench.Views.Rendering
                 SummarySectionLayoutMath.NonCoinTableRowsHeight(groups));
             for (int g = 0; g < groups.Count; g++)
             {
-                CreateNonCoinGroupHeadingRow(groups[g].Heading, parent, panelWidth);
+                // The table's own scroll anchors. Without them the
+                // nearest anchor to a line inside this table is the
+                // Summary section header, which sits ABOVE the rows whose
+                // count changes, so a restore that holds it still moves
+                // every section below by the table's growth.
+                var headingRow = CreateNonCoinGroupHeadingRow(
+                    groups[g].Heading, parent, panelWidth);
+                RegisterScrollAnchor(
+                    SummarySectionLayoutMath.NonCoinGroupAnchorKey(groups[g].IsInventoryGroup),
+                    headingRow);
+
                 var groupRows = groups[g].Rows;
                 for (int i = 0; i < groupRows.Count; i++)
                 {
-                    CreateCurrencyTableRow(groupRows[i], parent, panelWidth, scan);
+                    var costRow = CreateCurrencyTableRow(groupRows[i], parent, panelWidth, scan);
+                    RegisterScrollAnchor(
+                        SummarySectionLayoutMath.NonCoinRowAnchorKey(groupRows[i]), costRow);
                 }
+            }
+        }
+
+        private void RegisterScrollAnchor(string key, Control control)
+        {
+            if (_registerScrollAnchor != null && !string.IsNullOrEmpty(key) && control != null)
+            {
+                _registerScrollAnchor(key, control);
             }
         }
 
@@ -642,7 +669,7 @@ namespace TaimisToolbench.Views.Rendering
         /// one left edge, and drawn at the height
         /// SummarySectionLayoutMath.NonCoinTableRowsHeight prices it at.
         /// </summary>
-        private void CreateNonCoinGroupHeadingRow(
+        private Panel CreateNonCoinGroupHeadingRow(
             string text, FlowPanel parent, int panelWidth)
         {
             const int rowHeight = SummarySectionLayoutMath.NonCoinGroupHeadingHeight;
@@ -667,6 +694,7 @@ namespace TaimisToolbench.Views.Rendering
             // Fixed left-anchored text: only the row's own cosmetic width
             // tracks the panel, the same as CreateFootnoteRow.
             _sink.AddRelayout(w => rowPanel.Size = new Point(w, rowHeight));
+            return rowPanel;
         }
 
         /// <summary>
@@ -962,7 +990,7 @@ namespace TaimisToolbench.Views.Rendering
             });
         }
 
-        private void CreateCurrencyTableRow(
+        private Panel CreateCurrencyTableRow(
             PlanRowViewModel row, FlowPanel parent, int panelWidth, CurrencyColumnScan scan)
         {
             const int rowHeight = CurrencyRowHeight;
@@ -1072,6 +1100,7 @@ namespace TaimisToolbench.Views.Rendering
                     nameLabel.Text = newDisplayName;
                 }
             });
+            return rowPanel;
         }
 
         // A single subdued footnote row at the bottom of the section -

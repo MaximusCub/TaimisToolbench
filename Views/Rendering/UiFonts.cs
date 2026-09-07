@@ -55,6 +55,23 @@ namespace TaimisToolbench.Views.Rendering
         internal static BitmapFont Caption => GameService.Content.DefaultFont14;
 
         /// <summary>
+        /// The digits in a coin run - the gold, silver and copper numbers
+        /// that each carry an icon. Body, the same face as the caption
+        /// beside them.
+        /// <para>
+        /// This was Caption, one step under Body, for one build. MEASURED
+        /// in a screenshot holding this row beside the game's own inventory
+        /// coin row, so no interface scale is assumed: at Body the digits
+        /// ink "841" 19 pixels wide, which is exactly the game's 19, and at
+        /// Caption they ink 17. Both faces ink 11 rows tall against the
+        /// game's 10, so the step down cost width and bought no height.
+        /// The role is kept as its own name so this decision has somewhere
+        /// to live.
+        /// </para>
+        /// </summary>
+        internal static BitmapFont CoinDigits => Body;
+
+        /// <summary>
         /// Every column header the module draws, and the Total Cost band's
         /// tile captions. Bold, because headers used to be the same size and
         /// weight as the rows under them.

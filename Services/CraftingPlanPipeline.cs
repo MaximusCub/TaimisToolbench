@@ -350,6 +350,7 @@ namespace TaimisToolbench.Services
             // Also widen for offers a later manual override could reach -
             // see AddAllVendorOfferItemComponentIds.
             AddAllVendorOfferItemComponentIds(vendorOffers, metadataIds);
+            AddAllVendorOfferUnlockItemIds(vendorOffers, metadataIds);
             phaseTracker.Start(PlanPhase.FetchingItemDetails, "Fetching item details", metadataIds.Count);
             progress?.Report(new PlanStatus
             {
@@ -1229,18 +1230,14 @@ namespace TaimisToolbench.Services
 
             if (tree.Id == Gw2Constants.MultiItemWrapperItemId)
             {
-                var wrapperRecipe = tree.Recipes.FirstOrDefault(
-                    r => r.RecipeId == Gw2Constants.MultiItemWrapperRecipeId);
-                var roots = new List<CraftingTreeNode>(wrapperRecipe?.Ingredients.Count ?? 0);
-                if (wrapperRecipe != null)
+                var itemRoots = PlanRootNodes.Of(tree);
+                var roots = new List<CraftingTreeNode>(itemRoots.Count);
+                foreach (var itemRoot in itemRoots)
                 {
-                    foreach (var itemRoot in wrapperRecipe.Ingredients)
-                    {
-                        roots.Add(treeBuilder.BuildTree(
-                            itemRoot, decisions, metadata, hints,
-                            ownedQuantityUsedByNodeId, ignoredItemIds,
-                            currencyMetadata, ownedCurrencyAmounts, ownedVendorItemAmounts));
-                    }
+                    roots.Add(treeBuilder.BuildTree(
+                        itemRoot, decisions, metadata, hints,
+                        ownedQuantityUsedByNodeId, ignoredItemIds,
+                        currencyMetadata, ownedCurrencyAmounts, ownedVendorItemAmounts));
                 }
 
                 result.CraftingTree = null;
@@ -1365,6 +1362,43 @@ namespace TaimisToolbench.Services
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Widens <paramref name="metadataIds"/> to every offer's unlock
+        /// recipe sheet (VendorOffer.UnlockRecipeItemId): PlanResultBuilder
+        /// names it in Required Recipes, and it is never a tree ingredient,
+        /// a step item or a cost line, so nothing else collects it.
+        /// <para>
+        /// Separate from AddAllVendorOfferItemComponentIds, not folded into
+        /// it, because that method is also what
+        /// BuildOwnedVendorItemComponentAmounts scans - an unlock sheet is
+        /// not a cost component and must not gain an owned-amount entry.
+        /// </para>
+        /// </summary>
+        private static void AddAllVendorOfferUnlockItemIds(
+            IReadOnlyDictionary<int, IReadOnlyList<VendorOffer>> vendorOffers, HashSet<int> metadataIds)
+        {
+            if (vendorOffers == null)
+            {
+                return;
+            }
+
+            foreach (var offers in vendorOffers.Values)
+            {
+                if (offers == null)
+                {
+                    continue;
+                }
+
+                foreach (var offer in offers)
+                {
+                    if (offer != null && offer.UnlockRecipeItemId.HasValue)
+                    {
+                        metadataIds.Add(offer.UnlockRecipeItemId.Value);
+                    }
+                }
+            }
         }
 
         /// <summary>

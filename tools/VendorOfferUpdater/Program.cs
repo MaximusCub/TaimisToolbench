@@ -314,18 +314,25 @@ namespace VendorOfferUpdater
                     Console.WriteLine();
                 }
 
-                // Step 3: Resolve item-based currencies via wiki
+                // Step 3: Resolve item-based currencies and unlock recipe
+                // sheet names via wiki
                 string cachePath = Path.Combine(
                     Path.GetDirectoryName(outputPath) ?? ".",
                     "item_id_cache.json");
                 var itemIdCache = ItemIdCache.Load(cachePath);
                 ReportCachedMisses(itemIdCache, recheckMisses);
+                RegisterCachedCurrencyNames(itemIdCache, apiHelper);
 
                 if (!skipItemResolution)
                 {
-                    var unknownCurrencyNames = wikiResults
+                    var unknownNames = wikiResults
                         .SelectMany(r => r.CostEntries)
                         .Select(c => c.Currency)
+                        // An unlock requirement names a recipe sheet by the
+                        // same item name a cost line would, and needs the
+                        // same name-to-id resolution.
+                        .Concat(wikiResults.Select(r =>
+                            VendorUnlockRequirementParser.ExtractRecipeSheetName(r.Requirement)))
                         .Where(name => !string.IsNullOrEmpty(name)
                             && !apiHelper.ResolveCurrencyId(name).HasValue
                             && !itemIdCache.Contains(name))
@@ -336,43 +343,15 @@ namespace VendorOfferUpdater
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToList();
 
-                    if (unknownCurrencyNames.Count > 0)
+                    if (unknownNames.Count > 0)
                     {
-                        Console.WriteLine(
-                            $"Resolving {unknownCurrencyNames.Count} item-based currencies via wiki...");
-                        var resolution =
-                            await wikiClient.ResolveItemGameIdsAsync(
-                                unknownCurrencyNames, ct, queryOptions);
-
-                        var update = itemIdCache.Record(
-                            unknownCurrencyNames, resolution, DateTime.UtcNow);
-
-                        Console.WriteLine(
-                            $"  Resolved {update.Hits} of {unknownCurrencyNames.Count} item names, " +
-                            $"cached {update.Misses} miss(es) the wiki answered for, " +
-                            $"left {update.Deferred.Count} to ask again.");
-
-                        if (update.Deferred.Count > 0)
-                        {
-                            // Nothing is cached for these. A cached miss is
-                            // permanent - the filter above never asks about a
-                            // cached name again - so recording one for a batch
-                            // the wiki never answered would retire a real item
-                            // from the dataset for good.
-                            Console.WriteLine(
-                                "  These names were never answered for, so nothing was cached " +
-                                "and the next run asks again:");
-                            foreach (var name in update.Deferred.Take(DeferredNamesListed))
-                            {
-                                Console.WriteLine($"    - {name}");
-                            }
-
-                            if (update.Deferred.Count > DeferredNamesListed)
-                            {
-                                Console.WriteLine(
-                                    $"    ... and {update.Deferred.Count - DeferredNamesListed} more");
-                            }
-                        }
+                        await ResolveUnknownNamesAsync(
+                            unknownNames,
+                            wikiClient,
+                            apiHelper,
+                            itemIdCache,
+                            queryOptions,
+                            ct);
 
                         itemIdCache.Save(cachePath);
                         Console.WriteLine();
@@ -380,19 +359,27 @@ namespace VendorOfferUpdater
                     else if (itemIdCache.Count > 0)
                     {
                         Console.WriteLine(
-                            $"All item-based currencies resolved from cache ({itemIdCache.Count} entries).");
+                            $"All item names resolved from cache ({itemIdCache.Count} entries).");
                         Console.WriteLine();
                     }
                 }
                 else
                 {
                     Console.WriteLine(
-                        "Skipping item-based currency resolution (--skip-item-resolution).");
+                        "Skipping item name resolution (--skip-item-resolution).");
                     Console.WriteLine();
                 }
 
                 var itemIdMap = new Dictionary<string, int>(
                     itemIdCache.Ids, StringComparer.OrdinalIgnoreCase);
+
+                // Step 3.4: Resolve the recipe each unlock sheet named by a
+                // "Has requirement" value actually unlocks. Costs one GW2
+                // API item lookup per DISTINCT sheet, and no wiki traffic
+                // at all - measured over the full 70,644-row scrape that is
+                // one lookup, for Lyhr's "Recipe: Legendary Obsidian Armor".
+                var unlockRecipeIdByItemId =
+                    await ResolveUnlockRecipeIdsAsync(wikiResults, itemIdMap, apiHelper, ct);
 
                 // Step 3.5: Resolve festival-vendor seasonal tags via wiki
                 // (opt-in, --tag-seasonal-festivals - see
@@ -456,7 +443,8 @@ namespace VendorOfferUpdater
                         continue;
                     }
 
-                    var offer = ConvertToOffer(result, apiHelper, itemIdMap);
+                    var offer = ConvertToOffer(
+                        result, apiHelper, itemIdMap, unlockRecipeIdByItemId);
                     if (offer != null)
                     {
                         offers.Add(offer);
@@ -1149,7 +1137,8 @@ namespace VendorOfferUpdater
         internal static VendorOffer? ConvertToOffer(
             WikiVendorResult result,
             Gw2ApiHelper apiHelper,
-            Dictionary<string, int> itemIdMap)
+            Dictionary<string, int> itemIdMap,
+            IReadOnlyDictionary<int, int>? unlockRecipeIdByItemId = null)
         {
             int outputCount = result.OutputQuantity ?? 1;
             if (outputCount <= 0)
@@ -1256,6 +1245,24 @@ namespace VendorOfferUpdater
                     "{{Temporary}} template - left untagged (no invented festival mapping).");
             }
 
+            // Both ids stay null unless the requirement parses AND the
+            // sheet's own item id and the recipe it unlocks are both known.
+            // A half-resolved gate would name a sheet whose ownership the
+            // module could never check. Deliberately not passed to
+            // ComputeOfferId below - see Models/VendorOffer.cs.
+            int? unlockRecipeItemId = null;
+            int? unlockRecipeId = null;
+            string? unlockSheetName =
+                VendorUnlockRequirementParser.ExtractRecipeSheetName(result.Requirement);
+            if (unlockSheetName != null &&
+                itemIdMap.TryGetValue(unlockSheetName, out int sheetItemId) &&
+                unlockRecipeIdByItemId != null &&
+                unlockRecipeIdByItemId.TryGetValue(sheetItemId, out int sheetRecipeId))
+            {
+                unlockRecipeItemId = sheetItemId;
+                unlockRecipeId = sheetRecipeId;
+            }
+
             string offerId = VendorOfferHasher.ComputeOfferId(
                 result.GameId,
                 outputCount,
@@ -1280,7 +1287,69 @@ namespace VendorOfferUpdater
                 HomesteadTier = homesteadTier,
                 SeasonalCap = result.SeasonalCap,
                 SeasonalFestival = seasonalFestival,
+                UnlockRecipeItemId = unlockRecipeItemId,
+                UnlockRecipeId = unlockRecipeId,
             };
+        }
+
+        /// <summary>
+        /// Maps every recipe sheet item id named by a row's "Has
+        /// requirement" to the recipe that sheet unlocks, via
+        /// Gw2ApiHelper.ResolveRecipeSheetRecipeIdAsync - one lookup per
+        /// DISTINCT sheet, against api.guildwars2.com and never the wiki.
+        /// A sheet that unlocks no crafting recipe, or whose lookup fails,
+        /// is warned about and left out, so ConvertToOffer leaves that
+        /// offer's gate untagged rather than half-tagged.
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static async Task<Dictionary<int, int>> ResolveUnlockRecipeIdsAsync(
+            IReadOnlyList<WikiVendorResult> wikiResults,
+            IReadOnlyDictionary<string, int> itemIdMap,
+            Gw2ApiHelper apiHelper,
+            CancellationToken ct)
+        {
+            var sheetItemIds = new SortedSet<int>();
+            foreach (var result in wikiResults)
+            {
+                string? sheetName =
+                    VendorUnlockRequirementParser.ExtractRecipeSheetName(result.Requirement);
+                if (sheetName != null && itemIdMap.TryGetValue(sheetName, out int itemId))
+                {
+                    sheetItemIds.Add(itemId);
+                }
+            }
+
+            var resolved = new Dictionary<int, int>();
+            foreach (int itemId in sheetItemIds)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                int? recipeId;
+                try
+                {
+                    recipeId = await apiHelper.ResolveRecipeSheetRecipeIdAsync(itemId);
+                }
+                catch (HttpRequestException ex)
+                {
+                    Console.WriteLine(
+                        $"  WARNING: unlock requirement item {itemId} could not be looked " +
+                        $"up ({ex.Message}) - offers gated on it stay untagged.");
+                    continue;
+                }
+
+                if (recipeId.HasValue)
+                {
+                    resolved[itemId] = recipeId.Value;
+                }
+                else
+                {
+                    Console.WriteLine(
+                        $"  WARNING: unlock requirement item {itemId} unlocks no crafting " +
+                        "recipe - offers gated on it stay untagged.");
+                }
+            }
+
+            return resolved;
         }
 
         /// <summary>
@@ -1660,6 +1729,200 @@ namespace VendorOfferUpdater
             Console.WriteLine(
                 $"  {cache.Misses.Count} remembered miss(es), {age}{undatedNote}. " +
                 "Pass --recheck-misses to ask the wiki about them again.");
+        }
+
+        /// <summary>
+        /// Re-registers the currency names a previous run settled, so a run
+        /// that resolves nothing new still prices those cost lines.
+        /// <para>
+        /// An entry the API no longer names is dropped rather than kept. The
+        /// cache is consulted before the wiki is, so a stale entry would go
+        /// on naming a currency that has left the game, and nothing would
+        /// ever ask again.
+        /// </para>
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static void RegisterCachedCurrencyNames(ItemIdCache cache, Gw2ApiHelper apiHelper)
+        {
+            if (cache.CurrencyNames.Count == 0)
+            {
+                return;
+            }
+
+            var stale = new List<string>();
+            foreach (var pair in cache.CurrencyNames)
+            {
+                if (!apiHelper.AddCurrencyAlias(pair.Key, pair.Value))
+                {
+                    stale.Add(pair.Key);
+                }
+            }
+
+            foreach (var name in stale)
+            {
+                cache.ForgetCurrencyName(name);
+            }
+
+            Console.WriteLine(
+                $"  {cache.CurrencyNames.Count} cached cost name(s) name a wallet currency." +
+                (stale.Count > 0
+                    ? $" Dropped {stale.Count} the API no longer names; they are asked again."
+                    : string.Empty));
+        }
+
+        /// <summary>
+        /// Settles the names neither the API's currency list nor the cache
+        /// knows, in two steps: ask the wiki which page each name actually
+        /// names, then decide whether that page is a currency or an item.
+        /// Cost lines and unlock requirements both spell an item the same
+        /// way, so both arrive here.
+        /// <para>
+        /// A name whose title request went unanswered is left for the next
+        /// run rather than settled here. Nothing was asked about it, so there
+        /// is nothing to record either way, and a cached miss is permanent.
+        /// </para>
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static async Task ResolveUnknownNamesAsync(
+            IReadOnlyList<string> unknownNames,
+            WikiSmwClient wikiClient,
+            Gw2ApiHelper apiHelper,
+            ItemIdCache itemIdCache,
+            QueryOptions queryOptions,
+            CancellationToken ct)
+        {
+            Console.WriteLine(
+                $"Resolving {unknownNames.Count} unknown name(s) via the wiki...");
+
+            var titles = await wikiClient.ResolveTitlesAsync(unknownNames, ct, queryOptions);
+
+            var unanswered = new List<string>();
+            var itemQueries = new List<KeyValuePair<string, string>>();
+            int namedCurrencies = 0;
+
+            foreach (string name in unknownNames)
+            {
+                if (!titles.Answered.Contains(name))
+                {
+                    unanswered.Add(name);
+                    continue;
+                }
+
+                string title = titles.Resolved.TryGetValue(name, out var resolved)
+                    ? resolved
+                    : name;
+
+                if (apiHelper.AddCurrencyAlias(name, title))
+                {
+                    itemIdCache.RecordCurrencyName(name, title);
+                    namedCurrencies++;
+                }
+                else
+                {
+                    itemQueries.Add(new KeyValuePair<string, string>(name, title));
+                }
+            }
+
+            Console.WriteLine(
+                $"  {titles.Resolved.Count} of {unknownNames.Count} point at a page spelled " +
+                $"differently. {namedCurrencies} name a wallet currency outright, " +
+                $"{unanswered.Count} went unanswered.");
+
+            var update = new ItemIdCacheUpdate();
+            int itemsAsked = itemQueries.Count;
+            int reclassified = 0;
+
+            if (itemQueries.Count > 0)
+            {
+                var askedTitles = itemQueries
+                    .Select(query => query.Value)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var resolution =
+                    await wikiClient.ResolveItemGameIdsAsync(askedTitles, ct, queryOptions);
+
+                var stillItems = new List<KeyValuePair<string, string>>();
+                foreach (var query in itemQueries)
+                {
+                    if (ClaimAsCurrency(query, resolution, apiHelper, itemIdCache))
+                    {
+                        reclassified++;
+                    }
+                    else
+                    {
+                        stillItems.Add(query);
+                    }
+                }
+
+                update = itemIdCache.Record(stillItems, resolution, DateTime.UtcNow);
+            }
+
+            Console.WriteLine(
+                $"  Of the {itemsAsked} asked about as items: {update.Hits} resolved, " +
+                $"{reclassified} turned out to be a currency, " +
+                $"{update.Misses} cached as a miss the wiki answered for, " +
+                $"{update.Deferred.Count} left to ask again.");
+
+            // A cached miss is permanent - the resolution filter never asks
+            // about a settled name again - so a name the wiki never answered
+            // about is cached neither way, at either step.
+            ReportUnsettled(
+                update.Deferred,
+                "These names were never answered for, so nothing was cached and the " +
+                "next run asks again:");
+            ReportUnsettled(
+                unanswered,
+                "The wiki never said which page these names point at, so they were " +
+                "asked no further and nothing was cached:");
+        }
+
+        /// <summary>
+        /// Settles one cost name as a currency when the wiki has answered
+        /// that the page it names carries no item id. A page is one thing or
+        /// the other, and this is the only point at which the wiki has said
+        /// which, so it is also the only point at which a name may be matched
+        /// against the currency list on anything looser than its exact text.
+        /// </summary>
+        private static bool ClaimAsCurrency(
+            KeyValuePair<string, string> query,
+            ItemIdResolution resolution,
+            Gw2ApiHelper apiHelper,
+            ItemIdCache itemIdCache)
+        {
+            bool hasItemId = resolution.Resolved.TryGetValue(query.Value, out int id) && id > 0;
+            if (hasItemId || !resolution.Answered.Contains(query.Value))
+            {
+                return false;
+            }
+
+            string? currencyName = apiHelper.MatchCurrencyName(query.Value);
+            if (currencyName == null || !apiHelper.AddCurrencyAlias(query.Key, currencyName))
+            {
+                return false;
+            }
+
+            itemIdCache.RecordCurrencyName(query.Key, currencyName);
+            return true;
+        }
+
+        private static void ReportUnsettled(IReadOnlyList<string> names, string heading)
+        {
+            if (names.Count == 0)
+            {
+                return;
+            }
+
+            Console.WriteLine($"  {heading}");
+            foreach (var name in names.Take(DeferredNamesListed))
+            {
+                Console.WriteLine($"    - {name}");
+            }
+
+            if (names.Count > DeferredNamesListed)
+            {
+                Console.WriteLine($"    ... and {names.Count - DeferredNamesListed} more");
+            }
         }
 
         /// <summary>

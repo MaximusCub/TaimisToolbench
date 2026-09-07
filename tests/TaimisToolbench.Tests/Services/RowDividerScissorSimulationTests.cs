@@ -155,12 +155,12 @@ namespace TaimisToolbench.Tests.Services
         {
             // Why IconRowDividerClearance exists: the tier-2 flush sum
             // WITHOUT it (icon frame + divider = 44) and the naive
-            // bottom-flush variants of both shipped heights all vanish.
-            // This is the assertion that keeps the clearance pixel from
-            // being "simplified" away as slack.
+            // bottom-flush variant of the shipped icon-led height both
+            // vanish. This is the assertion that keeps the clearance pixel
+            // from being "simplified" away as slack.
             Assert.True(VanishCount(PlanContentHeightMath.RowIconFrameSize + DividerHeight, 0, 0.897f) > 0);
-            Assert.True(VanishCount(PlanContentHeightMath.UsedMaterialRowHeight, 0, 0.81f) > 0);
-            Assert.True(VanishCount(PlanContentHeightMath.CraftStepRowHeight, 0, 0.897f) > 0);
+            Assert.True(VanishCount(PlanContentHeightMath.IconLedRowHeight, 0, 0.81f) > 0);
+            Assert.True(VanishCount(PlanContentHeightMath.IconLedRowHeight, 0, 0.897f) > 0);
         }
 
         [Fact]
@@ -181,17 +181,16 @@ namespace TaimisToolbench.Tests.Services
             // Every CreateRowDivider caller's (rowHeight, bottomClearance),
             // plus the section header band divider built the same way.
             // Deduplicated because xUnit collapses identical theory cases
-            // anyway (the three flush tier-2 rows share one geometry).
+            // anyway (the four padded tier-2 rows share one geometry).
             int iconClearance = PlanContentHeightMath.IconRowDividerClearance;
             var pairs = new List<(int RowHeight, int Clearance)>
             {
                 // UsedMaterialsSectionRenderer / ShoppingListSectionRenderer
-                // / RecipesSectionRenderer: the tier-2 flush fit.
+                // / RecipesSectionRenderer / CraftStepsSectionRenderer: the
+                // tier-2 padded fit.
                 (PlanContentHeightMath.UsedMaterialRowHeight, iconClearance),
                 (PlanContentHeightMath.ShoppingRowHeight, iconClearance),
                 (PlanContentHeightMath.RecipeRowHeight, iconClearance),
-
-                // CraftStepsSectionRenderer: the inset tier-2 row.
                 (PlanContentHeightMath.CraftStepRowHeight, iconClearance),
 
                 // DisciplinesSectionRenderer passes 1 (belt-and-braces on
@@ -231,15 +230,27 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void FlushFitRowsKeepTheDividerClearOfTheIconFrame()
+        public void IconLedRowsKeepEqualPaddingAroundTheIconFrame()
         {
-            // The clearance pixel lives in the HEIGHT, not under the icon:
-            // at the flush heights the divider's top must land exactly at
-            // the icon frame's bottom edge - one pixel less height would
-            // slide the divider under the icon, one more would open a gap.
-            int dividerTop = PlanContentHeightMath.UsedMaterialRowHeight
-                - DividerHeight - PlanContentHeightMath.IconRowDividerClearance;
-            Assert.Equal(PlanContentHeightMath.RowIconFrameSize, dividerTop);
+            // Reported in game: the rows used to be flush, so the icon
+            // frame's bottom border and the divider's top edge shared a y.
+            // The gap a reader sees above the frame and the gap below it
+            // must both be IconRowFramePadding - which is why the icon's y
+            // is one LESS than the padding, the row above ending on its own
+            // clearance pixel.
+            int rowHeight = PlanContentHeightMath.UsedMaterialRowHeight;
+            int iconTop = PlanContentHeightMath.IconRowIconY;
+            int iconBottom = iconTop + PlanContentHeightMath.RowIconFrameSize;
+            int dividerTop = rowHeight - DividerHeight
+                - PlanContentHeightMath.IconRowDividerClearance;
+
+            Assert.Equal(PlanContentHeightMath.IconRowFramePadding, dividerTop - iconBottom);
+
+            // The next row's icon against the divider this row just drew.
+            int previousDividerBottom = dividerTop + DividerHeight;
+            Assert.Equal(
+                PlanContentHeightMath.IconRowFramePadding,
+                (rowHeight + iconTop) - previousDividerBottom);
         }
     }
 }

@@ -11,22 +11,21 @@ namespace TaimisToolbench.Tests.Services
         // --- The measured pair ---
         //
         // Pinned absolutely, the same way the other geometry proofs in this
-        // suite are: these came from template-matching the live 32x32 gold
-        // coin texture against the staged wallet captures (see
-        // Services/CurrencyIconTiers for the calibration), so a change here
-        // is a claim about the GAME, not about the module, and has to be
-        // re-measured rather than re-derived.
+        // suite are, so a change here is a claim about the GAME rather than
+        // about the module, and has to be re-measured rather than
+        // re-derived. See Services/CurrencyIconTiers for each measurement.
         [Fact]
         public void WalletTiers_ArePinnedToTheMeasuredCaptures()
         {
             Assert.Equal(32, CurrencyIconTiers.WalletListIconSize);
-            Assert.Equal(16, CurrencyIconTiers.WalletBarIconSize);
 
-            // The game halves its own texture between the two tiers; the
-            // exact 2:1 is a measured fact, not a convenience.
-            Assert.Equal(
-                CurrencyIconTiers.WalletListIconSize,
-                CurrencyIconTiers.WalletBarIconSize * 2);
+            // 18, from our bar beside the game's in one screenshot: the
+            // game's gold disc measures wider than ours at every threshold
+            // tried. The tiers are NOT 2:1 - an earlier template match of
+            // the 32x32 texture read the bar tier as 16, and the
+            // side-by-side capture supersedes it. Do not assert that ratio
+            // again.
+            Assert.Equal(18, CurrencyIconTiers.WalletBarIconSize);
         }
 
         // --- Which surface sits on which tier ---
@@ -134,7 +133,7 @@ namespace TaimisToolbench.Tests.Services
             // reserve their amount run as "the coin icon size", which was
             // only ever right because an inline coin happened to draw at
             // the amount text's own line height. Moving the coins onto the
-            // 16px bar tier broke that coincidence, and a reserve that
+            // shorter bar tier broke that coincidence, and a reserve that
             // followed the icon down would have stopped the band
             // bottom-anchoring its amount.
             Assert.True(PlanContentHeightMath.AmountRunHeight >= CoinSegmentMath.CoinIconSize);

@@ -136,6 +136,15 @@ namespace TaimisToolbench.Services
         public static FontInk CaptionInk => Regular14;
 
         /// <summary>
+        /// The digits in a coin run, sized against the 18px coin icon
+        /// rather than against the prose around them - the measurement is
+        /// on Views/Rendering/UiFonts.CoinDigits, the face this ink belongs
+        /// to. Named for the role so a caller putting a coin run on one
+        /// baseline with Body text reads the ink the run is drawn in.
+        /// </summary>
+        public static FontInk CoinDigitInk => Regular16;
+
+        /// <summary>
         /// Where the lowest ink of a line drawn at <paramref name="labelY"/>
         /// lands. Every band height and divider clearance in the plan view
         /// is a statement about this number.

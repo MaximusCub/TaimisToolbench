@@ -11,8 +11,8 @@ namespace TaimisToolbench.Tests.Services
     /// Materials, Shopping List, Snapshot results, Plan History). The rules
     /// that matter are what happens at the seams: the tooltip always opens
     /// on the icon+name header the game's own does, the name never appears
-    /// twice, and a coin amount in a surface's own extra lines stays a coin
-    /// span.
+    /// twice, a surface's own lines land in the second box rather than
+    /// inside the item's, and a coin amount in them stays a coin span.
     /// </summary>
     public class ItemRowTooltipComposerTests
     {
@@ -82,24 +82,30 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void ExtraLinesFollowTheStatBlockAfterExactlyOneBlank()
+        public void ExtraLinesGoToTheSecondBoxAndNeverIntoTheItemsOwn()
         {
-            var lines = ItemRowTooltipComposer.BuildRowContent(
-                Block(), Identity(), new[] { "Right-click: Open wiki page" }).ToPlainLines();
+            var content = ItemRowTooltipComposer.BuildRowContent(
+                Block(), Identity(), new[] { "Right-click to open the wiki page." });
 
-            Assert.Equal("Right-click: Open wiki page", lines[lines.Count - 1]);
-            Assert.Equal("", lines[lines.Count - 2]);
-            Assert.NotEqual("", lines[lines.Count - 3]);
+            Assert.True(content.HasExtra);
+            Assert.Equal(new[] { "Right-click to open the wiki page." }, content.ToExtraLines());
+            Assert.DoesNotContain("Right-click to open the wiki page.", content.ToPlainLines());
+
+            // No trailing blank either: the box boundary is what separates
+            // the two now, so the old separator row would be dead space.
+            var lines = content.ToPlainLines();
+            Assert.NotEqual("", lines[lines.Count - 1]);
         }
 
         [Fact]
-        public void ExtraLinesAloneNeverOpenOnABlankRow()
+        public void ExtraLinesAloneStayInTheFirstBoxRatherThanUnderAnEmptyOne()
         {
-            var lines = ItemRowTooltipComposer.BuildRowContent(
+            var content = ItemRowTooltipComposer.BuildRowContent(
                 (ItemStatBlock)null, ItemTooltipIdentity.Unnamed(),
-                new[] { "Right-click: Open wiki page" }).ToPlainLines();
+                new[] { "Right-click to open the wiki page." });
 
-            Assert.Equal(new[] { "Right-click: Open wiki page" }, lines);
+            Assert.False(content.HasExtra);
+            Assert.Equal(new[] { "Right-click to open the wiki page." }, content.ToPlainLines());
         }
 
         [Fact]
@@ -117,10 +123,10 @@ namespace TaimisToolbench.Tests.Services
             var content = ItemRowTooltipComposer.BuildRowContent(
                 ItemStatTooltipComposer.BuildContent(Block()), Identity(), extra);
 
-            var coins = content.Lines.SelectMany(l => l.Spans).Where(s => s.IsCoin).ToArray();
-            Assert.Equal(2, coins.Length);
-            Assert.Contains(coins, c => c.CoinCopper == 1234);
-            Assert.Contains(coins, c => c.CoinCopper == 7);
+            // The vendor value stays with the item; the unit price is the
+            // module's own figure and belongs in the second box.
+            Assert.Equal(new long[] { 7 }, content.CoinValues());
+            Assert.Equal(new long[] { 1234 }, content.Extra.CoinValues());
         }
     }
 }

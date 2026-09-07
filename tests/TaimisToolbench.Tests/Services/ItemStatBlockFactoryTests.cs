@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Threading.Tasks;
+using TaimisToolbench.Models;
 using TaimisToolbench.Services;
 using TaimisToolbench.Tests.Helpers;
 using Xunit;
@@ -26,7 +27,9 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal("Heavy", block.WeightClass);
             Assert.Equal(191, block.Defense);
             Assert.Equal(80, block.RequiredLevel);
-            Assert.Equal(1, block.InfusionSlotCount);
+            Assert.Equal(
+                new[] { ItemSlotKind.Upgrade, ItemSlotKind.Infusion },
+                block.UnusedSlots.ToArray());
             Assert.Equal(0, block.StatChoiceCount);
 
             Assert.Equal(
@@ -66,7 +69,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.Empty(block.Bindings);
             Assert.Empty(block.Attributes);
             Assert.Empty(block.UpgradeBonuses);
-            Assert.Equal(0, block.InfusionSlotCount);
+            Assert.Empty(block.UnusedSlots);
         }
 
         [Fact]
@@ -186,6 +189,67 @@ namespace TaimisToolbench.Tests.Services
             Assert.Empty(block.Bindings);
             Assert.Null(block.VendorValue);
             Assert.Equal("", ItemDescriptionSanitizer.Sanitize(block.Description));
+        }
+
+        [Fact]
+        public async Task ATwoHandedWeaponShippingOneSigilHasOneUpgradeSlotLeftAndTwoInfusions()
+        {
+            // Sunrise is a Greatsword, which takes two sigils, and its
+            // details name one suffix item - so one upgrade slot is still
+            // empty, above the two infusion slots the API reports.
+            var block = ItemStatBlockFactory.Build(
+                await RealItemFixtures.ParseOneAsync(RealItemJson.Sunrise));
+
+            Assert.Equal(
+                new[] { ItemSlotKind.Upgrade, ItemSlotKind.Infusion, ItemSlotKind.Infusion },
+                block.UnusedSlots.ToArray());
+        }
+
+        [Fact]
+        public async Task AOneHandedWeaponShippingASigilHasNoUpgradeSlotLeft()
+        {
+            var block = ItemStatBlockFactory.Build(
+                await RealItemFixtures.ParseOneAsync(RealItemJson.Bolt));
+
+            Assert.Equal(new[] { ItemSlotKind.Infusion }, block.UnusedSlots.ToArray());
+        }
+
+        [Fact]
+        public async Task AnAscendedAmuletHasAnEnrichmentSlotAndNoUpgradeSlot()
+        {
+            // NotUpgradeable is what removes the upgrade slot an exotic
+            // trinket has; the ascended one carries a jewel's stats instead.
+            var block = ItemStatBlockFactory.Build(
+                await RealItemFixtures.ParseOneAsync(RealItemJson.VialOfSalt));
+
+            Assert.Equal(new[] { ItemSlotKind.Enrichment }, block.UnusedSlots.ToArray());
+        }
+
+        [Fact]
+        public async Task AnExoticRingHasAnUpgradeSlotAndNoInfusionSlot()
+        {
+            var block = ItemStatBlockFactory.Build(
+                await RealItemFixtures.ParseOneAsync(RealItemJson.InfinityLoop));
+
+            Assert.Equal(new[] { ItemSlotKind.Upgrade }, block.UnusedSlots.ToArray());
+        }
+
+        [Fact]
+        public async Task AFilledInfusionSlotIsNotReportedAsUnused()
+        {
+            var block = ItemStatBlockFactory.Build(
+                await RealItemFixtures.ParseOneAsync(RealItemJson.KossOnKossInfused));
+
+            Assert.Equal(new[] { ItemSlotKind.Infusion }, block.UnusedSlots.ToArray());
+        }
+
+        [Fact]
+        public async Task AnUpgradeComponentHasNoSlotsOfItsOwn()
+        {
+            var block = ItemStatBlockFactory.Build(
+                await RealItemFixtures.ParseOneAsync(RealItemJson.SigilOfForce));
+
+            Assert.Empty(block.UnusedSlots);
         }
     }
 }

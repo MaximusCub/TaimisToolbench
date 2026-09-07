@@ -7,7 +7,7 @@ namespace TaimisToolbench.Services
     /// <summary>
     /// Builds a Recipe Tree row's extra tooltip lines (unit-price line(s), the
     /// TP price-side-fallback caveat, the Unknown/GuildUpgrade acquisition
-    /// hint, the receipt/what-if caption, and the "Right-click: Open wiki page"
+    /// hint, the receipt/what-if caption, and the wiki right-click
     /// affordance line), for <c>TreeSectionController.RenderTreeNode</c>. Pure,
     /// Blish-free string shaping so this row-tooltip logic is directly
     /// unit-testable without a live <c>Panel</c>/<c>BasicTooltipText</c>,
@@ -26,6 +26,20 @@ namespace TaimisToolbench.Services
     /// </summary>
     internal static class TreeRowTooltipComposer
     {
+        /// <summary>
+        /// The right-click affordance line. Shared with
+        /// <c>Views/Rendering/RecipesSectionRenderer</c>, which offers the
+        /// same right-click on its own rows and must not word it
+        /// differently.
+        /// </summary>
+        public const string WikiHintText = "Right-click to open the wiki page.";
+
+        /// <summary>The same affordance on a row whose acquisition is left
+        /// to the player, where the link lands on the page's Acquisition
+        /// section rather than its top.</summary>
+        public const string WikiAcquisitionHintText =
+            "Right-click to see how to get this on the wiki.";
+
         /// <summary>
         /// A row's item stat block as tooltip content, or empty content
         /// when the session has no stats for it - or when the row's id is
@@ -82,12 +96,11 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// A row's extra tooltip lines as content. Returns fresh, never-null
-        /// content (empty when nothing applies) so the caller can hand it
-        /// straight to <c>UpdateTreeRowTooltip</c> and capture the SAME
-        /// instance in its settle re-ellipsis closure - only the "is the name
-        /// actually truncated" line is reconsidered on resize, never this
-        /// content.
+        /// A row's extra tooltip lines as content - the second box of the
+        /// row's tooltip. Returns fresh, never-null content (empty when
+        /// nothing applies) so the caller can capture the SAME instance in
+        /// its settle re-ellipsis closure: nothing here depends on the
+        /// row's width, so a resize never has to recompose it.
         /// <para>
         /// The unit-price line keeps its gold figure as a coin span so the rich
         /// tooltip surface can draw it with real coin icons instead of spelling
@@ -181,18 +194,18 @@ namespace TaimisToolbench.Services
                 (node.Decision == CraftingDecision.BuyFromTp || node.IsCostComponent))
             {
                 extraTooltipLines.Add(TooltipContent.TextLine(currentPlan == null
-                    ? "Other trading post price side shown"
+                    ? "The other trading post price side is shown."
                     : currentPlan.PriceBasis == PriceBasis.BuyOrder
-                        ? "Buy-order price unavailable - instant-buy price shown"
-                        : "Instant-buy price unavailable - buy-order price shown"));
+                        ? "The buy-order price is unavailable, so the instant-buy price is shown."
+                        : "The instant-buy price is unavailable, so the buy-order price is shown."));
             }
             else if (node.PriceSideFellBack && node.Decision == CraftingDecision.BuyFromVendor)
             {
                 extraTooltipLines.Add(TooltipContent.TextLine(currentPlan == null
-                    ? "A vendor cost item's other trading post price side shown"
+                    ? "A vendor cost item shows its other trading post price side."
                     : currentPlan.PriceBasis == PriceBasis.BuyOrder
-                        ? "A vendor cost item's buy-order price is unavailable - its instant-buy price is used"
-                        : "A vendor cost item's instant-buy price is unavailable - its buy-order price is used"));
+                        ? "A vendor cost item's buy-order price is unavailable, so its instant-buy price is used."
+                        : "A vendor cost item's instant-buy price is unavailable, so its buy-order price is used."));
             }
 
             // guildupgrade-ingredients fix: a GuildUpgrade node's
@@ -206,13 +219,9 @@ namespace TaimisToolbench.Services
                 extraTooltipLines.Add(TooltipContent.TextLine(node.AcquisitionHint));
             }
 
-            // UI-bundle milestone, Feature C (receipt/what-if captions):
-            // sanctioned tooltip fallback. Inserted at the front, ahead of
-            // any unit-price/caveat lines already in extraTooltipLines -
-            // but on a row whose label got ellipsized, UpdateTreeRowTooltip
-            // itself prepends the full item name ahead of everything
-            // already in extraTooltipLines, so on those rows the caption
-            // reads second, after the name line, not first.
+            // First, ahead of any unit-price or caveat line already here:
+            // the caption says which group of children the row belongs to,
+            // and the rest of the box is about the row itself.
             if (!string.IsNullOrEmpty(captionText))
             {
                 extraTooltipLines.Insert(0, TooltipContent.TextLine(captionText));
@@ -228,10 +237,35 @@ namespace TaimisToolbench.Services
             // real page at all.
             if (WikiLinkBuilder.HasWikiPage(node.Name))
             {
-                extraTooltipLines.Add(TooltipContent.TextLine("Right-click: Open wiki page"));
+                extraTooltipLines.Add(TooltipContent.TextLine(
+                    CurrencyTradeUpRow.Matches(node)
+                        ? WikiAcquisitionHintText
+                        : WikiHintText));
             }
 
             return TooltipContent.FromLines(extraTooltipLines);
+        }
+
+        /// <summary>
+        /// The page the row's right-click opens. A currency trade-up row
+        /// (see <see cref="CurrencyTradeUpRow"/>) opens the item's
+        /// Acquisition section, because the module deliberately plans no
+        /// route to the currency and that section is where the player's
+        /// options are listed. Every other row opens the plain item page.
+        /// Null when the name has no wiki page, which is the same test the
+        /// tooltip line above uses, so the affordance and the link can
+        /// never disagree.
+        /// </summary>
+        public static string BuildWikiUrl(CraftingTreeNode node)
+        {
+            if (node == null)
+            {
+                return null;
+            }
+
+            return CurrencyTradeUpRow.Matches(node)
+                ? WikiLinkBuilder.BuildItemAcquisitionUrl(node.Name)
+                : WikiLinkBuilder.BuildItemPageUrl(node.Name);
         }
     }
 }

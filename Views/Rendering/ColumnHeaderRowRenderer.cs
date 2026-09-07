@@ -50,10 +50,10 @@ namespace TaimisToolbench.Views.Rendering
     // the reason the band, rather than the Shopping List's lighter
     // treatment, is the one every plan table now uses.
     //
-    // It also sizes the header BAND, which ends one TableRightMargin past
-    // the right column - the full panel width for every caller whose
-    // columns are pinned, i.e. all of them, and clamped to the panel for a
-    // caller whose derived edge ever landed past it.
+    // It also sizes the header BAND, which spans the panel width. The band
+    // is the table's own background, and every column the table draws is
+    // inside that panel - including a trailing action column that no header
+    // word sits over.
     // leftColumnEndForWidth: where the flexing name column really ends,
     // so its header cell reaches the band pinned to its right rather than
     // stopping between two words (HeaderCellMath.LabelExtent). Omitted by
@@ -81,8 +81,7 @@ namespace TaimisToolbench.Views.Rendering
             TableSortDirection? leftSort = null, TableSortDirection? rightSort = null,
             Func<int> rowsHeight = null)
         {
-            var flowBand = HeaderBands.CreateColumnHeaderBandInFlow(
-                parent, BandWidth(rightXForWidth, panelWidth));
+            var flowBand = HeaderBands.CreateColumnHeaderBandInFlow(parent, panelWidth);
             var rowPanel = flowBand.Band;
             var font = HeaderBands.Font;
             var leftBlock = SortableHeaderBlock.Create(
@@ -143,7 +142,7 @@ namespace TaimisToolbench.Views.Rendering
 
             Action<int> relayout = w =>
             {
-                flowBand.Resize(BandWidth(rightXForWidth, w));
+                flowBand.Resize(w);
                 rightBlock.MoveTo(
                     RightLabelX(w, rightXForWidth, rightLabelXForWidth, rightBlock.Width));
                 if (middleLabelControl != null && middleXForWidth != null)
@@ -194,28 +193,6 @@ namespace TaimisToolbench.Views.Rendering
         private static int Measure(BitmapFont font, string text)
         {
             return (int)Math.Ceiling(font.MeasureString(text ?? "").Width);
-        }
-
-        /// <summary>
-        /// Width of the header's dark band: up to the right column plus the
-        /// margin every plan table keeps past its block, never wider than the
-        /// panel itself. Full width when the caller's right column is still
-        /// pinned to the panel edge.
-        /// </summary>
-        private static int BandWidth(Func<int, int> rightXForWidth, int panelWidth)
-        {
-            if (rightXForWidth == null)
-            {
-                return panelWidth;
-            }
-
-            int width = rightXForWidth(panelWidth) + PlanRelayoutMath.TableRightMargin;
-            if (width > panelWidth)
-            {
-                width = panelWidth;
-            }
-
-            return width > 0 ? width : 0;
         }
     }
 }

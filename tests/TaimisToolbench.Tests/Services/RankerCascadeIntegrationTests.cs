@@ -284,14 +284,18 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public async Task ASnapshotCoveringTheTargetItemItselfStillSatisfiesMonotonicity()
+        public async Task HoldingTheTargetItemItselfChangesNothingForThatRow()
         {
+            // The row asks for the target to be made, so a copy already in
+            // storage buys it nothing (see PlanRootNodes). Monotonicity
+            // still holds, at equality rather than below it.
             var pipeline = BuildFlatPipeline();
             var baseline = await SolveAsync(pipeline, null);
             var owned = await SolveAsync(pipeline, SnapshotHolding(Target, 1));
 
             Assert.True(owned.Plan.TotalCoinCost <= baseline.Plan.TotalCoinCost);
-            Assert.Equal(0, owned.Plan.TotalCoinCost);
+            Assert.Equal(baseline.Plan.TotalCoinCost, owned.Plan.TotalCoinCost);
+            Assert.Equal(300, owned.Plan.TotalCoinCost);
         }
 
         [Fact]

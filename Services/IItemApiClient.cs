@@ -68,10 +68,20 @@ namespace TaimisToolbench.Services
 
         public string DamageType { get; set; }
 
-        /// <summary>Count of details.infusion_slots. The slots' CONTENTS are
-        /// instance state the item endpoint cannot know, so only the count
-        /// is carried.</summary>
-        public int InfusionSlotCount { get; set; }
+        /// <summary>details.infusion_slots, one entry per slot in API
+        /// order. Empty (never null) from the production parser, matching
+        /// the Flags convention on RawItem.</summary>
+        public List<RawInfusionSlot> InfusionSlots { get; set; }
+
+        /// <summary>
+        /// How many upgrades the DEFINITION already ships socketed:
+        /// details.suffix_item_id plus details.secondary_suffix_item_id, 0
+        /// to 2. The game prints the socketed upgrade where it would
+        /// otherwise print an unused-slot line, so this is what stops the
+        /// tooltip calling a filled slot empty. WHICH upgrade it is needs a
+        /// second /v2/items request and is not carried.
+        /// </summary>
+        public int SocketedUpgradeCount { get; set; }
 
         /// <summary>
         /// details.attribute_adjustment - the per-item scalar the stat
@@ -121,6 +131,22 @@ namespace TaimisToolbench.Services
         /// tooltip can draw the game's inline effect icon without a
         /// second request.</summary>
         public string EffectIconUrl { get; set; }
+    }
+
+    /// <summary>One details.infusion_slots entry.</summary>
+    internal class RawInfusionSlot
+    {
+        /// <summary>The slot's own flags; empty (never null) from the
+        /// production parser.</summary>
+        public List<string> Flags { get; set; }
+
+        /// <summary>
+        /// Whether the entry carries an item_id, which means the definition
+        /// ships this slot already filled - so the game shows what is in it
+        /// rather than an unused-slot line. Rare: 102 slots across the
+        /// 2026-09-05 corpus, all of them legacy "(Infused)" back items.
+        /// </summary>
+        public bool IsFilled { get; set; }
     }
 
     internal class RawItemAttribute

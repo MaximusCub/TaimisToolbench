@@ -58,5 +58,15 @@ namespace TaimisToolbench.Models
         // way this - never the pre-merge decision lines - is what
         // CraftingPlan.BarterItemCosts is summed from.
         public List<CostLine> VendorBarterItemCosts { get; set; }
+
+        // The unlock gate the winning vendor offer names: the recipe sheet
+        // item the account must own, and the recipe id that sheet unlocks.
+        // Both null for every non-vendor step, for a vendor offer with no
+        // gate, and for a vendor step whose occurrences resolved to more
+        // than one distinct offer - the same three cases that leave
+        // VendorOfferOutputCount at 0. See VendorOffer.UnlockRecipeItemId.
+        public int? VendorUnlockRecipeItemId { get; set; }
+
+        public int? VendorUnlockRecipeId { get; set; }
     }
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using TaimisToolbench.Models;
 using TaimisToolbench.Services;
@@ -147,6 +148,61 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(
                 "No icon available for this entry.",
                 TooltipContent.OrText(composed, "No icon available for this entry.").ToPlainText());
+        }
+
+        [Fact]
+        public void WithExtra_LeavesTheFirstBoxAloneAndHangsTheSecondOffIt()
+        {
+            var first = new TooltipContentBuilder().Text("Mithril Ore").Build();
+            var second = new TooltipContentBuilder().Text("Right-click to open the wiki page.").Build();
+
+            var stacked = first.WithExtra(second);
+
+            Assert.True(stacked.HasExtra);
+            Assert.Equal(new[] { "Mithril Ore" }, stacked.ToPlainLines());
+            Assert.Equal(new[] { "Right-click to open the wiki page." }, stacked.ToExtraLines());
+
+            // The original is untouched, so content handed to two surfaces
+            // cannot grow a second box on one of them.
+            Assert.False(first.HasExtra);
+        }
+
+        [Fact]
+        public void WithExtra_RefusesToPutASecondBoxUnderAnEmptyOne()
+        {
+            var second = new TooltipContentBuilder().Text("A hint.").Build();
+
+            Assert.False(TooltipContent.Empty.WithExtra(second).HasExtra);
+            Assert.False(new TooltipContentBuilder().Text("x").Build().WithExtra(null).HasExtra);
+            Assert.False(
+                new TooltipContentBuilder().Text("x").Build().WithExtra(TooltipContent.Empty).HasExtra);
+        }
+
+        [Fact]
+        public void Append_RefusesContentThatCarriesASecondBox()
+        {
+            // A builder has one box. Flattening the second one into it
+            // would put the module's own lines inside the game's block,
+            // which is the distinction the second box exists to draw.
+            var stacked = new TooltipContentBuilder().Text("first").Build()
+                .WithExtra(new TooltipContentBuilder().Text("second").Build());
+            Assert.True(stacked.HasExtra);
+
+            var builder = new TooltipContentBuilder().Text("head");
+
+            Assert.Throws<ArgumentException>(() => builder.Append(stacked));
+
+            // The rejected call left the builder as it was.
+            Assert.Equal(new[] { "head" }, builder.Build().ToPlainLines());
+        }
+
+        [Fact]
+        public void Append_TakesContentThatIsAllOneBox()
+        {
+            var builder = new TooltipContentBuilder().Text("head");
+            builder.Append(new TooltipContentBuilder().Text("body").Build());
+
+            Assert.Equal(new[] { "head", "body" }, builder.Build().ToPlainLines());
         }
     }
 }

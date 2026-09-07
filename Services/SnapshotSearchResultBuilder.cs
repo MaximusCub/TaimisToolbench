@@ -136,31 +136,74 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// Which characters are wearing each Legendary Armory item, keyed by
+        /// item id, in the order the capture saw them and with each
+        /// character named once. Built once per snapshot alongside
+        /// <see cref="BuildRepresentativeIndex"/>, because
+        /// <see cref="BuildItemRows"/> runs once per search-box keystroke
+        /// and a scan of the raw pairings per row would cost the roster
+        /// times the result set. Returns an empty dictionary, never null.
+        /// </summary>
+        public static Dictionary<int, List<string>> BuildArmoryEquippedIndex(AccountSnapshot snapshot)
+        {
+            var byItemId = new Dictionary<int, List<string>>();
+            if (snapshot == null || snapshot.LegendaryArmoryEquipped == null)
+            {
+                return byItemId;
+            }
+
+            foreach (var equip in snapshot.LegendaryArmoryEquipped)
+            {
+                if (equip == null || equip.ItemId <= 0 || string.IsNullOrEmpty(equip.CharacterName))
+                {
+                    continue;
+                }
+
+                if (!byItemId.TryGetValue(equip.ItemId, out var names))
+                {
+                    names = new List<string>();
+                    byItemId[equip.ItemId] = names;
+                }
+
+                // One character can wear the same legendary in two slots -
+                // two entries for one wearer, which must read as one name.
+                if (!names.Contains(equip.CharacterName))
+                {
+                    names.Add(equip.CharacterName);
+                }
+            }
+
+            return byItemId;
+        }
+
+        /// <summary>
         /// Builds one <see cref="SnapshotSearchRow"/> per distinct itemId in
-        /// <paramref name="itemsById"/> that (a) matches
-        /// <paramref name="searchText"/> by case-insensitive substring against
-        /// the item's own name OR - for queries of at least
-        /// <see cref="MinCharacterSearchLength"/> characters - against the name
-        /// of a character holding it, and (b) has a positive total once
-        /// <paramref name="sourceFilter"/> has excluded any unchecked sources.
-        /// An item with zero quantity across the checked sources drops out.
+        /// <paramref name="itemsById"/> that (a) has a positive total once
+        /// <paramref name="sourceFilter"/> has excluded any unchecked sources
+        /// and (b) matches <paramref name="searchText"/> by case-insensitive
+        /// substring: against the item's own name, against a skin a surviving
+        /// copy wears, or against a holding character's name (that last only
+        /// for queries of at least <see cref="MinCharacterSearchLength"/>).
         /// <para>
-        /// The two compose as a plain AND: only sources that survive the filter
-        /// are consulted for the character match, so an unchecked character's
-        /// rows stay hidden even when its own name is typed. A row surfaced by
-        /// a character match still reports the account-wide total and full
-        /// breakdown across the checked sources. Rows are sorted by name
+        /// The two compose as a plain AND. Only surviving sources are
+        /// consulted, for the skin as much as for the character, so an
+        /// unchecked character's rows stay hidden even when its own name or
+        /// the skin it alone wears is typed. Such a row still reports the
+        /// account-wide total across the checked sources. Rows sort by name
         /// (ordinal, case-insensitive). Returns an empty list, never null.
         /// </para>
         /// <para>What itemsById must be, and what character matching costs:
-        /// docs/ARCHITECTURE.md, S2.5.</para>
+        /// docs/ARCHITECTURE.md, S2.5. Which name a row takes when its copies
+        /// wear a skin: Services.TransmutedNameIndex.</para>
         /// </summary>
         public static List<SnapshotSearchRow> BuildItemRows(
             IReadOnlyDictionary<int, SnapshotItemEntry> itemsById,
             AccountItemIndex index,
             string searchText,
             SnapshotSourceFilter sourceFilter,
-            string activeCharacterName)
+            string activeCharacterName,
+            IReadOnlyDictionary<int, IReadOnlyList<TransmutedItemCopy>> transmutedCopies = null,
+            IReadOnlyDictionary<int, List<string>> armoryEquipped = null)
         {
             var rows = new List<SnapshotSearchRow>();
 
@@ -172,17 +215,29 @@ namespace TaimisToolbench.Services
             string trimmedSearch = (searchText ?? string.Empty).Trim();
             bool searching = trimmedSearch.Length > 0;
 
+            // Allocated once per call, not once per row: the skin helpers
+            // ask it about a stack's raw source, which is the same question
+            // the breakdown loop below already answers for itself.
+            Func<string, bool> sourceVisible = source => IsSourceEnabled(source, sourceFilter);
+
             foreach (var kvp in itemsById)
             {
                 int itemId = kvp.Key;
 
                 // Never display raw item IDs (repo invariant).
-                string name = string.IsNullOrWhiteSpace(kvp.Value.Name) ? "Unknown Item" : kvp.Value.Name;
+                string ownName = string.IsNullOrWhiteSpace(kvp.Value.Name) ? "Unknown Item" : kvp.Value.Name;
 
-                bool nameMatches = !searching || name.IndexOf(trimmedSearch, StringComparison.OrdinalIgnoreCase) >= 0;
+                IReadOnlyList<TransmutedItemCopy> copies = null;
+                if (transmutedCopies != null)
+                {
+                    transmutedCopies.TryGetValue(itemId, out copies);
+                }
+
+                bool nameMatches = !searching
+                    || ownName.IndexOf(trimmedSearch, StringComparison.OrdinalIgnoreCase) >= 0;
 
                 var prioritizedSources = AccountItemIndex.GetPrioritizedSources(itemId, index, activeCharacterName);
-                var breakdown = new List<SnapshotSourceCount>();
+                var breakdown = new List<SnapshotHoldLocation>();
                 int total = 0;
                 bool characterMatches = false;
 
@@ -204,7 +259,14 @@ namespace TaimisToolbench.Services
                         characterMatches = CharacterNameMatches(source, trimmedSearch);
                     }
 
-                    breakdown.Add(new SnapshotSourceCount { Label = FormatSourceLabel(source), Count = quantity });
+                    var location = SnapshotHoldLine.FromSource(source, quantity);
+                    if (location.Category == SnapshotHoldCategory.LegendaryArmory)
+                    {
+                        location.EquippedBy = VisibleWearers(
+                            itemId, armoryEquipped, sourceFilter);
+                    }
+
+                    breakdown.Add(location);
                     total += quantity;
                 }
 
@@ -216,22 +278,42 @@ namespace TaimisToolbench.Services
                     continue;
                 }
 
+                // Both spellings, always: the item's own name, and every
+                // skin a copy this row counted wears - which covers the
+                // shown name, since that is one of them.
+                if (!nameMatches
+                    && TransmutedNameIndex.AnySkinNameMatches(
+                        copies, trimmedSearch, sourceVisible))
+                {
+                    nameMatches = true;
+                }
+
                 if (!nameMatches && !characterMatches)
                 {
                     continue;
                 }
 
+                // Read off the copies this row counted, the same set its
+                // breakdown lists. A copy the filter hid can neither name
+                // the row nor stop another copy from naming it.
+                var skin = TransmutedNameIndex.AgreedSkin(copies, sourceVisible);
+                string name = skin.IsPresent ? skin.Name : ownName;
+
                 rows.Add(new SnapshotSearchRow
                 {
                     ItemId = itemId,
                     Name = name,
-                    IconUrl = kvp.Value.IconUrl ?? string.Empty,
+
+                    // Name and icon come off the same value, so a row can
+                    // never show one item's name over another's picture.
+                    IconUrl = skin.IsPresent ? skin.IconUrl : (kvp.Value.IconUrl ?? string.Empty),
 
                     // From the first entry seen for this id, like Name and
                     // IconUrl: the same item in a bank slot and on a
                     // character is the same item, so any of its entries
                     // carries the same captured rarity.
                     Rarity = kvp.Value.Rarity ?? string.Empty,
+                    Skin = skin,
                     TotalCount = total,
                     Breakdown = breakdown,
                 });
@@ -260,7 +342,7 @@ namespace TaimisToolbench.Services
         /// (case-insensitive, with an ordinal tiebreak so two names differing
         /// only by case keep a deterministic order). Drives the Snapshot
         /// tab's per-character source checkboxes, so it deliberately merges
-        /// both rosters the snapshot carries: the "Character:&lt;name&gt;"
+        /// both rosters the snapshot carries: the character-owned
         /// item sources AND CharacterDisciplines - a character holding no
         /// items at all still gets a checkbox as long as the snapshot saw it
         /// somewhere. Zero-count item entries are kept here (unlike
@@ -282,13 +364,11 @@ namespace TaimisToolbench.Services
             {
                 foreach (var entry in snapshot.Items)
                 {
-                    string source = entry?.Source;
-                    if (source == null || !source.StartsWith(AccountItemIndex.CharacterSourcePrefix, StringComparison.Ordinal))
+                    if (!AccountItemIndex.TryGetCharacterName(entry?.Source, out string name))
                     {
                         continue;
                     }
 
-                    string name = source.Substring(AccountItemIndex.CharacterSourcePrefix.Length);
                     if (name.Length > 0 && seen.Add(name))
                     {
                         names.Add(name);
@@ -352,10 +432,50 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// The characters wearing this item that the source filter still
+        /// shows, or null when none are left. Unchecking a character hides
+        /// its bags and its worn gear, so it must not go on naming that
+        /// character under the Legendary Armory either.
+        /// </summary>
+        private static IReadOnlyList<string> VisibleWearers(
+            int itemId,
+            IReadOnlyDictionary<int, List<string>> armoryEquipped,
+            SnapshotSourceFilter filter)
+        {
+            if (armoryEquipped == null
+                || !armoryEquipped.TryGetValue(itemId, out var names)
+                || names == null
+                || names.Count == 0)
+            {
+                return null;
+            }
+
+            var excluded = filter == null ? null : filter.UncheckedCharacters;
+            if (excluded == null || excluded.Count == 0)
+            {
+                return names;
+            }
+
+            // Allocates only once the user has unchecked something, and only
+            // for a row the armory holds - the legendaries, not the roster's
+            // whole item list.
+            var visible = new List<string>(names.Count);
+            for (int i = 0; i < names.Count; i++)
+            {
+                if (!excluded.Contains(names[i]))
+                {
+                    visible.Add(names[i]);
+                }
+            }
+
+            return visible.Count > 0 ? visible : null;
+        }
+
+        /// <summary>
         /// True when <paramref name="search"/> is at least
         /// <see cref="MinCharacterSearchLength"/> characters long and occurs
-        /// (case-insensitively) in the character-name half of a
-        /// "Character:&lt;name&gt;" source. The scan starts past the encoding
+        /// (case-insensitively) in the character-name half of either
+        /// character source encoding. The scan starts past the encoding
         /// prefix, so searching "char" matches a character actually named
         /// e.g. "Charr Hoarder" and never the internal token itself, and it
         /// takes no substring (this runs per source per item on the
@@ -363,9 +483,14 @@ namespace TaimisToolbench.Services
         /// </summary>
         private static bool CharacterNameMatches(string rawSource, string search)
         {
-            return search.Length >= MinCharacterSearchLength
-                && rawSource.StartsWith(AccountItemIndex.CharacterSourcePrefix, StringComparison.Ordinal)
-                && rawSource.IndexOf(search, AccountItemIndex.CharacterSourcePrefix.Length, StringComparison.OrdinalIgnoreCase) >= 0;
+            if (search.Length < MinCharacterSearchLength)
+            {
+                return false;
+            }
+
+            int offset = AccountItemIndex.CharacterNameOffset(rawSource);
+            return offset >= 0
+                && rawSource.IndexOf(search, offset, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         /// <summary>
@@ -374,8 +499,9 @@ namespace TaimisToolbench.Services
         /// null filter is treated as "show everything" (matches the
         /// controls' own all-checked default), as is a character whose name
         /// is absent from SnapshotSourceFilter.UncheckedCharacters. A raw
-        /// source string that matches none of the four known shapes
-        /// (Bank/MaterialStorage/SharedInventory/Character:&lt;name&gt;) is shown regardless -
+        /// source string that matches none of the known shapes
+        /// (Bank/MaterialStorage/SharedInventory/LegendaryArmory, or either
+        /// character encoding) is shown regardless -
         /// failing open rather than silently hiding real inventory data
         /// the module does not yet recognize (KNOWN-ISSUES #31's "never
         /// silently mask data" posture); there is no such source today.
@@ -392,7 +518,8 @@ namespace TaimisToolbench.Services
                 return false;
             }
 
-            if (rawSource.StartsWith(AccountItemIndex.CharacterSourcePrefix, StringComparison.Ordinal))
+            int characterNameOffset = AccountItemIndex.CharacterNameOffset(rawSource);
+            if (characterNameOffset >= 0)
             {
                 var excluded = filter.UncheckedCharacters;
                 if (excluded == null || excluded.Count == 0)
@@ -400,7 +527,7 @@ namespace TaimisToolbench.Services
                     return true;
                 }
 
-                return !IsExcludedCharacter(rawSource, excluded);
+                return !IsExcludedCharacter(rawSource, characterNameOffset, excluded);
             }
 
             switch (rawSource)
@@ -408,22 +535,25 @@ namespace TaimisToolbench.Services
                 case AccountItemIndex.SourceBank: return filter.Bank;
                 case AccountItemIndex.SourceMaterialStorage: return filter.MaterialStorage;
                 case AccountItemIndex.SourceSharedInventory: return filter.SharedInventory;
+                case AccountItemIndex.SourceLegendaryArmory: return filter.LegendaryArmory;
                 default: return true;
             }
         }
 
         /// <summary>
-        /// True when the character-name half of a "Character:&lt;name&gt;"
-        /// source appears in the exclusion set. Compares the name in place
+        /// True when the character-name half of a character source appears
+        /// in the exclusion set. One checkbox covers both of that
+        /// character's encodings, so unchecking a character hides its bags
+        /// and its worn gear together. Compares the name in place
         /// rather than taking a substring (this runs per source per item on
         /// the keystroke path), which trades the set's O(1) lookup for a
         /// scan of it - bounded by the roster, and only reached at all once
         /// the user has unchecked something. Ordinal, matching the
         /// comparer SnapshotSourceFilter's set is created with.
         /// </summary>
-        private static bool IsExcludedCharacter(string rawSource, HashSet<string> excluded)
+        private static bool IsExcludedCharacter(
+            string rawSource, int prefixLength, HashSet<string> excluded)
         {
-            int prefixLength = AccountItemIndex.CharacterSourcePrefix.Length;
             int nameLength = rawSource.Length - prefixLength;
 
             foreach (string name in excluded)
@@ -437,37 +567,6 @@ namespace TaimisToolbench.Services
             }
 
             return false;
-        }
-
-        /// <summary>
-        /// Display-formats a raw AccountItemIndex source string, stripping
-        /// the internal "Character:" encoding prefix and spacing out the
-        /// PascalCase storage-location names (e.g. "MaterialStorage" -&gt;
-        /// "Material Storage") - a small polish fix so the raw internal
-        /// token never reaches the UI verbatim. The underlying strings are
-        /// already display-safe, not raw ids, so this is cosmetic only, not
-        /// an ids-stay-internal fix. Returns "Unknown" for
-        /// a null/empty source.
-        /// </summary>
-        public static string FormatSourceLabel(string rawSource)
-        {
-            if (string.IsNullOrEmpty(rawSource))
-            {
-                return "Unknown";
-            }
-
-            if (rawSource.StartsWith(AccountItemIndex.CharacterSourcePrefix, StringComparison.Ordinal))
-            {
-                return "Character: " + rawSource.Substring(AccountItemIndex.CharacterSourcePrefix.Length);
-            }
-
-            switch (rawSource)
-            {
-                case AccountItemIndex.SourceMaterialStorage: return "Material Storage";
-                case AccountItemIndex.SourceSharedInventory: return "Shared Inventory";
-                case AccountItemIndex.SourceBank: return "Bank";
-                default: return rawSource;
-            }
         }
     }
 }

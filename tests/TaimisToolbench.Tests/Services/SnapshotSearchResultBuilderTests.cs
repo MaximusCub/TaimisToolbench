@@ -25,6 +25,8 @@ namespace TaimisToolbench.Tests.Services
 
         private static string CharSource(string name) => AccountItemIndex.CharacterSourcePrefix + name;
 
+        private static string EquipSource(string name) => AccountItemIndex.CharacterEquipmentSourcePrefix + name;
+
         // The filter shape MainView hands the builder once the user
         // unchecks one or more per-character boxes: everything else stays
         // checked, and any character not named here is visible.
@@ -146,7 +148,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal("Iron Ore", result[0].Name);
             Assert.Equal(40, result[0].TotalCount);
             Assert.Single(result[0].Breakdown);
-            Assert.Equal("Bank", result[0].Breakdown[0].Label);
+            Assert.Equal(SnapshotHoldCategory.Bank, result[0].Breakdown[0].Category);
             Assert.Equal(40, result[0].Breakdown[0].Count);
         }
 
@@ -203,9 +205,9 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(250, result[0].TotalCount);
             Assert.Equal(2, result[0].Breakdown.Count);
             // MaterialStorage outranks Bank in GetPrioritizedSources.
-            Assert.Equal("Material Storage", result[0].Breakdown[0].Label);
+            Assert.Equal(SnapshotHoldCategory.MaterialStorage, result[0].Breakdown[0].Category);
             Assert.Equal(150, result[0].Breakdown[0].Count);
-            Assert.Equal("Bank", result[0].Breakdown[1].Label);
+            Assert.Equal(SnapshotHoldCategory.Bank, result[0].Breakdown[1].Category);
             Assert.Equal(100, result[0].Breakdown[1].Count);
         }
 
@@ -268,7 +270,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.Single(result);
             Assert.Equal(510, result[0].TotalCount);
             Assert.Equal(2, result[0].Breakdown.Count);
-            Assert.Contains(result[0].Breakdown, b => b.Label == "Character: Zaeed");
+            Assert.Contains(result[0].Breakdown, b => b.Category == SnapshotHoldCategory.Bags && b.CharacterName == "Zaeed");
         }
 
         [Fact]
@@ -323,7 +325,8 @@ namespace TaimisToolbench.Tests.Services
             Assert.Single(result);
             Assert.Equal(10, result[0].TotalCount);
             Assert.Single(result[0].Breakdown);
-            Assert.Equal("Character: Zaeed", result[0].Breakdown[0].Label);
+            Assert.Equal(SnapshotHoldCategory.Bags, result[0].Breakdown[0].Category);
+            Assert.Equal("Zaeed", result[0].Breakdown[0].CharacterName);
         }
 
         [Fact]
@@ -471,7 +474,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.Single(result);
             Assert.Equal(150, result[0].TotalCount);
             Assert.Single(result[0].Breakdown);
-            Assert.Equal("Material Storage", result[0].Breakdown[0].Label);
+            Assert.Equal(SnapshotHoldCategory.MaterialStorage, result[0].Breakdown[0].Category);
         }
 
         [Fact]
@@ -484,6 +487,246 @@ namespace TaimisToolbench.Tests.Services
             var result = SnapshotSearchResultBuilder.BuildItemRows(ItemsById(items), index, "", filter, null);
 
             Assert.Empty(result);
+        }
+
+        // ---- BuildItemRows: worn gear ----
+        [Fact]
+        public void BuildItemRows_BagsAndWornGear_AreSeparatePlacesOnOneCharacter()
+        {
+            var items = new List<SnapshotItemEntry>
+            {
+                Entry(100, "Black Ice Band", 2, CharSource("Divineaxe")),
+                Entry(100, "Black Ice Band", 1, EquipSource("Divineaxe")),
+            };
+            var index = new AccountItemIndex(items);
+
+            var result = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", new SnapshotSourceFilter(), "Divineaxe");
+
+            Assert.Single(result);
+            Assert.Equal(3, result[0].TotalCount);
+            Assert.Equal(2, result[0].Breakdown.Count);
+            Assert.Equal(SnapshotHoldCategory.Bags, result[0].Breakdown[0].Category);
+            Assert.Equal("Divineaxe", result[0].Breakdown[0].CharacterName);
+            Assert.Equal(SnapshotHoldCategory.Equipped, result[0].Breakdown[1].Category);
+            Assert.Equal("Divineaxe", result[0].Breakdown[1].CharacterName);
+        }
+
+        [Fact]
+        public void BuildItemRows_UncheckedCharacter_HidesItsBagsAndWornGearTogether()
+        {
+            // One checkbox per character covers both of that character's
+            // source encodings.
+            var items = new List<SnapshotItemEntry>
+            {
+                Entry(100, "Black Ice Band", 2, CharSource("Alice")),
+                Entry(100, "Black Ice Band", 1, EquipSource("Alice")),
+                Entry(100, "Black Ice Band", 4, AccountItemIndex.SourceBank),
+            };
+            var index = new AccountItemIndex(items);
+
+            var result = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", Unchecked("Alice"), null);
+
+            Assert.Single(result);
+            Assert.Equal(4, result[0].TotalCount);
+            Assert.Single(result[0].Breakdown);
+            Assert.Equal(SnapshotHoldCategory.Bank, result[0].Breakdown[0].Category);
+        }
+
+        [Fact]
+        public void BuildItemRows_SearchText_MatchesACharacterNameInAWornGearSource()
+        {
+            var items = new List<SnapshotItemEntry>
+            {
+                Entry(100, "Black Ice Band", 1, EquipSource("Divineaxe")),
+            };
+            var index = new AccountItemIndex(items);
+
+            var result = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "divine", new SnapshotSourceFilter(), null);
+
+            Assert.Single(result);
+            Assert.Equal(SnapshotHoldCategory.Equipped, result[0].Breakdown[0].Category);
+        }
+
+        [Fact]
+        public void CollectCharacterNames_IncludesACharacterKnownOnlyFromWornGear()
+        {
+            var snapshot = new AccountSnapshot
+            {
+                Items = new List<SnapshotItemEntry>
+                {
+                    Entry(100, "Black Ice Band", 1, EquipSource("Divineaxe")),
+                },
+            };
+
+            Assert.Equal(new[] { "Divineaxe" }, SnapshotSearchResultBuilder.CollectCharacterNames(snapshot));
+        }
+
+        [Fact]
+        public void BuildItemRows_LegendaryArmory_IsItsOwnAccountWidePlace()
+        {
+            var items = new List<SnapshotItemEntry>
+            {
+                Entry(100, "Bolt", 1, AccountItemIndex.SourceLegendaryArmory),
+            };
+            var index = new AccountItemIndex(items);
+
+            var result = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", new SnapshotSourceFilter(), null);
+
+            Assert.Single(result);
+            Assert.Equal(SnapshotHoldCategory.LegendaryArmory, result[0].Breakdown[0].Category);
+            Assert.Equal("", result[0].Breakdown[0].CharacterName);
+        }
+
+        [Fact]
+        public void BuildItemRows_LegendaryArmoryUnchecked_DropsThoseItems()
+        {
+            var items = new List<SnapshotItemEntry>
+            {
+                Entry(100, "Bolt", 1, AccountItemIndex.SourceLegendaryArmory),
+            };
+            var index = new AccountItemIndex(items);
+            var filter = new SnapshotSourceFilter { LegendaryArmory = false };
+
+            Assert.Empty(SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", filter, null));
+        }
+
+        // ---- Who is wearing an armory item ----
+        private static AccountSnapshot ArmorySnapshot(params (int ItemId, string Character)[] worn)
+        {
+            var snapshot = new AccountSnapshot();
+            foreach (var entry in worn)
+            {
+                snapshot.LegendaryArmoryEquipped.Add(new SnapshotArmoryEquip
+                {
+                    ItemId = entry.ItemId,
+                    CharacterName = entry.Character,
+                });
+            }
+
+            return snapshot;
+        }
+
+        [Fact]
+        public void BuildArmoryEquippedIndex_KeepsCaptureOrderAndNamesEachWearerOnce()
+        {
+            // One character wearing the same legendary in two slots is two
+            // captured pairings and one name.
+            var index = SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(
+                ArmorySnapshot(
+                    (100, "Divineaxe"), (100, "Apoyu"), (100, "Divineaxe"), (200, "Zoe")));
+
+            Assert.Equal(new[] { "Divineaxe", "Apoyu" }, index[100]);
+            Assert.Equal(new[] { "Zoe" }, index[200]);
+        }
+
+        [Fact]
+        public void BuildArmoryEquippedIndex_SkipsUnusablePairingsAndNeverReturnsNull()
+        {
+            Assert.Empty(SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(null));
+            Assert.Empty(SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(new AccountSnapshot()));
+            Assert.Empty(SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(
+                ArmorySnapshot((0, "Divineaxe"), (100, ""), (100, null))));
+        }
+
+        [Fact]
+        public void BuildItemRows_ArmoryRow_NamesTheCharactersWearingIt()
+        {
+            var items = new List<SnapshotItemEntry>
+            {
+                Entry(100, "Bolt", 1, AccountItemIndex.SourceLegendaryArmory),
+            };
+            var index = new AccountItemIndex(items);
+            var armory = SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(
+                ArmorySnapshot((100, "Divineaxe"), (100, "Apoyu")));
+
+            var result = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", new SnapshotSourceFilter(), null, null, armory);
+
+            // Named, not counted: the account holds one copy however many
+            // characters are drawing it.
+            Assert.Equal(1, result[0].TotalCount);
+            Assert.Equal(
+                new[] { "Divineaxe", "Apoyu" }, result[0].Breakdown[0].EquippedBy);
+            Assert.Equal(
+                "Legendary Armory - Equipped: Divineaxe, Apoyu",
+                SnapshotHoldLine.Format(result[0].Breakdown));
+        }
+
+        [Fact]
+        public void BuildItemRows_OnlyTheArmoryPlaceCarriesWearers()
+        {
+            var items = new List<SnapshotItemEntry>
+            {
+                Entry(100, "Bolt", 1, AccountItemIndex.SourceLegendaryArmory),
+                Entry(100, "Bolt", 1, AccountItemIndex.SourceBank),
+            };
+            var index = new AccountItemIndex(items);
+            var armory = SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(
+                ArmorySnapshot((100, "Divineaxe")));
+
+            var result = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", new SnapshotSourceFilter(), null, null, armory);
+
+            Assert.Equal(2, result[0].TotalCount);
+            foreach (var place in result[0].Breakdown)
+            {
+                if (place.Category != SnapshotHoldCategory.LegendaryArmory)
+                {
+                    Assert.Null(place.EquippedBy);
+                }
+            }
+
+            // Two places each holding one still print no counts; the
+            // wearer clause is not a place and does not change that.
+            Assert.Equal(
+                "Bank  Legendary Armory - Equipped: Divineaxe",
+                SnapshotHoldLine.Format(result[0].Breakdown));
+        }
+
+        [Fact]
+        public void BuildItemRows_UncheckedCharacter_StopsNamingItUnderTheArmory()
+        {
+            var items = new List<SnapshotItemEntry>
+            {
+                Entry(100, "Bolt", 1, AccountItemIndex.SourceLegendaryArmory),
+            };
+            var index = new AccountItemIndex(items);
+            var armory = SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(
+                ArmorySnapshot((100, "Divineaxe"), (100, "Apoyu")));
+
+            var result = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", Unchecked("Divineaxe"), null, null, armory);
+
+            Assert.Equal(new[] { "Apoyu" }, result[0].Breakdown[0].EquippedBy);
+
+            // Unchecking every wearer leaves the place itself, which is
+            // account-wide and was never that character's to hide.
+            var noneVisible = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", Unchecked("Divineaxe", "Apoyu"), null, null, armory);
+
+            Assert.Null(noneVisible[0].Breakdown[0].EquippedBy);
+            Assert.Equal("Legendary Armory", SnapshotHoldLine.Format(noneVisible[0].Breakdown));
+        }
+
+        [Fact]
+        public void BuildItemRows_NoArmoryIndex_ReadsExactlyAsItDidBefore()
+        {
+            var items = new List<SnapshotItemEntry>
+            {
+                Entry(100, "Bolt", 1, AccountItemIndex.SourceLegendaryArmory),
+            };
+            var index = new AccountItemIndex(items);
+
+            var result = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", new SnapshotSourceFilter(), null);
+
+            Assert.Null(result[0].Breakdown[0].EquippedBy);
+            Assert.Equal("Legendary Armory", SnapshotHoldLine.Format(result[0].Breakdown));
         }
 
         // ---- BuildItemRows: per-character source filtering ----
@@ -503,8 +746,8 @@ namespace TaimisToolbench.Tests.Services
 
             Assert.Single(result);
             Assert.Equal(13, result[0].TotalCount);
-            Assert.DoesNotContain(result[0].Breakdown, b => b.Label == "Character: Alice");
-            Assert.Contains(result[0].Breakdown, b => b.Label == "Character: Bob");
+            Assert.DoesNotContain(result[0].Breakdown, b => b.Category == SnapshotHoldCategory.Bags && b.CharacterName == "Alice");
+            Assert.Contains(result[0].Breakdown, b => b.Category == SnapshotHoldCategory.Bags && b.CharacterName == "Bob");
         }
 
         [Fact]
@@ -526,7 +769,8 @@ namespace TaimisToolbench.Tests.Services
             Assert.Single(result);
             Assert.Equal(7, result[0].TotalCount);
             Assert.Single(result[0].Breakdown);
-            Assert.Equal("Character: Newcomer", result[0].Breakdown[0].Label);
+            Assert.Equal(SnapshotHoldCategory.Bags, result[0].Breakdown[0].Category);
+            Assert.Equal("Newcomer", result[0].Breakdown[0].CharacterName);
         }
 
         [Fact]
@@ -557,7 +801,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.Single(result);
             Assert.Equal(10, result[0].TotalCount);
             Assert.Single(result[0].Breakdown);
-            Assert.Equal("Material Storage", result[0].Breakdown[0].Label);
+            Assert.Equal(SnapshotHoldCategory.MaterialStorage, result[0].Breakdown[0].Category);
         }
 
         [Fact]
@@ -676,9 +920,10 @@ namespace TaimisToolbench.Tests.Services
             var result = SnapshotSearchResultBuilder.BuildItemRows(ItemsById(items), index, "", new SnapshotSourceFilter(), "Zaeed");
 
             Assert.Single(result);
-            Assert.Equal("Character: Zaeed", result[0].Breakdown[0].Label);
-            Assert.Equal("Shared Inventory", result[0].Breakdown[1].Label);
-            Assert.Equal("Bank", result[0].Breakdown[2].Label);
+            Assert.Equal(SnapshotHoldCategory.Bags, result[0].Breakdown[0].Category);
+            Assert.Equal("Zaeed", result[0].Breakdown[0].CharacterName);
+            Assert.Equal(SnapshotHoldCategory.SharedInventory, result[0].Breakdown[1].Category);
+            Assert.Equal(SnapshotHoldCategory.Bank, result[0].Breakdown[2].Category);
         }
 
         // ---- FilterWallet ----
@@ -936,34 +1181,6 @@ namespace TaimisToolbench.Tests.Services
             var result = SnapshotSearchResultBuilder.CollectCharacterNames(snapshot);
 
             Assert.Equal(new[] { "Alice" }, result);
-        }
-
-        // ---- FormatSourceLabel ----
-        [Fact]
-        public void FormatSourceLabel_NullOrEmpty_ReturnsUnknown()
-        {
-            Assert.Equal("Unknown", SnapshotSearchResultBuilder.FormatSourceLabel(null));
-            Assert.Equal("Unknown", SnapshotSearchResultBuilder.FormatSourceLabel(""));
-        }
-
-        [Fact]
-        public void FormatSourceLabel_KnownStorageSources_SpacedOutDisplayNames()
-        {
-            Assert.Equal("Bank", SnapshotSearchResultBuilder.FormatSourceLabel(AccountItemIndex.SourceBank));
-            Assert.Equal("Material Storage", SnapshotSearchResultBuilder.FormatSourceLabel(AccountItemIndex.SourceMaterialStorage));
-            Assert.Equal("Shared Inventory", SnapshotSearchResultBuilder.FormatSourceLabel(AccountItemIndex.SourceSharedInventory));
-        }
-
-        [Fact]
-        public void FormatSourceLabel_CharacterSource_StripsRawEncodingPrefix()
-        {
-            Assert.Equal("Character: Zaeed", SnapshotSearchResultBuilder.FormatSourceLabel(CharSource("Zaeed")));
-        }
-
-        [Fact]
-        public void FormatSourceLabel_UnknownSource_ReturnedAsIs()
-        {
-            Assert.Equal("SomeFutureSource", SnapshotSearchResultBuilder.FormatSourceLabel("SomeFutureSource"));
         }
 
         // --- The one-letter empty-state hint ---

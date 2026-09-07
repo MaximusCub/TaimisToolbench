@@ -187,6 +187,56 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(ClipCutoffMath.SlipBudget, ClipCutoffMath.SlipBudgetFor(float.NaN));
         }
 
+        /// <summary>
+        /// The same claim for a sticky header's clip, which is a SIBLING of
+        /// the scrolling viewport and so paints with no line in force
+        /// (Views/Rendering/StickyHeaderHost.cs). A band part way through
+        /// being pushed out by the end of its table sits above that clip, so
+        /// the clip's own top edge is the only thing between a header label
+        /// and the chrome above the viewport.
+        /// </summary>
+        [Fact]
+        public void AClipOfItsOwnHoldsAPinnedBandAtTheClipsTopEdge()
+        {
+            foreach (float scale in Scales)
+            {
+                int worstUnclamped = 0;
+                for (int clipTop = 0; clipTop <= PhaseSweep; clipTop++)
+                {
+                    // One round trip from the clip to the band, then one
+                    // more from the band to the label's own ink.
+                    int inherited = ClipCutoffMath.PropagateClipTop(clipTop, scale);
+                    int unclamped = ClipCutoffMath.PropagateClipTop(inherited, scale);
+                    if (clipTop - unclamped > worstUnclamped)
+                    {
+                        worstUnclamped = clipTop - unclamped;
+                    }
+
+                    int cutoff = ClipCutoffMath.CutoffTopFor(clipTop, scale);
+                    int clamped = ClipCutoffMath.ClampTop(inherited, cutoff);
+                    Assert.True(
+                        ClipCutoffMath.PropagateClipTop(clamped, scale) >= clipTop,
+                        $"a clamped band reached above clip top {clipTop}, scale {scale}");
+                }
+
+                Assert.Equal(WorstUnclampedSlip(2, scale), worstUnclamped);
+            }
+        }
+
+        /// <summary>
+        /// The size of the defect the clip's own line closes, so a change
+        /// that reopened it would fail here with a number rather than a
+        /// judgement.
+        /// </summary>
+        [Fact]
+        public void AnUnclampedBandReachesThreePixelsAboveItsClipAtTheTwoSmallestUiSizes()
+        {
+            Assert.Equal(3, WorstUnclampedSlip(2, 0.81f));
+            Assert.Equal(3, WorstUnclampedSlip(2, 0.897f));
+            Assert.Equal(2, WorstUnclampedSlip(2, 1.103f));
+            Assert.Equal(0, WorstUnclampedSlip(2, 1.0f));
+        }
+
         private static int WorstSingleContainerSlip(float scale)
         {
             int worst = 0;

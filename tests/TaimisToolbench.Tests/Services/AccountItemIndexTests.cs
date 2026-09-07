@@ -19,11 +19,16 @@ namespace TaimisToolbench.Tests.Services
             };
         }
 
-        // Character sources must use the same encoding production writes
-        // (Gw2AccountSnapshotService): "Character:<name>".
+        // Character sources must use the same encodings production writes
+        // (Gw2AccountSnapshotService): bags and worn gear each get their own.
         private static string CharSource(string name)
         {
             return AccountItemIndex.CharacterSourcePrefix + name;
+        }
+
+        private static string EquipSource(string name)
+        {
+            return AccountItemIndex.CharacterEquipmentSourcePrefix + name;
         }
 
         [Fact]
@@ -161,6 +166,62 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(CharSource("Alice"), prioritized[1]);
             Assert.Equal(AccountItemIndex.SourceSharedInventory, prioritized[2]);
             Assert.Equal(AccountItemIndex.SourceBank, prioritized[3]);
+        }
+
+        [Fact]
+        public void GetPrioritizedSources_ActiveCharBagsBeforeOwnWornGear()
+        {
+            var index = new AccountItemIndex(new List<SnapshotItemEntry>
+            {
+                Entry(100, 1, AccountItemIndex.SourceBank),
+                Entry(100, 2, EquipSource("Alice")),
+                Entry(100, 3, CharSource("Alice")),
+            });
+
+            var prioritized = AccountItemIndex.GetPrioritizedSources(
+                100, index, "Alice");
+
+            Assert.Equal(3, prioritized.Count);
+            Assert.Equal(CharSource("Alice"), prioritized[0]);
+            Assert.Equal(EquipSource("Alice"), prioritized[1]);
+            Assert.Equal(AccountItemIndex.SourceBank, prioritized[2]);
+        }
+
+        [Fact]
+        public void GetPrioritizedSources_LegendaryArmoryRanksAfterBank()
+        {
+            var index = new AccountItemIndex(new List<SnapshotItemEntry>
+            {
+                Entry(100, 1, AccountItemIndex.SourceLegendaryArmory),
+                Entry(100, 2, AccountItemIndex.SourceBank),
+                Entry(100, 3, CharSource("Zed")),
+            });
+
+            var prioritized = AccountItemIndex.GetPrioritizedSources(100, index, null);
+
+            Assert.Equal(3, prioritized.Count);
+            Assert.Equal(AccountItemIndex.SourceBank, prioritized[0]);
+            Assert.Equal(AccountItemIndex.SourceLegendaryArmory, prioritized[1]);
+            Assert.Equal(CharSource("Zed"), prioritized[2]);
+        }
+
+        [Fact]
+        public void CharacterNameOffset_ReadsBothCharacterEncodingsAndNothingElse()
+        {
+            Assert.Equal("Alice", NameAt(CharSource("Alice")));
+            Assert.Equal("Alice", NameAt(EquipSource("Alice")));
+
+            Assert.Equal(-1, AccountItemIndex.CharacterNameOffset(AccountItemIndex.SourceBank));
+            Assert.Equal(-1, AccountItemIndex.CharacterNameOffset(null));
+
+            Assert.True(AccountItemIndex.IsEquipmentSource(EquipSource("Alice")));
+            Assert.False(AccountItemIndex.IsEquipmentSource(CharSource("Alice")));
+        }
+
+        private static string NameAt(string source)
+        {
+            Assert.True(AccountItemIndex.TryGetCharacterName(source, out string name));
+            return name;
         }
 
         [Fact]

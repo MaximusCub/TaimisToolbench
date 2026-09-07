@@ -236,6 +236,21 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void AZeroCoverageAnnotationSaysWhereTheMaterialsWent()
+        {
+            // The badge reaches zero only when another node of the same
+            // item took the stock - see DecisionPillPlanner.
+            var node = Node();
+            node.Quantity = 10;
+            node.OwnedQuantityUsed = 0;
+
+            var plan = Compose(Spec("HAVE 0/10 NEEDED", null, PillKind.OwnedInfo), node);
+
+            Assert.Equal(
+                "Needs 10 - your materials went to other rows of this item", plan.Text);
+        }
+
+        [Fact]
         public void AnItemCostComponentsOwnBadgeSaysItChangesNothing()
         {
             var node = Node();

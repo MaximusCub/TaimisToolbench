@@ -85,8 +85,13 @@
   <ItemGroup>
     <Compile Include="Models\AccountSnapshot.cs" />
     <Compile Include="Models\SnapshotItemEntry.cs" />
+    <Compile Include="Models\SocketedUpgradeIds.cs" />
+    <Compile Include="Models\TransmutedItemCopy.cs" />
+    <Compile Include="Models\TransmutedSkin.cs" />
     <Compile Include="Models\SnapshotWalletEntry.cs" />
+    <Compile Include="Models\SnapshotArmoryEquip.cs" />
     <Compile Include="Models\SnapshotCharacterDiscipline.cs" />
+    <Compile Include="Models\SnapshotHoldLocation.cs" />
     <Compile Include="Models\SnapshotSearchRow.cs" />
     <Compile Include="Models\SnapshotSourceFilter.cs" />
     <Compile Include="Module.cs" />
@@ -94,7 +99,12 @@
     <Compile Include="Services\Gw2AccountSnapshotService.cs" />
     <Compile Include="Services\SnapshotHeaderLayout.cs" />
     <Compile Include="Services\SnapshotHelpers.cs" />
+    <Compile Include="Services\EquipmentLocationPolicy.cs" />
+    <Compile Include="Services\SnapshotHoldLine.cs" />
     <Compile Include="Services\SnapshotSearchResultBuilder.cs" />
+    <Compile Include="Services\EquippedRuneSetIndex.cs" />
+    <Compile Include="Services\SocketedUpgradeIndex.cs" />
+    <Compile Include="Services\TransmutedNameIndex.cs" />
     <Compile Include="Services\PanelChromeMath.cs" />
     <Compile Include="Services\SourceFilterFlowLayout.cs" />
     <Compile Include="Services\SnapshotStore.cs" />
@@ -203,6 +213,7 @@
     <Compile Include="Services\SolverDecision.cs" />
     <Compile Include="Services\SolveResult.cs" />
     <Compile Include="Models\ItemMetadata.cs" />
+    <Compile Include="Models\ItemSlotKind.cs" />
     <Compile Include="Models\ItemStatBlock.cs" />
     <Compile Include="Models\ItemAttributeLine.cs" />
     <Compile Include="Models\CurrencyMetadata.cs" />
@@ -221,8 +232,11 @@
     <Compile Include="Services\ItemRarityResolution.cs" />
     <Compile Include="Services\ItemStatMath.cs" />
     <Compile Include="Services\ItemDescriptionSanitizer.cs" />
+    <Compile Include="Services\ItemSlotFacts.cs" />
     <Compile Include="Services\ItemStatBlockFactory.cs" />
     <Compile Include="Services\ItemStatTooltipComposer.cs" />
+    <Compile Include="Services\SocketedUpgradeView.cs" />
+    <Compile Include="Services\UpgradeEffectLines.cs" />
     <Compile Include="Services\ItemRowTooltipComposer.cs" />
     <Compile Include="Services\ItemTooltipIdentity.cs" />
     <Compile Include="Services\ExcessCraftOutputCalculator.cs" />
@@ -236,6 +250,7 @@
     <Compile Include="Services\CachingAccountRecipeClient.cs" />
     <Compile Include="Services\CurrencyMetadataService.cs" />
     <Compile Include="Services\CurrencyDisplayResolver.cs" />
+    <Compile Include="Services\CurrencyTradeUpRow.cs" />
     <Compile Include="Services\CurrencyTooltipComposer.cs" />
     <Compile Include="Services\CurrencyTooltipFacts.cs" />
     <Compile Include="Services\ShoppingRowTooltipFormatter.cs" />
@@ -257,6 +272,8 @@
     <Compile Include="Services\Gw2PriceApiClient.cs" />
     <Compile Include="Services\Gw2ItemApiClient.cs" />
     <Compile Include="Services\Gw2BuildApiClient.cs" />
+    <Compile Include="Services\Gw2ApiUserAgent.cs" />
+    <Compile Include="Services\HttpRetry.cs" />
     <Compile Include="Views\MainView.cs" />
     <Compile Include="Views\AutocompleteTextBox.cs" />
     <Compile Include="Views\SuggestionPanel.cs" />
@@ -265,6 +282,7 @@
     <Compile Include="Views\ItemRowState.cs" />
     <Compile Include="Views\Rendering\RarityColors.cs" />
     <Compile Include="Views\Rendering\InlineSpinner.cs" />
+    <Compile Include="Views\Rendering\DeferredIconArt.cs" />
     <Compile Include="Views\Rendering\IconControls.cs" />
     <Compile Include="Views\Rendering\OutlineFramePanel.cs" />
     <Compile Include="Views\Rendering\ItemIconTooltip.cs" />
@@ -350,6 +368,7 @@
     <Compile Include="Services\SnapshotItemGridLayout.cs" />
     <Compile Include="Services\HeaderCellMath.cs" />
     <Compile Include="Services\ColumnHeaderLabelMath.cs" />
+    <Compile Include="Services\SnapshotIconWindow.cs" />
     <Compile Include="Services\SnapshotResultLayout.cs" />
     <Compile Include="Services\SnapshotTableSorter.cs" />
     <Compile Include="Services\ModuleLogLevel.cs" />
@@ -384,6 +403,7 @@
     <Compile Include="Models\RequiredDiscipline.cs" />
     <Compile Include="Models\RequiredRecipe.cs" />
     <Compile Include="Services\PlanResultBuilder.cs" />
+    <Compile Include="Services\PlanRootNodes.cs" />
     <Compile Include="Services\IAccountRecipeClient.cs" />
     <Compile Include="Models\PlanViewModel.cs" />
     <Compile Include="Services\PlanViewModelBuilder.cs" />

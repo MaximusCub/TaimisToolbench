@@ -130,7 +130,8 @@ namespace TaimisToolbench.Services
             internal LaidOutRow(
                 IReadOnlyList<PlacedSpan> spans, int width, int y, int height, string iconUrl,
                 TooltipLineKind kind = TooltipLineKind.Text,
-                TooltipHeaderSubject subject = default(TooltipHeaderSubject))
+                TooltipHeaderSubject subject = default(TooltipHeaderSubject),
+                int iconAssetId = 0)
             {
                 Spans = spans;
                 Width = width;
@@ -139,6 +140,7 @@ namespace TaimisToolbench.Services
                 IconUrl = iconUrl;
                 Kind = kind;
                 HeaderSubject = subject;
+                IconAssetId = iconAssetId;
             }
 
             public IReadOnlyList<PlacedSpan> Spans { get; }
@@ -177,6 +179,14 @@ namespace TaimisToolbench.Services
             /// frames <see cref="IconUrl"/> by on a header row.
             /// </summary>
             public TooltipHeaderSubject HeaderSubject { get; }
+
+            /// <summary>
+            /// The slot glyph on the first row of a
+            /// <see cref="TooltipLineKind.Slot"/> line, as a GW2 asset id;
+            /// 0 everywhere else, same first-row-only rule as
+            /// <see cref="IconUrl"/>.
+            /// </summary>
+            public int IconAssetId { get; }
         }
 
         public sealed class Layout
@@ -211,6 +221,10 @@ namespace TaimisToolbench.Services
         /// A line with no spans is a deliberate blank separator and still
         /// produces a row, so vertical rhythm survives the layout.
         /// </summary>
+        /// <param name="separateEntriesWhenAnyWraps">
+        /// For a box whose lines are unrelated statements rather than one
+        /// passage - see <see cref="SeparateEntries"/>.
+        /// </param>
         public static Layout LayoutContent(
             TooltipContent content,
             int maxWidth,
@@ -220,7 +234,9 @@ namespace TaimisToolbench.Services
             int coinRowHeight = 0,
             int headerRowHeight = 0,
             int headerIndent = 0,
-            int effectIndent = 0)
+            int effectIndent = 0,
+            int slotIndent = 0,
+            bool separateEntriesWhenAnyWraps = false)
         {
             if (measureText == null)
             {
@@ -246,19 +262,25 @@ namespace TaimisToolbench.Services
 
             int effectiveMax = Math.Max(1, maxWidth);
             int y = 0;
+            var lineStarts = new List<int>();
             foreach (var line in content.Lines)
             {
+                lineStarts.Add(rows.Count);
                 bool isHeader = line.Kind == TooltipLineKind.Header;
                 bool isEffect = line.Kind == TooltipLineKind.Effect;
+                bool isSlot = line.Kind == TooltipLineKind.Slot;
                 // The name column of a header row starts past the icon,
                 // and a wrapped continuation of it stays in that column.
                 // An effect row is indented past its inline icon the same
                 // way (measured: the game's effect text column starts
-                // ~31px in, live3 soul-pastries/candy-corn).
+                // ~31px in, live3 soul-pastries/candy-corn), and a slot row
+                // past its own narrower glyph.
                 int indent = isHeader ? Math.Max(0, headerIndent)
-                    : isEffect ? Math.Max(0, effectIndent) : 0;
+                    : isEffect ? Math.Max(0, effectIndent)
+                    : isSlot ? Math.Max(0, slotIndent) : 0;
                 int lineHeight = isHeader ? headerHeight : rowHeight;
                 string iconUrl = isHeader || isEffect ? line.IconUrl : null;
+                int iconAssetId = isSlot ? line.IconAssetId : 0;
 
                 var current = new List<PlacedSpan>();
                 int x = indent;
@@ -268,12 +290,14 @@ namespace TaimisToolbench.Services
                 void BreakRow()
                 {
                     rows.Add(new LaidOutRow(
-                        current, x, y, lineHeight, iconUrl, line.Kind, line.HeaderSubject));
+                        current, x, y, lineHeight, iconUrl, line.Kind, line.HeaderSubject,
+                        iconAssetId));
                     y += lineHeight;
                     // Continuations are ordinary text rows: only the FIRST
                     // row of a header line carries the icon and its height.
                     lineHeight = rowHeight;
                     iconUrl = null;
+                    iconAssetId = 0;
                     current = new List<PlacedSpan>();
                     x = indent;
                 }
@@ -352,6 +376,11 @@ namespace TaimisToolbench.Services
                 BreakRow();
             }
 
+            if (separateEntriesWhenAnyWraps)
+            {
+                rows = SeparateEntries(rows, lineStarts, rowHeight, out y);
+            }
+
             int width = 0;
             foreach (var row in rows)
             {
@@ -362,6 +391,135 @@ namespace TaimisToolbench.Services
             }
 
             return new Layout(rows, width, Math.Max(0, y));
+        }
+
+        /// <summary>
+        /// A blank row between every pair of adjacent entries, and the
+        /// height that leaves, when at least one entry wrapped onto a
+        /// second row. A reader cannot tell a continuation row from the
+        /// next entry, and the rows are unrelated statements.
+        /// <para>
+        /// All or nothing: separating only the pairs that wrap would leave
+        /// two unwrapped entries adjacent, reading as one wrapped entry.
+        /// A neighbour that is already a blank line gets no second blank.
+        /// </para>
+        /// </summary>
+        private static List<LaidOutRow> SeparateEntries(
+            List<LaidOutRow> rows, List<int> lineStarts, int rowHeight, out int height)
+        {
+            height = 0;
+            foreach (var row in rows)
+            {
+                height = Math.Max(height, row.Y + row.Height);
+            }
+
+            bool anyWrapped = false;
+            for (int i = 0; i < lineStarts.Count && !anyWrapped; i++)
+            {
+                int end = i + 1 < lineStarts.Count ? lineStarts[i + 1] : rows.Count;
+                anyWrapped = end - lineStarts[i] > 1;
+            }
+
+            if (!anyWrapped || lineStarts.Count < 2)
+            {
+                return rows;
+            }
+
+            var spaced = new List<LaidOutRow>(rows.Count + lineStarts.Count);
+            int y = 0;
+            for (int i = 0; i < lineStarts.Count; i++)
+            {
+                int start = lineStarts[i];
+                int end = i + 1 < lineStarts.Count ? lineStarts[i + 1] : rows.Count;
+                if (i > 0 && !IsBlank(rows, lineStarts, i) && !IsBlank(rows, lineStarts, i - 1))
+                {
+                    spaced.Add(new LaidOutRow(new List<PlacedSpan>(), 0, y, rowHeight, null));
+                    y += rowHeight;
+                }
+
+                for (int r = start; r < end; r++)
+                {
+                    var row = rows[r];
+                    spaced.Add(new LaidOutRow(
+                        row.Spans, row.Width, y, row.Height, row.IconUrl, row.Kind,
+                        row.HeaderSubject, row.IconAssetId));
+                    y += row.Height;
+                }
+            }
+
+            height = y;
+            return spaced;
+        }
+
+        /// <summary>Whether one content line laid out as a single empty
+        /// row - the deliberate blank separator.</summary>
+        private static bool IsBlank(List<LaidOutRow> rows, List<int> lineStarts, int index)
+        {
+            int start = lineStarts[index];
+            int end = index + 1 < lineStarts.Count ? lineStarts[index + 1] : rows.Count;
+            return end - start == 1 && rows[start].Spans.Count == 0;
+        }
+
+        /// <summary>
+        /// The two stacked boxes' geometry - see <see cref="Stack"/>.
+        /// Heights and tops in the surface's own coordinates, so a caller
+        /// that has laid out both contents needs no arithmetic of its own.
+        /// </summary>
+        public readonly struct StackedBoxes
+        {
+            internal StackedBoxes(int panelHeight, int extraContentTop, int firstBoxHeight, int secondBoxTop)
+            {
+                PanelHeight = panelHeight;
+                ExtraContentTop = extraContentTop;
+                FirstBoxHeight = firstBoxHeight;
+                SecondBoxTop = secondBoxTop;
+            }
+
+            /// <summary>Both contents plus the run between them, which is
+            /// what the one content panel spanning both boxes measures.</summary>
+            public int PanelHeight { get; }
+
+            /// <summary>Top of the second box's CONTENT inside that panel,
+            /// 0 when there is no second box.</summary>
+            public int ExtraContentTop { get; }
+
+            /// <summary>The first box's full height, its chrome included.</summary>
+            public int FirstBoxHeight { get; }
+
+            /// <summary>Top of the second box's FRAME, 0 when there is no
+            /// second box.</summary>
+            public int SecondBoxTop { get; }
+        }
+
+        /// <summary>
+        /// Stacks the module's own second box under the game's first one:
+        /// the first box's chrome closes, <paramref name="gap"/> pixels of
+        /// nothing follow, and the second box opens with chrome of its own.
+        /// A non-positive <paramref name="extraHeight"/> means there is
+        /// only one box, and every second-box figure comes back 0.
+        /// <para>
+        /// The two boxes are one hover and are placed as one unit, so the
+        /// gap is inside the placed rectangle rather than between two
+        /// independently placed ones.
+        /// </para>
+        /// </summary>
+        public static StackedBoxes Stack(
+            int firstHeight, int extraHeight, int chromeTop, int chromeBottom, int gap)
+        {
+            int first = Math.Max(0, firstHeight);
+            int extra = Math.Max(0, extraHeight);
+            int top = Math.Max(0, chromeTop);
+            int bottom = Math.Max(0, chromeBottom);
+            int firstBox = top + first + bottom;
+
+            if (extra <= 0)
+            {
+                return new StackedBoxes(first, 0, firstBox, 0);
+            }
+
+            int extraContentTop = first + bottom + Math.Max(0, gap) + top;
+            return new StackedBoxes(
+                extraContentTop + extra, extraContentTop, firstBox, firstBox + Math.Max(0, gap));
         }
 
         /// <summary>

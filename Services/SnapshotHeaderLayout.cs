@@ -34,6 +34,15 @@ namespace TaimisToolbench.Services
         /// </para>
         public const int StatusRowHeight = 26;
 
+        /// <summary>
+        /// Y the status label is drawn at inside that row, and so the top
+        /// the inline spinner beside it is clamped to
+        /// (InlineSpinnerLayout.Place never starts the spinner above the
+        /// label). A spinner taller than StatusRowHeight minus this paints
+        /// past the bottom of the row.
+        /// </summary>
+        public const int StatusLabelTopInset = 2;
+
         /// <summary>Left gutter every element on this tab starts at. Five
         /// things here used to sit at x=0.</summary>
         public const int SnapshotHeaderInset = UiSpacing.Inset;

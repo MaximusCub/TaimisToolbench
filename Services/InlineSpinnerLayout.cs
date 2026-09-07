@@ -28,8 +28,17 @@ namespace TaimisToolbench.Services
         /// <summary>
         /// Spinner edge for the Snapshot tab's status row, which is its own
         /// panel of <see cref="SnapshotHeaderLayout.StatusRowHeight"/>.
+        /// Also used by the Ranker and Plan History toolbars, which are 40
+        /// tall and so are not the binding constraint.
+        /// <para>
+        /// 22 is the largest even size that still clears the Snapshot row:
+        /// the label is drawn at
+        /// <see cref="SnapshotHeaderLayout.StatusLabelTopInset"/> and
+        /// <see cref="Place"/> clamps the spinner's top to the label's, so
+        /// 2 + 22 leaves two pixels under a 26-tall row.
+        /// </para>
         /// </summary>
-        public const int SnapshotStatusSize = 20;
+        public const int SnapshotStatusSize = 22;
 
         /// <summary>
         /// Gap between the label's right edge and the spinner.

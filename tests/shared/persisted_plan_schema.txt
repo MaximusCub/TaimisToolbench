@@ -180,6 +180,8 @@ PlanStep.VendorCurrencyCosts:List`1<CostLine>
 PlanStep.VendorHasBarterItemCost:Boolean
 PlanStep.VendorOfferCurrencyCostLinesPerBatch:List`1<CostLine>
 PlanStep.VendorOfferOutputCount:Int32
+PlanStep.VendorUnlockRecipeId:Nullable`1<Int32>
+PlanStep.VendorUnlockRecipeItemId:Nullable`1<Int32>
 RecipeNode.AchievementBit:Nullable`1<Int32>
 RecipeNode.AchievementId:Nullable`1<Int32>
 RecipeNode.Id:Int32
@@ -229,10 +231,15 @@ SnapshotCharacterDiscipline.Discipline:String
 SnapshotCharacterDiscipline.Rating:Int32
 SnapshotItemEntry.Count:Int32
 SnapshotItemEntry.IconUrl:String
+SnapshotItemEntry.Infusions:List`1<Int32>
 SnapshotItemEntry.ItemId:Int32
 SnapshotItemEntry.Name:String
 SnapshotItemEntry.Rarity:String
+SnapshotItemEntry.SkinIconUrl:String
+SnapshotItemEntry.SkinId:Int32
+SnapshotItemEntry.SkinName:String
 SnapshotItemEntry.Source:String
+SnapshotItemEntry.Upgrades:List`1<Int32>
 TimegatedItem.CapType:TimegatedCapType
 TimegatedItem.CapValue:Int32
 TimegatedItem.ItemId:Int32
@@ -250,4 +257,6 @@ VendorOffer.OutputCount:Int32
 VendorOffer.OutputItemId:Int32
 VendorOffer.SeasonalCap:Nullable`1<Int32>
 VendorOffer.SeasonalFestival:String
+VendorOffer.UnlockRecipeId:Nullable`1<Int32>
+VendorOffer.UnlockRecipeItemId:Nullable`1<Int32>
 VendorOffer.WeeklyCap:Nullable`1<Int32>

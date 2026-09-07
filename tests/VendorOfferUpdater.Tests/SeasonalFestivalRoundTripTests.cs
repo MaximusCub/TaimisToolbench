@@ -77,13 +77,14 @@ namespace VendorOfferUpdater.Tests
             // is even involved) and the exact set of festival keys now
             // seeded - see class doc comment for the six-festival live run
             // that produced this count.
-            // 57 -> 597 on the 2026-08-25 from-scratch refresh: the
-            // previous count came from a scoped six-festival run, this one
-            // from a full scrape with --tag-seasonal-festivals over every
-            // vendor page, so ten times as many rows carry their tag. The
-            // guard this pins is unchanged - a DROP still means the
-            // deserialize side lost tags before any merge ran.
-            Assert.Equal(597, seasonalBefore.Count);
+            // 57 -> 597 -> 611. 597 came from a full scrape with
+            // --tag-seasonal-festivals over every vendor page, ten times a
+            // scoped six-festival run; 611 from the rebuild that partitions
+            // the vendor list by name prefix and so reaches pages the
+            // unpartitioned query truncated away. Same six festivals both
+            // times. The guard this pins is unchanged - a DROP still means
+            // the deserialize side lost tags before any merge ran.
+            Assert.Equal(611, seasonalBefore.Count);
             Assert.All(
                 seasonalBefore,
                 o => Assert.Contains(
@@ -123,7 +124,7 @@ namespace VendorOfferUpdater.Tests
                 .Where(o => !string.IsNullOrEmpty(o.SeasonalFestival))
                 .ToList();
 
-            Assert.Equal(597, seasonalAfter.Count);
+            Assert.Equal(611, seasonalAfter.Count);
             foreach (var offerId in CandyCornOfferIds(baseline))
             {
                 var offer = result.Merged.SingleOrDefault(o => o.OfferId == offerId);

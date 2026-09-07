@@ -24,9 +24,9 @@ namespace VendorOfferUpdater
     }
 
     /// <summary>
-    /// Maps an item-based currency name to its GW2 game id, and remembers the
-    /// names the wiki answered with no id at all so they are not asked for
-    /// again on every run.
+    /// Settles a wiki cost name three ways: an item's GW2 game id, the name
+    /// of the wallet currency it turns out to be, or a remembered miss so the
+    /// name is not asked about again on every run.
     /// <para>
     /// A miss is only ever recorded for a name the wiki actually answered. A
     /// name in a batch that was refused, failed, or never sent is left out of
@@ -37,10 +37,19 @@ namespace VendorOfferUpdater
     /// </summary>
     internal sealed class ItemIdCache
     {
-        internal const int CurrentVersion = 2;
+        internal const int CurrentVersion = 3;
 
         private readonly Dictionary<string, int> _ids =
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        // A cost name that names a currency page, mapped to the API's own
+        // name for that currency. The name and not the id, because the API is
+        // loaded fresh every run and is the authority on which currencies are
+        // live: a currency retired from the game leaves an entry that
+        // resolves to nothing and is dropped, where a cached id would go on
+        // pricing offers in a currency no account can hold.
+        private readonly Dictionary<string, string> _currencyNames =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         // Value is the UTC date the miss was recorded, or null for one
         // migrated from the version 1 format, which stored misses as -1 with
@@ -53,26 +62,52 @@ namespace VendorOfferUpdater
 
         internal IReadOnlyDictionary<string, DateTime?> Misses => _misses;
 
-        internal int Count => _ids.Count + _misses.Count;
+        /// <summary>Cost names that name a currency, and the API's name for it.</summary>
+        internal IReadOnlyDictionary<string, string> CurrencyNames => _currencyNames;
+
+        internal int Count => _ids.Count + _misses.Count + _currencyNames.Count;
 
         /// <summary>
-        /// Whether this name has been settled, either way. A run only asks the
-        /// wiki about names this returns false for.
+        /// Whether this name has been settled, any of the three ways. A run
+        /// only asks the wiki about names this returns false for.
         /// </summary>
         internal bool Contains(string name)
         {
-            return _ids.ContainsKey(name) || _misses.ContainsKey(name);
+            return _ids.ContainsKey(name)
+                || _currencyNames.ContainsKey(name)
+                || _misses.ContainsKey(name);
         }
 
         internal void RecordHit(string name, int gameId)
         {
+            _currencyNames.Remove(name);
             _misses.Remove(name);
             _ids[name] = gameId;
         }
 
+        /// <summary>
+        /// Records that this cost name is the currency the API calls
+        /// <paramref name="currencyName"/>, not an item.
+        /// </summary>
+        internal void RecordCurrencyName(string name, string currencyName)
+        {
+            _ids.Remove(name);
+            _misses.Remove(name);
+            _currencyNames[name] = currencyName;
+        }
+
+        /// <summary>
+        /// Drops a remembered currency name so the next run asks about it
+        /// again. Returns whether there was one.
+        /// </summary>
+        internal bool ForgetCurrencyName(string name)
+        {
+            return _currencyNames.Remove(name);
+        }
+
         internal void RecordMiss(string name, DateTime recordedUtc)
         {
-            if (_ids.ContainsKey(name))
+            if (_ids.ContainsKey(name) || _currencyNames.ContainsKey(name))
             {
                 return;
             }
@@ -100,23 +135,41 @@ namespace VendorOfferUpdater
         internal ItemIdCacheUpdate Record(
             IEnumerable<string> requested, ItemIdResolution resolution, DateTime recordedUtc)
         {
+            return Record(
+                requested.Select(name => new KeyValuePair<string, string>(name, name)),
+                resolution,
+                recordedUtc);
+        }
+
+        /// <summary>
+        /// Records a pass whose queried titles are not the names being
+        /// cached. The key of each pair is the wiki's display string, which
+        /// is how a cost line spells the name and therefore how the cache is
+        /// keyed; the value is the page title the wiki was actually asked
+        /// about. The two differ wherever the display string is a redirect.
+        /// </summary>
+        internal ItemIdCacheUpdate Record(
+            IEnumerable<KeyValuePair<string, string>> requested,
+            ItemIdResolution resolution,
+            DateTime recordedUtc)
+        {
             var update = new ItemIdCacheUpdate();
 
-            foreach (var name in requested)
+            foreach (var pair in requested)
             {
-                if (resolution.Resolved.TryGetValue(name, out int id) && id > 0)
+                if (resolution.Resolved.TryGetValue(pair.Value, out int id) && id > 0)
                 {
-                    RecordHit(name, id);
+                    RecordHit(pair.Key, id);
                     update.Hits++;
                 }
-                else if (resolution.Answered.Contains(name))
+                else if (resolution.Answered.Contains(pair.Value))
                 {
-                    RecordMiss(name, recordedUtc);
+                    RecordMiss(pair.Key, recordedUtc);
                     update.Misses++;
                 }
                 else
                 {
-                    update.Deferred.Add(name);
+                    update.Deferred.Add(pair.Key);
                 }
             }
 
@@ -173,7 +226,9 @@ namespace VendorOfferUpdater
                     return cache;
                 }
 
-                if (root.TryGetProperty("ids", out var ids) || root.TryGetProperty("misses", out _))
+                if (root.TryGetProperty("ids", out _) ||
+                    root.TryGetProperty("currencies", out _) ||
+                    root.TryGetProperty("misses", out _))
                 {
                     ReadCurrent(cache, root);
                 }
@@ -184,6 +239,7 @@ namespace VendorOfferUpdater
 
                 Console.WriteLine(
                     $"Loaded item ID cache from {path}: {cache._ids.Count} resolved, " +
+                    $"{cache._currencyNames.Count} currency name(s), " +
                     $"{cache._misses.Count} remembered misses.");
             }
             catch (JsonException ex)
@@ -212,6 +268,9 @@ namespace VendorOfferUpdater
                 ["ids"] = _ids
                     .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(kv => kv.Key, kv => kv.Value),
+                ["currencies"] = _currencyNames
+                    .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(kv => kv.Key, kv => kv.Value),
                 ["misses"] = _misses
                     .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(
@@ -228,6 +287,7 @@ namespace VendorOfferUpdater
             File.WriteAllText(path, Serialize());
             Console.WriteLine(
                 $"  Saved item ID cache to {path}: {_ids.Count} resolved, " +
+                $"{_currencyNames.Count} currency name(s), " +
                 $"{_misses.Count} remembered misses.");
         }
 
@@ -245,14 +305,29 @@ namespace VendorOfferUpdater
                 }
             }
 
+            if (root.TryGetProperty("currencies", out var currencies) &&
+                currencies.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in currencies.EnumerateObject())
+                {
+                    if (prop.Value.ValueKind == JsonValueKind.String &&
+                        !cache._ids.ContainsKey(prop.Name))
+                    {
+                        cache._currencyNames[prop.Name] = prop.Value.GetString()!;
+                    }
+                }
+            }
+
             if (root.TryGetProperty("misses", out var misses) &&
                 misses.ValueKind == JsonValueKind.Object)
             {
                 foreach (var prop in misses.EnumerateObject())
                 {
-                    // A hand-edited file could list a name in both sections.
-                    // A resolved id is the stronger statement, so it wins.
-                    if (cache._ids.ContainsKey(prop.Name))
+                    // A hand-edited file could list a name in more than one
+                    // section. A resolved id or a named currency is the
+                    // stronger statement, so either wins over a miss.
+                    if (cache._ids.ContainsKey(prop.Name) ||
+                        cache._currencyNames.ContainsKey(prop.Name))
                     {
                         continue;
                     }

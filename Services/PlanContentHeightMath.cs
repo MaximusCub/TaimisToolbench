@@ -41,7 +41,7 @@ namespace TaimisToolbench.Services
         // RowIconFrameSize rarity frame plus a 2px divider already exceeds
         // the tallest text run in them, so their heights are derived below
         // from the frame rather than pinned by ink arithmetic.
-        // CraftStepRowHeight's body text was already Font16 before the
+        // The craft-step row's body text was already Font16 before the
         // bump, so only its Font12 -> Font14 sublabel moved, and that
         // sublabel's ink clears its divider with the same margin it had at
         // the pre-tier-2 heights. The two 28px rows put a single line at
@@ -71,33 +71,59 @@ namespace TaimisToolbench.Services
         /// LabelHelpers.CreateRowDivider. 1, not 0: the tier-2 flush-fit
         /// heights (RowIconFrameSize + RowDividerHeight = 44) are in the
         /// Container.Paint round-trip defect's vulnerable class, so the
-        /// clearance pixel is part of the height derivation itself - the
-        /// divider sits at rowHeight - 2 - 1 = 42, exactly flush under the
-        /// 0..42 icon frame, and rowHeight absorbs the extra pixel. Proven
-        /// immune at every GW2 UI scale by the executable re-derivation in
+        /// clearance pixel is part of the height derivation itself, and
+        /// rowHeight absorbs it. Proven immune at every GW2 UI scale by the
+        /// executable re-derivation in
         /// tests/.../RowDividerScissorSimulationTests.cs.
         /// </summary>
         public const int IconRowDividerClearance = 1;
 
-        // Flush fit: icon frame at y=0, divider directly under it, plus
-        // the clearance pixel the simulation demands at this height
-        // (42 + 2 + 1 = 45). The pre-tier-2 36px shape (34 + 2 + 0) was
-        // immune without clearance; 44 is not, which is why the clearance
-        // term joined the sum instead of the divider moving up under the
-        // icon.
-        public const int UsedMaterialRowHeight = RowIconFrameSize + RowDividerHeight + IconRowDividerClearance;
-        public const int ShoppingRowHeight = RowIconFrameSize + RowDividerHeight + IconRowDividerClearance;
+        /// <summary>
+        /// Clear space an icon-led list row keeps between its icon frame
+        /// and the divider rule on either side of it. Reported in game: the
+        /// rows were flush, so the frame's bottom border and the rule's top
+        /// edge shared a y and the rule read as drawing over the icon.
+        /// </summary>
+        public const int IconRowFramePadding = 3;
 
-        /// <summary>y of the craft-step row's icon frame - the one icon-led
-        /// row whose icon is inset rather than flush, because the numbered
-        /// badge beside it needs breathing room above and below.</summary>
-        public const int CraftStepIconY = 5;
+        /// <summary>
+        /// y of the icon frame in an icon-led list row. One less than the
+        /// padding, because the row above ends on its clearance pixel: the
+        /// gap a reader sees over the frame is this plus that pixel.
+        /// </summary>
+        public const int IconRowIconY = IconRowFramePadding - 1;
 
-        // Symmetric inset: CraftStepIconY above and below the frame
-        // (5 + 42 + 5 = 52). The divider then lands at rowHeight - 2 -
-        // IconRowDividerClearance = 49, 2px below the icon frame bottom
-        // (47) - the same 2px icon-to-divider gap the 44px shape had.
-        public const int CraftStepRowHeight = 2 * CraftStepIconY + RowIconFrameSize;
+        // Padded fit: the frame sits at IconRowIconY, the divider lands at
+        // rowHeight - RowDividerHeight - IconRowDividerClearance, and the
+        // terms above put exactly IconRowFramePadding between the two.
+        // 2 + 42 + 3 + 2 + 1 = 50.
+        public const int IconLedRowHeight =
+            IconRowIconY + RowIconFrameSize + IconRowFramePadding
+            + RowDividerHeight + IconRowDividerClearance;
+
+        public const int UsedMaterialRowHeight = IconLedRowHeight;
+        public const int ShoppingRowHeight = IconLedRowHeight;
+        public const int CraftStepRowHeight = IconLedRowHeight;
+
+        /// <summary>
+        /// Height of the band a reader sees in an icon-led row (47). The
+        /// row draws its rule over its own last RowDividerHeight plus
+        /// IconRowDividerClearance pixels, and none of those are space.
+        /// Centre a control on this rather than on IconLedRowHeight.
+        /// Centring on the full height counts the rule as visible space
+        /// and sets the control too low.
+        /// </summary>
+        public const int IconLedRowVisibleHeight =
+            IconLedRowHeight - RowDividerHeight - IconRowDividerClearance;
+
+        /// <summary>Edge of the numbered badge a Crafting Steps row draws
+        /// to the left of its icon.</summary>
+        public const int CraftStepBadgeSize = 36;
+
+        /// <summary>y of that badge. Centred on the band, which puts the
+        /// same gap above it and below it.</summary>
+        public const int CraftStepBadgeY =
+            (IconLedRowVisibleHeight - CraftStepBadgeSize) / 2;
 
         // 32, not the 28 a Body-16 header band needed: column headers moved
         // to the ColumnHeader tier (TypeRampMetrics.ColumnHeaderInk), whose
@@ -164,14 +190,14 @@ namespace TaimisToolbench.Services
         // LabelHelpers.CreateRowDivider's proven-immune list.
         public const int DisciplineRowHeight = 36;
 
-        // Same flush fit as UsedMaterialRowHeight/ShoppingRowHeight:
-        // tier-2 icon frame (y=0) + divider + the clearance pixel (45).
+        // The same padded shape as UsedMaterialRowHeight and
+        // ShoppingRowHeight.
         //
         // EVERY recipe row, since the discipline became a column
         // (Services/RecipesColumnMath) rather than a second line under the
         // name. The 48px twin this section used to need for a sublabel row
         // is gone with the sublabel.
-        public const int RecipeRowHeight = RowIconFrameSize + RowDividerHeight + IconRowDividerClearance;
+        public const int RecipeRowHeight = IconLedRowHeight;
 
         // Reserved height of a formula band's amount run: the taller of the
         // amount text's own line box (Regular16, 20 - TypeRampMetrics) and
@@ -181,7 +207,7 @@ namespace TaimisToolbench.Services
         // Spelled as CoinSegmentMath.CoinIconSize alone until the wallet BAR
         // tier made the icon the SHORTER of the pair: that only ever agreed
         // with the text by coincidence, and a reserve named after the icon
-        // now under-reserves by 4px.
+        // now under-reserves by 2px.
         public const int AmountTextLineHeight = 20;
         public const int AmountRunHeight =
             CoinSegmentMath.CoinIconSize > AmountTextLineHeight
@@ -235,9 +261,9 @@ namespace TaimisToolbench.Services
         // y is not a constant of the row at all.
         //
         // AmountRunHeight, never CoinSegmentMath.CoinIconSize: the run is as
-        // tall as the taller of its text and its icon, and since the coin
-        // runs moved onto the 16px wallet BAR tier that is the text. Naming
-        // the icon here would under-reserve the row by 4px.
+        // tall as the taller of its text and its icon, and at the 18px
+        // wallet BAR tier that is the text. Naming the icon here would
+        // under-reserve the row by 2px.
         //
         // This band carries no divider, so no RowDividerScissorSimulation
         // pair moves with it.

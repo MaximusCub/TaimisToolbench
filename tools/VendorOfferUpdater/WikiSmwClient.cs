@@ -22,6 +22,11 @@ namespace VendorOfferUpdater
         private const string WikiApiUrl = "https://wiki.guildwars2.com/api.php";
         private const int QueryLimit = 500;
 
+        // MediaWiki caps action=query at 50 titles per request for a client
+        // without the apihighlimits right, which this one is. Asking for more
+        // is refused outright rather than truncated.
+        private const int TitleBatchSize = 50;
+
         // Asks the server to refuse the query while its database replicas are
         // more than this many seconds behind, which is MediaWiki's documented
         // way of shedding load before it starts blocking a client outright.
@@ -671,6 +676,13 @@ namespace VendorOfferUpdater
                    $"&format=json&maxlag={MaxLagSeconds}";
         }
 
+        private static string BuildTitleUrl(string pipeSeparatedTitles)
+        {
+            return $"{WikiApiUrl}?action=query" +
+                   $"&titles={Uri.EscapeDataString(pipeSeparatedTitles)}" +
+                   $"&redirects=1&format=json&maxlag={MaxLagSeconds}";
+        }
+
         private static WikiApiError UnreadableResponse()
         {
             return new WikiApiError(
@@ -1017,6 +1029,174 @@ namespace VendorOfferUpdater
         }
 
         /// <summary>
+        /// Asks MediaWiki which page each display string actually names,
+        /// following redirects and title normalization.
+        /// <para>
+        /// A cost's currency reaches this tool as the wiki's display text,
+        /// and that text and the canonical page title disagree often: a
+        /// plural form, a doubled space, a reworded chest name. No string
+        /// rule reaches a rename, so the wiki has to answer. This is the
+        /// same omission docs/ARCHITECTURE.md section T.6 records for
+        /// FetchWikitextAsync, on the other endpoint.
+        /// </para>
+        /// <para>
+        /// Names in a batch the wiki never answered are absent from
+        /// <see cref="TitleResolution.Answered"/>. They did not resolve to
+        /// themselves - nothing was asked - and a caller that records an
+        /// absence has to tell the two apart.
+        /// </para>
+        /// </summary>
+        public async Task<TitleResolution> ResolveTitlesAsync(
+            IEnumerable<string> titles,
+            CancellationToken ct = default,
+            QueryOptions? options = null)
+        {
+            if (options != null)
+            {
+                _options = options;
+                _effectiveDelay = options.DelayBetweenRequestsMs;
+            }
+
+            var resolution = new TitleResolution();
+            var names = titles.ToList();
+
+            for (int i = 0; i < names.Count; i += TitleBatchSize)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                if (HasStoppedAnswering())
+                {
+                    Console.WriteLine(
+                        $"  WARNING: {_consecutiveUnresolved} section(s) in a row went " +
+                        $"unanswered. Stopping with {resolution.Answered.Count} name(s) answered.");
+                    break;
+                }
+
+                var batch = names.Skip(i).Take(TitleBatchSize).ToList();
+                string joined = string.Join("|", batch);
+                string label = $"title batch {i / TitleBatchSize + 1}";
+
+                Console.WriteLine(
+                    $"  Resolving titles, batch {i / TitleBatchSize + 1} ({batch.Count} name(s))...");
+
+                string response;
+                try
+                {
+                    response = await FetchWithRetryAsync(BuildTitleUrl(joined), label, joined, ct);
+                }
+                catch (WikiApiErrorException ex)
+                {
+                    RecordUnresolved("title-batch", label, null, joined, ex);
+                    if (i + TitleBatchSize < names.Count)
+                    {
+                        await Task.Delay(_effectiveDelay, ct);
+                    }
+
+                    continue;
+                }
+                catch (HttpRequestException ex)
+                {
+                    RecordUnresolved("title-batch", label, null, joined, ex);
+                    Console.WriteLine(
+                        $"  WARNING: Title resolution interrupted at batch " +
+                        $"{i / TitleBatchSize + 1}: {ex.Message}");
+                    break;
+                }
+
+                if (ReadTitleBatch(response, batch, resolution))
+                {
+                    RecordSectionAnswered();
+                }
+                else
+                {
+                    RecordUnresolved("title-batch", label, null, joined, UnreadableResponse());
+                }
+
+                if (i + TitleBatchSize < names.Count)
+                {
+                    await Task.Delay(_effectiveDelay, ct);
+                }
+            }
+
+            return resolution;
+        }
+
+        /// <summary>
+        /// Applies one action=query answer to <paramref name="resolution"/>.
+        /// Returns false when the body is not one, so the caller records the
+        /// batch unresolved rather than recording it answered.
+        /// <para>
+        /// "normalized" and "redirects" are separate arrays, and a title can
+        /// appear in one, in the other, or in the first and then the second,
+        /// so each name is followed hop by hop rather than looked up once.
+        /// </para>
+        /// </summary>
+        private static bool ReadTitleBatch(
+            string response, List<string> batch, TitleResolution resolution)
+        {
+            using var doc = JsonDocument.Parse(response);
+            var root = doc.RootElement;
+
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("query", out var query) ||
+                query.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            var hops = new Dictionary<string, string>(StringComparer.Ordinal);
+            ReadTitleHops(query, "normalized", hops);
+            ReadTitleHops(query, "redirects", hops);
+
+            foreach (var name in batch)
+            {
+                resolution.Answered.Add(name);
+
+                string current = name;
+                var seen = new HashSet<string>(StringComparer.Ordinal) { current };
+                while (hops.TryGetValue(current, out var next) && seen.Add(next))
+                {
+                    current = next;
+                }
+
+                if (!string.Equals(current, name, StringComparison.Ordinal))
+                {
+                    resolution.Resolved[name] = current;
+                }
+            }
+
+            return true;
+        }
+
+        private static void ReadTitleHops(
+            JsonElement query, string arrayName, Dictionary<string, string> hops)
+        {
+            if (!query.TryGetProperty(arrayName, out var entries) ||
+                entries.ValueKind != JsonValueKind.Array)
+            {
+                return;
+            }
+
+            foreach (var entry in entries.EnumerateArray())
+            {
+                if (entry.ValueKind != JsonValueKind.Object ||
+                    !entry.TryGetProperty("from", out var from) ||
+                    from.ValueKind != JsonValueKind.String ||
+                    !entry.TryGetProperty("to", out var to) ||
+                    to.ValueKind != JsonValueKind.String)
+                {
+                    continue;
+                }
+
+                string source = from.GetString()!;
+                if (!hops.ContainsKey(source))
+                {
+                    hops[source] = to.GetString()!;
+                }
+            }
+        }
+
+        /// <summary>
         /// Fetches a single wiki page's raw wikitext via
         /// action=parse&amp;prop=wikitext - used by the festival-vendor
         /// auto-tagging pass (Program.ResolveSeasonalFestivalValuesAsync) to
@@ -1075,6 +1255,31 @@ namespace VendorOfferUpdater
 
         public HashSet<string> Answered { get; } =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Which page each display string names, and which strings were never
+    /// asked about.
+    /// <para>
+    /// <see cref="Resolved"/> holds only the names whose page title differs
+    /// from the string itself, so a name absent from it either already names
+    /// its own page or was never answered for. Only <see cref="Answered"/>
+    /// separates those two.
+    /// </para>
+    /// <para>
+    /// Both are keyed ordinally, because a hop is applied only to a string
+    /// the wiki echoed back byte for byte.
+    /// </para>
+    /// </summary>
+    public class TitleResolution
+    {
+        /// <summary>Display string to the page title it names.</summary>
+        public Dictionary<string, string> Resolved { get; } =
+            new Dictionary<string, string>(StringComparer.Ordinal);
+
+        /// <summary>Every name in a batch the wiki answered.</summary>
+        public HashSet<string> Answered { get; } =
+            new HashSet<string>(StringComparer.Ordinal);
     }
 
     public class WikiCostEntry

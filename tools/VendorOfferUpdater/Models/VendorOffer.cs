@@ -58,5 +58,18 @@ namespace VendorOfferUpdater.Models
         // change to make the loss noticeable (SeasonalFestival is
         // deliberately not hashed by VendorOfferHasher).
         public string? SeasonalFestival { get; set; }
+
+        // The recipe sheet the account must own before this vendor will
+        // trade, and the recipe id that sheet unlocks. See
+        // Models/VendorOffer.cs (the runtime copy) for the full note, and
+        // ConvertToOffer/VendorUnlockRequirementParser for how the wiki's
+        // "Has requirement" text becomes these two ids. Not hashed into
+        // OfferId, so the same pass-through-mirror reason SeasonalFestival
+        // is declared here applies: a property this class does not declare
+        // is dropped from every untouched --merge-into row with no OfferId
+        // change to make the loss noticeable.
+        public int? UnlockRecipeItemId { get; set; }
+
+        public int? UnlockRecipeId { get; set; }
     }
 }

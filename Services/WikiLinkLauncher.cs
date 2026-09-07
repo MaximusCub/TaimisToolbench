@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace TaimisToolbench.Services
@@ -26,6 +27,15 @@ namespace TaimisToolbench.Services
     /// </summary>
     internal static class WikiLinkLauncher
     {
+        // ASFW_ANY, the wildcard process id user32 accepts here. The module
+        // cannot know which process the shell will hand the URL to, so the
+        // grant has to go to every process.
+        private const int AsfwAny = -1;
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool AllowSetForegroundWindow(int dwProcessId);
+
         public static void Open(string url)
         {
             if (string.IsNullOrEmpty(url))
@@ -45,6 +55,20 @@ namespace TaimisToolbench.Services
             {
                 return;
             }
+
+            // Windows only lets a process raise a window to the foreground
+            // if that process owns the current foreground window, started the
+            // process that owns it, or received the last input event. The
+            // first click starts the browser, so Windows lets it come
+            // forward. A later click hands the URL to a browser that is
+            // already running, and Windows refuses that process the
+            // foreground. The grant below passes this process's own right on
+            // to whichever process the shell picks. The right belongs to the
+            // process, not to a thread, so the Task.Run below still carries
+            // it. The call stays on this thread because the right depends on
+            // this process's foreground state at the moment of the call, and
+            // this thread is running a mouse handler.
+            GrantForegroundRightToBrowser();
 
             Task.Run(() =>
             {
@@ -69,6 +93,31 @@ namespace TaimisToolbench.Services
                     ModuleLog.Shared.Write(ModuleLogLevel.Warn, "wiki", $"Failed to open wiki link: {ex.GetType().Name} - {ex.Message}");
                 }
             });
+        }
+
+        private static void GrantForegroundRightToBrowser()
+        {
+            try
+            {
+                if (!AllowSetForegroundWindow(AsfwAny))
+                {
+                    // Blish HUD is an overlay and does not always hold the
+                    // foreground when a row is clicked. Windows then refuses
+                    // the grant and the browser stays behind the game. The
+                    // player can do nothing about that, so this is Debug. It
+                    // only separates "Windows said no" from "the call was
+                    // never made".
+                    ModuleLog.Shared.Write(ModuleLogLevel.Debug, "wiki", "AllowSetForegroundWindow was refused; the browser may open behind the game.");
+                }
+            }
+            catch (Exception ex)
+            {
+                // The caller runs on the game update loop and has no catch of
+                // its own, and this class must never crash the overlay a wiki
+                // link was clicked from. Losing the grant only costs the
+                // browser its jump to the front.
+                ModuleLog.Shared.Write(ModuleLogLevel.Debug, "wiki", $"AllowSetForegroundWindow failed: {ex.GetType().Name} - {ex.Message}");
+            }
         }
     }
 }

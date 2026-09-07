@@ -127,6 +127,116 @@ namespace VendorOfferUpdater.Tests
             Assert.Empty(cache.Misses);
         }
 
+        [Fact]
+        public void ANameIsCachedUnderTheStringTheCostLineSpells()
+        {
+            var cache = new ItemIdCache();
+
+            // The wiki was asked about the redirect's target; the cost line
+            // still spells the name the redirect came from.
+            var asked = new[]
+            {
+                new KeyValuePair<string, string>("Ectoplasm", "Glob of Ectoplasm"),
+            };
+
+            var update = cache.Record(
+                asked,
+                Resolution(new[] { "Glob of Ectoplasm" }, ("Glob of Ectoplasm", 19721)),
+                DateTime.UtcNow);
+
+            Assert.Equal(1, update.Hits);
+            Assert.Equal(19721, cache.Ids["Ectoplasm"]);
+            Assert.False(cache.Ids.ContainsKey("Glob of Ectoplasm"));
+        }
+
+        [Fact]
+        public void AnUnansweredTargetDefersTheNameThatAskedAboutIt()
+        {
+            var cache = new ItemIdCache();
+            var asked = new[]
+            {
+                new KeyValuePair<string, string>("Ectoplasm", "Glob of Ectoplasm"),
+            };
+
+            var update = cache.Record(asked, Resolution(Array.Empty<string>()), DateTime.UtcNow);
+
+            Assert.Equal(new[] { "Ectoplasm" }, update.Deferred);
+            Assert.False(cache.Contains("Ectoplasm"));
+        }
+
+        // -- Currency names -----------------------------------------
+        [Fact]
+        public void ACurrencyNameSettlesTheNameAndClearsAnEarlierMiss()
+        {
+            var cache = new ItemIdCache();
+            cache.RecordMiss("Tale of Dungeon Delving", DateTime.UtcNow);
+
+            cache.RecordCurrencyName("Tale of Dungeon Delving", "Tales of Dungeon Delving");
+
+            Assert.True(cache.Contains("Tale of Dungeon Delving"));
+            Assert.Empty(cache.Misses);
+            Assert.Equal(
+                "Tales of Dungeon Delving", cache.CurrencyNames["Tale of Dungeon Delving"]);
+        }
+
+        [Fact]
+        public void AMissIsNotRecordedOverANamedCurrency()
+        {
+            var cache = new ItemIdCache();
+            cache.RecordCurrencyName("Tale of Dungeon Delving", "Tales of Dungeon Delving");
+
+            cache.RecordMiss("Tale of Dungeon Delving", DateTime.UtcNow);
+
+            Assert.Empty(cache.Misses);
+        }
+
+        [Fact]
+        public void ForgetCurrencyNameSendsTheNameBackToTheWiki()
+        {
+            var cache = new ItemIdCache();
+            cache.RecordCurrencyName("Gaeting Crystal", "Gaeting Crystal");
+
+            Assert.True(cache.ForgetCurrencyName("Gaeting Crystal"));
+            Assert.False(cache.Contains("Gaeting Crystal"));
+            Assert.False(cache.ForgetCurrencyName("Gaeting Crystal"));
+        }
+
+        [Fact]
+        public void CurrencyNamesSurviveSaveAndLoad()
+        {
+            string path = Path_("currencies.json");
+
+            var written = new ItemIdCache();
+            written.RecordHit("Mystic Coin", 19976);
+            written.RecordCurrencyName("Tale of Dungeon Delving", "Tales of Dungeon Delving");
+            written.RecordMiss("Glory", new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc));
+            written.Save(path);
+
+            var read = ItemIdCache.Load(path);
+
+            Assert.Equal(19976, read.Ids["Mystic Coin"]);
+            Assert.Equal(
+                "Tales of Dungeon Delving", read.CurrencyNames["Tale of Dungeon Delving"]);
+            Assert.True(read.Misses.ContainsKey("Glory"));
+            Assert.Equal(3, read.Count);
+        }
+
+        [Fact]
+        public void ACacheWrittenBeforeCurrencyNamesExistedStillLoads()
+        {
+            string path = Path_("v2.json");
+            File.WriteAllText(
+                path,
+                "{\n  \"cacheVersion\": 2,\n  \"ids\": { \"Mystic Coin\": 19976 },\n" +
+                "  \"misses\": { \"Glory\": null }\n}");
+
+            var cache = ItemIdCache.Load(path);
+
+            Assert.Equal(19976, cache.Ids["Mystic Coin"]);
+            Assert.True(cache.Misses.ContainsKey("Glory"));
+            Assert.Empty(cache.CurrencyNames);
+        }
+
         // -- Re-checking --------------------------------------------
         [Fact]
         public void ForgetMissesDropsMissesAndKeepsIds()

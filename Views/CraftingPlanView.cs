@@ -591,19 +591,23 @@ namespace TaimisToolbench.Views
         private DateTime _lastResizeEventUtc;
         private bool _resizeSettlePending;
 
-        // Ceiling on how long a held pointer may hold the strip's reflow
-        // back, and not a second debounce - DeferredReflowGate.TryTake owns
-        // the rule and why the number is this far above ResizeDebounceMs.
-        private const int StripReflowStallMs = 2000;
+        // Ceiling on how long a drag that still reads as running may hold
+        // the strip's reflow back, and not a debounce - the rule lives in
+        // DeferredReflowGate.TryTake. It runs from the last width observed,
+        // so only a grip held motionless for the whole five seconds reaches
+        // it. It is a last resort: the one way a resize flag is known to
+        // outlive its drag is handled in ResizeDragActive instead.
+        private const int StripReflowStallMs = 5000;
 
         // The item input strip's column count is a step function of the
         // panel width, so re-seating it on every drag tick stretches each
         // cell between two boundaries and repacks the whole strip at each
         // one. This gate holds the newest width and releases it once the
-        // drag ends. Everything whose position derives from the strip's
-        // width reads AppliedWidth, never the live width: the reserved
-        // height and the strip it reserves for have to move on the same
-        // frame or the content jumps ahead of the strip.
+        // drag ends, or once a resize no drag drove goes quiet. Everything
+        // whose position derives from the strip's width reads AppliedWidth,
+        // never the live width: the reserved height and the strip it
+        // reserves for have to move on the same frame or the content jumps
+        // ahead of the strip.
         private readonly DeferredReflowGate _stripReflow =
             new DeferredReflowGate(ResizeDebounceMs, StripReflowStallMs);
 
@@ -935,14 +939,14 @@ namespace TaimisToolbench.Views
             // The stamped half goes through StatusText.Stamp, which owns
             // the module's one timestamp format and its InvariantCulture
             // policy (English-only strings; several locales' short time
-            // pattern has no AM/PM designator at all). ONE trailing hyphen
-            // clause: the dash separates verb from timestamp, a hyphen
-            // separates clauses, and two hyphen clauses at one level put
-            // two unrelated facts on the same footing. It also names a
-            // button that exists, and states the payoff (fresh prices)
-            // rather than the fear ("prices may have changed").
+            // pattern has no AM/PM designator at all). The advice is
+            // parenthesised because Stamp's own separator is a hyphen, so
+            // a trailing hyphen clause would put two unrelated facts on
+            // the same footing. It names a button that exists, and states
+            // the payoff (fresh prices) rather than the fear ("prices may
+            // have changed").
             _statusBoard.SeedRestored(
-                StatusText.Stamp("Generated", generatedAt) + " - Generate Plan to refresh prices");
+                StatusText.Stamp("Generated", generatedAt) + " (Generate Plan to refresh prices)");
             RenderFromBoard(_statusBoard.Snapshot());
 
             // Started BEFORE the render below and regardless of whether
@@ -995,14 +999,14 @@ namespace TaimisToolbench.Views
         {
             RestoreRequestControls(requestItems, null, useOwnMaterials, priceBasis, valueOwnMaterials);
 
-            // Same one-trailing-clause shape as the full restore's line,
-            // and it names a button that exists. It says what was kept, not
-            // what was lost: the items ARE back, and the only thing asked
-            // of the user is the click that would have refreshed prices
+            // Same parenthesised shape as the full restore's line, and it
+            // names a button that exists. It says what was kept, not what
+            // was lost: the items ARE back, and the only thing asked of
+            // the user is the click that would have refreshed prices
             // anyway.
             _statusBoard.SeedRestored(
                 StatusText.Stamp("Last planned", generatedAt)
-                + " - items restored, Generate Plan to rebuild the plan");
+                + " (items restored, Generate Plan to rebuild the plan)");
             RenderFromBoard(_statusBoard.Snapshot());
         }
 
@@ -1257,7 +1261,10 @@ namespace TaimisToolbench.Views
         // Section anchor keys are per PlanSectionType (one section, one
         // key); tree rows key off the solver NodeId the row draws - the
         // same identity TreeSectionController's own in-place row pairing
-        // already treats as stable across a re-solve.
+        // already treats as stable across a re-solve. The Total Cost
+        // table's own row and group-heading keys are built in
+        // Services/SummarySectionLayoutMath, which is Blish-free and so
+        // can be tested.
         internal static string SectionAnchorKey(PlanSectionType sectionKey)
         {
             return "section:" + sectionKey;
@@ -1297,19 +1304,19 @@ namespace TaimisToolbench.Views
 
         /// <summary>
         /// This render's anchor candidates in content space. A registered
-        /// control that no longer hangs under the content panel, or one
-        /// hidden inside a collapsed container, is skipped: its Top means
-        /// nothing (see ContentSpaceTop).
+        /// control that no longer hangs under the content panel is
+        /// skipped; one inside a collapsed container reports the row it is
+        /// drawn under and is marked hidden (see TryContentSpaceTop).
         /// </summary>
         private List<ScrollAnchorCandidate> CollectScrollAnchorCandidates()
         {
             var candidates = new List<ScrollAnchorCandidate>(_scrollAnchors.Count);
             foreach (var entry in _scrollAnchors)
             {
-                int? top = ContentSpaceTop(entry.Value);
-                if (top.HasValue)
+                if (TryContentSpaceTop(entry.Value, out int top, out bool hidden))
                 {
-                    candidates.Add(new ScrollAnchorCandidate(entry.Key, top.Value, entry.Value.Height));
+                    candidates.Add(
+                        new ScrollAnchorCandidate(entry.Key, top, entry.Value.Height, hidden));
                 }
             }
 
@@ -1318,33 +1325,58 @@ namespace TaimisToolbench.Views
 
         /// <summary>
         /// A control's top in the content panel's own coordinate space -
-        /// its Top plus every intermediate container's - or null when the
-        /// walk never reaches the content panel (a disposed or detached
-        /// control) or passes through an invisible container (a collapsed
-        /// section holds its rows at their last laid-out positions, which
-        /// are not where anything is drawn).
+        /// its Top plus every intermediate container's. False when the walk
+        /// never reaches the content panel (a disposed or detached
+        /// control).
+        /// <para>
+        /// Blish's FlowPanel reflow skips invisible children, so anything
+        /// inside a collapsed container keeps the Top it was last laid out
+        /// at, which is not where anything is drawn. The sum therefore
+        /// restarts above each invisible container and reports the nearest
+        /// ancestor that IS drawn, with hidden set: a collapsed node's rows
+        /// are drawn as part of the row they hang under, so that row's
+        /// position is the honest answer for them. False when no drawn
+        /// ancestor is left between the invisible container and the content
+        /// panel - a collapsed section's rows have no row to stand in for
+        /// them.
+        /// </para>
         /// </summary>
-        private int? ContentSpaceTop(Control control)
+        private bool TryContentSpaceTop(Control control, out int top, out bool hidden)
         {
-            if (control == null || !control.Visible)
+            top = 0;
+            hidden = false;
+            if (control == null)
             {
-                return null;
+                return false;
             }
 
-            int top = 0;
+            int sum = 0;
+            bool drawnAncestor = false;
             var current = control;
             while (current != null && current != _contentPanel)
             {
-                if (!current.Visible)
+                if (current.Visible)
                 {
-                    return null;
+                    sum += current.Top;
+                    drawnAncestor = true;
+                }
+                else
+                {
+                    sum = 0;
+                    drawnAncestor = false;
+                    hidden = true;
                 }
 
-                top += current.Top;
                 current = current.Parent;
             }
 
-            return current == _contentPanel ? top : (int?)null;
+            if (current != _contentPanel || (hidden && !drawnAncestor))
+            {
+                return false;
+            }
+
+            top = sum;
+            return true;
         }
 
         private bool TryCaptureScrollAnchor(int savedOffset, out ScrollAnchor anchor)
@@ -2959,7 +2991,7 @@ namespace TaimisToolbench.Views
             // below can never move ahead of the strip above it. The panel
             // itself still takes the live width - it is the clipping frame
             // for cells that a narrowing drag has not re-seated yet.
-            _stripReflow.Observe(w, nowUtc, PointerHeld());
+            _stripReflow.Observe(w, nowUtc, ResizeDragActive());
             var layout = ComputeTopRegionLayout(_stripReflow.AppliedWidth);
             _inputPanel.Size = new Point(w, layout.InputPanelHeight);
 
@@ -3355,7 +3387,7 @@ namespace TaimisToolbench.Views
             }
 
             int settledWidth;
-            if (!_stripReflow.TryTake(DateTime.UtcNow, PointerHeld(), out settledWidth))
+            if (!_stripReflow.TryTake(DateTime.UtcNow, ResizeDragActive(), out settledWidth))
             {
                 return;
             }
@@ -3365,16 +3397,37 @@ namespace TaimisToolbench.Views
         }
 
         /// <summary>
-        /// Whether the left mouse button is down, which for a window being
-        /// dragged by an edge or a corner means the drag is still running.
-        /// Releasing it ends a drag with no quiet period, so the settle
-        /// gate counts a release as a settle in its own right rather than
-        /// making the user watch the strip re-seat itself after they let go.
+        /// Whether a drag that is resizing this view is still running. The
+        /// strip's reflow waits for this to go false, so it lands on the
+        /// frame the user lets go.
+        /// <para>
+        /// Blish sets WindowBase2.Resizing on left-button-down over the
+        /// resize handle and writes the window size only while it is set,
+        /// so every resize tick a drag produces reads true here.
+        /// </para>
+        /// <para>
+        /// Visible is read with it because Blish clears Resizing from a
+        /// global mouse-release handler that returns early while the
+        /// window is hidden, and Hide clears Dragging but not Resizing.
+        /// An alt-tab mid-drag would otherwise leave the flag set.
+        /// </para>
+        /// <para>
+        /// A resize this window does not drive reads false here. The gate
+        /// collapses that burst on its quiet interval instead.
+        /// </para>
         /// </summary>
-        private static bool PointerHeld()
+        private bool ResizeDragActive()
         {
-            return GameService.Input?.Mouse?.State.LeftButton
-                == Microsoft.Xna.Framework.Input.ButtonState.Pressed;
+            for (Control control = _buildPanel; control != null; control = control.Parent)
+            {
+                var window = control as WindowBase2;
+                if (window != null)
+                {
+                    return window.Visible && window.Resizing;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -4923,7 +4976,7 @@ namespace TaimisToolbench.Views
                     // Row rendering (the cost-tile row, the
                     // MultiItemNote banner, and the per-currency rows) moved
                     // to Views/Rendering/SummarySectionRenderer.
-                    new SummarySectionRenderer(this, _getItemStatBlock)
+                    new SummarySectionRenderer(this, _getItemStatBlock, RegisterScrollAnchor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 case PlanSectionType.UsedMaterials:

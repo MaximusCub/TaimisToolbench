@@ -311,6 +311,47 @@ namespace TaimisToolbench.Services
                 });
             }
 
+            // A vendor offer can be gated behind a recipe sheet the account
+            // must own before that vendor will trade at all (see
+            // VendorOffer.UnlockRecipeItemId). The route is never hidden or
+            // repriced for it - the sheet is listed here and checked
+            // against the same learned-recipe set a craft recipe is.
+            foreach (var step in plan.Steps)
+            {
+                if (step.Source != AcquisitionSource.BuyFromVendor ||
+                    !step.VendorUnlockRecipeId.HasValue ||
+                    !step.VendorUnlockRecipeItemId.HasValue)
+                {
+                    continue;
+                }
+
+                int unlockRecipeId = step.VendorUnlockRecipeId.Value;
+                if (!seenRecipeIds.Add(unlockRecipeId))
+                {
+                    continue;
+                }
+
+                requiredRecipes.Add(new RequiredRecipe
+                {
+                    RecipeId = unlockRecipeId,
+                    // The SHEET item, not the recipe's own output, so the
+                    // row names what the player has to go and buy.
+                    OutputItemId = step.VendorUnlockRecipeItemId.Value,
+                    IsAutoLearned = false,
+                    // False despite the sheet being a consumable: that flag
+                    // makes the Missing! link prefix "Recipe: " onto the
+                    // OutputItemId's name (WikiLinkBuilder), and this row's
+                    // name already starts with one. False links to the
+                    // sheet's own page, which is the right page.
+                    IsLearnedFromItem = false,
+                    MinRating = 0,
+                    Disciplines = new List<string>(),
+                    IsMissing = learnedRecipeIds != null
+                        ? (bool?)!learnedRecipeIds.Contains(unlockRecipeId)
+                        : null,
+                });
+            }
+
             // Debug: missing recipes
             if (learnedRecipeIds != null)
             {

@@ -16,11 +16,27 @@ namespace TaimisToolbench.Services
         public readonly int Top;
         public readonly int Height;
 
+        /// <summary>
+        /// True when this element is not drawn and Top is the position of
+        /// the nearest ancestor that is - a row inside a collapsed tree
+        /// node is drawn as part of the row it hangs under. A hidden
+        /// candidate can be re-found by <see cref="ScrollAnchorMath.FindTop"/>
+        /// but is never chosen by <see cref="ScrollAnchorMath.TryCapture"/>:
+        /// nothing the user can see sits at its Top.
+        /// </summary>
+        public readonly bool Hidden;
+
         public ScrollAnchorCandidate(string key, int top, int height)
+            : this(key, top, height, false)
+        {
+        }
+
+        public ScrollAnchorCandidate(string key, int top, int height, bool hidden)
         {
             Key = key;
             Top = top;
             Height = height;
+            Hidden = hidden;
         }
     }
 
@@ -87,8 +103,14 @@ namespace TaimisToolbench.Services
         /// the most specific element on the line without the caller having
         /// to describe the nesting.
         /// <para>
-        /// False when the line is above every candidate: nothing up there
-        /// can anchor anything, so the caller stays on plain offset
+        /// Hidden candidates are skipped: they report the position of the
+        /// row they are drawn under, so they tie with it and are never
+        /// taller, and the tie-break would hand the anchor to something
+        /// nobody can see.
+        /// </para>
+        /// <para>
+        /// False when the line is above every drawn candidate: nothing up
+        /// there can anchor anything, so the caller stays on plain offset
         /// preservation.
         /// </para>
         /// </summary>
@@ -106,7 +128,9 @@ namespace TaimisToolbench.Services
             for (int i = 0; i < candidates.Count; i++)
             {
                 var candidate = candidates[i];
-                if (string.IsNullOrEmpty(candidate.Key) || candidate.Top > anchorLine)
+                if (string.IsNullOrEmpty(candidate.Key) ||
+                    candidate.Hidden ||
+                    candidate.Top > anchorLine)
                 {
                     continue;
                 }
@@ -135,6 +159,13 @@ namespace TaimisToolbench.Services
         /// just ignored, say) - in which case the caller falls back to
         /// plain offset preservation rather than jumping somewhere
         /// arbitrary.
+        /// <para>
+        /// A hidden candidate answers here, unlike in
+        /// <see cref="TryCapture"/>. A rebuild can leave the anchored row
+        /// inside a collapsed node, and the row it is drawn under is a
+        /// real position to hold still; refusing it would drop the anchor
+        /// for the whole subtree instead.
+        /// </para>
         /// </summary>
         public static int? FindTop(IReadOnlyList<ScrollAnchorCandidate> candidates, ScrollAnchor anchor)
         {

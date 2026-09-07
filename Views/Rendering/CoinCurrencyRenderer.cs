@@ -413,8 +413,9 @@ namespace TaimisToolbench.Views.Rendering
                 // Frame-less at the bar tier: beside the digits this icon is
                 // a currency symbol in the coin denominations' role, and
                 // they take no border (IconFrameGeometry.CurrencyIsFramed).
-                // It still occupies the measured 16px window, so this
-                // segment's advance below is the number it always was.
+                // It still occupies the whole measured bar-tier window, so
+                // this segment's advance below is unchanged by the border
+                // coming off.
                 var icon = IconControls.CreateCurrencyIcon(
                     parent, seg.IconUrl, x + seg.TextWidth + CoinSegmentMath.CoinLabelIconGap,
                     y + iconYOffset, ItemIconTier.CurrencyBarRun, seg.Name);

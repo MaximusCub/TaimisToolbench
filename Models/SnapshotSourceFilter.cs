@@ -6,7 +6,7 @@ namespace TaimisToolbench.Models
     /// <summary>
     /// Which account-inventory sources the Snapshot tab's search/filter row
     /// should include (dev/proposals/d1-snapshot-about-settings.md Feature
-    /// 1). The three storage locations default to true (show everything),
+    /// 1). The four storage locations default to true (show everything),
     /// matching the pre-search-box tab's implicit no-filter behavior.
     /// <para>
     /// Characters are carried as an EXCLUSION set of bare character names (no
@@ -30,6 +30,8 @@ namespace TaimisToolbench.Models
         public bool MaterialStorage { get; set; } = true;
 
         public bool SharedInventory { get; set; } = true;
+
+        public bool LegendaryArmory { get; set; } = true;
 
         public HashSet<string> UncheckedCharacters { get; set; } = new HashSet<string>(StringComparer.Ordinal);
     }

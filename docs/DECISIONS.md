@@ -86,6 +86,48 @@ history.
 
 ---
 
+## Stopping wiki API access over the `robots.txt` entry
+
+**Proposal:** stop using `https://wiki.guildwars2.com/api.php` in
+`tools/VendorOfferUpdater` and `tools/MysticForgeSeeder`, because
+<https://wiki.guildwars2.com/robots.txt> carries `Disallow: /api.php` for
+all user agents, and find another route to the vendor and Mystic Forge
+data.
+
+**Rejected. The tools continue to use that endpoint.** The endpoint exists
+to serve programmatic clients, and ArenaNet documents it for that purpose
+on the same wiki, at
+[API:Main](https://wiki.guildwars2.com/wiki/API:Main). A `robots.txt` entry
+that keeps general crawlers off a dynamic endpoint does not describe the
+documented client path. Both sources are linked above, so a reader can
+weigh them without taking this entry's word for either.
+
+**What we take on in exchange.** The reading above is only defensible while
+these tools behave as the documented client path expects, so the obligations
+are part of the decision rather than a separate aspiration. The page
+that states each rule, and the file that meets or misses it, are in
+[`api-client-contracts.md`](api-client-contracts.md) section 1; this list
+is the status, not a second copy of the evidence.
+
+| Obligation | Status |
+| --- | --- |
+| Identify the client, with a contact address | Met in `tools/MysticForgeSeeder/Program.cs` |
+| Serial requests, paced, never parallel | Met by both clients |
+| Send `maxlag` | Open in `tools/MysticForgeSeeder/WikiRecipeClient.cs` |
+| Honour `Retry-After` in its delta and its HTTP-date form | Partly met: both clients read the delta form only |
+| Back off on a refusal rather than retrying hard | Met for a refusal carried by the status code; open for one carried in the body, which `tools/MysticForgeSeeder/WikiRecipeClient.cs` cannot yet distinguish from an empty page |
+| Cache, so the same data is not fetched twice | Met |
+
+An obligation listed as open is a debt against this decision, not a
+footnote to it.
+
+**What would reopen it:** ArenaNet asking us to stop, or the client
+guidance on
+[API:Main](https://wiki.guildwars2.com/wiki/API:Main) changing so that it no
+longer describes `api.php` as a path third-party clients are meant to use.
+
+---
+
 ## M38's `Services/` foldering target
 
 **Proposal:** split the flat `Services/` directory into `Services/Pricing/`,

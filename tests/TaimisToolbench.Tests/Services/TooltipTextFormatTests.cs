@@ -17,7 +17,7 @@ namespace TaimisToolbench.Tests.Services
         [Fact]
         public void Wrap_LongSingleLine_BreaksAtWordBoundariesUnderBudget()
         {
-            string line = "A vendor cost item's buy-order price is unavailable - its instant-buy price is used";
+            string line = "A vendor cost item's buy-order price is unavailable, so its instant-buy price is used.";
 
             string[] wrapped = TooltipTextFormat.Wrap(line).Split('\n');
 

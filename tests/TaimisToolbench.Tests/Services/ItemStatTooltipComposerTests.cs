@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using TaimisToolbench.Models;
@@ -32,7 +33,9 @@ namespace TaimisToolbench.Tests.Services
                 "+34 Precision",
                 "+34 Ferocity",
                 "",
-                "Infusion Slot",
+                "Unused Upgrade Slot",
+                "",
+                "Unused Infusion Slot",
                 "",
                 "Ascended",
                 "Heavy",
@@ -52,7 +55,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal("Bolt", lines[0]);
             Assert.Equal("Weapon Strength: 950 - 1,050", lines[1]);
             Assert.Equal("", lines[2]);
-            Assert.Equal("Infusion Slot", lines[3]);
+            Assert.Equal("Unused Infusion Slot", lines[3]);
             // The game's own string for an unassigned stat-selectable
             // item, in the DESCRIPTION position inside the identity block.
             Assert.Contains("Double-click to select stats.", lines);
@@ -564,7 +567,7 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void ConsecutiveInfusionSlotsAreEachTheirOwnBlankSeparatedBlock()
+        public void ConsecutiveSlotsAreEachTheirOwnBlankSeparatedBlock()
         {
             // Measured on live/eq-weapon-full.png (2026-08-25): two sigil
             // blocks and two infusion lines each render blank / block /
@@ -573,16 +576,16 @@ namespace TaimisToolbench.Tests.Services
             {
                 ItemId = 1,
                 Name = "Two-Slot Thing",
-                InfusionSlotCount = 2,
+                UnusedSlots = new[] { ItemSlotKind.Infusion, ItemSlotKind.Infusion },
             });
 
             Assert.Equal(new[]
             {
                 "Two-Slot Thing",
                 "",
-                "Infusion Slot",
+                "Unused Infusion Slot",
                 "",
-                "Infusion Slot",
+                "Unused Infusion Slot",
             }, content.ToPlainLines().ToArray());
         }
 
@@ -680,6 +683,59 @@ namespace TaimisToolbench.Tests.Services
             });
 
             Assert.Contains("-5 Power", content.ToPlainLines());
+        }
+
+        [Fact]
+        public void EverySlotLineCarriesTheGamesOwnGlyphForThatSlot()
+        {
+            var content = ItemStatTooltipComposer.BuildContent(new ItemStatBlock
+            {
+                Name = "Every Slot",
+                UnusedSlots = new[]
+                {
+                    ItemSlotKind.Upgrade, ItemSlotKind.Infusion, ItemSlotKind.Enrichment,
+                },
+            });
+
+            var slots = content.Lines
+                .Where(l => l.Kind == TooltipLineKind.Slot)
+                .Select(l => l.IconAssetId + " " + string.Concat(l.Spans.Select(s => s.Text)))
+                .ToArray();
+
+            Assert.Equal(
+                new[]
+                {
+                    ItemSlotFacts.UpgradeSlotAssetId + " Unused Upgrade Slot",
+                    ItemSlotFacts.InfusionSlotAssetId + " Unused Infusion Slot",
+                    ItemSlotFacts.EnrichmentSlotAssetId + " Unused Enrichment Slot",
+                },
+                slots);
+        }
+
+        [Fact]
+        public async Task AnAscendedArmorPieceShowsAnUpgradeLineAboveItsInfusionLine()
+        {
+            // The order the game lists them in, measured on a live
+            // ascended-leggings tooltip: upgrade slot, then infusion slot.
+            var raw = await RealItemFixtures.ParseOneAsync(RealItemJson.ZojjasWarfists);
+            var lines = ItemStatTooltipComposer
+                .BuildContent(ItemStatBlockFactory.Build(raw))
+                .ToPlainLines()
+                .ToArray();
+
+            int upgrade = Array.IndexOf(lines, "Unused Upgrade Slot");
+            int infusion = Array.IndexOf(lines, "Unused Infusion Slot");
+            Assert.True(upgrade >= 0 && infusion > upgrade);
+        }
+
+        [Fact]
+        public async Task AnItemWithNoSlotsPrintsNoSlotLineAtAll()
+        {
+            var raw = await RealItemFixtures.ParseOneAsync(RealItemJson.MithrilOre);
+            var content = ItemStatTooltipComposer.BuildContent(ItemStatBlockFactory.Build(raw));
+
+            Assert.DoesNotContain(content.Lines, l => l.Kind == TooltipLineKind.Slot);
+            Assert.DoesNotContain(content.ToPlainLines(), l => l.Contains("Slot"));
         }
     }
 }

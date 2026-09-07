@@ -367,9 +367,13 @@ namespace TaimisToolbench.Tests.Services
         [Fact]
         public void FallbackTieBreak_NeverComparesABarterItemAgainstACurrency()
         {
-            // 8 tokens against 1 unvalued wallet currency unit: an item id
+            // 8 tokens against 1 unvalued wallet currency unit. An item id
             // and a currency id are different id spaces, so a bare id match
-            // must not be mistaken for a like-for-like comparison.
+            // must not be mistaken for a like-for-like comparison. The
+            // currency offer wins here because the fallback tier ranks a
+            // barter line behind a priced one before it ever compares unit
+            // counts, so the two counts are never weighed against each
+            // other.
             var tree = Leaf(1, 1);
             var prices = new Dictionary<int, ItemPrice>();
             var currencyOffer = new VendorOffer
@@ -390,7 +394,67 @@ namespace TaimisToolbench.Tests.Services
                 tree, prices, Offers(BarterOffer(1, BarterTokenItemId, 8), currencyOffer));
 
             Assert.Equal(AcquisitionSource.BuyFromVendor, result.Decisions[0].Source);
-            Assert.Equal(BarterTokenItemId, result.Decisions[0].VendorItemCosts.Single().ItemId);
+            Assert.Null(result.Decisions[0].VendorItemCosts);
+            Assert.Equal(
+                BarterTokenItemId,
+                result.Decisions[0].VendorCurrencyCosts.Single().Id);
+        }
+
+        [Fact]
+        public void BarterOffer_LosesToAPricedOffer_EvenWhenItsCoinPartIsLower()
+        {
+            // The barter offer charges 1 copper plus 5 untradeable tokens;
+            // the other charges 500 copper and nothing else. The token line
+            // carries no price, so it adds nothing to the barter offer's
+            // coin total, and ranking on coin alone read 1 as cheaper than
+            // 500. It is not cheaper: the tokens' cost is unknown, not zero.
+            var tree = Leaf(1, 1);
+            var prices = new Dictionary<int, ItemPrice>();
+            var pricedOffer = new VendorOffer
+            {
+                OfferId = "test-priced-500",
+                OutputItemId = 1,
+                OutputCount = 1,
+                CostLines = new List<CostLine>
+                {
+                    new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = 500 },
+                },
+                MerchantName = "Coin Vendor",
+                Locations = new List<string>(),
+            };
+            var solver = new PlanSolver();
+
+            var result = solver.Solve(
+                tree,
+                prices,
+                Offers(BarterOffer(1, BarterTokenItemId, 5, coinCost: 1), pricedOffer));
+
+            Assert.Equal(AcquisitionSource.BuyFromVendor, result.Decisions[0].Source);
+            Assert.Null(result.Decisions[0].VendorItemCosts);
+            Assert.Equal(500, result.Decisions[0].TotalCost);
+        }
+
+        [Fact]
+        public void BarterOffer_StillWins_WhenEveryOfferCarriesABarterLine()
+        {
+            // The rule above only orders barter offers behind priced ones.
+            // With no priced offer to lose to, the cheaper barter offer is
+            // still chosen and the route is still offered.
+            var tree = Leaf(1, 1);
+            var prices = new Dictionary<int, ItemPrice>();
+            var solver = new PlanSolver();
+
+            var result = solver.Solve(
+                tree,
+                prices,
+                Offers(
+                    BarterOffer(1, BarterTokenItemId, 5, coinCost: 90),
+                    BarterOffer(1, SecondBarterTokenItemId, 5, coinCost: 10)));
+
+            Assert.Equal(AcquisitionSource.BuyFromVendor, result.Decisions[0].Source);
+            Assert.Equal(
+                SecondBarterTokenItemId,
+                result.Decisions[0].VendorItemCosts.Single().ItemId);
         }
 
         [Fact]

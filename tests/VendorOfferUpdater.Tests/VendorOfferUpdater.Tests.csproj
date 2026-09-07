@@ -18,6 +18,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\tools\VendorOfferUpdater\VendorOfferUpdater.csproj" />
+
+    <!-- tools/MysticForgeSeeder has no test project of its own and adding a
+         fourth would add a fourth CI step. It is the repository's only other
+         net8.0 wiki client, so its scrape loop is covered here alongside
+         WikiSmwClient rather than left untested. -->
+    <ProjectReference Include="..\..\tools\MysticForgeSeeder\MysticForgeSeeder.csproj" />
   </ItemGroup>
 
 </Project>

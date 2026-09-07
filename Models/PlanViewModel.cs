@@ -187,6 +187,15 @@ namespace TaimisToolbench.Models
 
         public IReadOnlyDictionary<int, int> OwnedCurrencyAmounts { get; set; }
 
+        // Every item id the plan drew owned stock for, projected from
+        // CraftingPlanResult.UsedMaterials (the reducer's own per-item
+        // total). One item can sit at several places in one tree and the
+        // reducer gives its stock to whichever node it reaches first, so
+        // this plan-scope set is what lets the Recipe Tree draw the
+        // "HAVE {used}/{total} NEEDED" badge on the later nodes too, at
+        // "HAVE 0/{total}". Null when the plan drew no owned stock at all.
+        public ISet<int> OwnedStockDrawnItemIds { get; set; }
+
         // currency-ux-package (Feature 3, KNOWN-ISSUES #21
         // resolution): passthrough of CraftingPlan.TimegatedItems
         // (informational-only vendor purchase caps - see that class's own
@@ -410,6 +419,17 @@ namespace TaimisToolbench.Models
         // account snapshot's item index does, so the owned split above is
         // populated for both kinds. False on every other row.
         public bool IsBarterItemCost { get; set; }
+
+        // Identity of one CurrencyCost row, stable across a re-solve: the
+        // row's id with the id space it came from written into the string.
+        // The id space has to be part of it, because a wallet currency id
+        // and an item id are different spaces over the same numbers - id
+        // 24 is both a real item and the currency "Pristine Fractal
+        // Relics". Null on every other row type. Never displayed (repo
+        // invariant: ids are internal-only); the scroll anchor registry
+        // keys the row's control by it, so a rebuilt table's row takes
+        // over from the disposed one it stands in for.
+        public string NonCoinCostKey { get; set; }
 
         // User-mandated mouseover
         // tooltips: the exact-meaning tooltip text for a CostFormulaTile/

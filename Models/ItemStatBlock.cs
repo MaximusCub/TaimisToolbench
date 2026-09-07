@@ -61,7 +61,14 @@ namespace TaimisToolbench.Models
         /// item, which reports <see cref="StatChoiceCount"/> instead.</summary>
         public IReadOnlyList<ItemAttributeLine> Attributes { get; set; }
 
-        public int InfusionSlotCount { get; set; }
+        /// <summary>
+        /// The equipment slots this DEFINITION leaves empty, in the order
+        /// the game lists them: upgrade slots, then infusion and enrichment
+        /// slots in API order. A slot the definition ships something in is
+        /// absent, because it is not unused. Empty, never null, from
+        /// <see cref="Services.ItemStatBlockFactory"/>.
+        /// </summary>
+        public IReadOnlyList<ItemSlotKind> UnusedSlots { get; set; }
 
         /// <summary>A rune's bonus lines, verbatim API text.</summary>
         public IReadOnlyList<string> UpgradeBonuses { get; set; }

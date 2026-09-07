@@ -5,7 +5,17 @@ namespace TaimisToolbench.Services
 {
     internal static class StatusText
     {
-        public static string Normalize(string status) => status ?? "";
+        /// <summary>
+        /// A status read back from disk, ready to display. StatusStore keeps
+        /// status.txt exactly as it was written, so a status saved by a build
+        /// older than the hyphen separator still carries the em dash one; that
+        /// is swapped here on the way to the screen. The file itself is left
+        /// alone and the next status write replaces it.
+        /// </summary>
+        public static string Normalize(string status)
+        {
+            return status == null ? "" : status.Replace(LegacyStampSeparator, StampSeparator);
+        }
 
         /// <summary>
         /// The one timestamp format every user-facing status line uses.
@@ -16,16 +26,19 @@ namespace TaimisToolbench.Services
         public const string TimestampFormat = "MMM d, yyyy h:mm tt";
 
         /// <summary>
-        /// The one separator between a status verb and its timestamp. An
-        /// em-dash rather than the hyphen two of the four call sites used:
-        /// a hyphen is already this module's WITHIN-clause separator
-        /// ("Copy failed - clipboard unavailable", "Refresh failed:
-        /// could not reach the GW2 API"), so reusing it here left a line
-        /// with two identical separators at two different grammatical
-        /// levels. Em-dash is permitted here under the repo's ASCII rule
-        /// (rendered UI text, written as an escape, never a raw glyph).
+        /// The one separator between a status verb and its timestamp:
+        /// "Updated - Sep 6, 2026 4:28 PM". Four sites wrote this by hand
+        /// before it existed, so keep new sites calling
+        /// <see cref="Stamp"/> rather than spelling it out again.
         /// </summary>
-        public const string StampSeparator = " \u2014 ";
+        public const string StampSeparator = " - ";
+
+        /// <summary>
+        /// The separator builds before this one wrote. Only
+        /// <see cref="Normalize"/> reads it, to display a status.txt saved
+        /// by such a build.
+        /// </summary>
+        private const string LegacyStampSeparator = " \u2014 ";
 
         /// <summary>
         /// The shape of every timestamped status line in the module:
@@ -251,11 +264,11 @@ namespace TaimisToolbench.Services
         /// dialog, but still gets its own status text here so the header
         /// label reads correctly once that dialog is closed.
         /// <para>
-        /// The cause clause is introduced by a COLON, not the dash it used
-        /// to use: <see cref="StampSeparator"/> now owns the dash, and a
-        /// line carrying both ("Refresh failed - could not reach the GW2
-        /// API - Aug 15, 2026 3:41 PM") gave two unrelated clauses the same
-        /// separator and no way to tell which was which.
+        /// The cause clause is introduced by a COLON, not a dash:
+        /// <see cref="StampSeparator"/> owns the dash, and a line carrying
+        /// both ("Refresh failed - could not reach the GW2 API - Aug 15,
+        /// 2026 3:41 PM") gave two unrelated clauses the same separator and
+        /// no way to tell which was which.
         /// </para>
         /// </summary>
         public static string ForRefreshFailure(SnapshotFailureKind kind, int failedSourceCount, int totalSourceCount)

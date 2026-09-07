@@ -99,6 +99,20 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void TheCoinDigits_MatchTheGamesWidthAndNeverGoUnderTheFloor()
+        {
+            var digits = TypeRampMetrics.CoinDigitInk;
+
+            // MEASURED beside the game's own coin row in one screenshot, so
+            // no interface scale is assumed: at this face the digits ink
+            // "841" 19 pixels wide against the game's 19, and a step down
+            // inks 17. So the digits sit at Body, and a step down is a
+            // regression rather than a refinement.
+            Assert.Equal(TypeRampMetrics.BodyInk.CapHeight, digits.CapHeight);
+            Assert.True(digits.LineHeight >= TypeRampMetrics.CaptionInk.LineHeight);
+        }
+
+        [Fact]
         public void InkBottom_IsWhereADividerHasToClear()
         {
             var header = TypeRampMetrics.ColumnHeaderInk;

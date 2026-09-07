@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using TaimisToolbench.Models;
 using TaimisToolbench.Services;
 using Xunit;
 
@@ -43,6 +45,219 @@ namespace TaimisToolbench.Tests.Services
             }
 
             return bottom + 2000; // plenty of rows below; never clamps
+        }
+
+        // --- The Total Cost table's own anchors ---
+        //
+        // Section header height is this fixture's own; nothing below turns
+        // on its value. Every other height is the production constant the
+        // renderer builds the table from, so a change to the table's shape
+        // moves these layouts with it.
+        private const int SectionHeaderHeight = 40;
+
+        private static string WalletRowKey(int currencyId)
+        {
+            return SummarySectionLayoutMath.NonCoinRowAnchorKey(new PlanRowViewModel
+            {
+                RowType = PlanRowType.CurrencyCost,
+                NonCoinCostKey = SummarySectionLayoutMath.WalletCurrencyCostKey(currencyId),
+            });
+        }
+
+        /// <summary>
+        /// The Total Cost section followed by the Recipe Tree, with one
+        /// wallet-currency row per id in walletCurrencyIds and the anchors
+        /// the renderer registers for them.
+        /// </summary>
+        private static List<ScrollAnchorCandidate> CostTableLayout(params int[] walletCurrencyIds)
+        {
+            bool hasTable = walletCurrencyIds.Length > 0;
+            var candidates = new List<ScrollAnchorCandidate>
+            {
+                new ScrollAnchorCandidate("section:Summary", 0, SectionHeaderHeight),
+            };
+
+            int y = SectionHeaderHeight + SummarySectionLayoutMath.CostBandHeight(hasTable);
+            if (hasTable)
+            {
+                y += SummarySectionLayoutMath.CurrencyTableTopGap
+                    + PlanContentHeightMath.ColumnHeaderRowHeight;
+                candidates.Add(new ScrollAnchorCandidate(
+                    SummarySectionLayoutMath.NonCoinGroupAnchorKey(isInventoryGroup: false),
+                    y,
+                    SummarySectionLayoutMath.NonCoinGroupHeadingHeight));
+                y += SummarySectionLayoutMath.NonCoinGroupHeadingHeight;
+
+                foreach (int currencyId in walletCurrencyIds)
+                {
+                    candidates.Add(new ScrollAnchorCandidate(
+                        WalletRowKey(currencyId), y, PlanContentHeightMath.CurrencyRowHeight));
+                    y += PlanContentHeightMath.CurrencyRowHeight;
+                }
+            }
+
+            candidates.Add(new ScrollAnchorCandidate("section:RecipeTree", y, SectionHeaderHeight));
+            candidates.Add(new ScrollAnchorCandidate(
+                "node:1", y + SectionHeaderHeight, 30));
+            return candidates;
+        }
+
+        private static string BarterRowKey(int itemId)
+        {
+            return SummarySectionLayoutMath.NonCoinRowAnchorKey(new PlanRowViewModel
+            {
+                RowType = PlanRowType.CurrencyCost,
+                IsBarterItemCost = true,
+                NonCoinCostKey = SummarySectionLayoutMath.BarterItemCostKey(itemId),
+            });
+        }
+
+        private static int TopOf(List<ScrollAnchorCandidate> layout, string key)
+        {
+            int? top = ScrollAnchorMath.FindTop(layout, new ScrollAnchor(key, 0));
+            Assert.True(top.HasValue);
+            return top.Value;
+        }
+
+        [Fact]
+        public void LineInsideTheCostTable_AnchorsToTheRowNotTheSectionHeader()
+        {
+            var layout = CostTableLayout(3);
+            string rowKey = WalletRowKey(3);
+            int rowTop = TopOf(layout, rowKey);
+
+            Assert.True(ScrollAnchorMath.TryCapture(layout, rowTop + 10, out var anchor));
+
+            Assert.Equal(rowKey, anchor.Key);
+            Assert.Equal(rowTop, anchor.CapturedTop);
+        }
+
+        [Fact]
+        public void CostTableGainsARowAbove_TheTreeBelowKeepsItsScreenPosition()
+        {
+            // The reported case: a decision toggle re-solves, the table
+            // gains a currency row, and the tree row the click landed on
+            // slides. The anchor line is the viewport top here, which is
+            // where it sits whenever the cursor is off the panel.
+            var before = CostTableLayout(3);
+            int savedOffset = TopOf(before, WalletRowKey(3)) + 6;
+            int anchorLine = ScrollAnchorMath.AnchorLine(savedOffset, ViewportHeight, null);
+            Assert.True(ScrollAnchorMath.TryCapture(before, anchorLine, out var anchor));
+            Assert.Equal(WalletRowKey(3), anchor.Key);
+            int treeScreenYBefore = TopOf(before, "node:1") - savedOffset;
+
+            var after = CostTableLayout(2, 3);
+            int restored = ScrollAnchorMath.RestoredOffset(
+                savedOffset, anchor, ScrollAnchorMath.FindTop(after, anchor).Value,
+                ContentHeight(after), ViewportHeight);
+
+            Assert.Equal(savedOffset + PlanContentHeightMath.CurrencyRowHeight, restored);
+            Assert.Equal(treeScreenYBefore, TopOf(after, "node:1") - restored);
+        }
+
+        [Fact]
+        public void CostTableAppears_TheGroupHeadingAnchorAbsorbsTheWholeJump()
+        {
+            // Zero non-coin rows to one is the 141px case
+            // (SummarySectionLayoutMathTests pins the number). Nothing in
+            // the table exists to anchor to before it appears, so the line
+            // has to be below the table for the anchor to hold - the tree
+            // section header is what does it, and it still does.
+            var before = CostTableLayout();
+            int savedOffset = TopOf(before, "section:RecipeTree") + 4;
+            Assert.True(ScrollAnchorMath.TryCapture(before, savedOffset, out var anchor));
+            Assert.Equal("section:RecipeTree", anchor.Key);
+
+            var after = CostTableLayout(3);
+            int restored = ScrollAnchorMath.RestoredOffset(
+                savedOffset, anchor, ScrollAnchorMath.FindTop(after, anchor).Value,
+                ContentHeight(after), ViewportHeight);
+
+            Assert.Equal(savedOffset + 141, restored);
+            Assert.Equal(
+                TopOf(before, "node:1") - savedOffset, TopOf(after, "node:1") - restored);
+        }
+
+        [Fact]
+        public void WithoutTheTablesAnchors_TheSameLineHoldsTheSectionHeaderInstead()
+        {
+            // What the table's rows are registered FOR: strip them and the
+            // lowest candidate at or above the line is the Summary header,
+            // which sits above the rows whose count changed, so holding it
+            // still lets the whole tree slide by the table's growth.
+            var before = Coarse(CostTableLayout(3));
+            int savedOffset = TopOf(CostTableLayout(3), WalletRowKey(3)) + 6;
+            Assert.True(ScrollAnchorMath.TryCapture(before, savedOffset, out var anchor));
+            Assert.Equal("section:Summary", anchor.Key);
+
+            var after = Coarse(CostTableLayout(2, 3));
+            int restored = ScrollAnchorMath.RestoredOffset(
+                savedOffset, anchor, ScrollAnchorMath.FindTop(after, anchor).Value,
+                ContentHeight(after), ViewportHeight);
+
+            Assert.Equal(savedOffset, restored);
+            Assert.Equal(
+                PlanContentHeightMath.CurrencyRowHeight,
+                (TopOf(after, "node:1") - restored) - (TopOf(before, "node:1") - savedOffset));
+        }
+
+        private static List<ScrollAnchorCandidate> Coarse(List<ScrollAnchorCandidate> layout)
+        {
+            var kept = new List<ScrollAnchorCandidate>();
+            foreach (var candidate in layout)
+            {
+                if (candidate.Key.StartsWith("section:") || candidate.Key.StartsWith("node:"))
+                {
+                    kept.Add(candidate);
+                }
+            }
+
+            return kept;
+        }
+
+        [Fact]
+        public void EveryKeyInOneLayout_NamesExactlyOneCandidate()
+        {
+            // The cost table's keys go into the same candidate list as the
+            // plan view's section and tree-row keys, and FindTop matches on
+            // the whole key. Two candidates answering to one name would let
+            // a restore hold the wrong control.
+            var layout = CostTableLayout(1, 2, 3);
+            layout.Add(new ScrollAnchorCandidate(BarterRowKey(1), 900, 20));
+            layout.Add(new ScrollAnchorCandidate(BarterRowKey(3), 920, 20));
+            layout.Add(new ScrollAnchorCandidate(
+                SummarySectionLayoutMath.NonCoinGroupAnchorKey(isInventoryGroup: true), 940, 20));
+
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var candidate in layout)
+            {
+                Assert.True(seen.Add(candidate.Key), "two candidates answer to " + candidate.Key);
+                Assert.Equal(candidate.Top, TopOf(layout, candidate.Key));
+            }
+        }
+
+        [Fact]
+        public void TheCostTablesKeys_StayOutOfTheSectionAndTreeRowNamespaces()
+        {
+            // "section:" and "node:" are spelled as literals because the
+            // class that registers them, Views/CraftingPlanView, is
+            // Blish-bound and no test may reference it. The "Total Cost
+            // table registers its scroll anchors" step in
+            // .github/workflows/tests.yml fails if that class stops using
+            // these two prefixes.
+            foreach (string key in new[]
+            {
+                SummarySectionLayoutMath.NonCoinGroupAnchorKey(isInventoryGroup: false),
+                SummarySectionLayoutMath.NonCoinGroupAnchorKey(isInventoryGroup: true),
+                WalletRowKey(0),
+                WalletRowKey(int.MaxValue),
+                BarterRowKey(0),
+                BarterRowKey(int.MaxValue),
+            })
+            {
+                Assert.False(key.StartsWith("section:", StringComparison.Ordinal), key);
+                Assert.False(key.StartsWith("node:", StringComparison.Ordinal), key);
+            }
         }
 
         [Fact]
@@ -168,6 +383,77 @@ namespace TaimisToolbench.Tests.Services
             };
 
             Assert.Null(ScrollAnchorMath.FindTop(after, anchor));
+        }
+
+        [Fact]
+        public void AnchoredRowIsCollapsedAway_RestoreHoldsTheRowItIsDrawnUnder()
+        {
+            // A decision toggle can leave the anchored row inside a
+            // collapsed subtree. The row still exists and is still
+            // registered, but it is drawn as part of the row it hangs
+            // under, so that row reports its position. Holding that row
+            // still is what keeps the view where the user left it; the
+            // alternative is no anchor at all and the raw pre-mutate
+            // offset.
+            var before = Layout(summaryHeight: 200);
+            int savedOffset = 250;
+            int anchorLine = ScrollAnchorMath.AnchorLine(savedOffset, ViewportHeight, 60);
+            Assert.True(ScrollAnchorMath.TryCapture(before, anchorLine, out var anchor));
+            Assert.Equal("node:3", anchor.Key);
+            int screenYBefore = anchor.CapturedTop - savedOffset;
+
+            // The re-solve drops 60px of currency rows above the tree and
+            // collapses node:3 into node:1.
+            var after = new List<ScrollAnchorCandidate>
+            {
+                new ScrollAnchorCandidate("section:Summary", 0, 140),
+                new ScrollAnchorCandidate("section:RecipeTree", 140, 40),
+                new ScrollAnchorCandidate("node:1", 180, 30),
+                new ScrollAnchorCandidate("node:2", 180, 30, hidden: true),
+                new ScrollAnchorCandidate("node:3", 180, 30, hidden: true),
+            };
+
+            int? newTop = ScrollAnchorMath.FindTop(after, anchor);
+            Assert.Equal(180, newTop);
+
+            int restored = ScrollAnchorMath.RestoredOffset(
+                savedOffset, anchor, newTop.Value, ContentHeight(after), ViewportHeight);
+
+            Assert.Equal(130, restored);
+            Assert.Equal(screenYBefore, TopOf(after, "node:1") - restored);
+        }
+
+        [Fact]
+        public void HiddenCandidates_AreNeverChosenAsTheAnchor()
+        {
+            // A collapsed row reports the top of the row it is drawn
+            // under, so it ties with that row and is never taller. The
+            // tie-break prefers the shortest candidate, which would hand
+            // the anchor to something nobody can see.
+            var layout = new List<ScrollAnchorCandidate>
+            {
+                new ScrollAnchorCandidate("section:RecipeTree", 100, 500),
+                new ScrollAnchorCandidate("node:1", 100, 30),
+                new ScrollAnchorCandidate("node:2", 100, 10, hidden: true),
+            };
+
+            Assert.True(ScrollAnchorMath.TryCapture(layout, 110, out var anchor));
+            Assert.Equal("node:1", anchor.Key);
+        }
+
+        [Fact]
+        public void EveryCandidateHidden_CapturesNothing()
+        {
+            // Nothing on the line is drawn, so there is nothing to hold
+            // still and the caller stays on plain offset preservation.
+            var layout = new List<ScrollAnchorCandidate>
+            {
+                new ScrollAnchorCandidate("node:1", 100, 30, hidden: true),
+                new ScrollAnchorCandidate("node:2", 100, 30, hidden: true),
+            };
+
+            Assert.False(ScrollAnchorMath.TryCapture(layout, 110, out var anchor));
+            Assert.False(anchor.IsValid);
         }
 
         [Fact]

@@ -53,5 +53,21 @@ namespace TaimisToolbench.Models
         // Services/SeasonalVendorTipCalculator for the informational Plan
         // Notes tip.
         public string SeasonalFestival { get; set; }
+
+        // The recipe sheet the account must own before this vendor will
+        // trade at all, and the recipe id that sheet unlocks - Lyhr's
+        // exchange opens only once "Recipe: Legendary Obsidian Armor"
+        // (item 101483, unlocking recipe 14083) has been consumed. Both
+        // null for an offer with no such gate; additive, so existing
+        // offers deserialize with both null. Deliberately NOT hashed into
+        // OfferId, exactly like SeasonalFestival above, so back-filling
+        // this onto an already-shipped row never changes its id - see
+        // tools/VendorOfferUpdater/VendorOfferHasher.cs. NEVER read by the
+        // solver: the route stays selectable and priced either way, and
+        // the unlock is only reported as a required recipe by
+        // Services/PlanResultBuilder.
+        public int? UnlockRecipeItemId { get; set; }
+
+        public int? UnlockRecipeId { get; set; }
     }
 }

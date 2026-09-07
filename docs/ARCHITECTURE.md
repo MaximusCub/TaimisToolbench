@@ -823,11 +823,22 @@ plan. A barter line's own scaled quantity rides on
 
 An offer with at least one non-coin line that has **no** valuation
 (including when it is mixed with other, valued lines) is incomparable with
-coin costs and is reported only as a **fallback**, ranked by lowest coin
-part. A fallback coin-part tie is broken by unit count only when both
-offers cost the same single non-coin line, kind included; ties across
-different lines keep the first-listed offer, because ranking across them
-has no exchange rate and their unit counts must never be compared.
+coin costs and is reported only as a **fallback**. Fallback offers are
+ranked on three keys, most significant first: whether the offer carries a
+barter line, then its coin part, then unit count. A fallback coin-part tie
+is broken by unit count only when both offers cost the same single
+non-coin line, kind included; ties across different lines keep the
+first-listed offer, because ranking across them has no exchange rate and
+their unit counts must never be compared.
+
+The barter key comes first because a barter line contributes nothing to
+the coin part, so ranking on coin alone reads an unpriceable cost as a
+cheap one. Three Secrets of the Obscure materials are each sold for a flat
+250 map currency and are each also listed against several account-bound
+zone reward chests. Every chest offer scored a coin part of 0 and beat the
+flat price, and the plan told the player to acquire chests the module can
+neither price, buy nor craft. Both offers stay selectable; only the order
+changed.
 
 That coin part is a **partial** accounting of the offer, and how partial
 depends on which kind of line was left unvalued. An unvalued wallet
@@ -2269,10 +2280,13 @@ plus divider) and 52px (Crafting Steps): the simulation, re-derived from the
 decompiled `ScaleBy` floor/ceil semantics and validated by reproducing the
 numbers above, shows BOTH new heights are in the vulnerable class at clearance
 0 (45px: 18.0% of phases at 0.81, 7.0% at 0.897; 52px: 10.3% at 0.897) and
-immune at clearance 1 at all four scales. The flush fit survives because the
-tier-2 heights absorb the clearance pixel in their own derivation:
-`42 + 2 + 1 = 45` puts the divider at 42..44, exactly under the 0..42 icon
-frame. The proof is executable - `RowDividerScissorSimulationTests` sweeps
+immune at clearance 1 at all four scales. One padded height later replaced
+those two. Every icon-led plan row is now
+`PlanContentHeightMath.IconLedRowHeight`, which is 50. The icon frame sits at
+y=2, so `2 + 42 + 3 + 2 + 1 = 50` puts the divider at 47..48. A reader sees 3px
+of clear space over the frame and 3px under it. The row still absorbs the
+clearance pixel in its own derivation, so the sweep covers 50 at clearance 1.
+The proof is executable - `RowDividerScissorSimulationTests` sweeps
 every shipped (`rowHeight`, `clearance`) pair at all four scales and fails on
 any vanish - so a future height change re-runs it by construction.
 
@@ -2354,6 +2368,21 @@ loss a particular edge's phase actually suffers is also why a pinned band's
 seam FLICKERED rather than sitting still; `StickyHeaderHost` now paints
 that strip in the band's own fill while the band is whole, so the band
 reads as one piece at every scale.
+
+The sticky clip needs a line of its own. `StickyHeaderHost`'s clip is a
+SIBLING of the viewport, not a child of it, so the viewport's line is not
+in force while the clip paints and nothing was re-asserting anything for
+the band inside it. While a band is whole its top edge and the clip's are
+the same, so nothing shows; while the end of a table is pushing the band
+out, the band sits above its clip and the two containers between the
+clip's edge and a header label's ink let that ink paint 3 logical pixels
+above the clip at UI Size Small. That is what an in-game screenshot
+showed on 2026-09-06: the Total Cost table's column words drawn over the
+plan tab's separator rule and the "Plan updated" line above it. The clip
+is now `WheelTransparentClipAuthorityPanel`, which publishes
+`CutoffTopFor` its own top edge for its own subtree exactly as the
+viewport does for its. `ClipCutoffMathTests` proves the bound for the
+two-container chain that ships.
 
 Where nothing paints the strip and nothing can - the Snapshot tab's
 viewport top, which has no rule under it - the reserve is still spent, and
@@ -2534,6 +2563,34 @@ collected with it.
 inherits from the tier-1 tooltip work. `ApplyRich` exists for anything a string
 tooltip could only spell out as "1g 23s 45c", and for every item hover.
 
+### V.32a The two-box rule
+
+An item tooltip is not a place to put plan details. The first box carries what
+closely mirrors the game's own content for that item or currency, and nothing
+else. Anything this module adds - a unit price, a wallet holding, an
+acquisition hint, a caption, the wiki right-click affordance - goes in a second
+box drawn during the same hover, directly under the first.
+
+The game does this itself: hovering an item that fits several slots draws a
+"Currently Equipped" comparison box under or beside the item's own. Both boxes
+here share one background, border, padding and font, because they are drawn by
+one surface.
+
+Box two never measures itself. It is laid out at the width box one arrived at,
+so the pair reads as one column whatever the module has to say. `TooltipContent`
+carries the second box as `Extra`; `ItemRowTooltipComposer.BuildRowContent` is
+the one place that attaches it, so no surface can put its own lines inside the
+item's box by accident. `TooltipLayoutMath.Stack` holds the geometry - both
+frames' chrome and the measured gap between them - and is tested without a live
+control.
+
+Content that has nothing in box one keeps its lines in box one: a second box
+under an empty one is a blank frame. A tooltip the module wrote in full - a
+decision pill, a value breakdown - is one box, because none of it is the game's.
+
+Every line in box two reads as a sentence. No shouting, and no dashes doing a
+comma's job.
+
 ### V.33 `TreeSectionController`: heights, in-place refresh, and the pill column
 
 `RefreshTreeContainerHeights` replaced `InvalidateUpToContentPanel`, which only
@@ -2572,6 +2629,17 @@ beside. Placed anywhere among those markers, the button moved out from under
 the cursor that had just clicked it, and the next click reached the row and
 expanded the node instead. A column derived from the panel edge cannot move
 for that reason, or for a re-solve that changes either data column's width.
+
+The column also took 25px off the tree's header band, until 2026-09-06.
+`ColumnHeaderRowRenderer` sized the band from the right column's edge plus
+`TableRightMargin`, which was the panel edge for as long as Cost was the
+last column. The action column moved that edge left and the band stopped
+with it, so the tree's band ran short of the panel by exactly the column
+and its gap, and the game world showed through above the ignore buttons.
+The band is the table's own background and every plan table justifies to
+the width it is given, so it is now the panel width for every caller. No
+other table was affected: the tree is the only one that passed a derived
+right edge.
 
 The new column costs `TreeActionColumnWidth` 21 + `TreeActionColumnGap` 4 of
 every row, and it is paid for by `PlanRelayoutMath.TreePillColumnWidth`
@@ -3088,6 +3156,38 @@ bracket content is passed through rather than stripped: a blanket
 tag-stripper would silently delete real item text the day the API uses a
 bracket for something that is not markup.
 
+**Equipment slots.** `Services/ItemSlotFacts.cs` answers two questions the
+API answers only half of. Infusion and enrichment slots are read straight
+out of `details.infusion_slots`; the flag vocabulary there is exactly
+`Infusion` and `Enrichment`, one flag per slot at most, which is both what
+the schema says (`https://wiki.guildwars2.com/wiki/API:2/items`, "The array
+contains a maximum of one value") and what a census of all 74,072 items
+found on 2026-09-05: 6,507 `Infusion`, 94 `Enrichment`, nothing else, no
+empty flag array and no slot with two. The four infusion glyphs `/v2/files`
+publishes are pre-2016 artwork: the 2016-07-26 release merged the offensive,
+defensive and agony subtypes into one infusion and renamed utility infusions
+to enrichments, so no live flag distinguishes them. Two of the four are
+byte-identical.
+
+Upgrade slots have no API field. The count comes from the item's type - two
+sigils on a two-handed weapon, one on a one-handed one, one rune per armour
+piece, one jewel per trinket or back item - and from the `NotUpgradeable`
+flag, which is what removes the slot from an ascended trinket or back item
+(their jewel's stats are baked in) and from the Bloodbound and Dreambound
+weapon families at ordinary rarities. Every one of the 705 ascended and
+legendary trinkets and back items in that corpus carries the flag, so keying
+on rarity instead would be strictly worse. `details.secondary_suffix_item_id`
+is non-empty only on the nine two-handed types and would corroborate the
+rule, but it is empty on almost every two-handed weapon in the game, so it
+cannot derive it.
+
+Both counts net off what the definition already ships socketed, because the
+game prints a filled slot's contents rather than an unused-slot line. WHICH
+sigil or infusion that is needs a second `/v2/items` request and is not
+fetched; a filled slot simply produces no line. "Unused Upgrade Slot" and
+"Unused Infusion Slot" are verbatim from live captures; the enrichment
+line's wording follows the same pattern.
+
 `Models/ItemStatBlock` stays off `ItemMetadata` because `PersistedPlan.Result`
 is a `CraftingPlanResult` holding the `ItemMetadata` dictionary, and
 `PersistedPlanSchemaMemberSetTests` guards that whole reachable graph against
@@ -3158,6 +3258,22 @@ true while a raw coin component stays folded into `SubtreeCost`.
 pills means a real choice, exactly one means the source is locked. The
 `default` arm of its source switch is a non-crashing safety net for a future
 regression, not a real code path.
+
+A row the plan buys for one wallet currency and nothing else is a
+*currency trade-up* row (`Services/CurrencyTradeUpRow.cs`). Three Secrets
+of the Obscure materials are the live case: 250 map currency each, from
+several merchants, at one fixed price. The module deliberately plans no
+route to the currency itself - it is earned several ways, capped
+differently per way, and there is no cheapest answer to optimize - so the
+row states what the held currency buys now and leaves the earning to the
+player. Two things follow from that. The row gains a
+`BUYS {n}/{needed} NEEDED` annotation pill whose tooltip names the
+remainder, and its right-click opens the item's wiki Acquisition section
+(`WikiLinkBuilder.BuildItemAcquisitionUrl`) rather than the page top,
+because that section is where the player's options are listed. Both
+decisions are made in Blish-free classes -
+`DecisionPillPlanner.AppendCurrencyTradeUpPill` and
+`TreeRowTooltipComposer.BuildWikiUrl` - so the view only wires them up.
 
 `Services/PlanRelayoutMath.cs` fits those pills into the row.
 `ComputeVisiblePillCount` is the primitive: at least one pill is always
@@ -3505,22 +3621,23 @@ deliberate change to one silently move the others.
 
 ### S2.4 Tooltip text: wrap seams and scope vocabulary
 
-**`ShoppingRowTooltipFormatter.BuildCurrencyLines` - why "THIS ROW" and
-"wallet" are load-bearing.** Both numbers on a shopping-row currency line
-are that *row's* own total (`cc.Amount`, one `PlanStep`'s
-`VendorCurrencyCosts`), never the whole plan's requirement for that
-currency id. Without a scope marker, two shopping rows drawing on the same
-wallet currency - Karma split across two vendor rows, say - can each
-independently read as "fully covered" and double-count the one wallet
-balance. That is the same misreading class `DecisionPillPlanner`'s
-plan-scope `HAVE {have}/{planTotal} TOTAL` pill
-(`AppendCurrencyOwnershipPill`) exists to avoid, via its own explicit
-"TOTAL" suffix; "THIS ROW" is the row-scope mirror of that convention, and
-the vocabulary must never look plan-scope when it is not. The "(wallet N)"
-aside is worded the same way for the same reason: "wallet" is the one term
-this codebase uses for a raw account-wide holding figure, matching the
-Summary column-header table's "Have" column and the tree's
-`HAVE x/y TOTAL` pill.
+**`ShoppingRowTooltipFormatter.BuildCurrencyLines` - why every line names
+its scope.** The cost on a shopping-row currency line is that *row's* own
+total (`cc.Amount`, one `PlanStep`'s `VendorCurrencyCosts`), never the
+whole plan's requirement for that currency id, and the holding beside it
+is the whole account's wallet balance. Without both scopes stated, two
+shopping rows drawing on the same wallet currency - Karma split across two
+vendor rows, say - can each independently read as "fully covered" and
+double-count the one balance. That is the same misreading class
+`DecisionPillPlanner`'s plan-scope `HAVE {have}/{planTotal} TOTAL` pill
+(`AppendCurrencyOwnershipPill`) exists to avoid.
+
+The lines used to carry that scope as the shouted markers "THIS ROW" and
+"(wallet N)". They now say it in a sentence - "this row costs 3660. You
+have 2812 in your wallet and need 848 more." - because these lines live in
+the module's own second tooltip box, where the standing rule is that text
+reads as prose. The scope claim is what must survive a rewording; the
+markers themselves are not sacred.
 
 **`TooltipLayoutMath.ItemTooltipMaxContentWidth` - the corpus.** The cap is
 derived from the game's own break decisions rather than from a game-pixel

@@ -123,8 +123,8 @@ namespace TaimisToolbench.Services
                 InfixAttributes = new List<RawItemAttribute>(),
             };
 
-            var slots = details["infusion_slots"] as JArray;
-            detail.InfusionSlotCount = slots == null ? 0 : slots.Count;
+            detail.InfusionSlots = ReadInfusionSlots(details["infusion_slots"] as JArray);
+            detail.SocketedUpgradeCount = CountSocketedUpgrades(details);
 
             var infix = details["infix_upgrade"] as JObject;
             if (infix != null)
@@ -154,6 +154,66 @@ namespace TaimisToolbench.Services
             }
 
             return detail;
+        }
+
+        // A malformed element is dropped rather than counted: a slot the
+        // parser cannot read is not evidence that a slot exists.
+        private static List<RawInfusionSlot> ReadInfusionSlots(JArray array)
+        {
+            var slots = new List<RawInfusionSlot>();
+            if (array == null)
+            {
+                return slots;
+            }
+
+            foreach (var token in array)
+            {
+                var obj = token as JObject;
+                if (obj == null)
+                {
+                    continue;
+                }
+
+                slots.Add(new RawInfusionSlot
+                {
+                    Flags = ReadStringArray(obj["flags"] as JArray),
+                    IsFilled = obj["item_id"] != null && obj["item_id"].Type != JTokenType.Null,
+                });
+            }
+
+            return slots;
+        }
+
+        // suffix_item_id is a number and secondary_suffix_item_id a string
+        // that is "" when absent (measured on 30699 Bolt and 30703 Sunrise),
+        // so both are read as text and an id of 0 counts as no upgrade.
+        private static int CountSocketedUpgrades(JObject details)
+        {
+            int count = 0;
+            if (HasUpgradeId(details, "suffix_item_id"))
+            {
+                count++;
+            }
+
+            if (HasUpgradeId(details, "secondary_suffix_item_id"))
+            {
+                count++;
+            }
+
+            return count;
+        }
+
+        private static bool HasUpgradeId(JObject details, string field)
+        {
+            var value = details[field];
+            if (value == null ||
+                (value.Type != JTokenType.Integer && value.Type != JTokenType.String))
+            {
+                return false;
+            }
+
+            var text = value.Value<string>();
+            return !string.IsNullOrEmpty(text) && text != "0";
         }
 
         // Malformed elements are dropped rather than injected as nulls -

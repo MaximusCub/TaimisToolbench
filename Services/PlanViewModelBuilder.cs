@@ -27,6 +27,7 @@ namespace TaimisToolbench.Services
                 // branching is needed.
                 CurrencyPlanTotals = BuildCurrencyPlanTotals(result.Plan.CurrencyCosts),
                 OwnedCurrencyAmounts = result.OwnedCurrencyAmounts,
+                OwnedStockDrawnItemIds = BuildOwnedStockDrawnItemIds(result.UsedMaterials),
                 VendorCapsByItemId = BuildVendorCapsByItemId(result.Plan.TimegatedItems),
             };
 
@@ -632,6 +633,7 @@ namespace TaimisToolbench.Services
                     Label = currencyName,
                     Quantity = required,
                     IconUrl = iconUrl,
+                    NonCoinCostKey = SummarySectionLayoutMath.WalletCurrencyCostKey(cc.CurrencyId),
                     CurrencyDescription = CurrencyDisplayResolver.ResolveDescription(
                         cc.CurrencyId, result.CurrencyMetadata),
                 };
@@ -664,6 +666,7 @@ namespace TaimisToolbench.Services
                     RowType = PlanRowType.CurrencyCost,
                     IsBarterItemCost = true,
                     ItemId = bc.ItemId,
+                    NonCoinCostKey = SummarySectionLayoutMath.BarterItemCostKey(bc.ItemId),
                     Label = ResolveName(bc.ItemId, result.ItemMetadata),
                     Quantity = ClampToInt(bc.Amount),
                     IconUrl = ResolveIconUrl(bc.ItemId, result.ItemMetadata),
@@ -771,6 +774,33 @@ namespace TaimisToolbench.Services
             }
 
             return totals;
+        }
+
+        /// <summary>
+        /// Projects the item ids out of the reducer's used-materials list.
+        /// The list is already aggregated per item id over the whole tree,
+        /// so this is the plan-scope answer to "was any owned stock of
+        /// this item drawn", which the Recipe Tree's HAVE badge needs per
+        /// node in O(1). Null when nothing was drawn, matching how the
+        /// other plan-scope pill lookups here report "nothing to show".
+        /// </summary>
+        private static ISet<int> BuildOwnedStockDrawnItemIds(List<UsedMaterial> usedMaterials)
+        {
+            if (usedMaterials == null || usedMaterials.Count == 0)
+            {
+                return null;
+            }
+
+            var itemIds = new HashSet<int>();
+            foreach (var used in usedMaterials)
+            {
+                if (used != null && used.QuantityUsed > 0)
+                {
+                    itemIds.Add(used.ItemId);
+                }
+            }
+
+            return itemIds.Count > 0 ? itemIds : null;
         }
 
         /// <summary>
@@ -997,6 +1027,12 @@ namespace TaimisToolbench.Services
                 section.Rows.Add(new PlanRowViewModel
                 {
                     RowType = PlanRowType.CraftStep,
+                    // Carried so the row's hover can look the item's stats
+                    // up. Without it the id reads 0, the renderer skips the
+                    // lookup, and every Crafting Steps tooltip shows a name
+                    // and nothing else while every other section shows the
+                    // whole item.
+                    ItemId = step.ItemId,
                     Label = name,
                     Sublabel = sublabel,
                     IconUrl = iconUrl,

@@ -260,7 +260,7 @@ namespace TaimisToolbench.Tests.Services
 
             int lastColumnRightEdge =
                 ((columnCount - 1) * columnWidth)
-                + SnapshotItemGridLayout.CellAmountRightEdge(columnWidth);
+                + SnapshotItemGridLayout.CellContentRightEdge(columnWidth);
 
             Assert.Equal(
                 PlanRelayoutMath.PinnedRightEdge(gridWidth),

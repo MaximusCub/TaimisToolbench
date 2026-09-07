@@ -39,7 +39,6 @@ Module.cs                                                                       
 Services/CraftCompetencyEvaluator.cs                                                         1     0
 Services/DecisionPillPlanner.cs                                                              1     0
 Services/ItemMetadataService.cs                                                              1     0
-Services/ItemStatTooltipComposer.cs                                                          1     0
 Services/ModuleLog.cs                                                                        1     0
 Services/ModuleSettings.cs                                                                   2     0
 Services/PlanContentHeightMath.cs                                                            2     0
@@ -63,7 +62,7 @@ Views/MainView.cs                                                               
 Views/ModalDialog.cs                                                                         2     0
 Views/Rendering/CoinCurrencyRenderer.cs                                                      1     0
 Views/Rendering/ColumnHeaderRowRenderer.cs                                                   1     0
-Views/Rendering/CraftStepsSectionRenderer.cs                                                 2     0
+Views/Rendering/CraftStepsSectionRenderer.cs                                                 1     0
 Views/Rendering/DisciplinesSectionRenderer.cs                                                1     0
 Views/Rendering/IconNameRowHelpers.cs                                                        1     0
 Views/Rendering/NotesSectionRenderer.cs                                                      1     0

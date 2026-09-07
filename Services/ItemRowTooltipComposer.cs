@@ -6,9 +6,9 @@ namespace TaimisToolbench.Services
     /// <summary>
     /// The ONE shape an item row's tooltip has, wherever the row lives -
     /// recipe tree, Used Materials, Shopping List, Snapshot results: the
-    /// item's stat block first, then a blank, then whatever that particular
-    /// surface has to add (a unit price, a HAVE/NEED split, an acquisition
-    /// hint).
+    /// item's own stat block in the first box, and whatever that particular
+    /// surface has to add (a unit price, a wallet holding, an acquisition
+    /// hint) in a second box under it.
     ///
     /// <para>
     /// The tooltip ALWAYS opens on the icon+name header the game's own item
@@ -50,20 +50,20 @@ namespace TaimisToolbench.Services
                     TooltipHeaderSubject.ItemOfRarity(identity.Rarity));
             }
 
-            if (extraContent != null && !extraContent.IsEmpty)
+            var content = builder.Build();
+            if (extraContent == null || extraContent.IsEmpty)
             {
-                // Separator, not a bare blank: it is a no-op on a builder
-                // that is still empty, so a row with plan lines and no
-                // stats never opens on a blank row.
-                builder.Separator().Append(extraContent);
+                return content;
             }
 
-            return builder.Build();
+            // A row with extras and nothing else to say puts them in the
+            // FIRST box: a second box under an empty one is a blank frame.
+            return content.IsEmpty ? extraContent : content.WithExtra(extraContent);
         }
 
         /// <summary>A stat block plus prose-only extras, for the surfaces
-        /// whose additions are plain sentences (a hint, a HAVE/NEED
-        /// split).</summary>
+        /// whose additions are plain sentences (a hint, a wallet
+        /// holding).</summary>
         public static TooltipContent BuildRowContent(
             ItemStatBlock stats,
             ItemTooltipIdentity identity,

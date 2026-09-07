@@ -29,7 +29,9 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal("Gloves", detail.SubType);
             Assert.Equal("Heavy", detail.WeightClass);
             Assert.Equal(191, detail.Defense);
-            Assert.Equal(1, detail.InfusionSlotCount);
+            Assert.Equal(new[] { "Infusion" }, detail.InfusionSlots.Single().Flags);
+            Assert.False(detail.InfusionSlots.Single().IsFilled);
+            Assert.Equal(0, detail.SocketedUpgradeCount);
             Assert.Equal(134.442d, detail.AttributeAdjustment, 3);
             Assert.Equal(161, detail.InfixStatId);
             Assert.Equal(
@@ -128,7 +130,8 @@ namespace TaimisToolbench.Tests.Services
 
             Assert.Contains("NoSell", items[30699].Flags);
             Assert.StartsWith("<c=@flavor>", items[30703].Description);
-            Assert.Equal(2, items[30703].Detail.InfusionSlotCount);
+            Assert.Equal(2, items[30703].Detail.InfusionSlots.Count);
+            Assert.Equal(1, items[30703].Detail.SocketedUpgradeCount);
         }
 
         [Fact]
@@ -140,8 +143,23 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal("Rime-Rimmed Mariner's Rebreather", item.Name);
             Assert.Equal("Exotic", item.Rarity);
             Assert.Contains("SoulBindOnUse", item.Flags);
-            Assert.Equal(0, item.Detail.InfusionSlotCount);
+            Assert.Empty(item.Detail.InfusionSlots);
             Assert.Equal(73, item.Detail.Defense);
+        }
+
+        [Fact]
+        public async Task AnAlreadyFilledInfusionSlotIsMarkedFilledAndAnEnrichmentKeepsItsFlag()
+        {
+            var items = await RealItemFixtures.ParseAsync(
+                RealItemJson.KossOnKossInfused, RealItemJson.VialOfSalt);
+
+            var back = items[37010].Detail.InfusionSlots;
+            Assert.Equal(2, back.Count);
+            Assert.False(back[0].IsFilled);
+            Assert.True(back[1].IsFilled);
+
+            Assert.Equal(
+                new[] { "Enrichment" }, items[77482].Detail.InfusionSlots.Single().Flags);
         }
     }
 }

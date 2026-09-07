@@ -20,7 +20,8 @@
     "characters":  { "optional": false, "details": "Required to list characters and read their inventories" },
     "inventories": { "optional": false, "details": "Required for bank, shared inventory, materials, and character bags" },
     "wallet":      { "optional": false, "details": "Required for wallet currency data" },
-    "unlocks":     { "optional": true,  "details": "Used to check which recipes your account has learned" }
+    "unlocks":     { "optional": true,  "details": "Used to check which recipes your account has learned and to read your Legendary Armory" },
+    "builds":      { "optional": true,  "details": "Used to count the gear your characters are wearing as items you already own" }
   },
   "directories": ["data"]
 }

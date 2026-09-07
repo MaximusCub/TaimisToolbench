@@ -16,9 +16,25 @@ namespace TaimisToolbench.Models
     {
         public int ItemId { get; set; }
 
+        /// <summary>
+        /// What the row calls the item, and the picture it draws. Both are
+        /// the skin's when every copy wears the same skin, because that is
+        /// what the game shows; see Services.TransmutedNameIndex.
+        /// </summary>
         public string Name { get; set; } = "";
 
+        /// <summary>See <see cref="Name"/>. Never the skin's name over the
+        /// item's own icon: <see cref="Skin"/> settles both at once.</summary>
         public string IconUrl { get; set; } = "";
+
+        /// <summary>
+        /// The skin behind <see cref="Name"/> and <see cref="IconUrl"/>, or
+        /// <see cref="TransmutedSkin.None"/> when the row shows the item's
+        /// own. The tooltip needs them apart: it draws the skin as the
+        /// heading and prints the item's own name under a "Transmuted"
+        /// line, the way the game does.
+        /// </summary>
+        public TransmutedSkin Skin { get; set; } = TransmutedSkin.None;
 
         /// <summary>
         /// The rarity captured with this item's name and icon, or "" for a
@@ -30,21 +46,13 @@ namespace TaimisToolbench.Models
 
         public int TotalCount { get; set; }
 
-        public List<SnapshotSourceCount> Breakdown { get; set; } = new List<SnapshotSourceCount>();
-    }
-
-    /// <summary>
-    /// One source's contribution to a <see cref="SnapshotSearchRow"/>'s
-    /// total - Label is already the display-formatted source name (e.g.
-    /// "Material Storage", "Character: Zaeed"), never the raw
-    /// AccountItemIndex source key (repo invariant: source strings are
-    /// already display names, but the raw "Character:" prefix is an
-    /// internal encoding token that must never reach the UI verbatim).
-    /// </summary>
-    internal class SnapshotSourceCount
-    {
-        public string Label { get; set; } = "";
-
-        public int Count { get; set; }
+        /// <summary>
+        /// Every place holding some of <see cref="TotalCount"/>, in the
+        /// order AccountItemIndex.GetPrioritizedSources produced. Not
+        /// display text: Services.SnapshotHoldLine turns the whole list into
+        /// one line, because whether a place prints its count depends on the
+        /// other places in the same list.
+        /// </summary>
+        public List<SnapshotHoldLocation> Breakdown { get; set; } = new List<SnapshotHoldLocation>();
     }
 }

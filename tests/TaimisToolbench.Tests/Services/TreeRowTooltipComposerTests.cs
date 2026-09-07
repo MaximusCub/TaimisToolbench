@@ -131,7 +131,7 @@ namespace TaimisToolbench.Tests.Services
 
             var lines = TreeRowTooltipComposer.BuildExtraTooltipContent(node, null, null).ToPlainLines();
 
-            Assert.Contains("Other trading post price side shown", lines);
+            Assert.Contains("The other trading post price side is shown.", lines);
         }
 
         [Fact]
@@ -142,7 +142,7 @@ namespace TaimisToolbench.Tests.Services
 
             var lines = TreeRowTooltipComposer.BuildExtraTooltipContent(node, null, plan).ToPlainLines();
 
-            Assert.Contains("Buy-order price unavailable - instant-buy price shown", lines);
+            Assert.Contains("The buy-order price is unavailable, so the instant-buy price is shown.", lines);
         }
 
         [Fact]
@@ -153,7 +153,7 @@ namespace TaimisToolbench.Tests.Services
 
             var lines = TreeRowTooltipComposer.BuildExtraTooltipContent(node, null, plan).ToPlainLines();
 
-            Assert.Contains("Instant-buy price unavailable - buy-order price shown", lines);
+            Assert.Contains("The instant-buy price is unavailable, so the buy-order price is shown.", lines);
         }
 
         [Fact]
@@ -168,7 +168,7 @@ namespace TaimisToolbench.Tests.Services
 
             var lines = TreeRowTooltipComposer.BuildExtraTooltipContent(node, null, null).ToPlainLines();
 
-            Assert.Contains("Other trading post price side shown", lines);
+            Assert.Contains("The other trading post price side is shown.", lines);
             Assert.DoesNotContain(lines, l => l.StartsWith("A vendor cost item's"));
         }
 
@@ -179,7 +179,7 @@ namespace TaimisToolbench.Tests.Services
 
             var lines = TreeRowTooltipComposer.BuildExtraTooltipContent(node, null, null).ToPlainLines();
 
-            Assert.Contains("A vendor cost item's other trading post price side shown", lines);
+            Assert.Contains("A vendor cost item shows its other trading post price side.", lines);
         }
 
         [Fact]
@@ -198,7 +198,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.Contains(
                 lines,
                 l => l.StartsWith(
-                    "A vendor cost item's buy-order price is unavailable - its instant-buy price is used"));
+                    "A vendor cost item's buy-order price is unavailable, so its instant-buy price is used."));
         }
 
         [Fact]
@@ -216,7 +216,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.Contains(
                 lines,
                 l => l.StartsWith(
-                    "A vendor cost item's instant-buy price is unavailable - its buy-order price is used"));
+                    "A vendor cost item's instant-buy price is unavailable, so its buy-order price is used."));
         }
 
         [Fact]
@@ -275,7 +275,7 @@ namespace TaimisToolbench.Tests.Services
             // way the icons beside it do (leading all-zero units omitted,
             // trailing units zero-padded).
             Assert.Equal(
-                new[] { "Unit price: 5s 0c", "Unit price: 5 Karma", "Right-click: Open wiki page" },
+                new[] { "Unit price: 5s 0c", "Unit price: 5 Karma", "Right-click to open the wiki page." },
                 lines);
         }
 
@@ -375,7 +375,7 @@ namespace TaimisToolbench.Tests.Services
 
             var lines = TreeRowTooltipComposer.BuildExtraTooltipContent(node, null, null).ToPlainLines();
 
-            Assert.Contains("Right-click: Open wiki page", lines);
+            Assert.Contains("Right-click to open the wiki page.", lines);
         }
 
         [Theory]
@@ -389,7 +389,7 @@ namespace TaimisToolbench.Tests.Services
 
             var lines = TreeRowTooltipComposer.BuildExtraTooltipContent(node, null, null).ToPlainLines();
 
-            Assert.DoesNotContain("Right-click: Open wiki page", lines);
+            Assert.DoesNotContain("Right-click to open the wiki page.", lines);
         }
 
         [Fact]
@@ -411,8 +411,8 @@ namespace TaimisToolbench.Tests.Services
                 {
                     "Caption line",
                     "Unit price: 1s 0c",
-                    "Other trading post price side shown",
-                    "Right-click: Open wiki page",
+                    "The other trading post price side is shown.",
+                    "Right-click to open the wiki page.",
                 },
                 lines);
         }

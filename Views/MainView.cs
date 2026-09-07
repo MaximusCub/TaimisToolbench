@@ -52,6 +52,35 @@ namespace TaimisToolbench.Views
         // every call. See SnapshotSearchResultBuilder.BuildRepresentativeIndex.
         private Dictionary<int, SnapshotItemEntry> _itemsById;
 
+        // itemId -> what every stack of it agrees is socketed into it,
+        // built beside _itemsById once per snapshot. Absent for an id whose
+        // stacks disagree - see SocketedUpgradeIndex.
+        private IReadOnlyDictionary<int, SocketedUpgradeIds> _socketsByItemId;
+
+        // How many pieces of a rune the wearer of a uniquely equipped item
+        // has on, built beside _itemsById once per snapshot. Answers 0 for
+        // every id that is not uniquely equipped - see EquippedRuneSetIndex.
+        private EquippedRuneSetIndex _equippedRuneSets = EquippedRuneSetIndex.Empty;
+
+        // itemId -> its copies and the skins they wear, built beside
+        // _itemsById once per snapshot. Absent for an id no copy of which
+        // is transmuted. Which skin a row then shows depends on the source
+        // filter, so it is settled per row - see TransmutedNameIndex.
+        private IReadOnlyDictionary<int, IReadOnlyList<TransmutedItemCopy>> _transmutedCopiesByItemId;
+
+        // itemId -> the characters wearing that Legendary Armory item,
+        // built beside _itemsById once per snapshot. Names only: the armory
+        // copy is account-wide and already counted once, so nothing here
+        // may reach a total (Models.SnapshotArmoryEquip).
+        private IReadOnlyDictionary<int, List<string>> _armoryEquippedByItemId;
+
+        // Tops up the stat blocks the socket blocks are drawn FROM. Scoped
+        // to the socketed ids and their hosts rather than to the whole
+        // snapshot: an account's item list runs into the thousands, while
+        // the objects that carry a rune, sigil or infusion outside its
+        // equipped gear number in the tens.
+        private readonly ItemStatWarmer _statWarmer;
+
         private string _initialStatus;
         private readonly Func<Task<AccountSnapshot>> _refreshAsync;
         private readonly ApiAccessDialog _apiAccessDialog;
@@ -69,6 +98,7 @@ namespace TaimisToolbench.Views
         private bool _bankEnabled = true;
         private bool _materialStorageEnabled = true;
         private bool _sharedInventoryEnabled = true;
+        private bool _legendaryArmoryEnabled = true;
 
         // Exclusion set, keyed by character name: absent means checked, so
         // a character new in a fresh snapshot defaults to visible. Stale
@@ -142,6 +172,11 @@ namespace TaimisToolbench.Views
         private const int StatusSpinnerReserve =
             InlineSpinnerLayout.SnapshotStatusSize + InlineSpinnerLayout.LabelGap;
 
+        /// <summary>What the status line reads while a refresh is in
+        /// flight, clicked or automatic. Paired with the spinner beside
+        /// it, so the two are written together.</summary>
+        private const string RefreshingStatusText = "Updating...";
+
         // The status label gets its own full-width row rather than sharing
         // the button band - a long status string slid under the button row
         // at the window's clamped minimum size.
@@ -161,9 +196,10 @@ namespace TaimisToolbench.Views
         private const int SearchToFilterGapY = 3;
         // Caption-driven, not icon-driven: the block holds the caption
         // label's own line box beside an inline coin run drawn at y=2. The
-        // run is the wallet BAR tier, seated on the digits' ink two pixels
-        // into its line box (2 + 2 + 16 = 20), so the icons clear this
-        // height with room to spare; it is the caption that sets it.
+        // run is the wallet BAR tier, seated four pixels into its line box
+        // by CoinSegmentMath.CoinIconY, so the icon box ends at 2 + 4 + 18,
+        // exactly this height. The caption still sets the number, but a
+        // taller bar tier now clips rather than fitting: raise this with it.
         private const int CoinHeight = 24;
         private const int SectionGapY = 4;
 
@@ -275,6 +311,7 @@ namespace TaimisToolbench.Views
 
         private const string CoinCaption = "Coin";
         private const int CoinCaptionGap = 8;
+        private const int CoinCaptionY = 2;
         private static readonly Color CoinCaptionColor = new Color(130, 130, 130);
 
         // Same rule under every section heading in the module - see
@@ -326,6 +363,26 @@ namespace TaimisToolbench.Views
         // Null for a run with no rows: the section is absent, not empty.
         private SectionChrome _itemChrome;
         private SectionChrome _walletChrome;
+
+        // Where each run's cells were last placed, so the icon window knows
+        // a section's origin, its column count and how far down the reader
+        // has scrolled into it. Written by LayoutResultGrid, which is the
+        // only thing that moves a cell.
+        private SnapshotItemGridLayout.Grid _itemGrid;
+        private SnapshotItemGridLayout.Grid _walletGrid;
+
+        // The viewport the icon window was last computed for. The ticker
+        // re-reads the viewport every frame and does nothing at all unless
+        // one of these two changed, so scrolling is what costs, not idling.
+        private int _iconWindowTop = int.MinValue;
+        private int _iconWindowHeight = -1;
+
+        // How far the background prime has walked each run, in placement
+        // order, so the pictures below the fold are already there when the
+        // reader scrolls to them. Reset whenever the cells move, because a
+        // cursor into the previous list means nothing in the new one.
+        private int _itemPrimeCursor;
+        private int _walletPrimeCursor;
 
         // Session-sticky like the search text. One state per run: sorting
         // the items must not disturb the currencies beneath them.
@@ -407,8 +464,14 @@ namespace TaimisToolbench.Views
             // a pure cache read on the same terms as the item lookup
             // above: before /v2/currencies has landed the hover shows the
             // name and balance the row already holds, without its prose.
-            Func<int, CurrencyMetadata> getCurrencyMetadata = null)
+            Func<int, CurrencyMetadata> getCurrencyMetadata = null,
+            // Background stat top-up for every item this tab can draw and
+            // for the components socketed into them, which no other tab
+            // has any reason to fetch. Optional: without it the rows keep
+            // the identity-only tooltips they had.
+            Func<IReadOnlyList<int>, Task<int>> warmItemStatsAsync = null)
         {
+            _statWarmer = new ItemStatWarmer(warmItemStatsAsync, "snapshot");
             _snapshot = snapshot;
             // The constructor sets _snapshot directly, bypassing
             // SetSnapshot - the index needs its own build call here too,
@@ -417,7 +480,10 @@ namespace TaimisToolbench.Views
             // a null items list, and so does BuildRepresentativeIndex.
             _accountItemIndex = new AccountItemIndex(_snapshot?.Items);
             _itemsById = SnapshotSearchResultBuilder.BuildRepresentativeIndex(_snapshot?.Items);
+            _transmutedCopiesByItemId = TransmutedNameIndex.Build(_snapshot?.Items);
+            _armoryEquippedByItemId = SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(_snapshot);
             _characterNames = SnapshotSearchResultBuilder.CollectCharacterNames(_snapshot);
+            IndexSockets();
             _initialStatus = initialStatus;
             _refreshAsync = refreshAsync;
             _apiAccessDialog = apiAccessDialog;
@@ -446,6 +512,9 @@ namespace TaimisToolbench.Views
             _snapshot = snapshot;
             _accountItemIndex = new AccountItemIndex(_snapshot?.Items);
             _itemsById = SnapshotSearchResultBuilder.BuildRepresentativeIndex(_snapshot?.Items);
+            _transmutedCopiesByItemId = TransmutedNameIndex.Build(_snapshot?.Items);
+            _armoryEquippedByItemId = SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(_snapshot);
+            IndexSockets();
 
             var characterNames = SnapshotSearchResultBuilder.CollectCharacterNames(_snapshot);
             bool rosterChanged = !RosterEquals(_characterNames, characterNames);
@@ -732,6 +801,12 @@ namespace TaimisToolbench.Views
             // inside it: the clip a pinned band is drawn in must not scroll.
             _stickyHeaders = new StickyHeaderHost(buildPanel, _contentPanel);
 
+            // Held only by its parent, which disposes it - the same idiom
+            // Views/Rendering/StickyHeaderHost uses for its own ticker, and
+            // for the same reason: Blish raises nothing when a panel is
+            // scrolled.
+            new IconWindowTicker(this) { Parent = buildPanel };
+
             // Subscribe to resize
             buildPanel.Resized += OnPanelResized;
 
@@ -853,6 +928,7 @@ namespace TaimisToolbench.Views
             AddSourceCheckbox("Bank", _bankEnabled, isChecked => _bankEnabled = isChecked);
             AddSourceCheckbox("Material Storage", _materialStorageEnabled, isChecked => _materialStorageEnabled = isChecked);
             AddSourceCheckbox("Shared Inventory", _sharedInventoryEnabled, isChecked => _sharedInventoryEnabled = isChecked);
+            AddSourceCheckbox("Legendary Armory", _legendaryArmoryEnabled, isChecked => _legendaryArmoryEnabled = isChecked);
 
             // A master toggle earns its place only once there is more than
             // one character to cascade to.
@@ -1274,7 +1350,7 @@ namespace TaimisToolbench.Views
 
             SetSnapshotActionsEnabled(false);
             SetRefreshSpinnerVisible(true);
-            SetStatus("Refreshing...");
+            SetStatus(RefreshingStatusText);
 
             try
             {
@@ -1456,6 +1532,10 @@ namespace TaimisToolbench.Views
             {
                 _statusSpinner.Visible = _refreshInFlight || _backgroundRefreshInFlight;
             }
+
+            // The word and the spinner are one signal, so one writer moves
+            // both - see ApplyStatusDisplay's own guard.
+            ApplyStatusDisplay();
         }
 
         /// <summary>
@@ -1481,6 +1561,20 @@ namespace TaimisToolbench.Views
         {
             if (_statusLabel == null)
             {
+                return;
+            }
+
+            // While a refresh is running the line says so, and nothing
+            // else. The stored status is untouched, so the timestamp comes
+            // straight back when the spinner stops - which is what lets the
+            // AUTOMATIC refresh say it too. It could not before: that path
+            // writes no status of its own, so a label it overwrote would
+            // have had nothing to restore it.
+            if (_refreshInFlight || _backgroundRefreshInFlight)
+            {
+                _statusLabel.TextColor = _defaultStatusColor;
+                _statusFullText = RefreshingStatusText;
+                ApplyStatusText();
                 return;
             }
 
@@ -1624,6 +1718,135 @@ namespace TaimisToolbench.Views
 
             PlaceCells(_itemCells, _itemOrder, layout.Items.Grid, ItemRowHeight, refitText);
             PlaceCells(_walletCells, _walletOrder, layout.Wallet.Grid, WalletRowHeight, refitText);
+
+            _itemGrid = layout.Items.Grid;
+            _walletGrid = layout.Wallet.Grid;
+
+            // Every cell just moved, so whatever the window held is stale
+            // even if the viewport did not move, and a cursor into the old
+            // placement order means nothing in the new one. Restarting the
+            // prime is close to free: a cell already asked for is skipped
+            // without spending any of the frame's budget.
+            _itemPrimeCursor = 0;
+            _walletPrimeCursor = 0;
+            LoadNearIcons(force: true);
+        }
+
+        /// <summary>
+        /// One frame of icon loading, in the order that matters. What the
+        /// reader can see is asked for first and in full, however much the
+        /// prime below still has to do; only then does the prime spend its
+        /// own small budget on the rest.
+        /// </summary>
+        private void UpdateIconLoading()
+        {
+            LoadNearIcons(force: false);
+            PrimeRemainingIcons(SnapshotIconWindow.PrimePerFrame);
+        }
+
+        /// <summary>
+        /// Walks the rest of the list in reading order, a few pictures per
+        /// frame, so a scroll that arrives later finds them already asked
+        /// for. The budget is spent on the items run first and the
+        /// currencies get what is left, which is why this threads the
+        /// remainder through rather than giving each run its own.
+        /// </summary>
+        private void PrimeRemainingIcons(int budget)
+        {
+            if (_resultGridPanel == null || _resultGridPanel.Parent == null)
+            {
+                return;
+            }
+
+            budget = PrimeRun(_itemCells, _itemOrder, ref _itemPrimeCursor, budget);
+            PrimeRun(_walletCells, _walletOrder, ref _walletPrimeCursor, budget);
+        }
+
+        /// <summary>One run's share of a prime frame, returning the budget
+        /// left over. <paramref name="order"/> is the sort over the cells,
+        /// so the walk runs down the list the reader would scroll and not
+        /// down the order the search happened to return.</summary>
+        private static int PrimeRun(
+            List<ResultCell> cells, IReadOnlyList<int> order, ref int cursor, int budget)
+        {
+            bool ordered = order != null && order.Count == cells.Count;
+            while (budget > 0 && cursor < cells.Count)
+            {
+                int placement = cursor++;
+                var icon = cells[ordered ? order[placement] : placement].Icon;
+
+                // A picture the near window already asked for costs nothing
+                // to walk past and must not spend budget - otherwise the
+                // first screenful would be paid for twice.
+                if (icon == null || !icon.Pending)
+                {
+                    continue;
+                }
+
+                icon.Load();
+                budget--;
+            }
+
+            return budget;
+        }
+
+        /// <summary>
+        /// Asks Blish for the pictures of the cells at or near the viewport,
+        /// and for no others. Cheap to call every frame: the viewport read is
+        /// two rectangles, and nothing past it runs unless the viewport moved
+        /// or <paramref name="force"/> says the cells did.
+        /// </summary>
+        private void LoadNearIcons(bool force)
+        {
+            if (_contentPanel == null || _resultGridPanel == null || _resultGridPanel.Parent == null)
+            {
+                return;
+            }
+
+            var viewRegion = _contentPanel.ContentRegion;
+            var gridRegion = _resultGridPanel.ContentRegion;
+
+            // The grid panel's absolute position already carries the scroll,
+            // so the viewport's top in grid coordinates falls out of the two
+            // without this view knowing how Blish applies a scroll offset.
+            // Views/Rendering/StickyHeaderHost reads the same pair.
+            int viewTop = _contentPanel.AbsoluteBounds.Y + viewRegion.Y
+                - (_resultGridPanel.AbsoluteBounds.Y + gridRegion.Y);
+            int viewHeight = viewRegion.Height;
+
+            if (!force && viewTop == _iconWindowTop && viewHeight == _iconWindowHeight)
+            {
+                return;
+            }
+
+            _iconWindowTop = viewTop;
+            _iconWindowHeight = viewHeight;
+
+            LoadNearIcons(_itemCells, _itemOrder, _itemGrid, ItemRowHeight, viewTop, viewHeight);
+            LoadNearIcons(_walletCells, _walletOrder, _walletGrid, WalletRowHeight, viewTop, viewHeight);
+        }
+
+        /// <summary>One run's near cells. <paramref name="order"/> is the
+        /// sort over them, so placement index i holds cell order[i] - the
+        /// same mapping <see cref="PlaceCells"/> uses.</summary>
+        private static void LoadNearIcons(
+            List<ResultCell> cells, IReadOnlyList<int> order, SnapshotItemGridLayout.Grid grid,
+            int rowHeight, int viewTop, int viewHeight)
+        {
+            if (grid == null || cells.Count == 0)
+            {
+                return;
+            }
+
+            var span = SnapshotIconWindow.Compute(
+                cells.Count, grid.ColumnCount, rowHeight, grid.Top,
+                viewTop, viewHeight, SnapshotIconWindow.MarginPx);
+
+            bool ordered = order != null && order.Count == cells.Count;
+            for (int i = span.Start; i < span.End; i++)
+            {
+                cells[ordered ? order[i] : i].Icon?.Load();
+            }
         }
 
         /// <summary>Places one run's cells. They are held in the search's
@@ -1787,6 +2010,12 @@ namespace TaimisToolbench.Views
             _resultGridPanel = null;
             _itemChrome = null;
             _walletChrome = null;
+            _itemGrid = null;
+            _walletGrid = null;
+            _iconWindowTop = int.MinValue;
+            _iconWindowHeight = -1;
+            _itemPrimeCursor = 0;
+            _walletPrimeCursor = 0;
             _lastRowLayoutWidth = _contentPanel.Width;
 
             // BEFORE the disposal loop: a pinned band is not a child of the
@@ -1836,11 +2065,14 @@ namespace TaimisToolbench.Views
                     Bank = _bankEnabled,
                     MaterialStorage = _materialStorageEnabled,
                     SharedInventory = _sharedInventoryEnabled,
+                    LegendaryArmory = _legendaryArmoryEnabled,
                     UncheckedCharacters = new HashSet<string>(_uncheckedCharacters, StringComparer.Ordinal),
                 };
 
                 itemRows = SnapshotSearchResultBuilder.BuildItemRows(
-                    _itemsById, _accountItemIndex, searchText, sourceFilter, GetActiveCharacterName());
+                    _itemsById, _accountItemIndex, searchText, sourceFilter,
+                    GetActiveCharacterName(), _transmutedCopiesByItemId,
+                    _armoryEquippedByItemId);
             }
 
             if (filter == "All" || filter == "Wallet")
@@ -1978,6 +2210,16 @@ namespace TaimisToolbench.Views
             // already runs once per pause in typing over a list that can
             // reach into the thousands of rows.
             LayoutResultGrid(refitText: false);
+
+            // One line per rebuild, at Debug, because this is the tab's own
+            // answer to "how long until every picture is there". The row
+            // count is the upper bound on requests: the prime asks once per
+            // row and skips whatever the viewport already asked for.
+            int primeRows = _itemCells.Count + _walletCells.Count;
+            ModuleLog.Shared.Write(
+                ModuleLogLevel.Debug, "ui",
+                $"Snapshot icons: {primeRows} rows, priming over about "
+                + $"{SnapshotIconWindow.PrimeFrames(primeRows)} frames.");
         }
 
         /// <summary>Amount column text: the module's "30x" quantity
@@ -2046,10 +2288,6 @@ namespace TaimisToolbench.Views
 
             return null;
         }
-
-        // Left edge of a row's text column, past the icon at x=2. It lives
-        // in SnapshotItemGridLayout with every other edge in the cell.
-        private const int RowTextX = SnapshotItemGridLayout.CellTextX;
 
         /// <summary>One run's chrome: its section title with the rule under
         /// it, and the sortable header band above its cells. The band spans
@@ -2270,7 +2508,13 @@ namespace TaimisToolbench.Views
             int columnCount = section.Grid.ColumnCount;
             int columnWidth = section.Grid.ColumnWidth;
             int nameHeaderX = ColumnHeaderLabelMath.LabelX(
-                SnapshotItemGridLayout.CellTextX, SnapshotItemGridLayout.CellIconX);
+                SnapshotItemGridLayout.CellTextX(chrome.AmountBand),
+                SnapshotItemGridLayout.CellIconX(chrome.AmountBand));
+
+            // Centred over the band its digits centre in, so the word and
+            // the numbers under it read as one column.
+            int amountHeaderX = SnapshotItemGridLayout.CellAmountTextX(
+                chrome.AmountBand, chrome.AmountWidth);
 
             while (chrome.NameHeaders.Count < columnCount)
             {
@@ -2292,11 +2536,9 @@ namespace TaimisToolbench.Views
                 }
 
                 int columnX = i * columnWidth;
-                int amountX =
-                    SnapshotItemGridLayout.CellAmountRightEdge(columnWidth) - chrome.AmountWidth;
 
                 chrome.NameHeaders[i].MoveTo(columnX + nameHeaderX);
-                chrome.AmountHeaders[i].MoveTo(columnX + amountX);
+                chrome.AmountHeaders[i].MoveTo(columnX + amountHeaderX);
             }
 
             SyncHeaderCells(chrome, columnCount, columnWidth, gridWidth);
@@ -2322,18 +2564,20 @@ namespace TaimisToolbench.Views
                 chrome.CellPlan = new HeaderCellPlan(columnCount * 2, chrome.Cells);
                 for (int i = 0; i < columnCount; i++)
                 {
+                    // Amount before Name: HeaderCellMath.Partition walks its
+                    // labels left to right, and Amount is now the left one.
                     chrome.CellPlan.Set(
-                        i * 2, chrome.NameHeaders[i].Title, chrome.NameWidth, chrome.SortByName,
-                        chrome.NameHeaders[i].IndicatorLabel);
-                    chrome.CellPlan.Set(
-                        (i * 2) + 1, chrome.AmountHeaders[i].Title, chrome.AmountWidth,
+                        i * 2, chrome.AmountHeaders[i].Title, chrome.AmountWidth,
                         chrome.SortByAmount, chrome.AmountHeaders[i].IndicatorLabel);
+                    chrome.CellPlan.Set(
+                        (i * 2) + 1, chrome.NameHeaders[i].Title, chrome.NameWidth,
+                        chrome.SortByName, chrome.NameHeaders[i].IndicatorLabel);
                 }
 
                 chrome.PlanColumns = columnCount;
             }
 
-            int splitX = SnapshotItemGridLayout.CellHeaderSplitX(columnWidth, chrome.AmountBand);
+            int splitX = SnapshotItemGridLayout.CellHeaderSplitX(chrome.AmountBand);
             for (int i = 0; i < columnCount; i++)
             {
                 int columnX = i * columnWidth;
@@ -2379,19 +2623,77 @@ namespace TaimisToolbench.Views
         }
 
         /// <summary>
+        /// Drives icon loading once a frame: the viewport's own pictures,
+        /// then a few of the rest. It has to be per-frame because Blish
+        /// raises no event when a panel is scrolled. Zero-sized on purpose:
+        /// a control with no area is in no hit test.
+        /// <para>
+        /// A throw stands the ticker down for good rather than repeating
+        /// once a frame. The rows keep whatever pictures they already have,
+        /// which is the pre-existing empty-frame state and not an error a
+        /// player needs to hear about more than once.
+        /// </para>
+        /// </summary>
+        private sealed class IconWindowTicker : Control
+        {
+            private readonly MainView _view;
+            private bool _stopped;
+
+            internal IconWindowTicker(MainView view)
+            {
+                _view = view;
+                Size = Point.Zero;
+                Location = Point.Zero;
+            }
+
+            public override void DoUpdate(GameTime gameTime)
+            {
+                if (_stopped)
+                {
+                    return;
+                }
+
+                try
+                {
+                    _view.UpdateIconLoading();
+                }
+                catch (Exception ex)
+                {
+                    _stopped = true;
+                    Logger.Warn(ex, "Icon window update failed; stopping");
+                    ModuleLog.Shared.Write(
+                        ModuleLogLevel.Warn, "ui",
+                        "Snapshot icon loading stopped after a failure: "
+                        + ex.GetType().Name + " - " + ex.Message);
+                }
+            }
+
+            protected override void Paint(
+                Microsoft.Xna.Framework.Graphics.SpriteBatch spriteBatch, Rectangle bounds)
+            {
+            }
+        }
+
+        /// <summary>
         /// One placed result cell: the row Panel the grid moves and sizes,
         /// and the closure that re-ellipsizes its text lines against a new
-        /// column width and re-pins its amount. Text and position only -
-        /// see RefitResultRows for the wallet row's one exception.
+        /// column width. The amount is not in it: that column sits at the
+        /// cell's left edge and does not move with the width.
         /// </summary>
         private sealed class ResultCell
         {
             public readonly Panel Panel;
             public readonly Action<int> Fit;
 
-            public ResultCell(Panel panel, Action<int> fit)
+            /// <summary>The row's icon, whose picture has not been asked
+            /// for until this cell comes near the viewport - see
+            /// Views/Rendering/DeferredIconArt.cs.</summary>
+            public readonly DeferredIconArt Icon;
+
+            public ResultCell(Panel panel, DeferredIconArt icon, Action<int> fit)
             {
                 Panel = panel;
+                Icon = icon;
                 Fit = fit;
             }
         }
@@ -2406,14 +2708,15 @@ namespace TaimisToolbench.Views
         /// Log tab's rows and the plan's tables use.
         /// </summary>
         private static Label CreateRowTextLabel(
-            Panel rowPanel, string text, int maxWidth, int y, Color? color, out bool shortened)
+            Panel rowPanel, string text, int textX, int maxWidth, int y, Color? color,
+            out bool shortened)
         {
             var label = new Label()
             {
                 Font = UiFonts.Body,
                 AutoSizeWidth = true,
                 AutoSizeHeight = true,
-                Location = new Point(RowTextX, y),
+                Location = new Point(textX, y),
                 Parent = rowPanel,
             };
             if (color.HasValue)
@@ -2448,6 +2751,25 @@ namespace TaimisToolbench.Views
             return shown != full;
         }
 
+        /// <summary>
+        /// Puts the whole source-breakdown line on its label's hover while
+        /// the fit had to shorten it, and takes the hover away again when it
+        /// did not. Called at build and from every re-fit: a resize moves a
+        /// line between shortened and whole in both directions.
+        /// <para>
+        /// This label is the only text on a snapshot cell with no rich
+        /// surface on it, so a plain note here has nothing to drop - the
+        /// item's own hover lives on the icon tree alone
+        /// (ItemIconTooltip.StampOnIconTree). Do not copy this into
+        /// <see cref="FitRowTextLabel"/>, which also fits labels that do
+        /// carry one.
+        /// </para>
+        /// </summary>
+        private static void SetBreakdownHover(Label label, string breakdown, bool shortened)
+        {
+            TooltipFacility.ApplyPlain(label, shortened ? breakdown : null);
+        }
+
         private void CreateItemRow(SnapshotSearchRow row, int columnWidth, SectionChrome chrome)
         {
             // ClippedPanel: rows re-assert the viewport's published cutoff.
@@ -2477,62 +2799,69 @@ namespace TaimisToolbench.Views
 
             // The row's hover, composed once and stamped on every control
             // over the row - the icon included, by CreateItemIcon itself.
-            var hover = ItemRowHover(row, rarity, breakdown);
+            var hover = ItemRowHover(row, rarity);
 
-            IconControls.CreateItemIcon(
+            var icon = IconControls.CreateItemIconDeferredArt(
                 rowPanel, row.IconUrl, ItemIconFrame.ForRarity(rarity),
-                SnapshotItemGridLayout.CellIconX, 1,
+                SnapshotItemGridLayout.CellIconX(chrome.AmountBand), 1,
                 ItemIconTier.BagSlot, hover);
 
             // Never display raw item IDs (repo invariant) - row.Name is
             // already the resolved display name.
             //
-            // The count is a COLUMN, not a prefix: a quantity a reader can
-            // sort by has to line up. The name takes a rarity colour only
-            // when one is KNOWN - the unknown entry is a 200-grey that would
-            // dim every name on a fresh session (see RarityFor).
+            // The count is a COLUMN and it reads FIRST: a long name then
+            // trails off to the right instead of pushing the amount away
+            // from where a short one puts it. The name takes a rarity colour
+            // only when one is KNOWN - the unknown entry is a 200-grey that
+            // would dim every name on a fresh session (see RarityFor).
+            int textX = SnapshotItemGridLayout.CellTextX(chrome.AmountBand);
             string nameText = row.Name ?? "";
             string amountText = AmountText(row.TotalCount);
             var nameLabel = CreateRowTextLabel(
-                rowPanel, nameText,
-                SnapshotItemGridLayout.CellNameMaxWidth(columnWidth, chrome.AmountBand),
+                rowPanel, nameText, textX,
+                SnapshotItemGridLayout.CellTextMaxWidth(columnWidth, chrome.AmountBand),
                 4, rarity == null ? (Color?)null : RarityColors.GetRarityNameColor(rarity),
                 out _);
 
             // Measured here, not in the closure: the text is fixed and the
             // repack walks every row on screen.
             int amountWidth = (int)Math.Ceiling(UiFonts.Body.MeasureString(amountText).Width);
-            var amountLabel = CreateAmountLabel(rowPanel, amountText, amountWidth, columnWidth, 4);
+            CreateAmountLabel(rowPanel, amountText, amountWidth, chrome.AmountBand, 4);
 
-            // Runs UNDER the Amount column: that is one short line.
+            // Under the name, in the same run of the cell: the Amount column
+            // is left of both lines, not over this one.
             var breakdownLabel = CreateRowTextLabel(
-                rowPanel, breakdown, SnapshotItemGridLayout.CellFullLineMaxWidth(columnWidth),
-                26, InfoTextColor, out _);
+                rowPanel, breakdown, textX,
+                SnapshotItemGridLayout.CellTextMaxWidth(columnWidth, chrome.AmountBand),
+                26, InfoTextColor, out bool breakdownShortened);
+            SetBreakdownHover(breakdownLabel, breakdown, breakdownShortened);
 
-            // NOTHING else on the cell answers a hover: the item's tooltip
-            // is carried by its icon alone (ItemIconTooltip.StampOnIconTree),
-            // and the name, the amount, the source breakdown and the strip
-            // between them are not the item. The breakdown's full run is a
-            // line of that same tooltip, so nothing is lost by the column
-            // being too narrow to show it here.
+            // The breakdown line is the only text on the cell that answers a
+            // hover, and only while it is too long to read in full. The
+            // item's own tooltip is carried by its icon alone
+            // (ItemIconTooltip.StampOnIconTree); the name, the amount and
+            // the strip between them are not the item.
 
             // The cell's own Size is the grid's to write (LayoutResultGrid),
             // so this closure only re-fits what the new column width changed.
-            _itemCells.Add(new ResultCell(rowPanel, w =>
+            _itemCells.Add(new ResultCell(rowPanel, icon, w =>
             {
-                FitRowTextLabel(
-                    nameLabel, nameText, SnapshotItemGridLayout.CellNameMaxWidth(w, chrome.AmountBand));
-                FitRowTextLabel(breakdownLabel, breakdown, SnapshotItemGridLayout.CellFullLineMaxWidth(w));
-                PlaceAmountLabel(amountLabel, amountWidth, w, 4);
+                int fitWidth = SnapshotItemGridLayout.CellTextMaxWidth(w, chrome.AmountBand);
+                FitRowTextLabel(nameLabel, nameText, fitWidth);
+                SetBreakdownHover(
+                    breakdownLabel,
+                    breakdown,
+                    FitRowTextLabel(breakdownLabel, breakdown, fitWidth));
             }));
         }
 
         /// <summary>
-        /// The cell's Amount column: right-aligned on the edge every cell
-        /// pins to, so the numbers line up however long the names are.
+        /// The cell's Amount column: centred in the band at the cell's left
+        /// edge. The band is fixed for the run, so this never moves with the
+        /// column width and the repack has no amount to re-place.
         /// </summary>
-        private static Label CreateAmountLabel(
-            Panel rowPanel, string text, int textWidth, int columnWidth, int y)
+        private static void CreateAmountLabel(
+            Panel rowPanel, string text, int textWidth, int amountBandWidth, int y)
         {
             var label = LabelHelpers.WithDescenderClearance(new Label()
             {
@@ -2543,51 +2872,113 @@ namespace TaimisToolbench.Views
                 AutoSizeHeight = true,
                 Parent = rowPanel,
             });
-            PlaceAmountLabel(label, textWidth, columnWidth, y);
-            return label;
-        }
-
-        /// <summary>Re-pins one amount to its column's right edge, on the
-        /// width the caller measured at build: the text never changes, and
-        /// this is a position-and-width-only path.</summary>
-        private static void PlaceAmountLabel(Label label, int textWidth, int columnWidth, int y)
-        {
             label.Location = new Point(
-                SnapshotItemGridLayout.CellAmountRightEdge(columnWidth) - textWidth, y);
+                SnapshotItemGridLayout.CellAmountTextX(amountBandWidth, textWidth), y);
         }
 
         /// <summary>
-        /// One item row's hover: the item's own icon+name header, its stat
-        /// block if this session happens to hold one, and the whole source
-        /// breakdown - ALWAYS, not only when the line was shortened, since
-        /// the hover is where a reader goes for the run of it. A stat block
-        /// is the exception rather than the rule on this tab (see
-        /// RarityFor), which is why the identity carries the header.
+        /// One item row's hover: the item's own icon+name header and its
+        /// stat block, if this session happens to hold one. The identity
+        /// still carries the header, because a hover can land before
+        /// IndexSockets' top-up has fetched that item's block. The source
+        /// breakdown is NOT here - the row already prints it under the
+        /// name, and a second tooltip box repeating it says nothing new.
         /// </summary>
-        private ItemIconTooltip ItemRowHover(SnapshotSearchRow row, string rarity, string breakdown)
+        private ItemIconTooltip ItemRowHover(SnapshotSearchRow row, string rarity)
         {
             int itemId = row.ItemId;
-            return ItemIconTooltip.ForItem(
-                ItemTooltipIdentity.ForItem(row.Name ?? "", row.IconUrl, rarity),
-                _getItemStatBlock == null || itemId <= 0 ? (Func<ItemStatBlock>)null
-                    : () => _getItemStatBlock(itemId),
-                () => string.IsNullOrEmpty(breakdown)
-                    ? (IReadOnlyList<string>)null
-                    : new List<string> { breakdown });
+            var identity = ItemTooltipIdentity.ForItem(row.Name ?? "", row.IconUrl, rarity);
+            bool hasStats = _getItemStatBlock != null && itemId > 0;
+
+            // Composed rather than ForItem: the socket blocks are CONTENT
+            // (coloured spans and per-component icons), and they belong
+            // inside the stat block's own line order, not appended after it
+            // as prose. Everything is read at hover time, so a stat block
+            // the socket top-up lands after the row was built still shows.
+            return ItemIconTooltip.Composed(identity, () =>
+            {
+                var stats = hasStats ? _getItemStatBlock(itemId) : null;
+                return ItemRowTooltipComposer.BuildRowContent(
+                    ItemStatTooltipComposer.BuildContent(stats, SocketsFor(itemId), row.Skin),
+                    identity,
+                    null);
+            });
         }
 
         /// <summary>
-        /// The row's source breakdown as one line, or "". NOT the Amount
-        /// column's prefix notation, and the one deliberate exemption from
-        /// it: these labels are LOCATIONS. "20x Bank" parses as
-        /// twenty banks, and "10x Character: Maximus Test" collides with
-        /// the label's own colon.
+        /// Rebuilds the per-item socket index for the current snapshot and
+        /// starts the background stat top-up every row hover needs. Once
+        /// per snapshot, not once per keystroke: both the index and the id
+        /// set are read by every hover but change only when the snapshot
+        /// does.
+        /// <para>
+        /// The capture itself cannot supply the blocks.
+        /// Gw2AccountSnapshotService takes name, icon and rarity out of
+        /// Gw2Sharp's item model and keeps nothing else, so no
+        /// ItemStatBlock exists for a snapshot item until something fetches
+        /// it through ItemMetadataService. Without this warm the only rows
+        /// that hover with stats are the ones some plan happened to touch.
+        /// </para>
+        /// </summary>
+        private void IndexSockets()
+        {
+            _socketsByItemId = SocketedUpgradeIndex.Build(_snapshot?.Items);
+            _equippedRuneSets = new EquippedRuneSetIndex(_snapshot?.Items);
+            _statWarmer.Start(StatIdsForSnapshot());
+        }
+
+        /// <summary>Every id a snapshot row hover can ask for: the rows'
+        /// own items, then the components socketed into them.</summary>
+        private IReadOnlyList<int> StatIdsForSnapshot()
+        {
+            var ids = new List<int>();
+            var seen = new HashSet<int>();
+
+            if (_snapshot != null && _snapshot.Items != null)
+            {
+                foreach (var entry in _snapshot.Items)
+                {
+                    if (entry != null && entry.ItemId > 0 && seen.Add(entry.ItemId))
+                    {
+                        ids.Add(entry.ItemId);
+                    }
+                }
+            }
+
+            foreach (int id in SocketedUpgradeIndex.ItemIdsToResolve(_socketsByItemId))
+            {
+                if (seen.Add(id))
+                {
+                    ids.Add(id);
+                }
+            }
+
+            return ids;
+        }
+
+        /// <summary>What this row's stacks agree is socketed into them,
+        /// resolved against the session stat cache - empty when they
+        /// disagree, when nothing is socketed, or when the components'
+        /// stat blocks have not landed yet.</summary>
+        private SocketedUpgradeView SocketsFor(int itemId)
+        {
+            if (_socketsByItemId == null || _getItemStatBlock == null
+                || !_socketsByItemId.TryGetValue(itemId, out var ids))
+            {
+                return SocketedUpgradeView.None;
+            }
+
+            return SocketedUpgradeView.Resolve(
+                ids, _getItemStatBlock, runeId => _equippedRuneSets.WornCopies(itemId, runeId));
+        }
+
+        /// <summary>
+        /// The row's line of holding places, or "". The wording is
+        /// SnapshotHoldLine's, which is where it can be tested.
         /// </summary>
         private static string BreakdownText(SnapshotSearchRow row)
         {
-            return row.Breakdown == null || row.Breakdown.Count == 0
-                ? ""
-                : string.Join("   ", row.Breakdown.Select(b => $"{b.Label} {b.Count}"));
+            return SnapshotHoldLine.Format(row.Breakdown);
         }
 
         /// <summary>The rarity this tab can know for an item, or null -
@@ -2627,9 +3018,9 @@ namespace TaimisToolbench.Views
             int currencyId = entry.CurrencyId;
             int walletValue = entry.Value;
             string currencyIconUrl = entry.IconUrl;
-            IconControls.CreateItemIcon(
+            var icon = IconControls.CreateItemIconDeferredArt(
                 rowPanel, currencyIconUrl, ItemIconFrame.Currency(),
-                SnapshotItemGridLayout.CellIconX, 2,
+                SnapshotItemGridLayout.CellIconX(chrome.AmountBand), 2,
                 ItemIconTier.CurrencyListRow,
                 // A WALLET row is a wallet currency by construction - the
                 // id came out of /v2/account/wallet - so the kind needs no
@@ -2653,16 +3044,16 @@ namespace TaimisToolbench.Views
             string name = currencyName;
             string amountText = AmountText(entry.Value);
             var label = CreateRowTextLabel(
-                rowPanel, name, SnapshotItemGridLayout.CellNameMaxWidth(columnWidth, chrome.AmountBand),
+                rowPanel, name, SnapshotItemGridLayout.CellTextX(chrome.AmountBand),
+                SnapshotItemGridLayout.CellTextMaxWidth(columnWidth, chrome.AmountBand),
                 6, null, out _);
             int amountWidth = (int)Math.Ceiling(UiFonts.Body.MeasureString(amountText).Width);
-            var amountLabel = CreateAmountLabel(rowPanel, amountText, amountWidth, columnWidth, 6);
+            CreateAmountLabel(rowPanel, amountText, amountWidth, chrome.AmountBand, 6);
 
-            _walletCells.Add(new ResultCell(rowPanel, w =>
+            _walletCells.Add(new ResultCell(rowPanel, icon, w =>
             {
                 FitRowTextLabel(
-                    label, name, SnapshotItemGridLayout.CellNameMaxWidth(w, chrome.AmountBand));
-                PlaceAmountLabel(amountLabel, amountWidth, w, 6);
+                    label, name, SnapshotItemGridLayout.CellTextMaxWidth(w, chrome.AmountBand));
             }));
         }
 
@@ -2798,30 +3189,38 @@ namespace TaimisToolbench.Views
 
             var (gold, silver, cop) = CoinSegmentMath.Split(copper);
 
-            var font = UiFonts.Body;
+            var captionFont = UiFonts.Body;
+            var digitFont = UiFonts.CoinDigits;
 
-            // Body, not Caption: this was the one text on the tab both
-            // smaller AND greyer than what it labels. One channel of
-            // de-emphasis, and it lines up with the numbers it introduces.
+            // Body, not the digits' own face: this was the one text on the
+            // tab both smaller AND greyer than what it labels. One channel
+            // of de-emphasis, not two.
             new Label()
             {
                 Text = CoinCaption,
-                Font = font,
+                Font = captionFont,
                 TextColor = CoinCaptionColor,
                 AutoSizeWidth = true,
                 AutoSizeHeight = true,
-                Location = new Point(0, 2),
+                Location = new Point(0, CoinCaptionY),
                 Parent = _coinBlockPanel,
             };
-            int captionWidth = (int)Math.Ceiling(font.MeasureString(CoinCaption).Width);
+            int captionWidth = (int)Math.Ceiling(captionFont.MeasureString(CoinCaption).Width);
+
+            // The digits are a step smaller than the caption, so they are
+            // drawn lower to keep the two on one baseline. That leaves the
+            // digits' ink bottom exactly where it was, and the coin seated
+            // on it (CoinCurrencyRenderer's CoinDigitSeat) does not move.
+            int digitY = TypeRampMetrics.BaselineAlignedY(
+                TypeRampMetrics.CoinDigitInk, CoinCaptionY + TypeRampMetrics.BodyInk.BaselineY);
 
             var segments = new List<CoinSegmentMath.CoinSegmentSpec>(3);
-            CoinCurrencyRenderer.AddSegmentSpec(segments, font, CoinSegmentMath.GoldAssetId, gold.ToString());
-            CoinCurrencyRenderer.AddSegmentSpec(segments, font, CoinSegmentMath.SilverAssetId, silver.ToString());
-            CoinCurrencyRenderer.AddSegmentSpec(segments, font, CoinSegmentMath.CopperAssetId, cop.ToString());
+            CoinCurrencyRenderer.AddSegmentSpec(segments, digitFont, CoinSegmentMath.GoldAssetId, gold.ToString());
+            CoinCurrencyRenderer.AddSegmentSpec(segments, digitFont, CoinSegmentMath.SilverAssetId, silver.ToString());
+            CoinCurrencyRenderer.AddSegmentSpec(segments, digitFont, CoinSegmentMath.CopperAssetId, cop.ToString());
 
             CoinCurrencyRenderer.LayoutCoinSegments(
-                _coinBlockPanel, segments, captionWidth + CoinCaptionGap, 2, font);
+                _coinBlockPanel, segments, captionWidth + CoinCaptionGap, digitY, digitFont);
 
             // The block's exact extent, from the same arithmetic that laid
             // it out - so nothing re-measures it to right-pin it.

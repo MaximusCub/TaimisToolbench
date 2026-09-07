@@ -44,8 +44,8 @@ namespace TaimisToolbench.Tests.Services
         [Fact]
         public void Save_Load_RoundTrips()
         {
-            _store.Save("Updated \u2014 1:00 PM");
-            Assert.Equal("Updated \u2014 1:00 PM", _store.Load());
+            _store.Save("Updated - 1:00 PM");
+            Assert.Equal("Updated - 1:00 PM", _store.Load());
         }
 
         [Fact]

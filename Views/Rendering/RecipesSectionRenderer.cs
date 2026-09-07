@@ -253,7 +253,7 @@ namespace TaimisToolbench.Views.Rendering
                         WikiLinkLauncher.Open(wikiUrl);
                     }
                 };
-                wikiHint = WikiHintText;
+                wikiHint = TreeRowTooltipComposer.WikiHintText;
             }
 
             int itemId = row.ItemId;
@@ -266,7 +266,7 @@ namespace TaimisToolbench.Views.Rendering
 
             IconControls.CreateItemIcon(
                 rowPanel, row.IconUrl, ItemIconFrame.ForRarity(row.Rarity),
-                IconX, 0, ItemIconTier.BagSidebar, hover);
+                IconX, PlanContentHeightMath.IconRowIconY, ItemIconTier.BagSidebar, hover);
 
             var font = UiFonts.Body;
             string fullName = row.Label ?? "";
@@ -358,8 +358,6 @@ namespace TaimisToolbench.Views.Rendering
         // 12, not the pre-tier-2 8: the icon frame's center moved down 4px
         // with the 34 -> 42 resize, and the reading line (name, discipline,
         // status) keeps its offset from that center.
-        private const int NameY = 12;
-
-        private const string WikiHintText = "Right-click: Open wiki page";
+        private const int NameY = PlanContentHeightMath.IconRowIconY + 12;
     }
 }

@@ -28,6 +28,13 @@ namespace TaimisToolbench.Tests.Services
             return TooltipLayoutMath.LayoutContent(content, maxWidth, 20, TenPxPerChar, FixedCoinWidth);
         }
 
+        private static TooltipLayoutMath.Layout Separated(TooltipContent content, int maxWidth)
+        {
+            return TooltipLayoutMath.LayoutContent(
+                content, maxWidth, 20, TenPxPerChar, FixedCoinWidth,
+                separateEntriesWhenAnyWraps: true);
+        }
+
         private static string RowText(TooltipLayoutMath.LaidOutRow row)
         {
             return string.Concat(row.Spans.Select(s => s.Span.Text));
@@ -626,6 +633,199 @@ namespace TaimisToolbench.Tests.Services
             // texture no larger than the crop origin has nothing to give
             Assert.Equal(0, TooltipLayoutMath.CanvasArtSourceLength(100, 3, 3));
             Assert.Equal(0, TooltipLayoutMath.CanvasArtSourceLength(100, 0, 4));
+        }
+
+        // --- Slot rows ---
+        [Fact]
+        public void ASlotRowStartsAtTheSlotIndentAndKeepsItsGlyph()
+        {
+            var content = new TooltipContentBuilder()
+                .Text("plain").EndLine()
+                .SlotLine(517197, "Unused Upgrade Slot")
+                .Build();
+
+            var layout = TooltipLayoutMath.LayoutContent(
+                content, 500, 20, TenPxPerChar, FixedCoinWidth, slotIndent: 21);
+
+            Assert.Equal(0, layout.Rows[0].Spans[0].X);
+            Assert.Equal(0, layout.Rows[0].IconAssetId);
+            Assert.Equal(21, layout.Rows[1].Spans[0].X);
+            Assert.Equal(517197, layout.Rows[1].IconAssetId);
+        }
+
+        [Fact]
+        public void AWrappedSlotRowDrawsItsGlyphOnceAndIndentsTheContinuation()
+        {
+            var content = new TooltipContentBuilder()
+                .SlotLine(517197, "aaa bbb ccc")
+                .Build();
+
+            // 21px indent plus 40px of budget: "aaa" fits, "bbb ccc" does not.
+            var layout = TooltipLayoutMath.LayoutContent(
+                content, 61, 20, TenPxPerChar, FixedCoinWidth, slotIndent: 21);
+
+            Assert.True(layout.Rows.Count > 1);
+            Assert.Equal(517197, layout.Rows[0].IconAssetId);
+            Assert.All(layout.Rows.Skip(1), r => Assert.Equal(0, r.IconAssetId));
+            Assert.All(layout.Rows, r => Assert.Equal(21, r.Spans[0].X));
+        }
+
+        [Fact]
+        public void Stack_WithNothingExtra_IsOneBoxAndNamesNoSecond()
+        {
+            var boxes = TooltipLayoutMath.Stack(100, 0, 4, 3, 18);
+
+            Assert.Equal(100, boxes.PanelHeight);
+            Assert.Equal(107, boxes.FirstBoxHeight);
+            Assert.Equal(0, boxes.ExtraContentTop);
+            Assert.Equal(0, boxes.SecondBoxTop);
+        }
+
+        [Fact]
+        public void Stack_PutsTheGapBetweenTheTwoFramesAndNotInsideEither()
+        {
+            var boxes = TooltipLayoutMath.Stack(100, 40, 4, 3, 18);
+
+            // First frame: 4 + 100 + 3.
+            Assert.Equal(107, boxes.FirstBoxHeight);
+
+            // The second frame opens 18px of nothing below it.
+            Assert.Equal(125, boxes.SecondBoxTop);
+            Assert.Equal(boxes.FirstBoxHeight + 18, boxes.SecondBoxTop);
+
+            // The content panel starts one top padding into the control,
+            // so the second box's text lands exactly one top padding
+            // inside the second frame - the same inset the first box has.
+            Assert.Equal(boxes.SecondBoxTop + 4, 4 + boxes.ExtraContentTop);
+
+            // The panel spans both contents and the run between them, so
+            // the control ends one bottom padding under the last line.
+            Assert.Equal(boxes.ExtraContentTop + 40, boxes.PanelHeight);
+            Assert.Equal(4 + boxes.PanelHeight + 3, boxes.SecondBoxTop + 4 + 40 + 3);
+        }
+
+        [Fact]
+        public void Stack_NegativeInputsCannotProduceANegativeBox()
+        {
+            var boxes = TooltipLayoutMath.Stack(-5, -5, -1, -1, -1);
+
+            Assert.Equal(0, boxes.PanelHeight);
+            Assert.Equal(0, boxes.FirstBoxHeight);
+            Assert.Equal(0, boxes.SecondBoxTop);
+        }
+
+        [Fact]
+        public void TheSecondBoxWrapsToTheFirstBoxsWidthRatherThanTheScreenCap()
+        {
+            var first = TooltipLayoutMath.LayoutContent(
+                new TooltipContentBuilder().Text("short").Build(),
+                500, 20, TenPxPerChar, FixedCoinWidth);
+
+            // What RichTooltipSurface.BuildContent does: the second box is
+            // laid out at the width the first one measured, never at the
+            // screen cap, so the pair reads as one column.
+            var second = TooltipLayoutMath.LayoutContent(
+                new TooltipContentBuilder().Text("aaa bbb ccc ddd eee").Build(),
+                first.Width, 20, TenPxPerChar, FixedCoinWidth);
+
+            Assert.Equal(50, first.Width);
+            Assert.True(second.Rows.Count > 1);
+            Assert.All(second.Rows, r => Assert.True(r.Width <= first.Width, r.Width.ToString()));
+        }
+
+        // --- Separating a box of unrelated statements ---
+        //
+        // Reported in game: hovering Obsidian Shard on a Recipe Tree row
+        // gave a 126px second box reading "Unit price: 425 for / 50 Fractal
+        // Relic / Right-click to open / the wiki page." - two unrelated
+        // statements over four rows with nothing between them. The second
+        // box takes its width from the first, so a short item name is all
+        // it takes to get there.
+        [Fact]
+        public void SeparateEntries_NothingWraps_IsTheBoxItAlwaysWas()
+        {
+            var content = TooltipContent.FromText("one\ntwo\nthree");
+
+            var plain = Layout(content, 500);
+            var separated = Separated(content, 500);
+
+            Assert.Equal(plain.Rows.Count, separated.Rows.Count);
+            Assert.Equal(plain.Height, separated.Height);
+        }
+
+        [Fact]
+        public void SeparateEntries_OneEntryWraps_EveryPairGetsABlankRow()
+        {
+            // Every character is 10px wide here, so a 110px box holds
+            // eleven of them: the second entry wraps and the third does
+            // not. Without the blank rows the four rows read as one
+            // statement of unknown length.
+            var content = TooltipContent.FromText("short\nwraps over here\ntail");
+
+            var separated = Separated(content, 110);
+            var texts = separated.Rows.Select(RowText).ToList();
+
+            Assert.Equal("short", texts[0]);
+            Assert.Equal("", texts[1]);
+            Assert.Equal("wraps over", texts[2]);
+            Assert.Equal("here", texts[3]);
+            Assert.Equal("", texts[4]);
+            Assert.Equal("tail", texts[5]);
+
+            // Every row still stacks at its own height, blanks included.
+            int y = 0;
+            foreach (var row in separated.Rows)
+            {
+                Assert.Equal(y, row.Y);
+                y += row.Height;
+            }
+
+            Assert.Equal(y, separated.Height);
+        }
+
+        [Fact]
+        public void SeparateEntries_UnwrappedNeighbours_AreSeparatedToo()
+        {
+            // The all-or-nothing rule. Separating only the pairs that wrap
+            // would leave "short" and "tail" adjacent, reading as one
+            // statement that wrapped.
+            var separated = Separated(
+                TooltipContent.FromText("short\ntail\nwraps over here"), 110);
+
+            Assert.Equal(
+                new[] { "short", "", "tail", "", "wraps over", "here" },
+                separated.Rows.Select(RowText).ToArray());
+        }
+
+        [Fact]
+        public void SeparateEntries_ContentThatAskedForItsOwnBlank_DoesNotGetASecond()
+        {
+            var separated = Separated(
+                TooltipContent.FromText("wraps over here\n\ntail"), 110);
+
+            Assert.Equal(
+                new[] { "wraps over", "here", "", "tail" },
+                separated.Rows.Select(RowText).ToArray());
+        }
+
+        [Fact]
+        public void SeparateEntries_ASingleEntry_HasNothingToSeparate()
+        {
+            var separated = Separated(TooltipContent.FromText("wraps over here"), 110);
+
+            Assert.Equal(
+                new[] { "wraps over", "here" },
+                separated.Rows.Select(RowText).ToArray());
+            Assert.Equal(40, separated.Height);
+        }
+
+        [Fact]
+        public void SeparateEntries_TheBoxWidth_IgnoresTheBlankRows()
+        {
+            var separated = Separated(
+                TooltipContent.FromText("short\nwraps over here"), 110);
+
+            Assert.Equal(Layout(TooltipContent.FromText("wraps over"), 110).Width, separated.Width);
         }
     }
 }

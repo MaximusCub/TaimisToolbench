@@ -111,8 +111,12 @@ namespace MysticForgeSeeder
             Console.WriteLine();
 
             using var httpClient = new HttpClient();
+            // MediaWiki's User-Agent policy asks a script to supply a way to
+            // reach its operator; a name alone leaves the wiki nothing but an
+            // IP to act on. See docs/api-client-contracts.md.
             httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(
-                "TaimisToolbench-MysticForgeSeeder/1.0");
+                "TaimisToolbench-MysticForgeSeeder/1.0 " +
+                "(+https://github.com/MaximusCub/TaimisToolbench)");
 
             var client = new WikiRecipeClient(
                 httpClient, delayMs, maxRequests);

@@ -5,8 +5,9 @@ namespace TaimisToolbench.Tests.Helpers
     /// the item classes the stat-tooltip work has to survive: fixed-stat
     /// ascended armour, a stat-selectable legendary weapon, a rune, a
     /// sigil, an infusion, fine and ascended food, a detail-less crafting
-    /// material, a stat-selectable exotic, and a legendary whose flavour
-    /// text carries markup and non-ASCII bullets.
+    /// material, a stat-selectable exotic, a legendary whose flavour text
+    /// carries markup and non-ASCII bullets, and the equipment-slot
+    /// shapes below.
     /// <para>
     /// Non-ASCII bytes in the API's own text are written as \u escapes so
     /// the source stays ASCII-only (repo invariant); the RUNTIME string is
@@ -29,6 +30,24 @@ namespace TaimisToolbench.Tests.Helpers
 
         public const string AgonyInfusion =
             "{\"name\":\"+1 Agony Infusion\",\"description\":\"Double-click to apply to an unused infusion slot. Used by artificers to craft more powerful agony infusions.\",\"type\":\"UpgradeComponent\",\"level\":0,\"rarity\":\"Ascended\",\"vendor_value\":330,\"game_types\":[\"Activity\",\"Wvw\",\"Dungeon\",\"Pve\"],\"flags\":[\"NoSalvage\",\"NoSell\"],\"restrictions\":[],\"id\":49424,\"chat_link\":\"[&AgEQwQAA]\",\"icon\":\"https://render.guildwars2.com/file/C605E2EF280B5E4CF9A249E80AB3053843C5EBE3/511839.png\",\"details\":{\"type\":\"Default\",\"flags\":[\"ShortBow\",\"HeavyArmor\",\"LightArmor\",\"Dagger\",\"MediumArmor\",\"Focus\",\"Greatsword\",\"Hammer\",\"Trinket\",\"Harpoon\",\"Mace\",\"Pistol\",\"Rifle\",\"Scepter\",\"Shield\",\"Speargun\",\"Axe\",\"Staff\",\"Sword\",\"Torch\",\"Trident\",\"Warhorn\",\"LongBow\"],\"infusion_upgrade_flags\":[\"Infusion\"],\"attribute_adjustment\":0,\"infix_upgrade\":{\"id\":764,\"buff\":{\"skill_id\":22100,\"description\":\"+1 Agony Resistance\"},\"attributes\":[{\"attribute\":\"AgonyResistance\",\"modifier\":1}]},\"suffix\":\"\"},\"upgrades_into\":[{\"upgrade\":\"Attunement\",\"item_id\":104755},{\"upgrade\":\"Attunement\",\"item_id\":104864},{\"upgrade\":\"Attunement\",\"item_id\":104797},{\"upgrade\":\"Attunement\",\"item_id\":104706},{\"upgrade\":\"Attunement\",\"item_id\":104681},{\"upgrade\":\"Attunement\",\"item_id\":104741}]}";
+
+        /// <summary>A sigil whose effect text carries a reminder run: the
+        /// cooldown arrives inside infix_upgrade.buff.description, behind a
+        /// &lt;br&gt;, and has to reach the reader as its own grey line.</summary>
+        public const string SigilOfEarth =
+            "{\"name\":\"Superior Sigil of Earth\",\"description\":\"<c=@abilitytype>Element: </c>Pain<br>Double-click to apply to a weapon.\",\"type\":\"UpgradeComponent\",\"level\":60,\"rarity\":\"Exotic\",\"vendor_value\":216,\"game_types\":[\"Activity\",\"Wvw\",\"Dungeon\",\"Pve\"],\"flags\":[],\"restrictions\":[],\"id\":24560,\"chat_link\":\"[&AgHwXwAA]\",\"icon\":\"https://render.guildwars2.com/file/251EE3B8B5ADB8D7F7A35DBAEFABA35AEACDF51B/220677.png\",\"details\":{\"type\":\"Sigil\",\"flags\":[\"ShortBow\",\"Dagger\",\"Focus\",\"Greatsword\",\"Hammer\",\"Harpoon\",\"Mace\",\"Pistol\",\"Rifle\",\"Scepter\",\"Shield\",\"Speargun\",\"Axe\",\"Staff\",\"Sword\",\"Torch\",\"Trident\",\"Warhorn\",\"LongBow\"],\"infusion_upgrade_flags\":[],\"attribute_adjustment\":0,\"infix_upgrade\":{\"id\":203,\"buff\":{\"skill_id\":9452,\"description\":\"Inflict bleeding for 6 seconds upon critically hitting a foe. <br><c=@reminder>(Cooldown: 2 Seconds)</c>\"},\"attributes\":[]},\"suffix\":\"of Earth\"}}";
+
+        /// <summary>A rune whose FOURTH bonus string carries the same
+        /// reminder markup - the case that proves details.bonuses is
+        /// sanitized rather than printed raw.</summary>
+        public const string RuneOfTheWater =
+            "{\"name\":\"Major Rune of the Water\",\"description\":\"<c=@abilitytype>Element: </c>Skill<br>Double-click to apply to a piece of armor.\",\"type\":\"UpgradeComponent\",\"level\":39,\"rarity\":\"Rare\",\"vendor_value\":30,\"game_types\":[\"Activity\",\"Wvw\",\"Dungeon\",\"Pve\"],\"flags\":[],\"restrictions\":[],\"id\":24838,\"chat_link\":\"[&AgEGYQAA]\",\"icon\":\"https://render.guildwars2.com/file/BF001AE4ED5BD7335A49D64D2AD1090E1CA19E09/221147.png\",\"details\":{\"type\":\"Rune\",\"flags\":[\"HeavyArmor\",\"LightArmor\",\"MediumArmor\"],\"infusion_upgrade_flags\":[],\"bonuses\":[\"+15 Healing\",\"+3% Boon Duration\",\"+30 Healing\",\"Remove a condition when you are struck. <c=@reminder>(Cooldown: 30 Seconds)</c>\"],\"attribute_adjustment\":0,\"infix_upgrade\":{\"id\":112,\"attributes\":[]},\"suffix\":\"of the Water\"}}";
+
+        /// <summary>An enrichment: infusion_upgrade_flags ["Enrichment"],
+        /// a real buff description and an EMPTY attribute list, which is
+        /// why display text is built from the description alone.</summary>
+        public const string KarmicEnrichment =
+            "{\"name\":\"Karmic Enrichment\",\"description\":\"Double-click to apply to an unused enrichment slot.\",\"type\":\"UpgradeComponent\",\"level\":0,\"rarity\":\"Fine\",\"vendor_value\":8,\"game_types\":[\"Activity\",\"Wvw\",\"Dungeon\",\"Pve\"],\"flags\":[\"AccountBound\",\"NoMysticForge\",\"NoSalvage\",\"NoSell\",\"AccountBindOnUse\"],\"restrictions\":[],\"id\":39332,\"chat_link\":\"[&AgGkmQAA]\",\"icon\":\"https://render.guildwars2.com/file/F508A75DDFBFC87133FFC5ADA3DADFF5640A2E0C/534272.png\",\"details\":{\"type\":\"Default\",\"flags\":[\"Trinket\"],\"infusion_upgrade_flags\":[\"Enrichment\"],\"attribute_adjustment\":0,\"infix_upgrade\":{\"id\":643,\"buff\":{\"skill_id\":16978,\"description\":\"+15% Karma\"},\"attributes\":[]},\"suffix\":\"\"}}";
 
         public const string LotusFries =
             "{\"name\":\"Cup of Lotus Fries\",\"type\":\"Consumable\",\"level\":80,\"rarity\":\"Fine\",\"vendor_value\":33,\"game_types\":[\"Wvw\",\"Dungeon\",\"Pve\"],\"flags\":[\"NoSell\"],\"restrictions\":[],\"id\":12472,\"chat_link\":\"[&AgG4MAAA]\",\"icon\":\"https://render.guildwars2.com/file/4120B6390F071AF9DF0D633097C00DB12C80056D/219456.png\",\"details\":{\"type\":\"Food\",\"duration_ms\":1800000,\"apply_count\":1,\"name\":\"Nourishment\",\"icon\":\"https://render.guildwars2.com/file/779D3F0ABE5B46C09CFC57374DA8CC3A495F291C/436367.png\",\"description\":\"30% Magic Find\\n+70 Condition Damage\\n+10% Experience from Kills\"}}";
@@ -54,6 +73,23 @@ namespace TaimisToolbench.Tests.Helpers
         /// </summary>
         public const string GiftOfTwilight =
             "{\"name\":\"Gift of Twilight\",\"description\":\"A gift used to create the legendary greatsword Twilight.\\n\\nMade by combining these items in the Mystic Forge:\\n\u2022 1 Gift of Metal\\n\u2022 1 Gift of Darkness\\n\u2022 100 Icy Runestones\\n\u2022 1 Superior Sigil of Blood\",\"type\":\"Trophy\",\"level\":0,\"rarity\":\"Legendary\",\"vendor_value\":640,\"game_types\":[\"Activity\",\"Wvw\",\"Dungeon\",\"Pve\"],\"flags\":[\"AccountBound\",\"NoSalvage\",\"AccountBindOnUse\",\"DeleteWarning\"],\"restrictions\":[],\"id\":19648,\"chat_link\":\"[&AgHATAAA]\",\"icon\":\"https://render.guildwars2.com/file/01D07FABAE26C0E5240892B00DA7AF90AB0EA022/455828.png\"}";
+
+        /// <summary>
+        /// The three slot shapes /v2/items expresses that no other fixture
+        /// here has: an ascended amulet's ENRICHMENT slot (77482), an
+        /// ascended back item whose second infusion slot is already filled
+        /// (37010, item_id 49428), and an exotic ring, which has an upgrade
+        /// slot and no infusion slot where its ascended equivalent has the
+        /// reverse (36551).
+        /// </summary>
+        public const string VialOfSalt =
+            "{\"name\":\"Vial of Salt\",\"description\":\"<c=@flavor>It took a lot of tears to create this much salt.</c>\",\"type\":\"Trinket\",\"level\":80,\"rarity\":\"Ascended\",\"vendor_value\":660,\"game_types\":[\"Activity\",\"Wvw\",\"Dungeon\",\"Pve\"],\"flags\":[\"HideSuffix\",\"AccountBound\",\"NotUpgradeable\",\"Unique\",\"AccountBindOnUse\"],\"restrictions\":[],\"id\":77482,\"chat_link\":\"[&AgGqLgEA]\",\"icon\":\"https://render.guildwars2.com/file/5C6AC7BB0B70C95D4DD4D07209546B6FB56A1E0D/1313083.png\",\"details\":{\"type\":\"Amulet\",\"infusion_slots\":[{\"flags\":[\"Enrichment\"]}],\"attribute_adjustment\":358.512,\"stat_choices\":[584,656,658,1119,657,1038,1097,659,690,583,585,1037,586,1035,588,1114,1128,1163,1066,1064,660,1430,1436,591,581,592,1263,1271,1265,1270,1262,1268,1264,1267,1269,1366,1367,1374,1549,1566,1691,1706,1827],\"secondary_suffix_item_id\":\"\"}}";
+
+        public const string KossOnKossInfused =
+            "{\"name\":\"Koss on Koss (Infused)\",\"description\":\"<c=@flavor>First edition. This book appears to be written in the author's own hand.</c>\",\"type\":\"Back\",\"level\":80,\"rarity\":\"Ascended\",\"vendor_value\":330,\"default_skin\":2376,\"game_types\":[\"Activity\",\"Wvw\",\"Dungeon\",\"Pve\"],\"flags\":[\"HideSuffix\",\"AccountBound\",\"NoSell\",\"NotUpgradeable\",\"Unique\",\"AccountBindOnUse\"],\"restrictions\":[],\"id\":37010,\"chat_link\":\"[&AgGSkAAA]\",\"icon\":\"https://render.guildwars2.com/file/22D31C930DFAFC955209201535DABB6C956DD7F0/511798.png\",\"details\":{\"infusion_slots\":[{\"flags\":[\"Infusion\"]},{\"flags\":[\"Infusion\"],\"item_id\":49428}],\"attribute_adjustment\":89.628,\"infix_upgrade\":{\"id\":601,\"buff\":{\"skill_id\":15757,\"description\":\"+32 Power\\n+18 Toughness\\n+18 Vitality\\n+5 Agony Resistance\"},\"attributes\":[{\"attribute\":\"Power\",\"modifier\":63},{\"attribute\":\"Toughness\",\"modifier\":40},{\"attribute\":\"Vitality\",\"modifier\":40}]},\"secondary_suffix_item_id\":\"\"}}";
+
+        public const string InfinityLoop =
+            "{\"name\":\"Infinity Loop\",\"description\":\"<c=@flavor>A single twist in the band creates a continuous surface.</c>\",\"type\":\"Trinket\",\"level\":80,\"rarity\":\"Exotic\",\"vendor_value\":396,\"game_types\":[\"Activity\",\"Wvw\",\"Dungeon\",\"Pve\"],\"flags\":[\"HideSuffix\",\"SoulBindOnUse\"],\"restrictions\":[],\"id\":36551,\"chat_link\":\"[&AgHHjgAA]\",\"icon\":\"https://render.guildwars2.com/file/A3473FFC3353576C2EF60C5A9CC47CDA6AB562C1/63613.png\",\"details\":{\"type\":\"Ring\",\"infusion_slots\":[],\"attribute_adjustment\":256.08,\"infix_upgrade\":{\"id\":153,\"attributes\":[{\"attribute\":\"Vitality\",\"modifier\":90},{\"attribute\":\"Healing\",\"modifier\":64},{\"attribute\":\"ConditionDamage\",\"modifier\":64}]},\"secondary_suffix_item_id\":\"\"}}";
 
         public static string Array(params string[] items)
         {

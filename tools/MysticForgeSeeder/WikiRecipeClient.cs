@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using TaimisToolbench.Services;
 
 namespace MysticForgeSeeder
 {
@@ -51,16 +52,39 @@ namespace MysticForgeSeeder
         private const int MaxRetries = 3;
         private const int QueryLimit = 500;
 
+        /// <summary>
+        /// The replication lag, in seconds, above which the wiki should
+        /// refuse this scrape rather than serve it. API:Etiquette asks a
+        /// non-interactive client to send the parameter and names 5 as the
+        /// value for a client in no hurry.
+        /// </summary>
+        private const string MaxLagSeconds = "5";
+
+        /// <summary>
+        /// Shortest pause after a lag refusal. Manual:Maxlag parameter asks
+        /// for at least five seconds.
+        /// </summary>
+        private const int LagBackoffMs = 5000;
+
         private readonly HttpClient _httpClient;
         private readonly int _delayMs;
         private readonly int _maxRequests;
+        private readonly Func<TimeSpan, CancellationToken, Task> _delay;
+        private readonly Func<DateTimeOffset> _now;
         private int _requestCount;
 
-        public WikiRecipeClient(HttpClient httpClient, int delayMs = 250, int maxRequests = 200)
+        public WikiRecipeClient(
+            HttpClient httpClient,
+            int delayMs = 250,
+            int maxRequests = 200,
+            Func<TimeSpan, CancellationToken, Task>? delay = null,
+            Func<DateTimeOffset>? now = null)
         {
             _httpClient = httpClient;
             _delayMs = delayMs;
             _maxRequests = maxRequests;
+            _delay = delay ?? ((d, ct) => Task.Delay(d, ct));
+            _now = now ?? (() => DateTimeOffset.UtcNow);
         }
 
         /// <summary>
@@ -95,10 +119,16 @@ namespace MysticForgeSeeder
                 using var doc = JsonDocument.Parse(responseJson);
                 var root = doc.RootElement;
 
+                // A page with no results says so as an empty results object;
+                // a body that states no results at all is the wiki declining
+                // in a shape this tool does not know, and ending the scrape
+                // on it would write a short seed and call it complete.
                 if (!root.TryGetProperty("query", out var queryEl) ||
                     !queryEl.TryGetProperty("results", out var results))
                 {
-                    break;
+                    throw new WikiApiException(
+                        $"Wiki response at offset {offset} carried neither " +
+                        "results nor an error object.");
                 }
 
                 // Empty results come back as [] instead of {}
@@ -139,7 +169,7 @@ namespace MysticForgeSeeder
                     }
 
                     offset = nextOffset;
-                    await Task.Delay(_delayMs, ct);
+                    await _delay(TimeSpan.FromMilliseconds(_delayMs), ct);
                 }
                 else
                 {
@@ -252,7 +282,7 @@ namespace MysticForgeSeeder
 
                 if (i + batchSize < nameList.Count)
                 {
-                    await Task.Delay(_delayMs, ct);
+                    await _delay(TimeSpan.FromMilliseconds(_delayMs), ct);
                 }
             }
 
@@ -494,6 +524,7 @@ namespace MysticForgeSeeder
                         {
                             ["action"] = "ask",
                             ["format"] = "json",
+                            ["maxlag"] = MaxLagSeconds,
                             ["query"] = query,
                         });
 
@@ -510,19 +541,12 @@ namespace MysticForgeSeeder
                                 "Wiki may be rate-limiting.");
                         }
 
-                        int cooldownMs = 30_000 * (1 << attempt);
-                        if (response.Headers.RetryAfter?.Delta is TimeSpan d403)
-                        {
-                            cooldownMs = Math.Max(
-                                cooldownMs, (int)d403.TotalMilliseconds);
-                        }
-
-                        cooldownMs = AddJitter(cooldownMs);
+                        int cooldownMs = WaitMs(response, 30_000 * (1 << attempt));
 
                         Console.WriteLine(
                             $"    HTTP 403, cooling down {cooldownMs / 1000}s " +
                             $"(attempt {attempt + 1}/{MaxRetries})...");
-                        await Task.Delay(cooldownMs, ct);
+                        await _delay(TimeSpan.FromMilliseconds(cooldownMs), ct);
                         continue;
                     }
 
@@ -533,39 +557,69 @@ namespace MysticForgeSeeder
                             response.EnsureSuccessStatusCode();
                         }
 
-                        int backoffMs = 1000 * (1 << attempt);
-                        if (response.Headers.RetryAfter?.Delta is TimeSpan delta)
-                        {
-                            backoffMs = Math.Max(
-                                backoffMs, (int)delta.TotalMilliseconds);
-                        }
-
-                        backoffMs = AddJitter(backoffMs);
+                        int backoffMs = WaitMs(response, 1000 * (1 << attempt));
 
                         Console.WriteLine(
                             $"    HTTP {statusCode}, retrying in {backoffMs}ms " +
                             $"(attempt {attempt + 1}/{MaxRetries})...");
-                        await Task.Delay(backoffMs, ct);
+                        await _delay(TimeSpan.FromMilliseconds(backoffMs), ct);
                         continue;
                     }
 
                     response.EnsureSuccessStatusCode();
-                    return await response.Content.ReadAsStringAsync(ct);
+                    string body = await response.Content.ReadAsStringAsync(ct);
+
+                    var refusal = WikiApiRefusal.Read(body);
+                    if (refusal == null)
+                    {
+                        return body;
+                    }
+
+                    if (!refusal.IsTransient)
+                    {
+                        throw new WikiApiException(refusal.ToString());
+                    }
+
+                    if (attempt >= MaxRetries)
+                    {
+                        throw new WikiApiException(
+                            $"{refusal} after {MaxRetries + 1} attempts.");
+                    }
+
+                    int lagWaitMs = WaitMs(
+                        response,
+                        Math.Max(LagBackoffMs, 1000 * (1 << attempt)));
+
+                    Console.WriteLine(
+                        $"    {refusal}, retrying in {lagWaitMs}ms " +
+                        $"(attempt {attempt + 1}/{MaxRetries})...");
+                    await _delay(TimeSpan.FromMilliseconds(lagWaitMs), ct);
                 }
                 catch (HttpRequestException) when (attempt < MaxRetries)
                 {
-                    int backoffMs = 1000 * (1 << attempt);
-                    backoffMs = AddJitter(backoffMs);
+                    int backoffMs = AddJitter(1000 * (1 << attempt));
 
                     Console.WriteLine(
                         $"    Request failed, retrying in {backoffMs}ms " +
                         $"(attempt {attempt + 1}/{MaxRetries})...");
-                    await Task.Delay(backoffMs, ct);
+                    await _delay(TimeSpan.FromMilliseconds(backoffMs), ct);
                 }
             }
 
             throw new HttpRequestException(
                 $"Failed after {MaxRetries + 1} attempts");
+        }
+
+        /// <summary>
+        /// The wait before the next attempt: whatever Retry-After asks for,
+        /// or <paramref name="fallbackMs"/> when it asks for nothing or for
+        /// less, jittered so a run does not synchronise its retries.
+        /// </summary>
+        private int WaitMs(HttpResponseMessage response, int fallbackMs)
+        {
+            TimeSpan wait = HttpRetry.ResolveDelay(
+                response, TimeSpan.FromMilliseconds(fallbackMs), _now());
+            return AddJitter((int)wait.TotalMilliseconds);
         }
 
         /// <summary>

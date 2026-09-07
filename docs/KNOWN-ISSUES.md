@@ -247,6 +247,14 @@ own derivation. The proof is now executable and runs in CI:
 sweeps every shipped (rowHeight, clearance) pair at all four scales and
 fails on any vanish.
 
+Padded fit (2026-09-06): the 45px and 52px above are the heights of that
+day, and are no longer shipped. Reported in game, twice: the rule read as
+drawing over the icon, and the Crafting Steps rule sat off centre between
+rows. Every icon-led plan row is now one height,
+`PlanContentHeightMath.IconLedRowHeight` (50), with the frame at y=2 and
+3px of clear space over and under it. The sweep already covered 50 at
+clearance 1, so the proof needed no new case.
+
 ### 39. M38 view-decomposition entries (WP-21 through WP-25)
 
 Numbered late, on 2026-08-25, so `Views/Rendering/ISectionRelayoutSink.cs`
@@ -707,9 +715,48 @@ they appear in `Services/ItemDescriptionSanitizer.cs`,
 Comments that used to cite "spec section N.M" cited a document that is not
 in this repository and never was; they now cite this number, and the
 measurement each one stood on is inlined at the constant. Carries the
-accepted divergence from the game's "Unused Infusion Slot" wording, and the
 warhelm first-band divergence (G15). Full record:
 `dev/archive/known-issues/2026-08-23-tooltip-authenticity.md`.
+
+**Correction (FIXED): the slot lines are not a divergence, and there was
+never a reason for one.** The record above accepted "Infusion Slot" in
+place of the game's "Unused Infusion Slot", on the grounds that what is
+socketed in a player's copy is instance state `/v2/items` cannot know, so
+calling a slot unused would be a guess. That reasoning was wrong.
+`/v2/items` returns an item DEFINITION, not an instance, and a definition
+has nothing socketed in it, so "Unused" is the accurate word. Where a
+definition DOES ship an upgrade - a weapon's `suffix_item_id`, an infusion
+slot carrying an `item_id` - that slot is now left out of the tooltip
+entirely rather than described as unused, which is the same distinction
+drawn correctly. The tooltip also draws the game's own glyph beside each
+slot line, and prints upgrade slots, which it never did before: /v2/items
+has no upgrade-slot field, so the count comes from the item's type and its
+`NotUpgradeable` flag (`Services/ItemSlotFacts.cs`).
+
+**Follow-up (PARTLY FIXED): what is socketed is no longer unknowable.** The
+record above lists "what is actually socketed in the player's copy" among
+the things the API cannot tell us. That was true of `/v2/items`, which
+describes a definition, and false of `/v2/account/*`, which reports
+`upgrades` and `infusions` per owned stack. The Snapshot tab now names the
+runes, sigils, infusions and enrichments in a stack it holds, each with its
+own icon and effect text. A socketed component spends the definition's slot
+of its own kind, so only the slots left over print an unused-slot line. An
+item id whose stacks disagree reports nothing rather than one stack's
+reading, because a Snapshot row sums every stack of an id.
+
+A snapshot now reads `/v2/characters/:id/equipment` as well, so an equipped
+piece records its sockets the same way a bag stack does, and the Snapshot
+tab names the runes and infusions a character is wearing.
+
+Two residuals remain. First, the `(n/m)` set counter the game prints beside
+a socketed rune: the denominator is `details.bonuses.length` and is known,
+but the numerator is how many pieces of that set are equipped on the
+character being played. The endpoint carries what each character wears, but
+a snapshot row is one item id summed over every stack of it, with no
+character or slot kept, so that count is not available at the point the
+tooltip is drawn and none is printed. Second, and following from it, every
+tier of a socketed rune's ladder renders inactive - a divergence from the
+game whenever the same rune is worn on the character being played.
 
 ### 43. Tooltip text wrapping and Blish's 500px cap (audit batches A+B+C)
 
@@ -795,17 +842,27 @@ exactly 29,160c, which is what the wiki says Lyhr's offer is.
 
 **Gates this model still does not have (REPORTED, not implemented).** The
 wiki names three conditions that decide whether a route is available at
-all, and the module expresses none of them:
+all. One is now implemented; the other two are not:
 
 - **"Recipe: Legendary Obsidian Armor"**, the item that unlocks Lyhr's
-  exchange. The module has vocabulary for a recipe gate (`RequiredRecipe`,
-  `learnedRecipeIds` from `/v2/account/recipes`) but it is CRAFT-side
-  only: an offer has no notion of a required item, and `VendorOffer` has
-  no field for one. Without it the plan can recommend a vendor route the
-  player cannot use until they buy a 60-Provisioner-Token recipe sheet
-  first. This is the one worth doing: it needs a `VendorOffer` field, a
-  `tools/VendorOfferUpdater` scrape for it, and a check beside the
-  existing discipline gate.
+  exchange (FIXED). `VendorOffer` now carries `UnlockRecipeItemId` and
+  `UnlockRecipeId`: the recipe sheet the account must own, and the recipe
+  that sheet unlocks. When a committed vendor step's offer names one, the
+  sheet appears in Required Recipes, marked Missing! or Learned from the
+  same `/v2/account/recipes` set a craft recipe is marked from. The route
+  is never hidden and its cost never changes - hiding a route the player
+  could actually take is the worse failure. `tools/VendorOfferUpdater`
+  fills the fields from the wiki's `Has requirement` property: the value
+  must be exactly a `Recipe:` title (`VendorUnlockRequirementParser`), and
+  the GW2 API then supplies the recipe from the sheet item's
+  `details.recipe_id`. Measured over the full 70,644-row wiki scrape, that
+  rule matches 18 rows, all Lyhr's, and nothing else. The two ids are
+  deliberately NOT hashed into `offerId`, exactly like `SeasonalFestival`:
+  in that same corpus no two offers differ only by an item-valued
+  requirement, so no id collides, and back-filling a shipped row leaves
+  the id every consumer keys on untouched. `ref/vendor_offers.json` has
+  not been re-scraped yet, so every shipped offer still carries both
+  fields null.
 - **The "Astral Heartbeat" achievement** gating 100509 Arcanum of Astral
   Heartbeat, the one cost item in this chain with no recipe at all. The
   module reads achievement *bits* (`AchievementBitDedupPrePass`,
@@ -823,10 +880,11 @@ all, and the module expresses none of them:
   Purely informational in effect - the cost is right, the trip is longer
   than the plan implies.
 
-None of the three changes a COST, which is why none was implemented here:
-each turns a route from available into unavailable, and getting that
-wrong hides a route the player can actually take - the failure this whole
-item is about, in the other direction.
+None of the three changes a COST. The recipe gate was implemented by
+naming the unlock rather than acting on it; the other two are not, because
+acting on either turns a route from available into unavailable, and
+getting that wrong hides a route the player can actually take - the
+failure this whole item is about, in the other direction.
 
 ### 45. W3B: generation progress + rich logging
 
@@ -1451,9 +1509,9 @@ into `dev/archive/known-issues/`, before per-branch files existed. The
   Cited as: "Font bump and decision-round polish", font-and-polish.
   `dev/archive/known-issues/2026-08-23-font-and-polish.md`
 - **Tooltip authenticity (tooltip-authenticity)** - gate PASS 2026-08-23.
-  Cited as: "Tooltip authenticity", tooltip-authenticity; carries the
-  accepted divergence from the game's "Unused Infusion Slot" wording that
-  `Services/ItemStatTooltipComposer.cs` points here for.
+  Cited as: "Tooltip authenticity", tooltip-authenticity. Its "Infusion
+  Slot" wording divergence has since been corrected; see the correction
+  under entry 42.
   `dev/archive/known-issues/2026-08-23-tooltip-authenticity.md`
 - **Keyboard focus release (kb-focus-release)** - gate PASS 2026-08-23.
   `dev/archive/known-issues/2026-08-23-kb-focus-release.md`
@@ -1518,7 +1576,7 @@ into `dev/archive/known-issues/`, before per-branch files existed. The
   `dev/records/cleanup-public-surfaces.md`
 - **Total Cost: the inventory rows get a real Have and Needed, and the group labels read as headings (2026-09-05)** - gate NOT RUN (no live check recorded on either commit).
   `dev/records/w20-total-cost-groups.md`
-- **The plan tab's input strip reflowed in the middle of a drag (2026-09-05)** - gate NOT RUN (no live session recorded on that branch).
+- **The plan tab's input strip reflowed in the middle of a drag (2026-09-05)** - gate NOT RUN (no live session recorded on that branch); superseded by `w40-reflow-on-release` below.
   `dev/records/w22-resize-stretch.md`
 - **The recipe tree's IGNORE key moves into the gap between Source and Cost (2026-09-05)** - gate NOT RUN (no live confirmation recorded on that branch); superseded by `w23-ignore-trailing-column` below.
   `dev/records/w18-ignore-x-gap.md`
@@ -1530,3 +1588,5 @@ into `dev/archive/known-issues/`, before per-branch files existed. The
   `dev/records/w24-ranker-button-consistency.md`
 - **The Recipe Tree's ignore button gets a fixed column after Cost (2026-09-05)** - gate NOT RUN (no live session recorded on that branch).
   `dev/records/w23-ignore-trailing-column.md`
+- **The input strip reflows when the resize drag ends, not when the hand pauses (2026-09-06)** - gate NOT RUN (no live session recorded on that branch).
+  `dev/records/w40-reflow-on-release.md`

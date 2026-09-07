@@ -49,7 +49,18 @@ namespace TaimisToolbench.Tests.Helpers
             return sb.ToString();
         }
 
-        /// <summary>One plain string per line.</summary>
+        /// <summary>
+        /// One plain string per line of the SECOND box - what this module
+        /// adds under the game's own content. Empty when the tooltip is a
+        /// single box, which is what a test asserting "this line does not
+        /// belong in the item's own box" checks against.
+        /// </summary>
+        public static List<string> ToExtraLines(this TooltipContent content)
+        {
+            return content == null ? new List<string>() : content.Extra.ToPlainLines();
+        }
+
+        /// <summary>One plain string per line of the first box.</summary>
         public static List<string> ToPlainLines(this TooltipContent content)
         {
             var result = new List<string>();

@@ -348,14 +348,15 @@ namespace TaimisToolbench.Tests.Services
         // and CoinSegmentGap(6) sits twice between them, so the column is
         // the three digit runs' MeasureString widths plus that fixed chrome.
         //
-        // The chrome was 78 when CoinIconSize was 20; the move onto the
-        // measured wallet BAR tier (CurrencyIconTiers.WalletBarIconSize, 16)
-        // makes it 3 * (2 + 16) + 2 * 6 = 66, so the real worst case is now
-        // 169. The literal below is deliberately NOT lowered: it feeds a
+        // The chrome was 78 when CoinIconSize was 20, and 66 at the bar
+        // tier's first reading of 16. Re-measuring the tier against the
+        // game's own bar (CurrencyIconTiers.WalletBarIconSize, 18) makes it
+        // 3 * (2 + 18) + 2 * 6 = 72, so the real worst case is now 175. The
+        // literal below is deliberately NOT lowered: it feeds a
         // minimum-window-width PROOF, where over-reserving is safe and
         // under-reserving is not, and holding it fixed keeps the shipped
         // window minimum where it is rather than moving a user-visible
-        // constant as a side effect of an icon change. The 12px it now
+        // constant as a side effect of an icon change. The 6px it now
         // over-reserves is recorded slack, not an unmodelled term.
         // At Font16 '0' advances 10px and inks 12, '2' and '7' advance 10
         // and ink 11, '1' advances 6, and every other digit advances 9 and

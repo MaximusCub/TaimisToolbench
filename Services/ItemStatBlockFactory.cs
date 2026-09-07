@@ -27,6 +27,7 @@ namespace TaimisToolbench.Services
     {
         private static readonly IReadOnlyList<ItemAttributeLine> NoAttributes = new List<ItemAttributeLine>();
         private static readonly IReadOnlyList<string> NoStrings = new List<string>();
+        private static readonly IReadOnlyList<ItemSlotKind> NoSlots = new List<ItemSlotKind>();
 
         public static ItemStatBlock Build(RawItem raw)
         {
@@ -52,6 +53,7 @@ namespace TaimisToolbench.Services
                 Description = raw.Description ?? "",
                 Attributes = NoAttributes,
                 UpgradeBonuses = NoStrings,
+                UnusedSlots = NoSlots,
             };
 
             var detail = raw.Detail;
@@ -63,7 +65,7 @@ namespace TaimisToolbench.Services
             block.SubType = detail.SubType;
             block.WeightClass = detail.WeightClass;
             block.DamageType = detail.DamageType;
-            block.InfusionSlotCount = detail.InfusionSlotCount;
+            block.UnusedSlots = ResolveUnusedSlots(raw, detail, flags);
             block.BuffDescription = detail.BuffDescription;
             block.StatChoiceCount = detail.StatChoiceIds == null ? 0 : detail.StatChoiceIds.Count;
             block.NourishmentDurationMs = detail.NourishmentDurationMs;
@@ -114,6 +116,41 @@ namespace TaimisToolbench.Services
             }
 
             return block;
+        }
+
+        /// <summary>
+        /// The slots the definition leaves EMPTY, in the game's own order:
+        /// upgrade slots first, then infusion and enrichment slots
+        /// (measured on a live ascended-staff tooltip, which lists two
+        /// upgrade lines above its two infusion lines).
+        /// <para>
+        /// Both kinds net off what the definition already ships socketed -
+        /// its suffix items, and any infusion slot carrying an item_id -
+        /// because the game prints the contents of a filled slot instead of
+        /// an unused-slot line.
+        /// </para>
+        /// </summary>
+        private static IReadOnlyList<ItemSlotKind> ResolveUnusedSlots(
+            RawItem raw, RawItemDetail detail, HashSet<string> flags)
+        {
+            int upgradeSlots = ItemSlotFacts.UpgradeSlotCount(
+                raw.ItemType, detail.SubType, flags.Contains("NotUpgradeable"));
+            int unusedUpgrades = upgradeSlots - detail.SocketedUpgradeCount;
+            var slots = new List<ItemSlotKind>();
+            for (int i = 0; i < unusedUpgrades; i++)
+            {
+                slots.Add(ItemSlotKind.Upgrade);
+            }
+
+            foreach (var slot in detail.InfusionSlots ?? new List<RawInfusionSlot>())
+            {
+                if (slot != null && !slot.IsFilled)
+                {
+                    slots.Add(ItemSlotFacts.InfusionSlotKind(slot.Flags));
+                }
+            }
+
+            return slots.Count == 0 ? NoSlots : slots;
         }
 
         /// <summary>

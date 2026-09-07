@@ -528,5 +528,92 @@ namespace VendorOfferUpdater.Tests
             Assert.Null(untagged.SeasonalFestival);
             Assert.Equal("halloween", tagged.SeasonalFestival);
         }
+
+        // Lyhr's real wiki rows: the Obsidian armour pieces carry
+        // "Recipe: Legendary Obsidian Armor", item 101483, whose GW2 API
+        // details name recipe 14083.
+        private const string ObsidianSheetName = "Recipe: Legendary Obsidian Armor";
+        private const int ObsidianSheetItemId = 101483;
+        private const int ObsidianSheetRecipeId = 14083;
+
+        private static Dictionary<string, int> SheetItemIdMap()
+        {
+            return new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase)
+            {
+                [ObsidianSheetName] = ObsidianSheetItemId,
+            };
+        }
+
+        [Fact]
+        public async Task RecipeSheetRequirement_TagsBothUnlockIds()
+        {
+            var (helper, httpClient) = await CreateLoadedHelper();
+            using var _ = httpClient;
+            var result = MakeResult(merchantName: "Lyhr", requirement: ObsidianSheetName);
+
+            var offer = Program.ConvertToOffer(
+                result, helper, SheetItemIdMap(),
+                new Dictionary<int, int> { [ObsidianSheetItemId] = ObsidianSheetRecipeId });
+
+            Assert.NotNull(offer);
+            Assert.Equal(ObsidianSheetItemId, offer.UnlockRecipeItemId);
+            Assert.Equal(ObsidianSheetRecipeId, offer.UnlockRecipeId);
+        }
+
+        [Fact]
+        public async Task RecipeSheetRequirement_UnresolvedRecipeId_LeavesBothNull()
+        {
+            // Half a gate is worse than none: the sheet's item id is known
+            // but nothing maps it to a recipe, so ownership could never be
+            // checked.
+            var (helper, httpClient) = await CreateLoadedHelper();
+            using var _ = httpClient;
+            var result = MakeResult(merchantName: "Lyhr", requirement: ObsidianSheetName);
+
+            var offer = Program.ConvertToOffer(result, helper, SheetItemIdMap());
+
+            Assert.NotNull(offer);
+            Assert.Null(offer.UnlockRecipeItemId);
+            Assert.Null(offer.UnlockRecipeId);
+        }
+
+        [Fact]
+        public async Task NonSheetRequirement_LeavesBothNull()
+        {
+            var (helper, httpClient) = await CreateLoadedHelper();
+            using var _ = httpClient;
+            var result = MakeResult(
+                merchantName: "Lyhr", requirement: "Obsidian Armor Crafting");
+
+            var offer = Program.ConvertToOffer(
+                result, helper, SheetItemIdMap(),
+                new Dictionary<int, int> { [ObsidianSheetItemId] = ObsidianSheetRecipeId });
+
+            Assert.NotNull(offer);
+            Assert.Null(offer.UnlockRecipeItemId);
+            Assert.Null(offer.UnlockRecipeId);
+        }
+
+        [Fact]
+        public async Task UnlockRequirement_DoesNotChangeOfferId()
+        {
+            // Models/VendorOffer.cs: the unlock is deliberately not hashed,
+            // so back-filling it onto an already-shipped row leaves the id
+            // every consumer keys on untouched.
+            var (helper, httpClient) = await CreateLoadedHelper();
+            using var _ = httpClient;
+            var untagged = Program.ConvertToOffer(
+                MakeResult(merchantName: "Lyhr"), helper, SheetItemIdMap());
+            var tagged = Program.ConvertToOffer(
+                MakeResult(merchantName: "Lyhr", requirement: ObsidianSheetName),
+                helper, SheetItemIdMap(),
+                new Dictionary<int, int> { [ObsidianSheetItemId] = ObsidianSheetRecipeId });
+
+            Assert.NotNull(untagged);
+            Assert.NotNull(tagged);
+            Assert.Equal(untagged.OfferId, tagged.OfferId);
+            Assert.Null(untagged.UnlockRecipeItemId);
+            Assert.Equal(ObsidianSheetItemId, tagged.UnlockRecipeItemId);
+        }
     }
 }

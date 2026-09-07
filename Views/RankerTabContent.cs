@@ -527,7 +527,7 @@ namespace TaimisToolbench.Views
             {
                 Font = UiFonts.Body,
                 Text = "Compare:",
-                TextColor = DimColor,
+                TextColor = Color.White,
                 AutoSizeWidth = true,
                 AutoSizeHeight = true,
                 Location = new Point(0, 10),

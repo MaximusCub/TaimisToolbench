@@ -4,7 +4,7 @@ using TaimisToolbench.Models;
 namespace TaimisToolbench.Services
 {
     /// <summary>
-    /// Builds the shopping-row tooltip's per-currency HAVE/NEED line(s) from an
+    /// Builds the shopping-row tooltip's per-currency wallet line(s) from an
     /// already-resolved CurrencyAmountViewModel list - the same list
     /// ShoppingListSectionRenderer.CreateShoppingRow renders in the Total cell
     /// (row.CurrencyCosts). Pure, Blish-free string shaping so both
@@ -25,7 +25,7 @@ namespace TaimisToolbench.Services
         /// The whole shopping row tooltip as CONTENT rather than as a
         /// string: the item's stat block (which opens with its name in its
         /// rarity colour and closes with a real coin run), then the row's
-        /// own acquisition hint and the HAVE/NEED lines below.
+        /// own acquisition hint and wallet lines in the second box.
         /// <para>
         /// The plain string form this row used to build could only spell a
         /// coin amount out as "1g 23s 45c" and could show no stats at all,
@@ -60,17 +60,15 @@ namespace TaimisToolbench.Services
         /// an empty list for "nothing to say" lets callers AddRange without a
         /// null check.
         ///
-        /// Shortfall rows (holding &lt; Amount) render "HAVE owned/Amount THIS
-        /// ROW, NEED shortfall"; in that branch the OwnedQuantity clamp is
-        /// inert, so OwnedQuantity already IS the real unclamped holding.
-        /// Covered rows (holding &gt;= Amount) render "HAVE Amount/Amount THIS
-        /// ROW", plus a "(wallet N)" aside only when the real unclamped
-        /// RawOwnedQuantity exceeds Amount - the clamp hides that surplus, so
-        /// the aside is the only place it survives.
-        ///
-        /// The "THIS ROW" and "wallet" wording is load-bearing and must not be
-        /// softened; why, and the plan-scope pill it mirrors:
+        /// Every line has to say that the cost is THIS ROW's and that the
+        /// holding is the whole WALLET's, because the two are different
+        /// scopes and a reader who reads the cost as the plan's total will
+        /// buy the wrong things. Why, and the plan-scope pill it mirrors:
         /// docs/ARCHITECTURE.md, "Services Q-Z: relocated design narrative".
+        /// On a shortfall row the OwnedQuantity clamp is inert, so
+        /// OwnedQuantity already IS the real unclamped holding; on a covered
+        /// row the clamp hides any surplus, and RawOwnedQuantity is the only
+        /// place it survives.
         /// </summary>
         public static IReadOnlyList<string> BuildCurrencyLines(IReadOnlyList<CurrencyAmountViewModel> currencyCosts)
         {
@@ -95,7 +93,9 @@ namespace TaimisToolbench.Services
                 long needed = cc.Amount - cc.OwnedQuantity.Value;
                 if (needed > 0)
                 {
-                    lines.Add($"{cc.Name}: HAVE {cc.OwnedQuantity.Value}/{cc.Amount} THIS ROW, NEED {needed}");
+                    lines.Add(
+                        $"{cc.Name}: this row costs {cc.Amount}. You have {cc.OwnedQuantity.Value}"
+                        + $" in your wallet and need {needed} more.");
                     continue;
                 }
 
@@ -104,13 +104,9 @@ namespace TaimisToolbench.Services
                 // only guards against a future caller constructing this
                 // view model directly with just OwnedQuantity set.
                 long rawHeld = cc.RawOwnedQuantity ?? cc.OwnedQuantity.Value;
-                string line = $"{cc.Name}: HAVE {cc.Amount}/{cc.Amount} THIS ROW";
-                if (rawHeld > cc.Amount)
-                {
-                    line += $" (wallet {rawHeld})";
-                }
-
-                lines.Add(line);
+                lines.Add(rawHeld > cc.Amount
+                    ? $"{cc.Name}: this row costs {cc.Amount}. Your wallet holds {rawHeld}."
+                    : $"{cc.Name}: this row costs {cc.Amount}. You have enough in your wallet.");
             }
 
             return lines;
