@@ -369,6 +369,12 @@ namespace TaimisToolbench.Views
         // Views/Rendering/StickyHeaderHost.
         private StickyHeaderHost _stickyHeaders;
 
+        // Trailing blank space that lets a shrunken plan still scroll far
+        // enough to hold the anchored row where it was. Rebuilt on demand:
+        // ResetContentPanelToEmpty disposes it with the rest of the
+        // content - see SetScrollTailSpacer.
+        private Panel _scrollTailSpacer;
+
         // How to put the TREE's band back after a preserving rebuild. Only
         // the tree needs one: every other section re-registers its band as
         // it re-renders it, and the tree is the one whose controls a
@@ -495,7 +501,9 @@ namespace TaimisToolbench.Views
         // nothing else, and none of them becomes part of this class's own
         // callable surface. Every one forwards to the private member that
         // used to be handed over as a constructor delegate.
-        void ITreePlanHost.PreserveScrollAcross(Action mutate) => PreserveScrollAcross(mutate);
+        void ITreePlanHost.PreserveScrollAcross(Action mutate, int? anchorNodeId) =>
+            PreserveScrollAcross(
+                mutate, anchorNodeId.HasValue ? TreeRowAnchorKey(anchorNodeId.Value) : null);
 
         void ITreePlanHost.SetStatus(string status) => SetStatus(status);
 
@@ -1212,7 +1220,7 @@ namespace TaimisToolbench.Views
         /// against a late Blish-internal scrollbar reset
         /// (StartScrollVerify).
         /// </summary>
-        private void PreserveScrollAcross(Action mutate)
+        private void PreserveScrollAcross(Action mutate, string anchorKey = null)
         {
             int saved = _contentPanel?.VerticalScrollOffset ?? 0;
             int capturedGeneration = ++_scrollRestoreGeneration;
@@ -1223,22 +1231,20 @@ namespace TaimisToolbench.Views
             // stale-offset verify against the new content.
             _resizeScrollRestorePending = false;
 
-            // Nothing to hold still at the very top of the content, and a
-            // restore is skipped there anyway.
-            ScrollAnchor anchor = default(ScrollAnchor);
-            bool anchored = false;
-            if (saved > 0)
+            ScrollAnchor anchor;
+            if (!TryCaptureScrollAnchor(saved, anchorKey, out anchor))
             {
-                anchored = TryCaptureScrollAnchor(saved, out anchor);
+                anchor = default(ScrollAnchor);
             }
 
             mutate();
-            if (saved <= 0)
-            {
-                return;
-            }
 
-            int restore = anchored ? ResolveAnchoredOffset(anchor, saved) : saved;
+            // Two statements, deliberately. ResolveAnchoredOffset sizes
+            // the trailing spacer as part of deciding the offset, and the
+            // write below measures the content and recalculates the
+            // scrollbar from what it finds. The spacer has to be in place
+            // before that measure runs.
+            int restore = ResolveAnchoredOffset(anchor, saved);
             ApplySavedScrollSynchronously(restore, capturedGeneration);
         }
 
@@ -1379,7 +1385,14 @@ namespace TaimisToolbench.Views
             return true;
         }
 
-        private bool TryCaptureScrollAnchor(int savedOffset, out ScrollAnchor anchor)
+        /// <summary>
+        /// The element this restore must hold still. The three-tier rule
+        /// itself is ScrollAnchorMath.TryCaptureFor's, which is where its
+        /// derivation and its tests live; this reads the two inputs only
+        /// the view can see - where the cursor is, and how much of the
+        /// viewport's top edge a pinned sticky band covers.
+        /// </summary>
+        private bool TryCaptureScrollAnchor(int savedOffset, string anchorKey, out ScrollAnchor anchor)
         {
             anchor = default(ScrollAnchor);
             if (_contentPanel == null || _scrollAnchors.Count == 0)
@@ -1387,11 +1400,32 @@ namespace TaimisToolbench.Views
                 return false;
             }
 
-            int anchorLine = ScrollAnchorMath.AnchorLine(
-                savedOffset, _contentPanel.Height, CursorYInContentViewport());
+            return ScrollAnchorMath.TryCaptureFor(
+                CollectScrollAnchorCandidates(),
+                anchorKey,
+                savedOffset,
+                _contentPanel.Height,
+                CursorYInContentViewport(),
+                PinnedBandTopInset(),
+                out anchor);
+        }
 
-            return ScrollAnchorMath.TryCapture(
-                CollectScrollAnchorCandidates(), anchorLine, out anchor);
+        /// <summary>
+        /// How many pixels of the content viewport's top edge a pinned
+        /// sticky header band is drawn over, or zero when none is pinned.
+        /// StickyHeaderHost publishes an absolute y, so this subtracts the
+        /// viewport's own absolute top.
+        /// </summary>
+        private int PinnedBandTopInset()
+        {
+            int? pinnedBottom = _stickyHeaders?.PinnedBandBottom;
+            if (!pinnedBottom.HasValue || _contentPanel == null)
+            {
+                return 0;
+            }
+
+            int inset = pinnedBottom.Value - _contentPanel.AbsoluteBounds.Y;
+            return inset > 0 ? inset : 0;
         }
 
         /// <summary>
@@ -1420,9 +1454,16 @@ namespace TaimisToolbench.Views
 
         /// <summary>
         /// The offset that puts the anchored element back under the line
-        /// it was on. Falls back to the pre-mutate offset when the element
-        /// is gone from the rebuilt content - a jump to wherever a missing
-        /// row "would" be is worse than the reflow this fixes.
+        /// it was on. Walks the anchor's on-screen fallbacks when the
+        /// anchor itself is gone, then falls back to the pre-mutate
+        /// offset clamped to what the rebuilt content can scroll to.
+        /// <para>
+        /// The clamp is the point. An unclamped offset past the end of
+        /// shorter content saturates ScrollMath.RatioForOffset at 1.0 and
+        /// lands the viewport at the very bottom, which is a jump nobody
+        /// chose. Clamping cannot hold a row still when the content below
+        /// it is gone, but it stops at the last position that exists.
+        /// </para>
         /// </summary>
         private int ResolveAnchoredOffset(ScrollAnchor anchor, int savedOffset)
         {
@@ -1431,15 +1472,79 @@ namespace TaimisToolbench.Views
                 return savedOffset;
             }
 
-            int? newTop = ScrollAnchorMath.FindTop(CollectScrollAnchorCandidates(), anchor);
-            if (!newTop.HasValue)
+            // Zeroed BEFORE the measure. The previous restore's spacer is
+            // not content, and left standing it would count toward the
+            // height this one measures, size the new spacer to nothing,
+            // and clamp anyway one rebuild late.
+            SetScrollTailSpacer(0, 0);
+
+            int contentHeight = MeasureContentHeight(_contentPanel);
+            var plan = ScrollAnchorMath.PlanRestore(
+                CollectScrollAnchorCandidates(),
+                anchor,
+                savedOffset,
+                contentHeight,
+                _contentPanel.Height);
+
+            // Sized BEFORE the scroll write, which measures the content
+            // again and recalculates the scrollbar from what it finds.
+            SetScrollTailSpacer(plan.TailSpacerHeight, contentHeight);
+            return plan.Offset;
+        }
+
+        /// <summary>
+        /// Sizes the trailing spacer, creating it as the content panel's
+        /// last child when the last rebuild disposed it with everything
+        /// else. Height zero hides it, so a plan that needs none measures
+        /// and scrolls exactly as it did before this existed - Blish's
+        /// FlowPanel reflow and MeasureContentHeight both skip an
+        /// invisible child.
+        /// <para>
+        /// Only ever called from the rebuild path. A spacer that changed
+        /// height during free scrolling would move the content height at a
+        /// moment with no restore armed, which is precisely when Blish's
+        /// Scrollbar.RecalculateLayout zeroes ScrollDistance.
+        /// </para>
+        /// </summary>
+        private void SetScrollTailSpacer(int height, int contentBottom)
+        {
+            if (_contentPanel == null)
             {
-                return savedOffset;
+                return;
             }
 
-            return ScrollAnchorMath.RestoredOffset(
-                savedOffset, anchor, newTop.Value,
-                MeasureContentHeight(_contentPanel), _contentPanel.Height);
+            if (height <= 0)
+            {
+                if (_scrollTailSpacer != null)
+                {
+                    _scrollTailSpacer.Visible = false;
+                }
+
+                return;
+            }
+
+            if (_scrollTailSpacer == null || _scrollTailSpacer.Parent != _contentPanel)
+            {
+                _scrollTailSpacer = new WheelTransparentClippedPanel()
+                {
+                    Parent = _contentPanel,
+                };
+            }
+
+            int width = _contentPanel.Width - RightEdgePadding;
+            if (width < 0)
+            {
+                width = 0;
+            }
+
+            // Placed at the measured content bottom rather than left to
+            // the FlowPanel's own reflow: the scroll write that follows
+            // reads this control's Bottom inside the same call. The panel
+            // sets no ControlPadding, so this is where the reflow puts it
+            // too, and a later one moves nothing.
+            _scrollTailSpacer.Size = new Point(width, height);
+            _scrollTailSpacer.Location = new Point(0, contentBottom);
+            _scrollTailSpacer.Visible = true;
         }
 
         #endregion // Scroll preserve/restore/verify: the reflection handle and PreserveScrollAcross - KNOWN-ISSUES #12/#14/#19
@@ -4492,6 +4597,10 @@ namespace TaimisToolbench.Views
             {
                 child.Dispose();
             }
+
+            // Disposed by the sweep above, and a disposed control is not a
+            // spacer to re-size.
+            _scrollTailSpacer = null;
         }
 
         /// <summary>
