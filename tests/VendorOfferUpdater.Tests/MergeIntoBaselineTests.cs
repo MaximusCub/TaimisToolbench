@@ -440,5 +440,160 @@ namespace VendorOfferUpdater.Tests
             Assert.Single(result.Merged);
             Assert.Equal("dragonbash", result.Merged[0].SeasonalFestival);
         }
+
+        private static VendorOffer MakeCoinOffer(
+            string offerId, string merchantName, int outputItemId, int coinCount,
+            int karmaCount = 0, string location = null, string seasonalFestival = null)
+        {
+            var costs = new List<CostLine>
+            {
+                new CostLine { Type = "Currency", Id = 1, Count = coinCount },
+            };
+            if (karmaCount > 0)
+            {
+                costs.Add(new CostLine { Type = "Currency", Id = 2, Count = karmaCount });
+            }
+
+            return new VendorOffer
+            {
+                OfferId = offerId,
+                OutputItemId = outputItemId,
+                OutputCount = 1,
+                CostLines = costs,
+                MerchantName = merchantName,
+                Locations = location == null
+                    ? new List<string>()
+                    : new List<string> { location },
+                SeasonalFestival = seasonalFestival,
+            };
+        }
+
+        // A protected merchant's baseline row and this pass's row can name
+        // two different coin prices for one sale, because the wiki writes a
+        // coin price in gold, silver or copper. Shipping both lets the
+        // solver buy at the lower one.
+        [Fact]
+        public void ProtectedMerchant_BaselineRowAtADifferentCoinPrice_IsDropped()
+        {
+            var baseline = new List<VendorOffer>
+            {
+                MakeCoinOffer("stale", "Palak", 106986, 200, karmaCount: 300000),
+            };
+            var fresh = new List<VendorOffer>
+            {
+                MakeCoinOffer("corrected", "Palak", 106986, 2000000, karmaCount: 300000),
+            };
+            var skipped = new HashSet<string> { "Palak" };
+
+            var result = Program.MergeIntoBaseline(baseline, fresh, skipped);
+
+            Assert.Single(result.Merged);
+            Assert.Equal("corrected", result.Merged[0].OfferId);
+        }
+
+        [Fact]
+        public void ProtectedMerchant_BaselineRowAtADifferentCoinPrice_CarriesItsTagAcross()
+        {
+            var baseline = new List<VendorOffer>
+            {
+                MakeCoinOffer("stale", "Wintersday Trader (Weekly)", 104132, 5,
+                    seasonalFestival: "wintersday"),
+            };
+            var fresh = new List<VendorOffer>
+            {
+                MakeCoinOffer("corrected", "Wintersday Trader (Weekly)", 104132, 50000),
+            };
+            var skipped = new HashSet<string> { "Wintersday Trader (Weekly)" };
+
+            var result = Program.MergeIntoBaseline(baseline, fresh, skipped);
+
+            Assert.Single(result.Merged);
+            Assert.Equal("corrected", result.Merged[0].OfferId);
+            Assert.Equal("wintersday", result.Merged[0].SeasonalFestival);
+        }
+
+        // The guard the protected-merchant path exists for: a baseline row
+        // this pass produced no row for is still kept.
+        [Fact]
+        public void ProtectedMerchant_BaselineRowForAnItemThisPassDidNotProduce_IsKept()
+        {
+            var baseline = new List<VendorOffer>
+            {
+                MakeCoinOffer("only-in-baseline", "Palak", 100221, 5000),
+            };
+            var fresh = new List<VendorOffer>
+            {
+                MakeCoinOffer("other-item", "Palak", 106986, 2000000),
+            };
+            var skipped = new HashSet<string> { "Palak" };
+
+            var result = Program.MergeIntoBaseline(baseline, fresh, skipped);
+
+            Assert.Equal(2, result.Merged.Count);
+            Assert.Contains(result.Merged, o => o.OfferId == "only-in-baseline");
+        }
+
+        // Two rows for one sale that agree on the coin price are left
+        // alone: only a disagreement about the price drops the baseline
+        // row, so a row differing in some other field is not swept up.
+        [Fact]
+        public void ProtectedMerchant_BaselineRowAtTheSameCoinPrice_IsKept()
+        {
+            var baseline = new List<VendorOffer>
+            {
+                MakeCoinOffer("stale-location", "Palak", 106986, 2000000,
+                    location: "Shipwreck Strand"),
+            };
+            var fresh = new List<VendorOffer>
+            {
+                MakeCoinOffer("current", "Palak", 106986, 2000000, location: "Hullgarden"),
+            };
+            var skipped = new HashSet<string> { "Palak" };
+
+            var result = Program.MergeIntoBaseline(baseline, fresh, skipped);
+
+            Assert.Equal(2, result.Merged.Count);
+        }
+
+        [Fact]
+        public void ProtectedMerchant_RowWithDifferentNonCoinCosts_IsNotTheSameSale()
+        {
+            var baseline = new List<VendorOffer>
+            {
+                MakeCoinOffer("karma-priced", "Palak", 106986, 200, karmaCount: 300000),
+            };
+            var fresh = new List<VendorOffer>
+            {
+                MakeCoinOffer("coin-only", "Palak", 106986, 2000000),
+            };
+            var skipped = new HashSet<string> { "Palak" };
+
+            var result = Program.MergeIntoBaseline(baseline, fresh, skipped);
+
+            Assert.Equal(2, result.Merged.Count);
+        }
+
+        // A replaced merchant's tag is harvested before its baseline rows
+        // are dropped. Both the OfferId and the content key carry the coin
+        // count, so a corrected price used to match on neither.
+        [Fact]
+        public void ReplacedMerchant_FestivalTagSurvivesACoinPriceCorrection()
+        {
+            var baseline = new List<VendorOffer>
+            {
+                MakeCoinOffer("stale", "Festival Rewards Vendor (Weekly)", 104132, 5,
+                    seasonalFestival: "wintersday"),
+            };
+            var fresh = new List<VendorOffer>
+            {
+                MakeCoinOffer("corrected", "Festival Rewards Vendor (Weekly)", 104132, 50000),
+            };
+
+            var result = Program.MergeIntoBaseline(baseline, fresh);
+
+            Assert.Single(result.Merged);
+            Assert.Equal("corrected", result.Merged[0].OfferId);
+            Assert.Equal("wintersday", result.Merged[0].SeasonalFestival);
+        }
     }
 }

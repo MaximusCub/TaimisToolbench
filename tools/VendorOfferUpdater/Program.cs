@@ -894,6 +894,11 @@ namespace VendorOfferUpdater
             {
                 var replacedTagsByOfferId = new Dictionary<string, string>(StringComparer.Ordinal);
                 var replacedTagsByContentKey = new Dictionary<string, string>(StringComparer.Ordinal);
+
+                // Both keys above carry the coin count, so a run that
+                // corrects a sale's coin price matches on neither and the
+                // tag is lost. ComputeSameSaleKey leaves the price out.
+                var replacedTagsBySaleKey = new Dictionary<string, string>(StringComparer.Ordinal);
                 foreach (var o in baseline)
                 {
                     if (o.SeasonalFestival == null)
@@ -912,9 +917,11 @@ namespace VendorOfferUpdater
                     }
 
                     replacedTagsByContentKey[ComputeContentKey(o)] = o.SeasonalFestival;
+                    replacedTagsBySaleKey[ComputeSameSaleKey(o)] = o.SeasonalFestival;
                 }
 
-                if (replacedTagsByOfferId.Count > 0 || replacedTagsByContentKey.Count > 0)
+                if (replacedTagsByOfferId.Count > 0 || replacedTagsByContentKey.Count > 0
+                    || replacedTagsBySaleKey.Count > 0)
                 {
                     foreach (var o in fresh)
                     {
@@ -937,6 +944,11 @@ namespace VendorOfferUpdater
                             ComputeContentKey(o), out var tagByContent))
                         {
                             o.SeasonalFestival = tagByContent;
+                        }
+                        else if (replacedTagsBySaleKey.TryGetValue(
+                            ComputeSameSaleKey(o), out var tagBySale))
+                        {
+                            o.SeasonalFestival = tagBySale;
                         }
                     }
                 }
@@ -1049,6 +1061,70 @@ namespace VendorOfferUpdater
 
                 result.AddRange(byContentKey.Values);
                 merged = result;
+
+                // The wiki writes a coin price in gold, silver or copper,
+                // so a run that reads the unit differently records a
+                // different number of copper for the same sale
+                // (ComputeSameSaleKey). Both rows then ship and the solver
+                // buys at the cheaper of them. This pass's price wins: a
+                // protected merchant's baseline row goes when this pass
+                // produced a row for the same sale and no row at that
+                // price, after its festival tag is carried across. A
+                // baseline row this pass produced no row for is kept, and
+                // so is one whose price this pass agrees with - those are
+                // the cases the protected-merchant guard exists for.
+                var freshBySaleKey =
+                    new Dictionary<string, List<VendorOffer>>(StringComparer.Ordinal);
+                foreach (var o in fresh)
+                {
+                    if (!protectedSet.Contains(o.MerchantName ?? string.Empty))
+                    {
+                        continue;
+                    }
+
+                    string saleKey = ComputeSameSaleKey(o);
+                    if (!freshBySaleKey.TryGetValue(saleKey, out var sameSale))
+                    {
+                        sameSale = new List<VendorOffer>();
+                        freshBySaleKey[saleKey] = sameSale;
+                    }
+
+                    sameSale.Add(o);
+                }
+
+                if (freshBySaleKey.Count > 0)
+                {
+                    var deduped = new List<VendorOffer>(merged.Count);
+                    foreach (var offer in merged)
+                    {
+                        List<VendorOffer>? freshRows = null;
+                        bool drop =
+                            protectedSet.Contains(offer.MerchantName ?? string.Empty)
+                            && (offer.OfferId == null || !freshOfferIds.Contains(offer.OfferId))
+                            && freshBySaleKey.TryGetValue(
+                                ComputeSameSaleKey(offer), out freshRows)
+                            && !freshRows.Any(f => TotalCoinCost(f) == TotalCoinCost(offer));
+
+                        if (!drop)
+                        {
+                            deduped.Add(offer);
+                            continue;
+                        }
+
+                        if (offer.SeasonalFestival != null)
+                        {
+                            foreach (var freshRow in freshRows!)
+                            {
+                                if (freshRow.SeasonalFestival == null)
+                                {
+                                    freshRow.SeasonalFestival = offer.SeasonalFestival;
+                                }
+                            }
+                        }
+                    }
+
+                    merged = deduped;
+                }
             }
 
             merged = merged
@@ -1129,6 +1205,73 @@ namespace VendorOfferUpdater
             return sb.ToString();
         }
 
+        private static bool IsCoinCost(CostLine cost)
+        {
+            return string.Equals(cost.Type, "Currency", StringComparison.Ordinal)
+                && cost.Id == Gw2Constants.CoinCurrencyId;
+        }
+
+        private static long TotalCoinCost(VendorOffer offer)
+        {
+            return (offer.CostLines ?? new List<CostLine>())
+                .Where(IsCoinCost)
+                .Sum(c => (long)c.Count);
+        }
+
+        /// <summary>
+        /// Key for "these two rows are the same sale": the merchant, what it
+        /// hands over, and what it charges other than coin. The coin amount
+        /// is left out, and so is everything the wiki can restate for a sale
+        /// it still lists - where the vendor stands, and the caps. Whether
+        /// the sale costs coin at all is kept, so a free row never matches a
+        /// priced one.
+        /// <para>
+        /// Used only by MergeIntoBaseline, to drop a protected merchant's
+        /// baseline row once this pass has produced its own row for the same
+        /// sale. It never collapses two rows from the same pass.
+        /// </para>
+        /// </summary>
+        private static string ComputeSameSaleKey(VendorOffer offer)
+        {
+            var sb = new StringBuilder();
+
+            sb.Append("merchant=");
+            sb.Append(offer.MerchantName ?? "");
+
+            sb.Append(";output=");
+            sb.Append(offer.OutputItemId);
+            sb.Append('/');
+            sb.Append(offer.OutputCount);
+
+            var costs = offer.CostLines ?? new List<CostLine>();
+
+            sb.Append(";coinCost=");
+            sb.Append(costs.Any(IsCoinCost) ? "yes" : "no");
+
+            sb.Append(";otherCosts=");
+            var sortedCosts = costs
+                .Where(c => !IsCoinCost(c))
+                .OrderBy(c => c.Type, StringComparer.Ordinal)
+                .ThenBy(c => c.Id)
+                .ThenBy(c => c.Count)
+                .ToList();
+            for (int i = 0; i < sortedCosts.Count; i++)
+            {
+                if (i > 0)
+                {
+                    sb.Append(',');
+                }
+
+                sb.Append(sortedCosts[i].Type);
+                sb.Append(':');
+                sb.Append(sortedCosts[i].Id);
+                sb.Append(':');
+                sb.Append(sortedCosts[i].Count);
+            }
+
+            return sb.ToString();
+        }
+
         /// <summary>
         /// Converts a single wiki vendor result to a VendorOffer.
         /// Returns null if any cost line cannot be resolved.
@@ -1159,11 +1302,30 @@ namespace VendorOfferUpdater
                 int? currencyId = apiHelper.ResolveCurrencyId(cost.Currency);
                 if (currencyId.HasValue)
                 {
+                    // A coin price is stored in copper, but the wiki writes
+                    // it in whichever unit the vendor page used - 200 under
+                    // the name "Gold" is 2000000 copper. Every other
+                    // currency counts in whole units and needs no scaling.
+                    long count = cost.Value;
+                    if (Gw2Constants.TryGetCopperPerUnit(cost.Currency, out int copperPerUnit))
+                    {
+                        count = (long)cost.Value * copperPerUnit;
+                    }
+
+                    if (count > int.MaxValue)
+                    {
+                        Console.WriteLine(
+                            $"  WARNING: cost of {cost.Value} {cost.Currency} for game id " +
+                            $"{result.GameId} exceeds the copper a cost line can hold - " +
+                            "offer skipped.");
+                        return null;
+                    }
+
                     costLines.Add(new CostLine
                     {
                         Type = "Currency",
                         Id = currencyId.Value,
-                        Count = cost.Value,
+                        Count = (int)count,
                     });
                 }
                 else if (!string.IsNullOrEmpty(cost.Currency) &&

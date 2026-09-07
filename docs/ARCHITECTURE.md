@@ -4018,6 +4018,27 @@ deleted shipped offers before, when a pass returned rows with
 replace. A possibly-stale baseline row surviving an extra run is visible
 and fixable; a silent deletion is neither.
 
+One kind of stale row is not fixable by an extra run, though, and the
+union has to drop it: a second price for a sale this pass already
+priced. The wiki writes a vendor's coin price in gold, silver or copper,
+so a run that reads the unit differently records a different number of
+copper for the same sale. Both rows then ship and the solver buys at the
+lower one. `ComputeSameSaleKey` names a sale by its merchant, what it
+hands over, and what it charges other than coin; a protected merchant's
+baseline row goes when this pass produced a row for that sale and no row
+at that price. A baseline row this pass produced no row for is still
+kept, and so is one whose price this pass agrees with. The rule never
+collapses two rows from the same pass, so a vendor that really does sell
+one item at two prices keeps both.
+
+`merchantsWithSkippedRows` also never empties for a pass that reads the
+wiki cache rather than the wiki. `--resolve-item-currencies-only` builds
+the set from cache rows with `GameId <= 0`, and those rows are in the
+cache until a fresh scrape replaces them, so the same ~880 merchants are
+protected on every such run. Their rows are the ones that need the rule
+above; the "re-run once every row resolves a game id" advice in the
+merge's own warning only reaches merchants a live scrape can fix.
+
 ### T.5 `Program.ResolveSeasonalFestivalValuesAsync`: opt-in, budgeted, page-keyed
 
 **Why opt-in.** Every other field on `WikiVendorResult` comes from SMW

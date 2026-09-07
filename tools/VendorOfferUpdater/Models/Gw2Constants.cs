@@ -7,6 +7,55 @@ namespace VendorOfferUpdater.Models
     {
         public const int CoinCurrencyId = 1;
 
+        public const int CopperPerSilver = 100;
+
+        public const int CopperPerGold = 10000;
+
+        /// <summary>
+        /// How many copper one unit of a wiki coin price is worth, or false
+        /// for a name that is not a coin price at all.
+        /// <para>
+        /// A wiki vendor row writes a coin price under whichever of "Coin",
+        /// "Coins", "Copper", "Silver" or "Gold" the page's editor chose.
+        /// Currency id 1 is always counted in copper, so a "Gold" value has
+        /// to be multiplied by 10000 and a "Silver" value by 100 before it
+        /// becomes a cost line. This is also the list
+        /// Gw2ApiHelper.ResolveCurrencyId answers currency id 1 for, so the
+        /// two never disagree about which names are coin.
+        /// </para>
+        /// </summary>
+        public static bool TryGetCopperPerUnit(string? currencyName, out int copperPerUnit)
+        {
+            copperPerUnit = 0;
+
+            if (string.IsNullOrEmpty(currencyName))
+            {
+                return false;
+            }
+
+            if (string.Equals(currencyName, "Coin", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(currencyName, "Coins", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(currencyName, "Copper", StringComparison.OrdinalIgnoreCase))
+            {
+                copperPerUnit = 1;
+                return true;
+            }
+
+            if (string.Equals(currencyName, "Silver", StringComparison.OrdinalIgnoreCase))
+            {
+                copperPerUnit = CopperPerSilver;
+                return true;
+            }
+
+            if (string.Equals(currencyName, "Gold", StringComparison.OrdinalIgnoreCase))
+            {
+                copperPerUnit = CopperPerGold;
+                return true;
+            }
+
+            return false;
+        }
+
         // The three Homestead Refinement output
         // materials. The main app's Models/Gw2Constants.cs declares the
         // same three ids; that class is much larger and the two have
