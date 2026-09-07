@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using VendorOfferUpdater;
@@ -87,6 +88,109 @@ namespace VendorOfferUpdater.Tests
             Assert.NotNull(offer);
             Assert.Equal("Currency", offer.CostLines[0].Type);
             Assert.Equal(Gw2Constants.CoinCurrencyId, offer.CostLines[0].Id);
+        }
+
+        [Theory]
+        [InlineData("Coin", 250, 250)]
+        [InlineData("Coins", 250, 250)]
+        [InlineData("Copper", 14, 14)]
+        [InlineData("Silver", 50, 5000)]
+        [InlineData("Gold", 200, 2000000)]
+        [InlineData("gold", 1, 10000)]
+        public async Task CoinCost_IsConvertedToCopper(
+            string currencyName, int wikiValue, int expectedCopper)
+        {
+            var (helper, httpClient) = await CreateLoadedHelper();
+            using var _ = httpClient;
+            var result = MakeResult(costEntries: new List<WikiCostEntry>
+            {
+                new WikiCostEntry { Value = wikiValue, Currency = currencyName },
+            });
+
+            var offer = Program.ConvertToOffer(result, helper, new Dictionary<string, int>());
+
+            Assert.NotNull(offer);
+            Assert.Single(offer.CostLines);
+            Assert.Equal(Gw2Constants.CoinCurrencyId, offer.CostLines[0].Id);
+            Assert.Equal(expectedCopper, offer.CostLines[0].Count);
+        }
+
+        [Fact]
+        public async Task NonCoinCurrency_CountIsNotScaled()
+        {
+            var (helper, httpClient) = await CreateLoadedHelper();
+            using var _ = httpClient;
+            var result = MakeResult(costEntries: new List<WikiCostEntry>
+            {
+                new WikiCostEntry { Value = 300000, Currency = "Karma" },
+            });
+
+            var offer = Program.ConvertToOffer(result, helper, new Dictionary<string, int>());
+
+            Assert.NotNull(offer);
+            Assert.Equal(2, offer.CostLines[0].Id);
+            Assert.Equal(300000, offer.CostLines[0].Count);
+        }
+
+        [Fact]
+        public async Task GoldCostBeyondIntRange_ReturnsNull()
+        {
+            var (helper, httpClient) = await CreateLoadedHelper();
+            using var _ = httpClient;
+            var result = MakeResult(costEntries: new List<WikiCostEntry>
+            {
+                new WikiCostEntry { Value = 300000, Currency = "Gold" },
+            });
+
+            var offer = Program.ConvertToOffer(result, helper, new Dictionary<string, int>());
+
+            Assert.Null(offer);
+        }
+
+        // Palak sells this item for 250 Sun Beads, 300000 Karma and 200
+        // Gold. The wiki writes the third cost as the number 200 under the
+        // name "Gold", and it reached ref/vendor_offers.json as 200 copper.
+        [Fact]
+        public async Task GiftOfTheHylek_CoinCostIsTwoHundredGoldInCopper()
+        {
+            var (helper, httpClient) = await CreateLoadedHelper();
+            using var _ = httpClient;
+            var itemIdMap = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase)
+            {
+                ["Sun Bead"] = 19717,
+            };
+            var result = MakeResult(
+                gameId: 106986,
+                merchantName: "Palak",
+                costEntries: new List<WikiCostEntry>
+                {
+                    new WikiCostEntry { Value = 250, Currency = "Sun Bead" },
+                    new WikiCostEntry { Value = 300000, Currency = "Karma" },
+                    new WikiCostEntry { Value = 200, Currency = "Gold" },
+                });
+
+            var offer = Program.ConvertToOffer(result, helper, itemIdMap);
+
+            Assert.NotNull(offer);
+            var coin = offer.CostLines.Single(
+                l => l.Type == "Currency" && l.Id == Gw2Constants.CoinCurrencyId);
+            Assert.Equal(2000000, coin.Count);
+        }
+
+        [Fact]
+        public async Task UnresolvedCurrency_DropsWholeOfferNotJustThatLine()
+        {
+            var (helper, httpClient) = await CreateLoadedHelper();
+            using var _ = httpClient;
+            var result = MakeResult(costEntries: new List<WikiCostEntry>
+            {
+                new WikiCostEntry { Value = 100, Currency = "Karma" },
+                new WikiCostEntry { Value = 10, Currency = "Unknown Token" },
+            });
+
+            var offer = Program.ConvertToOffer(result, helper, new Dictionary<string, int>());
+
+            Assert.Null(offer);
         }
 
         [Fact]

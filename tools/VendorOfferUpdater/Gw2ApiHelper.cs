@@ -98,12 +98,11 @@ namespace VendorOfferUpdater
                 return null;
             }
 
-            // Common wiki name mappings
-            if (string.Equals(currencyName, "Coin", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(currencyName, "Coins", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(currencyName, "Gold", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(currencyName, "Copper", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(currencyName, "Silver", StringComparison.OrdinalIgnoreCase))
+            // The names a wiki row writes a coin price under. The same
+            // list carries each name's copper scale, so a caller that
+            // gets currency id 1 back can always ask what unit the value
+            // was in.
+            if (Models.Gw2Constants.TryGetCopperPerUnit(currencyName, out _))
             {
                 return Models.Gw2Constants.CoinCurrencyId;
             }

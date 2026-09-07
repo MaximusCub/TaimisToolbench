@@ -614,6 +614,7 @@ tests/TaimisToolbench.Tests/Services/TreeRowShapeGoldenTests.cs                 
 tests/TaimisToolbench.Tests/Services/TreeRowTooltipComposerTests.cs                     538
 tests/TaimisToolbench.Tests/Services/TypeRampMetricsTests.cs                            206
 tests/TaimisToolbench.Tests/Services/ValueDetailTooltipBuilderTests.cs                  191
+tests/TaimisToolbench.Tests/Services/VendorCoinCostShippedDataTests.cs                  101
 tests/TaimisToolbench.Tests/Services/VendorCurrencyTradeUpRoutingTests.cs               248
 tests/TaimisToolbench.Tests/Services/VendorOfferStoreTests.cs                           576
 tests/TaimisToolbench.Tests/Services/VendorUnlockRecipeTests.cs                         233
@@ -623,7 +624,7 @@ tests/TaimisToolbench.Tests/Services/WindowPlacementTests.cs                    
 tests/TaimisToolbench.Tests/Services/WindowSizingTests.cs                               76
 tests/TaimisToolbench.Tests/Services/ZojjasClaymoreValidationTests.cs                   471
 tests/VendorOfferUpdater.Tests/ApplyExclusionsTests.cs                                  196
-tests/VendorOfferUpdater.Tests/ConvertToOfferTests.cs                                   620
+tests/VendorOfferUpdater.Tests/ConvertToOfferTests.cs                                   723
 tests/VendorOfferUpdater.Tests/CostNameResolutionTests.cs                               434
 tests/VendorOfferUpdater.Tests/CoverageGateTests.cs                                     250
 tests/VendorOfferUpdater.Tests/EscapeNonAsciiTests.cs                                   79
@@ -634,7 +635,7 @@ tests/VendorOfferUpdater.Tests/Helpers/VendorOfferHasherVectorFixture.cs        
 tests/VendorOfferUpdater.Tests/Helpers/WikiJsonBuilder.cs                               255
 tests/VendorOfferUpdater.Tests/HomesteadTierResolverTests.cs                            105
 tests/VendorOfferUpdater.Tests/ItemIdCacheTests.cs                                      349
-tests/VendorOfferUpdater.Tests/MergeIntoBaselineTests.cs                                444
+tests/VendorOfferUpdater.Tests/MergeIntoBaselineTests.cs                                599
 tests/VendorOfferUpdater.Tests/MergeWikiCacheTests.cs                                   224
 tests/VendorOfferUpdater.Tests/ResolveSeasonalFestivalValuesAsyncTests.cs               730
 tests/VendorOfferUpdater.Tests/ResolveUnlockRecipeIdsTests.cs                           122
@@ -655,15 +656,15 @@ tools/MysticForgeSeeder/Program.cs                                              
 tools/MysticForgeSeeder/WikiRecipeClient.cs                                             681
 tools/Shared/FileMysticForgeRecipeSource.cs                                             39
 tools/VendorOfferUpdater/CoverageGate.cs                                                278
-tools/VendorOfferUpdater/Gw2ApiHelper.cs                                                277
+tools/VendorOfferUpdater/Gw2ApiHelper.cs                                                276
 tools/VendorOfferUpdater/HomesteadTierResolver.cs                                       80
 tools/VendorOfferUpdater/ItemIdCache.cs                                                 372
 tools/VendorOfferUpdater/Models/CostLine.cs                                             18
-tools/VendorOfferUpdater/Models/Gw2Constants.cs                                         77
+tools/VendorOfferUpdater/Models/Gw2Constants.cs                                         126
 tools/VendorOfferUpdater/Models/VendorOffer.cs                                          75
 tools/VendorOfferUpdater/Models/VendorOfferDataset.cs                                   21
 tools/VendorOfferUpdater/Models/VendorOfferManifest.cs                                  33
-tools/VendorOfferUpdater/Program.cs                                                     2257
+tools/VendorOfferUpdater/Program.cs                                                     2419
 tools/VendorOfferUpdater/QueryOptions.cs                                                56
 tools/VendorOfferUpdater/QueryStats.cs                                                  79
 tools/VendorOfferUpdater/TemporaryTemplateParser.cs                                     122
