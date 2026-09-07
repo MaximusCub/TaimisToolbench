@@ -58,7 +58,7 @@ Models/PlanRequestItem.cs                                                       
 Models/PlanSolveContext.cs                                                              212
 Models/PlanStatus.cs                                                                    11
 Models/PlanStep.cs                                                                      72
-Models/PlanViewModel.cs                                                                 475
+Models/PlanViewModel.cs                                                                 492
 Models/PriceBasis.cs                                                                    32
 Models/RankerRowMetrics.cs                                                              152
 Models/RankerSlotAvailability.cs                                                        59
@@ -189,7 +189,7 @@ Services/PlanStripStatusBoard.cs                                                
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     597
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        1761
+Services/PlanViewModelBuilder.cs                                                        1809
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
@@ -260,7 +260,7 @@ Services/StatusStore.cs                                                         
 Services/StatusText.cs                                                                  289
 Services/StatusUpdateGuard.cs                                                           38
 Services/StickyHeaderLayout.cs                                                          117
-Services/SummarySectionLayoutMath.cs                                                    913
+Services/SummarySectionLayoutMath.cs                                                   1031
 Services/TableSortState.cs                                                              114
 Services/TransmutedNameIndex.cs                                                         215
 Services/UiGlyphs.cs                                                                    124
@@ -342,7 +342,7 @@ Views/Rendering/SortableHeaderBlock.cs                                          
 Views/Rendering/SortableHeaderCells.cs                                                  249
 Views/Rendering/SortableHeaderLabel.cs                                                  38
 Views/Rendering/StickyHeaderHost.cs                                                     408
-Views/Rendering/SummarySectionRenderer.cs                                               1137
+Views/Rendering/SummarySectionRenderer.cs                                               1291
 Views/Rendering/TextRowRenderer.cs                                                      36
 Views/Rendering/TooltipFacility.cs                                                      288
 Views/Rendering/TreeSectionController.cs                                                2530
