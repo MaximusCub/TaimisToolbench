@@ -70,6 +70,7 @@ namespace TaimisToolbench.Views.Rendering
 
             try
             {
+                IconAssetConnectionLimit.Apply();
                 square.BackgroundTexture = GameService.Content.GetRenderServiceTexture(_iconUrl);
             }
             catch (Exception ex)

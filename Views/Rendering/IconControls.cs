@@ -215,6 +215,11 @@ namespace TaimisToolbench.Views.Rendering
             // Missing icon: render a neutral empty-slot square, not the
             // alarming red error texture - a data gap is not a failure.
             bool missing = !HasArt(iconUrl);
+            if (!missing && !deferArt)
+            {
+                IconAssetConnectionLimit.Apply();
+            }
+
             Panel icon = missing
                 ? new ClippedPanel()
                 {
@@ -286,6 +291,7 @@ namespace TaimisToolbench.Views.Rendering
         internal static Panel CreateAssetIcon(
             Panel parent, int assetId, int x, int y, int size, string tooltipText)
         {
+            IconAssetConnectionLimit.Apply();
             var icon = new ClippedPanel()
             {
                 Size = new Point(size, size),
