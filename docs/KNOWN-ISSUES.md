@@ -1105,6 +1105,51 @@ and does not fade until seven rows below it. The vertical terms now live in
 `Services/WindowSizing.cs` beside the chrome they produce. Full record:
 `dev/records/viewport-bottom-margin.md`.
 
+### 67. An owned item planned as a vendor purchase
+
+A tester's plan for the legendary ring Endless Summer showed its Gift of
+the Hylek ingredient as a vendor purchase. He held one in his bank, and
+the Account Snapshot search found it there.
+
+Inventory reduction is not at fault.
+`tests/TaimisToolbench.Tests/Services/OwnedVendorOnlyItemRealCorpusTests.cs`
+drives the real `CraftingPlanPipeline`, `PlanSolver` and
+`InventoryReducer` over the shipped corpus against a snapshot holding one
+gift. The gift is counted as owned, in both own-materials modes, from
+every storage location the snapshot reports, and the row draws HAVE
+rather than VENDOR.
+
+Four candidate causes were ruled out by running the plan, not by reading
+the code.
+
+1. A node the solver decided to buy is still eligible for its own owned
+   stock. Only that node's descendants are gated on its decision. The
+   rule is stated in `docs/ARCHITECTURE.md` section 8.2 and in
+   `Services/InventoryReducer.cs`.
+2. The plan-root exemption reaches only the item the user typed.
+   `PlanRootNodes.Of` matches root nodes by object identity, and the gift
+   is an ingredient.
+3. The item id is unique. The wiki and the item API each return one item
+   named Gift of the Hylek, and that is the id in `ref/recipes_seed.json`
+   and `ref/vendor_offers.json`.
+4. Reduction runs before the real solve, and nothing discards its
+   allocation when a decision changes afterwards.
+
+That leaves "Use Own Materials" being off for the plan that was
+generated. One code path turns it off without the user choosing it.
+`Views/CraftingPlanView.cs` hands the GATED value to generation, so a
+plan generated before an account snapshot exists records
+`UseOwnMaterials: false`. `RestoreRequestControls` then writes that value
+back into `_useOwnMaterials`, which is the user's standing intent. The
+box comes back unchecked on the next module load and stays unchecked
+until the user clicks it. Whether that is what happened to this tester is
+not established. The path is real either way.
+
+A fix has to persist the user's intent apart from what the plan was
+solved with. `PersistedPlan.UseOwnMaterials` cannot carry both, and Plan
+History shows it as what the plan was solved with, so the change is a
+`PersistedPlan` shape change and a schema bump. Not made here.
+
 ---
 
 ## DEFERRED (recorded, not implemented)
