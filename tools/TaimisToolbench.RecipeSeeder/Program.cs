@@ -540,7 +540,8 @@ namespace TaimisToolbench.RecipeSeeder
             return recipes;
         }
 
-        private static void MergeMysticForgeRecipes(
+        // internal for testability (TaimisToolbench.RecipeSeeder.Tests)
+        internal static void MergeMysticForgeRecipes(
             Stream mfStream,
             Dictionary<int, RawRecipe> allRecipes,
             Dictionary<int, List<int>> searchIndex,
@@ -624,13 +625,24 @@ namespace TaimisToolbench.RecipeSeeder
                             Flags = new List<string>(),
                         };
 
+                        // An ingredient short of type, id or count refuses the
+                        // whole recipe rather than itself. Dropping just the
+                        // ingredient would write a recipe that costs less
+                        // than it really does, and the solver ranks the
+                        // cheapest route first. Both other readers of
+                        // ref/mystic_forge_recipes.json already refuse the
+                        // recipe: Services/MysticForgeRecipeData.cs records a
+                        // load warning, tools/MysticForgeSeeder/Program.cs
+                        // prints a SKIP line.
+                        bool everyIngredientRead = true;
                         foreach (var ing in ingsArr.EnumerateArray())
                         {
                             if (!ing.TryGetProperty("type", out var ingType) ||
                                 !ing.TryGetProperty("id", out var ingId) ||
                                 !ing.TryGetProperty("count", out var ingCount))
                             {
-                                continue;
+                                everyIngredientRead = false;
+                                break;
                             }
 
                             recipe.Ingredients.Add(new RawIngredient
@@ -639,6 +651,16 @@ namespace TaimisToolbench.RecipeSeeder
                                 Id = ingId.GetInt32(),
                                 Count = ingCount.GetInt32(),
                             });
+                        }
+
+                        if (!everyIngredientRead)
+                        {
+                            Console.Error.WriteLine(
+                                $"Warning: skipping mystic forge recipe {id} -" +
+                                " an ingredient is missing type, id or count," +
+                                " and a recipe short an ingredient would be" +
+                                " seeded cheaper than it really is.");
+                            continue;
                         }
 
                         if (recipe.Ingredients.Count == 0)

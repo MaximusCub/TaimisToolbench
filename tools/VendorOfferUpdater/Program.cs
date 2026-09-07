@@ -839,14 +839,14 @@ namespace VendorOfferUpdater
         /// least one GameId&lt;=0 row this pass, built before the GameId
         /// filter runs) opts a merchant OUT of that replacement: its baseline
         /// offers are unioned with the fresh ones, deduplicated by OfferId
-        /// with fresh preferred - a losing row's SeasonalFestival tag is
-        /// carried onto an untagged winner - plus a content-key pass
-        /// (ComputeContentKey) for rows predating a hash-format change. Why
-        /// replacing there is unsafe: docs/ARCHITECTURE.md section T.4.
+        /// with fresh preferred, plus a content-key pass (ComputeContentKey)
+        /// for rows predating a hash-format change. Why replacing there is
+        /// unsafe: docs/ARCHITECTURE.md section T.4.
         ///
-        /// NOTE (non-purity): assigns onto SeasonalFestival/OfferId of rows in
-        /// the caller's own <paramref name="fresh"/>/<paramref name="baseline"/>
-        /// lists rather than cloning, so a caller's own reference sees it.
+        /// Every seat that discards one of two rows for the same sale first
+        /// calls <see cref="CarryForwardUnhashedFields"/>. That method and
+        /// the OfferId migration below both assign onto rows in the caller's
+        /// own lists rather than cloning, so a caller's reference sees it.
         /// </summary>
         // internal for testability (VendorOfferUpdater.Tests)
         internal static BaselineMergeResult MergeIntoBaseline(
@@ -872,36 +872,31 @@ namespace VendorOfferUpdater
                 .ToList();
             var merchantsReplacedSet = new HashSet<string>(merchantsReplaced, StringComparer.Ordinal);
 
-            // An ORDINARY (non-protected) replaced merchant's
-            // baseline rows are about to be dropped entirely by `kept`
-            // below, before the fresh/kept GroupBy tag-carry-forward logic
-            // further down ever runs - that logic only ever sees a
-            // baseline row for PROTECTED merchants. Without this, a
-            // transiently failed fetch loses a previously-shipped tag for
-            // every ordinary merchant. Harvest each replaced merchant's
-            // tagged baseline rows into a lookup BEFORE `kept` drops them,
-            // keyed by both OfferId and ComputeContentKey - a
-            // VendorOfferHasher hash-format migration can leave either as
-            // the only field still matching between the baseline and fresh
-            // copies of the same offer (see the protected-merchant
-            // content-key dedupe pass further below for the same
-            // reasoning) - then apply the harvested tag onto that
-            // merchant's fresh rows that have no tag of their own. A fresh
-            // row that already carries its own (possibly different) tag is
-            // never overwritten - fresh always wins when both sides are
-            // tagged.
+            // An ORDINARY (non-protected) replaced merchant's baseline rows
+            // are about to be dropped entirely by `kept` below, before the
+            // fresh/kept GroupBy carry-forward further down ever runs - that
+            // logic only ever sees a baseline row for PROTECTED merchants.
+            // Without this, a transiently failed fetch loses a
+            // previously-shipped unhashed field for every ordinary merchant.
+            // Harvest each such baseline row into a lookup BEFORE `kept`
+            // drops them, keyed by OfferId, ComputeContentKey and
+            // ComputeSameSaleKey - a VendorOfferHasher hash-format migration
+            // can leave any one of the three as the only key still matching
+            // between the baseline and fresh copies of the same offer.
+            // CarryForwardUnhashedFields then decides what moves: fresh wins
+            // every field it already carries.
             if (merchantsReplacedSet.Count > 0)
             {
-                var replacedTagsByOfferId = new Dictionary<string, string>(StringComparer.Ordinal);
-                var replacedTagsByContentKey = new Dictionary<string, string>(StringComparer.Ordinal);
+                var replacedByOfferId = new Dictionary<string, VendorOffer>(StringComparer.Ordinal);
+                var replacedByContentKey = new Dictionary<string, VendorOffer>(StringComparer.Ordinal);
 
                 // Both keys above carry the coin count, so a run that
                 // corrects a sale's coin price matches on neither and the
-                // tag is lost. ComputeSameSaleKey leaves the price out.
-                var replacedTagsBySaleKey = new Dictionary<string, string>(StringComparer.Ordinal);
+                // row is lost. ComputeSameSaleKey leaves the price out.
+                var replacedBySaleKey = new Dictionary<string, VendorOffer>(StringComparer.Ordinal);
                 foreach (var o in baseline)
                 {
-                    if (o.SeasonalFestival == null)
+                    if (!CarriesUnhashedFields(o))
                     {
                         continue;
                     }
@@ -913,42 +908,37 @@ namespace VendorOfferUpdater
 
                     if (o.OfferId != null)
                     {
-                        replacedTagsByOfferId[o.OfferId] = o.SeasonalFestival;
+                        replacedByOfferId[o.OfferId] = o;
                     }
 
-                    replacedTagsByContentKey[ComputeContentKey(o)] = o.SeasonalFestival;
-                    replacedTagsBySaleKey[ComputeSameSaleKey(o)] = o.SeasonalFestival;
+                    replacedByContentKey[ComputeContentKey(o)] = o;
+                    replacedBySaleKey[ComputeSameSaleKey(o)] = o;
                 }
 
-                if (replacedTagsByOfferId.Count > 0 || replacedTagsByContentKey.Count > 0
-                    || replacedTagsBySaleKey.Count > 0)
+                if (replacedByOfferId.Count > 0 || replacedByContentKey.Count > 0
+                    || replacedBySaleKey.Count > 0)
                 {
                     foreach (var o in fresh)
                     {
-                        if (o.SeasonalFestival != null)
-                        {
-                            continue;
-                        }
-
                         if (!merchantsReplacedSet.Contains(o.MerchantName ?? string.Empty))
                         {
                             continue;
                         }
 
                         if (o.OfferId != null
-                            && replacedTagsByOfferId.TryGetValue(o.OfferId, out var tagById))
+                            && replacedByOfferId.TryGetValue(o.OfferId, out var byId))
                         {
-                            o.SeasonalFestival = tagById;
+                            CarryForwardUnhashedFields(o, byId);
                         }
-                        else if (replacedTagsByContentKey.TryGetValue(
-                            ComputeContentKey(o), out var tagByContent))
+                        else if (replacedByContentKey.TryGetValue(
+                            ComputeContentKey(o), out var byContent))
                         {
-                            o.SeasonalFestival = tagByContent;
+                            CarryForwardUnhashedFields(o, byContent);
                         }
-                        else if (replacedTagsBySaleKey.TryGetValue(
-                            ComputeSameSaleKey(o), out var tagBySale))
+                        else if (replacedBySaleKey.TryGetValue(
+                            ComputeSameSaleKey(o), out var bySale))
                         {
-                            o.SeasonalFestival = tagBySale;
+                            CarryForwardUnhashedFields(o, bySale);
                         }
                     }
                 }
@@ -959,40 +949,27 @@ namespace VendorOfferUpdater
                 .ToList();
             int removed = baseline.Count - kept.Count;
 
-            //
             // fresh must come FIRST in the concat so an OfferId collision
             // resolves to the FRESH row via GroupBy(...).Select(g =>
             // g.First()) below. The old kept.Concat(fresh) order let the
-            // BASELINE row win every collision - for a protected merchant
-            // (kept includes its baseline rows; SeasonalFestival is
-            // deliberately NOT hashed by VendorOfferHasher, so a row whose
-            // content is otherwise unchanged collides on OfferId) this
-            // silently discarded the freshly-derived SeasonalFestival tag,
-            // i.e. exactly the merchants the protected-merchant guard
-            // exists to preserve data for kept shipping untagged.
-            // This pass used to just take
-            // g.First() unconditionally, so a FRESH row with no
-            // SeasonalFestival (e.g. one whose page's wikitext fetch
-            // missed this run - see ResolveSeasonalFestivalValuesAsync's
-            // null-wikitext handling) silently deleted a shipped, tagged
-            // baseline row on an OfferId collision - the exact opposite of
-            // the content-key pass below, which already prefers whichever
-            // side carries the tag. Same rule now applies here: keep the
-            // winning row (fresh, if present in the group, for freshness
-            // of everything else), but carry a losing sibling's tag
-            // forward if the winner itself has none.
+            // BASELINE row win every collision, which discarded whatever
+            // this pass had freshly derived.
+            //
+            // A collision is possible at all because an unhashed field is
+            // not part of the id: two rows identical everywhere else but
+            // differing in one still land in the same group. So the winner
+            // takes the freshness of everything the hash covers, and
+            // CarryForwardUnhashedFields takes each losing sibling's
+            // unhashed fields for anything the winner lacks. Whichever side
+            // holds a field, it survives the group.
             var merged = fresh.Concat(kept)
                 .GroupBy(o => o.OfferId, StringComparer.Ordinal)
                 .Select(g =>
                 {
                     var winner = g.First();
-                    if (winner.SeasonalFestival == null)
+                    foreach (var sibling in g)
                     {
-                        var taggedSibling = g.FirstOrDefault(o => o.SeasonalFestival != null);
-                        if (taggedSibling != null)
-                        {
-                            winner.SeasonalFestival = taggedSibling.SeasonalFestival;
-                        }
+                        CarryForwardUnhashedFields(winner, sibling);
                     }
 
                     return winner;
@@ -1041,6 +1018,11 @@ namespace VendorOfferUpdater
                     string contentKey = ComputeContentKey(offer);
                     if (byContentKey.TryGetValue(contentKey, out var survivor))
                     {
+                        // Which row survives is decided on the festival tag
+                        // alone, as it always was. The unhashed fields move
+                        // onto whichever one that is, so a row carrying the
+                        // tag and a row carrying the unlock gate no longer
+                        // cost each other their data.
                         if (survivor.SeasonalFestival == null && offer.SeasonalFestival != null)
                         {
                             if (offer.OfferId != null && survivor.OfferId != null
@@ -1050,7 +1032,12 @@ namespace VendorOfferUpdater
                                 offer.OfferId = survivor.OfferId;
                             }
 
+                            CarryForwardUnhashedFields(offer, survivor);
                             byContentKey[contentKey] = offer;
+                        }
+                        else
+                        {
+                            CarryForwardUnhashedFields(survivor, offer);
                         }
                     }
                     else
@@ -1111,15 +1098,9 @@ namespace VendorOfferUpdater
                             continue;
                         }
 
-                        if (offer.SeasonalFestival != null)
+                        foreach (var freshRow in freshRows!)
                         {
-                            foreach (var freshRow in freshRows!)
-                            {
-                                if (freshRow.SeasonalFestival == null)
-                                {
-                                    freshRow.SeasonalFestival = offer.SeasonalFestival;
-                                }
-                            }
+                            CarryForwardUnhashedFields(freshRow, offer);
                         }
                     }
 
@@ -1138,6 +1119,58 @@ namespace VendorOfferUpdater
                 MerchantNamesReplaced = merchantsReplaced,
                 MerchantNamesProtected = merchantsProtected,
             };
+        }
+
+        /// <summary>
+        /// True when <paramref name="offer"/> carries at least one field that
+        /// <see cref="VendorOfferHasher.ComputeOfferId"/> does not hash, so
+        /// losing it changes no OfferId and shows in no diff.
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static bool CarriesUnhashedFields(VendorOffer offer)
+        {
+            return offer != null
+                && (offer.SeasonalFestival != null
+                    || offer.UnlockRecipeItemId != null
+                    || offer.UnlockRecipeId != null);
+        }
+
+        /// <summary>
+        /// Fills each field <see cref="VendorOfferHasher.ComputeOfferId"/>
+        /// does not hash on <paramref name="target"/> from
+        /// <paramref name="source"/>, leaving any the target already carries.
+        /// <para>
+        /// Every seat in <see cref="MergeIntoBaseline"/> that discards one of
+        /// two rows for the same sale calls this first. An unhashed field is
+        /// the only kind a merge can drop without changing an OfferId, so
+        /// nothing downstream notices the loss. Adding a field to VendorOffer
+        /// and not to this method reintroduces that.
+        /// </para>
+        /// <para>
+        /// UnlockRecipeItemId and UnlockRecipeId move as a pair, because
+        /// ConvertToOffer sets them as one and a half-resolved gate names a
+        /// sheet whose ownership the module cannot check - see
+        /// tools/VendorOfferUpdater/Models/VendorOffer.cs.
+        /// </para>
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static void CarryForwardUnhashedFields(VendorOffer target, VendorOffer source)
+        {
+            if (target == null || source == null || ReferenceEquals(target, source))
+            {
+                return;
+            }
+
+            if (target.SeasonalFestival == null)
+            {
+                target.SeasonalFestival = source.SeasonalFestival;
+            }
+
+            if (target.UnlockRecipeItemId == null && target.UnlockRecipeId == null)
+            {
+                target.UnlockRecipeItemId = source.UnlockRecipeItemId;
+                target.UnlockRecipeId = source.UnlockRecipeId;
+            }
         }
 
         /// <summary>
