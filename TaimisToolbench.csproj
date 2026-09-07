@@ -250,6 +250,7 @@
     <Compile Include="Services\CachingAccountRecipeClient.cs" />
     <Compile Include="Services\CurrencyMetadataService.cs" />
     <Compile Include="Services\CurrencyDisplayResolver.cs" />
+    <Compile Include="Services\CurrencyTradeUpCoalescing.cs" />
     <Compile Include="Services\CurrencyTradeUpRow.cs" />
     <Compile Include="Services\CurrencyTooltipComposer.cs" />
     <Compile Include="Services\CurrencyTooltipFacts.cs" />

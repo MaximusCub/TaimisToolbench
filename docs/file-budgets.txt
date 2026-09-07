@@ -102,7 +102,7 @@ Services/CompositeRecipeApiClient.cs                                            
 Services/CostLineValuation.cs                                                           121
 Services/CraftCompetencyEvaluator.cs                                                    125
 Services/CraftableItemSearchProvider.cs                                                 127
-Services/CraftingPlanPipeline.cs                                                        1669
+Services/CraftingPlanPipeline.cs                                                        1697
 Services/CraftingTreeBuilder.cs                                                         626
 Services/CurrencyDisplayResolver.cs                                                     236
 Services/CurrencyMetadataService.cs                                                     159
@@ -182,7 +182,7 @@ Services/PlanPhaseEvent.cs                                                      
 Services/PlanRelayoutMath.cs                                                            479
 Services/PlanResultBuilder.cs                                                           416
 Services/PlanRootNodes.cs                                                               46
-Services/PlanSolver.cs                                                                  2323
+Services/PlanSolver.cs                                                                  2346
 Services/PlanStore.cs                                                                   219
 Services/PlanStoreHelpers.cs                                                            374
 Services/PlanStripStatusBoard.cs                                                        307
@@ -193,7 +193,7 @@ Services/PlanViewModelBuilder.cs                                                
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
-Services/RankerReadinessCalculator.cs                                                   698
+Services/RankerReadinessCalculator.cs                                                   699
 Services/RankerReadinessRamp.cs                                                         265
 Services/RankerReadinessWeights.cs                                                      61
 Services/RankerResultCache.cs                                                           263
@@ -282,7 +282,7 @@ Services/TypeRampMetrics.cs                                                     
 Services/UiSpacing.cs                                                                   53
 Services/UpgradeEffectLines.cs                                                          182
 Services/ValueDetailTooltipBuilder.cs                                                   159
-Services/VendorBatchSolver.cs                                                           1206
+Services/VendorBatchSolver.cs                                                           1242
 Services/VendorOfferLoader.cs                                                           51
 Services/VendorOfferStore.cs                                                            218
 Services/WheelDeltaSanitizer.cs                                                         92
