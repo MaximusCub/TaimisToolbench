@@ -335,6 +335,24 @@ namespace TaimisToolbench.Views
         private const int ItemRowHeight = 56;
         private const int WalletRowHeight = 36;
 
+        // Top of each run's icon frame inside its cell. The Amount column
+        // centres on the frame these place, so both numbers are named once.
+        private const int ItemIconY = 1;
+        private const int WalletIconY = 2;
+
+        // Y of each run's Amount text: its capital ink centred on the icon
+        // frame beside it, not on the cell. The two runs differ because
+        // their icon frames do - 54px for an item, 32px for a currency.
+        private static readonly int ItemAmountY = TypeRampMetrics.CapCentredY(
+            TypeRampMetrics.AmountColumnInk,
+            ItemIconY,
+            ItemIconTiers.FrameSize(ItemIconTier.BagSlot));
+
+        private static readonly int WalletAmountY = TypeRampMetrics.CapCentredY(
+            TypeRampMetrics.AmountColumnInk,
+            WalletIconY,
+            ItemIconTiers.FrameSize(ItemIconTier.CurrencyListRow));
+
         // UI controls (stored for resize handler)
         private Panel _statusPanel;
         private Panel _filterPanel;
@@ -2235,7 +2253,7 @@ namespace TaimisToolbench.Views
         /// against is the band's only other term.</summary>
         private static int MeasureWidestAmount<T>(IReadOnlyList<T> rows, Func<T, string> amountOf)
         {
-            var font = UiFonts.Body;
+            var font = UiFonts.AmountColumn;
             int widest = 0;
             for (int i = 0; i < rows.Count; i++)
             {
@@ -2332,6 +2350,11 @@ namespace TaimisToolbench.Views
 
             public readonly List<SortableHeaderBlock> AmountHeaders =
                 new List<SortableHeaderBlock>();
+
+            /// <summary>The rules between this run's columns of cells, one
+            /// per gap. Surplus rules from a wider window are hidden rather
+            /// than disposed, like the header labels above.</summary>
+            public readonly List<Panel> ColumnDividers = new List<Panel>();
 
             /// <summary>Cycles this run's sort and re-places its cells.</summary>
             public Action<SnapshotTableColumn> SortBy;
@@ -2488,6 +2511,7 @@ namespace TaimisToolbench.Views
             chrome.HeaderPanel.Visible = section.Present;
             if (!section.Present)
             {
+                HideColumnDividers(chrome);
                 return;
             }
 
@@ -2541,7 +2565,63 @@ namespace TaimisToolbench.Views
                 chrome.AmountHeaders[i].MoveTo(columnX + amountHeaderX);
             }
 
+            LayoutColumnDividers(
+                chrome, columnCount, columnWidth, section.Grid.Top, section.Grid.Height);
             SyncHeaderCells(chrome, columnCount, columnWidth, gridWidth);
+        }
+
+        /// <summary>
+        /// Places this run's column rules: one in each gap between two
+        /// columns, down the height of the run's own rows. Same colour and
+        /// weight as the rule under a section title.
+        /// <para>
+        /// The rows only. The header band above them paints an opaque
+        /// background over its whole width, so a rule crossing it would
+        /// depend on paint order between two siblings.
+        /// </para>
+        /// </summary>
+        private void LayoutColumnDividers(
+            SectionChrome chrome, int columnCount, int columnWidth, int top, int height)
+        {
+            int wanted = height > 0
+                ? SnapshotItemGridLayout.ColumnDividerCount(columnCount)
+                : 0;
+
+            while (chrome.ColumnDividers.Count < wanted)
+            {
+                // ClippedPanel: one more container inside the viewport, so it
+                // re-asserts the published cutoff like every cell around it
+                // (Views/Rendering/ClipCutoff.cs).
+                chrome.ColumnDividers.Add(new ClippedPanel()
+                {
+                    Size = new Point(SnapshotItemGridLayout.ColumnDividerWidth, 0),
+                    BackgroundColor = SectionDividerColor,
+                    Parent = _resultGridPanel,
+                });
+            }
+
+            for (int i = 0; i < chrome.ColumnDividers.Count; i++)
+            {
+                var rule = chrome.ColumnDividers[i];
+                bool used = i < wanted;
+                rule.Visible = used;
+                if (!used)
+                {
+                    continue;
+                }
+
+                rule.Location = new Point(
+                    SnapshotItemGridLayout.ColumnDividerX(i, columnWidth), top);
+                rule.Size = new Point(SnapshotItemGridLayout.ColumnDividerWidth, height);
+            }
+        }
+
+        private static void HideColumnDividers(SectionChrome chrome)
+        {
+            for (int i = 0; i < chrome.ColumnDividers.Count; i++)
+            {
+                chrome.ColumnDividers[i].Visible = false;
+            }
         }
 
         /// <summary>
@@ -2803,7 +2883,7 @@ namespace TaimisToolbench.Views
 
             var icon = IconControls.CreateItemIconDeferredArt(
                 rowPanel, row.IconUrl, ItemIconFrame.ForRarity(rarity),
-                SnapshotItemGridLayout.CellIconX(chrome.AmountBand), 1,
+                SnapshotItemGridLayout.CellIconX(chrome.AmountBand), ItemIconY,
                 ItemIconTier.BagSlot, hover);
 
             // Never display raw item IDs (repo invariant) - row.Name is
@@ -2825,8 +2905,8 @@ namespace TaimisToolbench.Views
 
             // Measured here, not in the closure: the text is fixed and the
             // repack walks every row on screen.
-            int amountWidth = (int)Math.Ceiling(UiFonts.Body.MeasureString(amountText).Width);
-            CreateAmountLabel(rowPanel, amountText, amountWidth, chrome.AmountBand, 4);
+            int amountWidth = (int)Math.Ceiling(UiFonts.AmountColumn.MeasureString(amountText).Width);
+            CreateAmountLabel(rowPanel, amountText, amountWidth, chrome.AmountBand, ItemAmountY);
 
             // Under the name, in the same run of the cell: the Amount column
             // is left of both lines, not over this one.
@@ -2857,15 +2937,16 @@ namespace TaimisToolbench.Views
 
         /// <summary>
         /// The cell's Amount column: centred in the band at the cell's left
-        /// edge. The band is fixed for the run, so this never moves with the
-        /// column width and the repack has no amount to re-place.
+        /// edge, and vertically on the icon frame beside it. The band is
+        /// fixed for the run, so this never moves with the column width and
+        /// the repack has no amount to re-place.
         /// </summary>
         private static void CreateAmountLabel(
             Panel rowPanel, string text, int textWidth, int amountBandWidth, int y)
         {
             var label = LabelHelpers.WithDescenderClearance(new Label()
             {
-                Font = UiFonts.Body,
+                Font = UiFonts.AmountColumn,
                 Text = text,
                 TextColor = AmountTextColor,
                 AutoSizeWidth = true,
@@ -3020,7 +3101,7 @@ namespace TaimisToolbench.Views
             string currencyIconUrl = entry.IconUrl;
             var icon = IconControls.CreateItemIconDeferredArt(
                 rowPanel, currencyIconUrl, ItemIconFrame.Currency(),
-                SnapshotItemGridLayout.CellIconX(chrome.AmountBand), 2,
+                SnapshotItemGridLayout.CellIconX(chrome.AmountBand), WalletIconY,
                 ItemIconTier.CurrencyListRow,
                 // A WALLET row is a wallet currency by construction - the
                 // id came out of /v2/account/wallet - so the kind needs no
@@ -3047,8 +3128,8 @@ namespace TaimisToolbench.Views
                 rowPanel, name, SnapshotItemGridLayout.CellTextX(chrome.AmountBand),
                 SnapshotItemGridLayout.CellTextMaxWidth(columnWidth, chrome.AmountBand),
                 6, null, out _);
-            int amountWidth = (int)Math.Ceiling(UiFonts.Body.MeasureString(amountText).Width);
-            CreateAmountLabel(rowPanel, amountText, amountWidth, chrome.AmountBand, 6);
+            int amountWidth = (int)Math.Ceiling(UiFonts.AmountColumn.MeasureString(amountText).Width);
+            CreateAmountLabel(rowPanel, amountText, amountWidth, chrome.AmountBand, WalletAmountY);
 
             _walletCells.Add(new ResultCell(rowPanel, icon, w =>
             {

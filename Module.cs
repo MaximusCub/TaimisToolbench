@@ -119,6 +119,26 @@ namespace TaimisToolbench
         // the window to the Crafting Plan tab; compared by reference,
         // like _logTab/_settingsTab.
         private Tab _craftingPlanTab;
+
+        // Held so the icon prime below can stand down while the tab it
+        // primes for is the one on screen, running its own faster prime.
+        private Tab _snapshotTab;
+
+        // The Snapshot tab's icon art, asked for a few pictures a frame
+        // while the player is on some other tab, so the tab is warm the
+        // first time it is opened. Both are frame-thread only: the queue is
+        // fed from Update's snapshot drain and drained from Update itself.
+        // The batch list is a reused scratch buffer, so a prime frame
+        // allocates nothing.
+        private readonly IconPrimeQueue _iconPrime = new IconPrimeQueue();
+        private readonly List<string> _iconPrimeBatch = new List<string>();
+
+        // Set the first time the Snapshot tab is opened, and never cleared.
+        // From then on the tab's own prime owns the list, so this one stops
+        // for good rather than pausing - which is what keeps a picture from
+        // being asked for by both.
+        private bool _iconPrimeHandedOver;
+
         private SnapshotStore _snapshotStore;
         private StatusStore _statusStore;
         private Gw2AccountSnapshotService _snapshotService;
@@ -1183,13 +1203,14 @@ namespace TaimisToolbench
                 "Plan History");
             _mainWindow.Tabs.Add(_planHistoryTab);
 
-            _mainWindow.Tabs.Add(new Tab(
+            _snapshotTab = new Tab(
                 AsyncTexture2D.FromAssetId(156699),
                 () => new ViewAdapter(
                     "Account Snapshot",
                     c => _snapshotContent.Build(c),
                     b => _snapshotContent.BuildHeaderActions(b)),
-                "Account Snapshot"));
+                "Account Snapshot");
+            _mainWindow.Tabs.Add(_snapshotTab);
 
             _rankerContent = new RankerTabContent(
                 _craftingPipeline,
@@ -1648,6 +1669,18 @@ namespace TaimisToolbench
                 _snapshotContent?.SetSnapshot(_pendingSnapshot);
                 _snapshotContent?.SetStatus(_lastStatus);
                 statusApplied = true;
+
+                // Here rather than where the snapshot is committed: this is
+                // the frame thread, and it only runs once the module is
+                // loaded and the snapshot is the one the tab will draw.
+                int primeUrls = _iconPrimeHandedOver ? 0 : _iconPrime.Enqueue(_pendingSnapshot);
+                if (primeUrls > 0)
+                {
+                    ModuleLog.Shared.Write(
+                        ModuleLogLevel.Debug, "ui",
+                        $"Snapshot icon prime: {primeUrls} new pictures over about "
+                        + $"{SnapshotIconWindow.PrimeFrames(primeUrls, SnapshotIconWindow.BackgroundPrimePerFrame)} frames.");
+                }
             }
 
             // Status updates saved from a ThreadPool continuation (Blish's
@@ -1664,6 +1697,8 @@ namespace TaimisToolbench
                     _snapshotContent?.SetStatus(_lastStatus);
                 }
             }
+
+            PrimeSnapshotIcons();
 
             // The Log tab's own poll, run
             // only while it is the selected tab - a cheap Version compare
@@ -1819,6 +1854,51 @@ namespace TaimisToolbench
             }
 
             _ = RefreshSnapshotInBackgroundAsync();
+        }
+
+        /// <summary>
+        /// Asks Blish for a few of the Snapshot tab's pictures, so the tab
+        /// is warm the first time it is opened. One frame's worth per call,
+        /// from Update.
+        /// <para>
+        /// It hands over for good the moment that tab is opened. The tab
+        /// runs its own prime over the cells it built, four times faster and
+        /// in the order the reader scrolls; stopping rather than pausing is
+        /// what stops the two from asking for the same picture.
+        /// </para>
+        /// </summary>
+        private void PrimeSnapshotIcons()
+        {
+            if (_iconPrimeHandedOver)
+            {
+                return;
+            }
+
+            if (_snapshotTab != null && _mainWindow?.SelectedTab == _snapshotTab)
+            {
+                _iconPrimeHandedOver = true;
+                return;
+            }
+
+            _iconPrimeBatch.Clear();
+            _iconPrime.Take(SnapshotIconWindow.BackgroundPrimePerFrame, _iconPrimeBatch);
+
+            for (int i = 0; i < _iconPrimeBatch.Count; i++)
+            {
+                try
+                {
+                    GameService.Content.GetRenderServiceTexture(_iconPrimeBatch[i]);
+                }
+                catch (Exception ex)
+                {
+                    // GetRenderServiceTexture throws on a url carrying no
+                    // signature/file-id pair. At most one line per url,
+                    // ever: the queue hands none of them out twice.
+                    ModuleLog.Shared.Write(
+                        ModuleLogLevel.Debug, "ui",
+                        $"Icon prime request failed: {ex.GetType().Name} - {ex.Message}");
+                }
+            }
         }
 
         protected override void Unload()
