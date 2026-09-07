@@ -50,8 +50,12 @@ namespace TaimisToolbench.Views.Rendering
                 wiring.Target = target;
                 wiring.Armed = false;
             }
-            else
+            else if (target.HasPage)
             {
+                // Nothing is allocated for an icon with no page. The rich
+                // tooltip surface rebuilds its own icons on every hover, so
+                // wiring three handlers there would be garbage per hover
+                // for a control the cursor can never click.
                 wiring = new Wiring { Target = target };
                 Wired.Add(control, wiring);
                 Wire(control, wiring);
