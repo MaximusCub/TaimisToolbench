@@ -741,13 +741,40 @@ namespace TaimisToolbench.Services
         /// </summary>
         public static int CurrencyLineCount(int currencyCount)
         {
+            return (CurrenciesShown(currencyCount) + CurrenciesPerLine - 1) / CurrenciesPerLine;
+        }
+
+        /// <summary>
+        /// How many currency shortfalls a row actually draws. The grid holds
+        /// CurrenciesPerLine by MaxCurrencyLines and the rest are dropped.
+        /// The Currencies gate averages over all of them, so a row can score
+        /// against currencies it never listed. RankerTabContent pairs this
+        /// with CurrencyOverflowNote so the drop is stated.
+        /// </summary>
+        public static int CurrenciesShown(int currencyCount)
+        {
             if (currencyCount <= 0)
             {
                 return 0;
             }
 
-            int shown = Math.Min(currencyCount, CurrenciesPerLine * MaxCurrencyLines);
-            return (shown + CurrenciesPerLine - 1) / CurrenciesPerLine;
+            return Math.Min(currencyCount, CurrenciesPerLine * MaxCurrencyLines);
+        }
+
+        /// <summary>
+        /// The line that owns up to the currencies the grid could not fit,
+        /// or null when it fit them all. Same disclosure the discipline note
+        /// and the recipe tree's overflow pill already make.
+        /// </summary>
+        public static string CurrencyOverflowNote(int currencyCount)
+        {
+            int hidden = Math.Max(0, currencyCount - CurrenciesShown(currencyCount));
+            if (hidden == 0)
+            {
+                return null;
+            }
+
+            return StatusText.Count(hidden, "more currency", "more currencies") + " not shown";
         }
     }
 }

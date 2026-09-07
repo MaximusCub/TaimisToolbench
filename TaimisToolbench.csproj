@@ -118,6 +118,7 @@
     <Compile Include="Services\PlanHistoryRetention.cs" />
     <Compile Include="Services\PlanHistoryTableSorter.cs" />
     <Compile Include="Services\PlanHistoryRowLayout.cs" />
+    <Compile Include="Services\PlanHistoryIndexEdits.cs" />
     <Compile Include="Services\PlanHistoryItemIds.cs" />
     <Compile Include="Services\PlanHistoryLabels.cs" />
     <Compile Include="Views\PlanHistoryTabContent.cs" />

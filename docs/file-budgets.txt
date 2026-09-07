@@ -85,7 +85,7 @@ Models/UsedMaterial.cs                                                          
 Models/VendorItemCostLine.cs                                                            42
 Models/VendorOffer.cs                                                                   73
 Models/VendorOfferDataset.cs                                                            15
-Module.cs                                                                               2953
+Module.cs                                                                               2981
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
@@ -173,6 +173,7 @@ Services/PillTooltipTextComposer.cs                                             
 Services/PlanContentHeightMath.cs                                                       500
 Services/PlanHistoryBlobStore.cs                                                        216
 Services/PlanHistoryDedupKey.cs                                                         104
+Services/PlanHistoryIndexEdits.cs                                                       76
 Services/PlanHistoryLabels.cs                                                           118
 Services/PlanHistoryRetention.cs                                                        102
 Services/PlanHistoryRowLayout.cs                                                        369
@@ -193,11 +194,11 @@ Services/PlanViewModelBuilder.cs                                                
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
-Services/RankerReadinessCalculator.cs                                                   671
+Services/RankerReadinessCalculator.cs                                                   697
 Services/RankerReadinessRamp.cs                                                         265
 Services/RankerReadinessWeights.cs                                                      61
 Services/RankerResultCache.cs                                                           263
-Services/RankerRowLayout.cs                                                             753
+Services/RankerRowLayout.cs                                                             780
 Services/RankerSnapshotWatch.cs                                                         93
 Services/RankerStore.cs                                                                 132
 Services/RankerWatchlistLimits.cs                                                       17
@@ -304,8 +305,8 @@ Views/MainView.cs                                                               
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    425
-Views/PlanHistoryTabContent.cs                                                          1487
-Views/RankerTabContent.cs                                                               3025
+Views/PlanHistoryTabContent.cs                                                          1501
+Views/RankerTabContent.cs                                                               3037
 Views/Rendering/ClickSound.cs                                                           197
 Views/Rendering/CaretKeyButton.cs                                                       109
 Views/Rendering/CloseKeyButton.cs                                                       64
@@ -480,6 +481,7 @@ tests/TaimisToolbench.Tests/Services/PlanContentHeightMathTests.cs              
 tests/TaimisToolbench.Tests/Services/PlanHistoryBlobStoreTests.cs                       324
 tests/TaimisToolbench.Tests/Services/PlanHistoryDedupKeyTests.cs                        94
 tests/TaimisToolbench.Tests/Services/PlanHistoryLabelsTests.cs                          138
+tests/TaimisToolbench.Tests/Services/PlanHistoryOverrideMarkTests.cs                    142
 tests/TaimisToolbench.Tests/Services/PlanHistoryRetentionTests.cs                       139
 tests/TaimisToolbench.Tests/Services/PlanHistoryRowLayoutTests.cs                       422
 tests/TaimisToolbench.Tests/Services/PlanHistoryStoreTests.cs                           323
@@ -532,11 +534,11 @@ tests/TaimisToolbench.Tests/Services/RankerCascadeIntegrationTests.cs           
 tests/TaimisToolbench.Tests/Services/RankerPriorityCascadeTests.cs                      377
 tests/TaimisToolbench.Tests/Services/RankerPriorityOrderingTests.cs                     256
 tests/TaimisToolbench.Tests/Services/RankerRarityAdoptionTests.cs                       130
-tests/TaimisToolbench.Tests/Services/RankerReadinessCalculatorTests.cs                  866
+tests/TaimisToolbench.Tests/Services/RankerReadinessCalculatorTests.cs                  902
 tests/TaimisToolbench.Tests/Services/RankerReadinessRampTests.cs                        225
 tests/TaimisToolbench.Tests/Services/RankerRecipeGateAgreesWithPlanTests.cs             128
 tests/TaimisToolbench.Tests/Services/RankerResultCacheTests.cs                          215
-tests/TaimisToolbench.Tests/Services/RankerRowLayoutTests.cs                            933
+tests/TaimisToolbench.Tests/Services/RankerRowLayoutTests.cs                            977
 tests/TaimisToolbench.Tests/Services/RankerSnapshotWatchTests.cs                        141
 tests/TaimisToolbench.Tests/Services/RankerStoreTests.cs                                285
 tests/TaimisToolbench.Tests/Services/ReceiptCaptionHelperTests.cs                       124

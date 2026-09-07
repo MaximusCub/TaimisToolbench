@@ -1838,9 +1838,9 @@ namespace TaimisToolbench.Views
                 });
             }
 
-            int shown = currencyLines == 0 ? 0 : Math.Min(
-                metrics.CurrencyShortfalls.Count,
-                RankerRowLayout.CurrenciesPerLine * RankerRowLayout.MaxCurrencyLines);
+            int shown = currencyLines == 0
+                ? 0
+                : RankerRowLayout.CurrenciesShown(metrics.CurrencyShortfalls.Count);
             for (int i = 0; i < shown; i++)
             {
                 var shortfall = metrics.CurrencyShortfalls[i];
@@ -1874,8 +1874,10 @@ namespace TaimisToolbench.Views
                 // control (LabelHelpers.CreateFullCoverageMarker) rather than
                 // a green word only this tab uses. Seated on the ICON like
                 // the text beside it, but off the tag's own height.
-                row.CurrencyValues.Add(shortfall.Short > 0
-                    ? (Control)new Label
+                Label shortfallLabel = null;
+                if (shortfall.Short > 0)
+                {
+                    shortfallLabel = new Label
                     {
                         Font = UiFonts.Caption,
                         Text = ShortfallText(shortfall),
@@ -1884,7 +1886,19 @@ namespace TaimisToolbench.Views
                         AutoSizeHeight = true,
                         Location = new Point(0, textY),
                         Parent = row.Panel,
-                    }
+                    };
+
+                    // In Cascade mode Held is the wallet after the rows above
+                    // took theirs, so the bare "N short" beside it is not
+                    // measured against the account. The coin chip states that
+                    // in its own hover; this is the currency half of it.
+                    TooltipFacility.ApplyPlain(
+                        shortfallLabel,
+                        RankerReadinessCalculator.ShortfallTooltip(shortfall, fullName, Mode));
+                }
+
+                row.CurrencyValues.Add(shortfallLabel != null
+                    ? (Control)shortfallLabel
                     : LabelHelpers.CreateFullCoverageMarker(
                         row.Panel,
                         0,
@@ -2332,6 +2346,12 @@ namespace TaimisToolbench.Views
                 notes.Add("Claimed by higher priority: " + string.Join(", ", parts));
             }
 
+            // One line only, like the discipline note above it, and like it
+            // the rest are counted rather than dropped. The plan tab lists
+            // them all. A cap whose item resolves no name is not counted
+            // either, because the row could never name it.
+            string firstCapNote = null;
+            int namedCaps = 0;
             foreach (var capped in metrics.VendorCappedItems)
             {
                 string name = VendorCappedName(capped.ItemId);
@@ -2341,14 +2361,33 @@ namespace TaimisToolbench.Views
                     continue;
                 }
 
+                namedCaps++;
+                if (firstCapNote != null)
+                {
+                    continue;
+                }
+
                 // Same wording as the plan tab's TimegatedNotice rows, and
                 // named for what it is - a vendor purchase limit, not an
                 // earning cooldown (the calculator already drops caps on
                 // TP-liquid items, where the cap is coin rather than time).
-                notes.Add(name + " is timegated - vendor " + CapLabel(capped.CapType) +
+                firstCapNote = name + " is timegated - vendor " + CapLabel(capped.CapType) +
                     " limit: " + capped.CapValue.ToString(CultureInfo.InvariantCulture) +
-                    " (plan needs " + capped.NeededCount.ToString(CultureInfo.InvariantCulture) + ")");
-                break;
+                    " (plan needs " + capped.NeededCount.ToString(CultureInfo.InvariantCulture) + ")";
+            }
+
+            if (firstCapNote != null)
+            {
+                notes.Add(namedCaps > 1
+                    ? firstCapNote + " (and " + (namedCaps - 1).ToString(CultureInfo.InvariantCulture) + " more)"
+                    : firstCapNote);
+            }
+
+            string currencyOverflow = RankerRowLayout.CurrencyOverflowNote(
+                metrics.CurrencyShortfalls?.Count ?? 0);
+            if (currencyOverflow != null)
+            {
+                notes.Add(currencyOverflow);
             }
 
             return notes;

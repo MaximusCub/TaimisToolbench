@@ -327,6 +327,42 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void ShortfallTooltip_NamesWhatTheChipWasMeasuredAgainst()
+        {
+            var shortfall = new RankerCurrencyShortfall
+            {
+                CurrencyId = 23,
+                Needed = 500,
+                Held = 200,
+                Short = 300,
+                BaselineNeeded = 500,
+            };
+
+            string cascade = RankerReadinessCalculator.ShortfallTooltip(
+                shortfall, "Karma", RankerMode.Cascade);
+            string independent = RankerReadinessCalculator.ShortfallTooltip(
+                shortfall, "Karma", RankerMode.Independent);
+
+            // In Cascade mode the held figure is the wallet residual, so the
+            // chip's bare "300 short" is not measured against the wallet.
+            Assert.Contains("300 Karma", cascade);
+            Assert.Contains("higher-priority", cascade);
+            Assert.Contains("300 Karma", independent);
+            Assert.Contains("full wallet", independent);
+            Assert.DoesNotContain("higher-priority", independent);
+        }
+
+        [Fact]
+        public void ShortfallTooltip_ToleratesAMissingNameAndANullShortfall()
+        {
+            Assert.Null(RankerReadinessCalculator.ShortfallTooltip(null, "Karma", RankerMode.Cascade));
+
+            string text = RankerReadinessCalculator.ShortfallTooltip(
+                new RankerCurrencyShortfall { CurrencyId = 23, Short = 5 }, null, RankerMode.Cascade);
+            Assert.Contains("5 this currency", text);
+        }
+
+        [Fact]
         public void EachCurrencyCountsOnceRegardlessOfMagnitude()
         {
             // Weighting by need would compare 5,000 karma against 10 laurels as

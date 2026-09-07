@@ -981,6 +981,12 @@ namespace TaimisToolbench
                     // from the same baseline, not empty (see
                     // PersistResolvedPlanInBackground).
                     PersistResolvedPlanInBackground(result, overrides, ignoredItemIds);
+
+                    // Off the main thread: this writes the history index,
+                    // and the caller is a pill Click chain.
+                    int overrideCount = overrides?.Count ?? 0;
+                    int ignoredCount = ignoredItemIds?.Count ?? 0;
+                    Task.Run(() => MarkHistoryResolvedWithOverrides(overrideCount, ignoredCount));
                     return result;
                 },
                 itemMetadataService.GetCachedStatBlock,
@@ -2601,6 +2607,38 @@ namespace TaimisToolbench
             }
         }
 
+        /// <summary>
+        /// Marks the history row for the plan the tab is showing, after a
+        /// decision pill re-solved it. See
+        /// PlanHistoryIndexEdits.MarkOverrides for what the mark says and
+        /// why the row's Cost is left alone.
+        /// </summary>
+        private void MarkHistoryResolvedWithOverrides(int overrideCount, int ignoredCount)
+        {
+            var metadata = _lastPersistedPlanMetadata;
+            if (metadata == null || _planHistoryStore == null)
+            {
+                return;
+            }
+
+            string key = PlanHistoryDedupKey.Compute(
+                metadata.RequestItems,
+                metadata.UseOwnMaterials,
+                metadata.PriceBasis,
+                metadata.ValueOwnMaterials,
+                null);
+
+            lock (_planHistoryLock)
+            {
+                var index = _planHistoryIndex;
+                var entry = PlanHistoryIndexEdits.FindByDedupKey(index, key);
+                if (PlanHistoryIndexEdits.MarkOverrides(entry, overrideCount, ignoredCount))
+                {
+                    _planHistoryStore.Save(index);
+                }
+            }
+        }
+
         private PlanHistoryEntry FindHistoryEntry(PlanHistoryIndex index, string entryId)
         {
             foreach (var entry in index.Entries)
@@ -2644,17 +2682,7 @@ namespace TaimisToolbench
             {
                 var index = _planHistoryIndex;
 
-                PlanHistoryEntry entry = null;
-                foreach (var candidate in index.Entries)
-                {
-                    if (candidate != null
-                        && string.Equals(PlanHistoryDedupKey.ForEntry(candidate), key, StringComparison.Ordinal))
-                    {
-                        entry = candidate;
-                        break;
-                    }
-                }
-
+                var entry = PlanHistoryIndexEdits.FindByDedupKey(index, key);
                 if (entry == null)
                 {
                     entry = new PlanHistoryEntry

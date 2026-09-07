@@ -929,5 +929,49 @@ namespace TaimisToolbench.Tests.Services
         {
             Assert.Equal(0, RankerRowLayout.MainLineY(RankerRowLayout.RowHeight + 100));
         }
+
+        // --- The currencies the grid cannot fit ---
+        [Theory]
+        [InlineData(0, 0)]
+        [InlineData(1, 1)]
+        [InlineData(9, 9)]
+        [InlineData(10, 9)]
+        [InlineData(40, 9)]
+        public void CurrenciesShown_StopsAtTheGridSize(int currencies, int expected)
+        {
+            Assert.Equal(expected, RankerRowLayout.CurrenciesShown(currencies));
+        }
+
+        [Fact]
+        public void CurrencyLineCount_AgreesWithCurrenciesShown()
+        {
+            // The row's height and the number of chips it draws must come
+            // from one count, or a chip lands outside its own row.
+            for (int currencies = 0; currencies <= 40; currencies++)
+            {
+                int shown = RankerRowLayout.CurrenciesShown(currencies);
+                int expectedLines =
+                    (shown + RankerRowLayout.CurrenciesPerLine - 1) / RankerRowLayout.CurrenciesPerLine;
+                Assert.Equal(expectedLines, RankerRowLayout.CurrencyLineCount(currencies));
+            }
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(5)]
+        [InlineData(9)]
+        public void CurrencyOverflowNote_IsAbsentWhenEveryCurrencyFits(int currencies)
+        {
+            Assert.Null(RankerRowLayout.CurrencyOverflowNote(currencies));
+        }
+
+        [Fact]
+        public void CurrencyOverflowNote_CountsWhatTheGridDropped()
+        {
+            // The Currencies gate averages over all twelve, so the three the
+            // row never lists still move its percentage.
+            Assert.Equal("3 more currencies not shown", RankerRowLayout.CurrencyOverflowNote(12));
+            Assert.Equal("1 more currency not shown", RankerRowLayout.CurrencyOverflowNote(10));
+        }
     }
 }

@@ -207,6 +207,32 @@ namespace TaimisToolbench.Services
             return FormatPercent(gate.Applies ? gate.Completion : 1.0);
         }
 
+        /// <summary>
+        /// What a currency shortfall chip's "N short" is measured against.
+        /// <para>
+        /// In Cascade mode <see cref="RankerCurrencyShortfall.Held"/> is the
+        /// wallet left after the higher-priority rows took theirs, not the
+        /// account balance, so the bare chip states a number the wallet does
+        /// not show. The coin chip carries the same qualifier in its own
+        /// hover.
+        /// </para>
+        /// </summary>
+        public static string ShortfallTooltip(
+            RankerCurrencyShortfall shortfall, string currencyName, RankerMode mode)
+        {
+            if (shortfall == null)
+            {
+                return null;
+            }
+
+            string amount = shortfall.Short.ToString("N0", CultureInfo.InvariantCulture);
+            string name = string.IsNullOrEmpty(currencyName) ? "this currency" : currencyName;
+            return mode == RankerMode.Independent
+                ? "You are " + amount + " " + name + " short for this item, measured against your full wallet."
+                : "You are " + amount + " " + name +
+                  " short for this item, counting what the higher-priority items above it would already have spent.";
+        }
+
         public static string GateLabel(RankerGate gate)
         {
             switch (gate)
