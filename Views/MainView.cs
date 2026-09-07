@@ -63,6 +63,12 @@ namespace TaimisToolbench.Views
         // filter, so it is settled per row - see TransmutedNameIndex.
         private IReadOnlyDictionary<int, IReadOnlyList<TransmutedItemCopy>> _transmutedCopiesByItemId;
 
+        // itemId -> the characters wearing that Legendary Armory item,
+        // built beside _itemsById once per snapshot. Names only: the armory
+        // copy is account-wide and already counted once, so nothing here
+        // may reach a total (Models.SnapshotArmoryEquip).
+        private IReadOnlyDictionary<int, List<string>> _armoryEquippedByItemId;
+
         // Tops up the stat blocks the socket blocks are drawn FROM. Scoped
         // to the socketed ids and their hosts rather than to the whole
         // snapshot: an account's item list runs into the thousands, while
@@ -450,6 +456,7 @@ namespace TaimisToolbench.Views
             _accountItemIndex = new AccountItemIndex(_snapshot?.Items);
             _itemsById = SnapshotSearchResultBuilder.BuildRepresentativeIndex(_snapshot?.Items);
             _transmutedCopiesByItemId = TransmutedNameIndex.Build(_snapshot?.Items);
+            _armoryEquippedByItemId = SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(_snapshot);
             _characterNames = SnapshotSearchResultBuilder.CollectCharacterNames(_snapshot);
             IndexSockets();
             _initialStatus = initialStatus;
@@ -481,6 +488,7 @@ namespace TaimisToolbench.Views
             _accountItemIndex = new AccountItemIndex(_snapshot?.Items);
             _itemsById = SnapshotSearchResultBuilder.BuildRepresentativeIndex(_snapshot?.Items);
             _transmutedCopiesByItemId = TransmutedNameIndex.Build(_snapshot?.Items);
+            _armoryEquippedByItemId = SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(_snapshot);
             IndexSockets();
 
             var characterNames = SnapshotSearchResultBuilder.CollectCharacterNames(_snapshot);
@@ -1897,7 +1905,8 @@ namespace TaimisToolbench.Views
 
                 itemRows = SnapshotSearchResultBuilder.BuildItemRows(
                     _itemsById, _accountItemIndex, searchText, sourceFilter,
-                    GetActiveCharacterName(), _transmutedCopiesByItemId);
+                    GetActiveCharacterName(), _transmutedCopiesByItemId,
+                    _armoryEquippedByItemId);
             }
 
             if (filter == "All" || filter == "Wallet")

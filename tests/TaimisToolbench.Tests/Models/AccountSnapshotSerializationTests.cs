@@ -43,6 +43,11 @@ namespace TaimisToolbench.Tests.Models
                     new SnapshotCharacterDiscipline { CharacterName = "Anna", Discipline = "Weaponsmith", Rating = 500, Active = true },
                     new SnapshotCharacterDiscipline { CharacterName = "Bob", Discipline = "Chef", Rating = 400, Active = false },
                 },
+                LegendaryArmoryEquipped = new List<SnapshotArmoryEquip>
+                {
+                    new SnapshotArmoryEquip { ItemId = 300, CharacterName = "Anna" },
+                    new SnapshotArmoryEquip { ItemId = 300, CharacterName = "Bob" },
+                },
             };
 
             string json = JsonConvert.SerializeObject(original);
@@ -71,6 +76,24 @@ namespace TaimisToolbench.Tests.Models
             Assert.Equal(original.CharacterDisciplines[1].Discipline, deserialized.CharacterDisciplines[1].Discipline);
             Assert.Equal(original.CharacterDisciplines[1].Rating, deserialized.CharacterDisciplines[1].Rating);
             Assert.Equal(original.CharacterDisciplines[1].Active, deserialized.CharacterDisciplines[1].Active);
+            Assert.Equal(original.LegendaryArmoryEquipped.Count, deserialized.LegendaryArmoryEquipped.Count);
+            Assert.Equal(original.LegendaryArmoryEquipped[0].ItemId, deserialized.LegendaryArmoryEquipped[0].ItemId);
+            Assert.Equal(original.LegendaryArmoryEquipped[0].CharacterName, deserialized.LegendaryArmoryEquipped[0].CharacterName);
+            Assert.Equal(original.LegendaryArmoryEquipped[1].ItemId, deserialized.LegendaryArmoryEquipped[1].ItemId);
+            Assert.Equal(original.LegendaryArmoryEquipped[1].CharacterName, deserialized.LegendaryArmoryEquipped[1].CharacterName);
+        }
+
+        [Fact]
+        public void ASnapshotWrittenBeforeWearersWereCaptured_LoadsWithNobodyNamed()
+        {
+            // The field is additive. An older snapshot.json carries no
+            // "LegendaryArmoryEquipped" at all, and must read as "nobody
+            // named" rather than leaving a null the row builder walks.
+            var deserialized = JsonConvert.DeserializeObject<AccountSnapshot>(
+                "{\"CapturedAt\":\"2025-06-15T12:00:00Z\",\"CoinCopper\":5}");
+
+            Assert.NotNull(deserialized.LegendaryArmoryEquipped);
+            Assert.Empty(deserialized.LegendaryArmoryEquipped);
         }
 
         [Fact]

@@ -89,6 +89,7 @@
     <Compile Include="Models\TransmutedItemCopy.cs" />
     <Compile Include="Models\TransmutedSkin.cs" />
     <Compile Include="Models\SnapshotWalletEntry.cs" />
+    <Compile Include="Models\SnapshotArmoryEquip.cs" />
     <Compile Include="Models\SnapshotCharacterDiscipline.cs" />
     <Compile Include="Models\SnapshotHoldLocation.cs" />
     <Compile Include="Models\SnapshotSearchRow.cs" />
@@ -98,6 +99,7 @@
     <Compile Include="Services\Gw2AccountSnapshotService.cs" />
     <Compile Include="Services\SnapshotHeaderLayout.cs" />
     <Compile Include="Services\SnapshotHelpers.cs" />
+    <Compile Include="Services\EquipmentLocationPolicy.cs" />
     <Compile Include="Services\SnapshotHoldLine.cs" />
     <Compile Include="Services\SnapshotSearchResultBuilder.cs" />
     <Compile Include="Services\SocketedUpgradeIndex.cs" />

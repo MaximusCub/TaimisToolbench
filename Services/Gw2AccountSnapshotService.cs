@@ -275,7 +275,17 @@ namespace TaimisToolbench.Services
                     // characterDisciplineDataDegraded; the two are
                     // independent signals.
                     snapshot.Items.AddRange(inventoryTask.Result);
-                    snapshot.Items.AddRange(equipmentTask.Result);
+
+                    var equipment = equipmentTask.Result;
+                    snapshot.Items.AddRange(equipment.Items);
+                    foreach (int armoryItemId in equipment.ArmoryItemIds)
+                    {
+                        snapshot.LegendaryArmoryEquipped.Add(new SnapshotArmoryEquip
+                        {
+                            ItemId = armoryItemId,
+                            CharacterName = name,
+                        });
+                    }
 
                     // Crafting disciplines: unlike Inventory, ANY failure
                     // flips characterDisciplineDataDegraded so the whole
@@ -383,24 +393,23 @@ namespace TaimisToolbench.Services
         /// What this character is wearing, plus what its saved equipment
         /// tabs hold, as one entry per physical item under the
         /// "Equipped:&lt;name&gt;" source, which is not the source its bags
-        /// use.
+        /// use. The second half of the result is the item ids this
+        /// character is wearing out of the account-wide Legendary Armory,
+        /// which are named but never counted (Models.SnapshotArmoryEquip).
         /// <para>
         /// /v2/characters/:id/equipment returns each physical item once and
         /// names every tab it sits in, so an item shared by three loadouts
         /// is one entry, not three (/v2/characters/:id/equipmenttabs is the
-        /// per-tab view that would repeat it). Location says which store
-        /// the slot draws from: "Equipped" and "Armory" are items this
-        /// character holds; the two Legendary Armory values are an
-        /// account-wide shared copy reported once per slot per character,
-        /// so counting them would multiply one legendary by the number of
-        /// slots using it - the account's own
-        /// /v2/account/legendaryarmory read carries those instead. Never
+        /// per-tab view that would repeat it). Which store a slot draws
+        /// from is Services.EquipmentLocationPolicy's decision. Never
         /// throws, like the inventory fetch.
         /// </para>
         /// </summary>
-        private async Task<List<SnapshotItemEntry>> FetchCharacterEquipmentItemsAsync(string characterName, CancellationToken ct)
+        private async Task<(List<SnapshotItemEntry> Items, List<int> ArmoryItemIds)>
+            FetchCharacterEquipmentItemsAsync(string characterName, CancellationToken ct)
         {
             var items = new List<SnapshotItemEntry>();
+            var armoryItemIds = new List<int>();
             try
             {
                 var equipment = await _apiManager.Gw2ApiClient.V2.Characters[characterName].Equipment.GetAsync(ct);
@@ -408,8 +417,20 @@ namespace TaimisToolbench.Services
                 {
                     foreach (var item in equipment.Equipment)
                     {
-                        if (item == null || !IsHeldByCharacter(item))
+                        if (item == null)
                         {
+                            continue;
+                        }
+
+                        string location = RawLocation(item);
+                        if (!EquipmentLocationPolicy.IsHeldByCharacter(location))
+                        {
+                            if (item.Id > 0
+                                && EquipmentLocationPolicy.IsEquippedFromLegendaryArmory(location))
+                            {
+                                armoryItemIds.Add(item.Id);
+                            }
+
                             continue;
                         }
 
@@ -435,33 +456,26 @@ namespace TaimisToolbench.Services
                 ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch equipment for character {characterName}: {ex.GetType().Name} - {ex.Message}");
             }
 
-            return items;
+            return (items, armoryItemIds);
         }
 
         /// <summary>
-        /// Whether an equipment slot holds an item this character owns a
-        /// copy of, rather than one drawn from the account-wide Legendary
-        /// Armory - see FetchCharacterEquipmentItemsAsync. The literal wire
-        /// string decides, the same way RarityOf reads rarity, so a value
-        /// Gw2Sharp's enum does not recognise is left out rather than
-        /// counted as something it is not.
+        /// The wire string in an equipment slot's "location" field, which is
+        /// what Services.EquipmentLocationPolicy reads. Taken raw the same
+        /// way RarityOf reads rarity, so a value Gw2Sharp's enum does not
+        /// recognise reaches the policy as itself rather than as the enum's
+        /// fallback member. "" when the slot carries no location at all.
         /// </summary>
-        private static bool IsHeldByCharacter(CharacterEquipmentItem item)
+        private static string RawLocation(CharacterEquipmentItem item)
         {
             var location = item.Location;
             if (location == null)
             {
-                return false;
+                return "";
             }
 
             string raw = location.RawValue;
-            if (string.IsNullOrEmpty(raw))
-            {
-                raw = location.Value.ToString();
-            }
-
-            return string.Equals(raw, "Equipped", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(raw, "Armory", StringComparison.OrdinalIgnoreCase);
+            return string.IsNullOrEmpty(raw) ? location.Value.ToString() : raw;
         }
 
         // One bounded retry: the all-or-nothing rule means a single

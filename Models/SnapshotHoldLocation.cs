@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace TaimisToolbench.Models
 {
     /// <summary>
@@ -34,6 +36,18 @@ namespace TaimisToolbench.Models
         public string CharacterName { get; set; } = "";
 
         public int Count { get; set; }
+
+        /// <summary>
+        /// Characters wearing this item, for a place that holds it for the
+        /// whole account. Null or empty everywhere else.
+        /// <para>
+        /// Only <see cref="SnapshotHoldCategory.LegendaryArmory"/> fills
+        /// this in today. These characters are NOT holders: they draw the
+        /// one account-wide copy <see cref="Count"/> already counts, so
+        /// naming them must never add to a total.
+        /// </para>
+        /// </summary>
+        public IReadOnlyList<string> EquippedBy { get; set; }
 
         /// <summary>
         /// The raw source key, kept for <see cref="SnapshotHoldCategory.Unknown"/>

@@ -595,6 +595,140 @@ namespace TaimisToolbench.Tests.Services
                 ItemsById(items), index, "", filter, null));
         }
 
+        // ---- Who is wearing an armory item ----
+        private static AccountSnapshot ArmorySnapshot(params (int ItemId, string Character)[] worn)
+        {
+            var snapshot = new AccountSnapshot();
+            foreach (var entry in worn)
+            {
+                snapshot.LegendaryArmoryEquipped.Add(new SnapshotArmoryEquip
+                {
+                    ItemId = entry.ItemId,
+                    CharacterName = entry.Character,
+                });
+            }
+
+            return snapshot;
+        }
+
+        [Fact]
+        public void BuildArmoryEquippedIndex_KeepsCaptureOrderAndNamesEachWearerOnce()
+        {
+            // One character wearing the same legendary in two slots is two
+            // captured pairings and one name.
+            var index = SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(
+                ArmorySnapshot(
+                    (100, "Divineaxe"), (100, "Apoyu"), (100, "Divineaxe"), (200, "Zoe")));
+
+            Assert.Equal(new[] { "Divineaxe", "Apoyu" }, index[100]);
+            Assert.Equal(new[] { "Zoe" }, index[200]);
+        }
+
+        [Fact]
+        public void BuildArmoryEquippedIndex_SkipsUnusablePairingsAndNeverReturnsNull()
+        {
+            Assert.Empty(SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(null));
+            Assert.Empty(SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(new AccountSnapshot()));
+            Assert.Empty(SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(
+                ArmorySnapshot((0, "Divineaxe"), (100, ""), (100, null))));
+        }
+
+        [Fact]
+        public void BuildItemRows_ArmoryRow_NamesTheCharactersWearingIt()
+        {
+            var items = new List<SnapshotItemEntry>
+            {
+                Entry(100, "Bolt", 1, AccountItemIndex.SourceLegendaryArmory),
+            };
+            var index = new AccountItemIndex(items);
+            var armory = SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(
+                ArmorySnapshot((100, "Divineaxe"), (100, "Apoyu")));
+
+            var result = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", new SnapshotSourceFilter(), null, null, armory);
+
+            // Named, not counted: the account holds one copy however many
+            // characters are drawing it.
+            Assert.Equal(1, result[0].TotalCount);
+            Assert.Equal(
+                new[] { "Divineaxe", "Apoyu" }, result[0].Breakdown[0].EquippedBy);
+            Assert.Equal(
+                "Legendary Armory - Equipped: Divineaxe, Apoyu",
+                SnapshotHoldLine.Format(result[0].Breakdown));
+        }
+
+        [Fact]
+        public void BuildItemRows_OnlyTheArmoryPlaceCarriesWearers()
+        {
+            var items = new List<SnapshotItemEntry>
+            {
+                Entry(100, "Bolt", 1, AccountItemIndex.SourceLegendaryArmory),
+                Entry(100, "Bolt", 1, AccountItemIndex.SourceBank),
+            };
+            var index = new AccountItemIndex(items);
+            var armory = SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(
+                ArmorySnapshot((100, "Divineaxe")));
+
+            var result = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", new SnapshotSourceFilter(), null, null, armory);
+
+            Assert.Equal(2, result[0].TotalCount);
+            foreach (var place in result[0].Breakdown)
+            {
+                if (place.Category != SnapshotHoldCategory.LegendaryArmory)
+                {
+                    Assert.Null(place.EquippedBy);
+                }
+            }
+
+            // Two places each holding one still print no counts; the
+            // wearer clause is not a place and does not change that.
+            Assert.Equal(
+                "Bank  Legendary Armory - Equipped: Divineaxe",
+                SnapshotHoldLine.Format(result[0].Breakdown));
+        }
+
+        [Fact]
+        public void BuildItemRows_UncheckedCharacter_StopsNamingItUnderTheArmory()
+        {
+            var items = new List<SnapshotItemEntry>
+            {
+                Entry(100, "Bolt", 1, AccountItemIndex.SourceLegendaryArmory),
+            };
+            var index = new AccountItemIndex(items);
+            var armory = SnapshotSearchResultBuilder.BuildArmoryEquippedIndex(
+                ArmorySnapshot((100, "Divineaxe"), (100, "Apoyu")));
+
+            var result = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", Unchecked("Divineaxe"), null, null, armory);
+
+            Assert.Equal(new[] { "Apoyu" }, result[0].Breakdown[0].EquippedBy);
+
+            // Unchecking every wearer leaves the place itself, which is
+            // account-wide and was never that character's to hide.
+            var noneVisible = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", Unchecked("Divineaxe", "Apoyu"), null, null, armory);
+
+            Assert.Null(noneVisible[0].Breakdown[0].EquippedBy);
+            Assert.Equal("Legendary Armory", SnapshotHoldLine.Format(noneVisible[0].Breakdown));
+        }
+
+        [Fact]
+        public void BuildItemRows_NoArmoryIndex_ReadsExactlyAsItDidBefore()
+        {
+            var items = new List<SnapshotItemEntry>
+            {
+                Entry(100, "Bolt", 1, AccountItemIndex.SourceLegendaryArmory),
+            };
+            var index = new AccountItemIndex(items);
+
+            var result = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", new SnapshotSourceFilter(), null);
+
+            Assert.Null(result[0].Breakdown[0].EquippedBy);
+            Assert.Equal("Legendary Armory", SnapshotHoldLine.Format(result[0].Breakdown));
+        }
+
         // ---- BuildItemRows: per-character source filtering ----
         [Fact]
         public void BuildItemRows_UncheckedCharacter_HidesOnlyThatCharactersContribution()

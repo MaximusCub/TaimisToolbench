@@ -136,6 +136,47 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// Which characters are wearing each Legendary Armory item, keyed by
+        /// item id, in the order the capture saw them and with each
+        /// character named once. Built once per snapshot alongside
+        /// <see cref="BuildRepresentativeIndex"/>, because
+        /// <see cref="BuildItemRows"/> runs once per search-box keystroke
+        /// and a scan of the raw pairings per row would cost the roster
+        /// times the result set. Returns an empty dictionary, never null.
+        /// </summary>
+        public static Dictionary<int, List<string>> BuildArmoryEquippedIndex(AccountSnapshot snapshot)
+        {
+            var byItemId = new Dictionary<int, List<string>>();
+            if (snapshot == null || snapshot.LegendaryArmoryEquipped == null)
+            {
+                return byItemId;
+            }
+
+            foreach (var equip in snapshot.LegendaryArmoryEquipped)
+            {
+                if (equip == null || equip.ItemId <= 0 || string.IsNullOrEmpty(equip.CharacterName))
+                {
+                    continue;
+                }
+
+                if (!byItemId.TryGetValue(equip.ItemId, out var names))
+                {
+                    names = new List<string>();
+                    byItemId[equip.ItemId] = names;
+                }
+
+                // One character can wear the same legendary in two slots -
+                // two entries for one wearer, which must read as one name.
+                if (!names.Contains(equip.CharacterName))
+                {
+                    names.Add(equip.CharacterName);
+                }
+            }
+
+            return byItemId;
+        }
+
+        /// <summary>
         /// Builds one <see cref="SnapshotSearchRow"/> per distinct itemId in
         /// <paramref name="itemsById"/> that (a) has a positive total once
         /// <paramref name="sourceFilter"/> has excluded any unchecked sources
@@ -161,7 +202,8 @@ namespace TaimisToolbench.Services
             string searchText,
             SnapshotSourceFilter sourceFilter,
             string activeCharacterName,
-            IReadOnlyDictionary<int, IReadOnlyList<TransmutedItemCopy>> transmutedCopies = null)
+            IReadOnlyDictionary<int, IReadOnlyList<TransmutedItemCopy>> transmutedCopies = null,
+            IReadOnlyDictionary<int, List<string>> armoryEquipped = null)
         {
             var rows = new List<SnapshotSearchRow>();
 
@@ -217,7 +259,14 @@ namespace TaimisToolbench.Services
                         characterMatches = CharacterNameMatches(source, trimmedSearch);
                     }
 
-                    breakdown.Add(SnapshotHoldLine.FromSource(source, quantity));
+                    var location = SnapshotHoldLine.FromSource(source, quantity);
+                    if (location.Category == SnapshotHoldCategory.LegendaryArmory)
+                    {
+                        location.EquippedBy = VisibleWearers(
+                            itemId, armoryEquipped, sourceFilter);
+                    }
+
+                    breakdown.Add(location);
                     total += quantity;
                 }
 
@@ -380,6 +429,46 @@ namespace TaimisToolbench.Services
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// The characters wearing this item that the source filter still
+        /// shows, or null when none are left. Unchecking a character hides
+        /// its bags and its worn gear, so it must not go on naming that
+        /// character under the Legendary Armory either.
+        /// </summary>
+        private static IReadOnlyList<string> VisibleWearers(
+            int itemId,
+            IReadOnlyDictionary<int, List<string>> armoryEquipped,
+            SnapshotSourceFilter filter)
+        {
+            if (armoryEquipped == null
+                || !armoryEquipped.TryGetValue(itemId, out var names)
+                || names == null
+                || names.Count == 0)
+            {
+                return null;
+            }
+
+            var excluded = filter == null ? null : filter.UncheckedCharacters;
+            if (excluded == null || excluded.Count == 0)
+            {
+                return names;
+            }
+
+            // Allocates only once the user has unchecked something, and only
+            // for a row the armory holds - the legendaries, not the roster's
+            // whole item list.
+            var visible = new List<string>(names.Count);
+            for (int i = 0; i < names.Count; i++)
+            {
+                if (!excluded.Contains(names[i]))
+                {
+                    visible.Add(names[i]);
+                }
+            }
+
+            return visible.Count > 0 ? visible : null;
         }
 
         /// <summary>

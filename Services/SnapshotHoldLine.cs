@@ -23,6 +23,19 @@ namespace TaimisToolbench.Services
         private const string CategorySeparator = "  ";
 
         /// <summary>
+        /// Opens the list of characters wearing an account-wide item. The
+        /// dash keeps it apart from the colon that introduces the
+        /// characters HOLDING a category's stock: these characters are
+        /// drawing the one copy the category already counted.
+        /// </summary>
+        private const string EquippedByPrefix = " - Equipped: ";
+
+        /// <summary>Separates two names in that list. They never carry
+        /// counts, so a comma is the only thing between them however the
+        /// rest of the line is printing.</summary>
+        private const string EquippedBySeparator = ", ";
+
+        /// <summary>
         /// Reads a raw AccountItemIndex source key as a place. An
         /// unrecognized key becomes
         /// <see cref="SnapshotHoldCategory.Unknown"/> and keeps its raw text,
@@ -201,6 +214,7 @@ namespace TaimisToolbench.Services
                     AppendEachCount(line, locations, category);
                 }
 
+                AppendEquippedBy(line, locations, category);
                 return;
             }
 
@@ -227,6 +241,47 @@ namespace TaimisToolbench.Services
 
                 AppendPlace(line, location, showCounts);
                 wrote = true;
+            }
+
+            AppendEquippedBy(line, locations, category);
+        }
+
+        /// <summary>
+        /// Appends the characters wearing this category's item, or nothing
+        /// when none are named. Names only: a count here would read as
+        /// stock, and the whole point of
+        /// Models.SnapshotHoldLocation.EquippedBy is that these characters
+        /// hold none.
+        /// </summary>
+        private static void AppendEquippedBy(
+            StringBuilder line,
+            IReadOnlyList<SnapshotHoldLocation> locations,
+            SnapshotHoldCategory category)
+        {
+            bool wrote = false;
+
+            for (int i = 0; i < locations.Count; i++)
+            {
+                var location = locations[i];
+                if (location == null
+                    || location.Category != category
+                    || location.EquippedBy == null)
+                {
+                    continue;
+                }
+
+                var names = location.EquippedBy;
+                for (int n = 0; n < names.Count; n++)
+                {
+                    if (string.IsNullOrEmpty(names[n]))
+                    {
+                        continue;
+                    }
+
+                    line.Append(wrote ? EquippedBySeparator : EquippedByPrefix);
+                    line.Append(names[n]);
+                    wrote = true;
+                }
             }
         }
 
