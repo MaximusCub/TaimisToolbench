@@ -2505,6 +2505,25 @@ namespace TaimisToolbench.Views
             return shown != full;
         }
 
+        /// <summary>
+        /// Puts the whole source-breakdown line on its label's hover while
+        /// the fit had to shorten it, and takes the hover away again when it
+        /// did not. Called at build and from every re-fit: a resize moves a
+        /// line between shortened and whole in both directions.
+        /// <para>
+        /// This label is the only text on a snapshot cell with no rich
+        /// surface on it, so a plain note here has nothing to drop - the
+        /// item's own hover lives on the icon tree alone
+        /// (ItemIconTooltip.StampOnIconTree). Do not copy this into
+        /// <see cref="FitRowTextLabel"/>, which also fits labels that do
+        /// carry one.
+        /// </para>
+        /// </summary>
+        private static void SetBreakdownHover(Label label, string breakdown, bool shortened)
+        {
+            TooltipFacility.ApplyPlain(label, shortened ? breakdown : null);
+        }
+
         private void CreateItemRow(SnapshotSearchRow row, int columnWidth, SectionChrome chrome)
         {
             // ClippedPanel: rows re-assert the viewport's published cutoff.
@@ -2564,12 +2583,14 @@ namespace TaimisToolbench.Views
             // Runs UNDER the Amount column: that is one short line.
             var breakdownLabel = CreateRowTextLabel(
                 rowPanel, breakdown, SnapshotItemGridLayout.CellFullLineMaxWidth(columnWidth),
-                26, InfoTextColor, out _);
+                26, InfoTextColor, out bool breakdownShortened);
+            SetBreakdownHover(breakdownLabel, breakdown, breakdownShortened);
 
-            // NOTHING else on the cell answers a hover: the item's tooltip
-            // is carried by its icon alone (ItemIconTooltip.StampOnIconTree),
-            // and the name, the amount, the source breakdown and the strip
-            // between them are not the item.
+            // The breakdown line is the only text on the cell that answers a
+            // hover, and only while it is too long to read in full. The
+            // item's own tooltip is carried by its icon alone
+            // (ItemIconTooltip.StampOnIconTree); the name, the amount and
+            // the strip between them are not the item.
 
             // The cell's own Size is the grid's to write (LayoutResultGrid),
             // so this closure only re-fits what the new column width changed.
@@ -2577,7 +2598,11 @@ namespace TaimisToolbench.Views
             {
                 FitRowTextLabel(
                     nameLabel, nameText, SnapshotItemGridLayout.CellNameMaxWidth(w, chrome.AmountBand));
-                FitRowTextLabel(breakdownLabel, breakdown, SnapshotItemGridLayout.CellFullLineMaxWidth(w));
+                SetBreakdownHover(
+                    breakdownLabel,
+                    breakdown,
+                    FitRowTextLabel(
+                        breakdownLabel, breakdown, SnapshotItemGridLayout.CellFullLineMaxWidth(w)));
                 PlaceAmountLabel(amountLabel, amountWidth, w, 4);
             }));
         }
