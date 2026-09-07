@@ -87,7 +87,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(1013, row.TradeUpCurrencyHeld);
             Assert.Equal(4, row.TradeUpBuysQuantity);
             Assert.Equal("1013", SummarySectionLayoutMath.TradeUpNoteHeldText(row));
-            Assert.Equal("buys 4", SummarySectionLayoutMath.TradeUpNoteBuysText(row));
+            Assert.Equal("Buys 4", SummarySectionLayoutMath.TradeUpNoteBuysText(row));
         }
 
         [Fact]
@@ -100,7 +100,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(163, row.TradeUpCurrencyHeld);
             Assert.Equal(0, row.TradeUpBuysQuantity);
             Assert.Equal("163", SummarySectionLayoutMath.TradeUpNoteHeldText(row));
-            Assert.Equal("buys 0", SummarySectionLayoutMath.TradeUpNoteBuysText(row));
+            Assert.Equal("Buys 0", SummarySectionLayoutMath.TradeUpNoteBuysText(row));
         }
 
         /// <summary>

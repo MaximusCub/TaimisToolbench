@@ -727,9 +727,17 @@ namespace TaimisToolbench.Views.Rendering
 
             internal readonly int NoteBandWidth;
 
+            /// <summary>
+            /// Widest held amount any note draws. Every row right-aligns
+            /// its own held amount in this width, which is what puts each
+            /// row's currency icon at the same x down the column.
+            /// </summary>
+            internal readonly int NoteHeldBandWidth;
+
             internal CurrencyColumnScan(
                 int numberBandWidth, int requiredInk, int haveInk, int neededInk,
-                int markerInk, int markerBandWidth, int noteInk, int noteBandWidth)
+                int markerInk, int markerBandWidth, int noteInk, int noteBandWidth,
+                int noteHeldBandWidth)
             {
                 NumberBandWidth = numberBandWidth;
                 RequiredInk = requiredInk;
@@ -739,6 +747,7 @@ namespace TaimisToolbench.Views.Rendering
                 MarkerBandWidth = markerBandWidth;
                 NoteInk = noteInk;
                 NoteBandWidth = noteBandWidth;
+                NoteHeldBandWidth = noteHeldBandWidth;
             }
 
             internal SummarySectionLayoutMath.CurrencyColumnEdges EdgesFor(int panelWidth)
@@ -760,27 +769,39 @@ namespace TaimisToolbench.Views.Rendering
         private static CurrencyColumnScan ScanCurrencyColumns(List<PlanRowViewModel> rows)
         {
             var font = UiFonts.Body;
-            int required = 0, have = 0, needed = 0, note = 0;
+            int required = 0, have = 0, needed = 0, noteHeld = 0, noteBuys = 0;
             bool anyCovered = false;
             foreach (var row in rows)
             {
                 required = Max(required, MeasureNumber(font, row.Quantity.ToString()));
                 have = Max(have, MeasureNumber(font, CurrencyHaveText(row)));
                 needed = Max(needed, MeasureNumber(font, CurrencyNeededText(row)));
-                note = Max(note, MeasureNoteWidth(font, row));
                 anyCovered |= row.CurrencyFullyCovered;
+
+                string held = SummarySectionLayoutMath.TradeUpNoteHeldText(row);
+                if (!string.IsNullOrEmpty(held))
+                {
+                    noteHeld = Max(noteHeld, MeasureNumber(font, held));
+                    noteBuys = Max(
+                        noteBuys,
+                        MeasureNumber(font, SummarySectionLayoutMath.TradeUpNoteBuysText(row)));
+                }
             }
 
             int band = Max(WidestCurrencyHeaderLabel(), Max(required, Max(have, needed)));
             int markerInk = anyCovered ? LabelHelpers.FullCoverageMarkerWidth() : 0;
             int markerBand = SummarySectionLayoutMath.EffectiveCurrencyMarkerWidth(
                 Max(markerInk, MeasureHeader(HeaderBands.Font, StatusHeaderText)));
+
+            // The note's two halves are measured as column-wide maxima, so
+            // one note's width is the width of them all.
+            int note = SummarySectionLayoutMath.TradeUpNoteWidth(noteHeld, noteBuys);
             int noteBand = note > 0
                 ? Max(note, MeasureHeader(HeaderBands.Font, NoteHeaderText))
                 : 0;
 
             return new CurrencyColumnScan(
-                band, required, have, needed, markerInk, markerBand, note, noteBand);
+                band, required, have, needed, markerInk, markerBand, note, noteBand, noteHeld);
         }
 
         private static int Max(int a, int b)
@@ -808,24 +829,6 @@ namespace TaimisToolbench.Views.Rendering
         private static string CurrencyNeededText(PlanRowViewModel row)
         {
             return row.CurrencyNeededQuantity.HasValue ? row.CurrencyNeededQuantity.Value.ToString() : "-";
-        }
-
-        /// <summary>
-        /// Width of one row's note, 0 on a row with none. Measured through
-        /// the layout math's own arithmetic, so the pre-scan below and the
-        /// drawn cell cannot place the same note differently.
-        /// </summary>
-        private static int MeasureNoteWidth(BitmapFont font, PlanRowViewModel row)
-        {
-            string held = SummarySectionLayoutMath.TradeUpNoteHeldText(row);
-            if (string.IsNullOrEmpty(held))
-            {
-                return 0;
-            }
-
-            return SummarySectionLayoutMath.TradeUpNoteWidth(
-                MeasureNumber(font, held),
-                MeasureNumber(font, SummarySectionLayoutMath.TradeUpNoteBuysText(row)));
         }
 
         private const string RequiredHeaderText = "Required";
@@ -1112,7 +1115,7 @@ namespace TaimisToolbench.Views.Rendering
             var haveLabel = LabelHelpers.CreateRightAlignedLabel(rowPanel, CurrencyHaveText(row), font, numberColor, edges.HaveRightEdge, SummarySectionLayoutMath.CurrencyRowTextY);
             var neededLabel = LabelHelpers.CreateRightAlignedLabel(rowPanel, CurrencyNeededText(row), font, numberColor, edges.NeededRightEdge, SummarySectionLayoutMath.CurrencyRowTextY);
 
-            var note = CreateTradeUpNote(row, rowPanel, edges, font);
+            var note = CreateTradeUpNote(row, rowPanel, edges, font, scan.NoteHeldBandWidth);
 
             Panel marker = null;
             if (row.CurrencyFullyCovered)
@@ -1175,7 +1178,8 @@ namespace TaimisToolbench.Views.Rendering
         /// </summary>
         private static TradeUpNoteHandle CreateTradeUpNote(
             PlanRowViewModel row, Panel rowPanel,
-            SummarySectionLayoutMath.CurrencyColumnEdges edges, BitmapFont font)
+            SummarySectionLayoutMath.CurrencyColumnEdges edges, BitmapFont font,
+            int heldBandWidth)
         {
             string heldText = SummarySectionLayoutMath.TradeUpNoteHeldText(row);
             if (string.IsNullOrEmpty(heldText))
@@ -1192,13 +1196,17 @@ namespace TaimisToolbench.Views.Rendering
             {
                 Text = heldText, Font = font, TextColor = color,
                 AutoSizeWidth = true, AutoSizeHeight = true,
-                Location = new Point(edges.NoteX, y),
+                Location = new Point(
+                    SummarySectionLayoutMath.TradeUpNoteHeldX(
+                        edges.NoteX, heldBandWidth, heldWidth),
+                    y),
                 Parent = rowPanel,
             });
 
             var icon = IconControls.CreateCurrencyIcon(
                 rowPanel, row.TradeUpCurrencyIconUrl,
-                SummarySectionLayoutMath.TradeUpNoteIconX(edges.NoteX, heldWidth), iconY,
+                SummarySectionLayoutMath.TradeUpNoteIconX(edges.NoteX, heldBandWidth, heldWidth),
+                iconY,
                 ItemIconTier.CurrencyBarRun, row.TradeUpCurrencyName);
 
             var buysLabel = LabelHelpers.WithDescenderClearance(new Label()
@@ -1206,11 +1214,13 @@ namespace TaimisToolbench.Views.Rendering
                 Text = SummarySectionLayoutMath.TradeUpNoteBuysText(row), Font = font, TextColor = color,
                 AutoSizeWidth = true, AutoSizeHeight = true,
                 Location = new Point(
-                    SummarySectionLayoutMath.TradeUpNoteBuysX(edges.NoteX, heldWidth), y),
+                    SummarySectionLayoutMath.TradeUpNoteBuysX(
+                        edges.NoteX, heldBandWidth, heldWidth),
+                    y),
                 Parent = rowPanel,
             });
 
-            return new TradeUpNoteHandle(heldLabel, icon, buysLabel, heldWidth, iconY);
+            return new TradeUpNoteHandle(heldLabel, icon, buysLabel, heldBandWidth, heldWidth, iconY);
         }
 
         /// <summary>
@@ -1223,14 +1233,17 @@ namespace TaimisToolbench.Views.Rendering
             private readonly Label _held;
             private readonly Panel _icon;
             private readonly Label _buys;
+            private readonly int _heldBandWidth;
             private readonly int _heldWidth;
             private readonly int _iconY;
 
-            internal TradeUpNoteHandle(Label held, Panel icon, Label buys, int heldWidth, int iconY)
+            internal TradeUpNoteHandle(
+                Label held, Panel icon, Label buys, int heldBandWidth, int heldWidth, int iconY)
             {
                 _held = held;
                 _icon = icon;
                 _buys = buys;
+                _heldBandWidth = heldBandWidth;
                 _heldWidth = heldWidth;
                 _iconY = iconY;
             }
@@ -1243,17 +1256,23 @@ namespace TaimisToolbench.Views.Rendering
                 }
 
                 int y = SummarySectionLayoutMath.CurrencyRowTextY;
-                _held.Location = new Point(noteX, y);
+                _held.Location = new Point(
+                    SummarySectionLayoutMath.TradeUpNoteHeldX(noteX, _heldBandWidth, _heldWidth),
+                    y);
                 if (_icon != null)
                 {
                     _icon.Location = new Point(
-                        SummarySectionLayoutMath.TradeUpNoteIconX(noteX, _heldWidth), _iconY);
+                        SummarySectionLayoutMath.TradeUpNoteIconX(
+                            noteX, _heldBandWidth, _heldWidth),
+                        _iconY);
                 }
 
                 if (_buys != null)
                 {
                     _buys.Location = new Point(
-                        SummarySectionLayoutMath.TradeUpNoteBuysX(noteX, _heldWidth), y);
+                        SummarySectionLayoutMath.TradeUpNoteBuysX(
+                            noteX, _heldBandWidth, _heldWidth),
+                        y);
                 }
             }
         }
