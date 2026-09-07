@@ -242,9 +242,9 @@ What remains ours on that path is request volume and what we keep:
 - Item names and currency metadata are held across refreshes, so a second
   snapshot on the same session re-fetches neither
   (`Services/Gw2AccountSnapshotService.cs`).
-- The learned-recipe list is fronted by a five-minute cache with explicit
-  invalidation when the subtoken changes
-  (`Services/CachingAccountRecipeClient.cs`).
+- The learned-recipe list is fetched once per plan generation and is not
+  cached, so a recipe learned in game shows as known on the next plan
+  (`Services/CraftingPlanPipeline.cs`).
 - A single refresh is claimed once and cannot overlap itself
   (`Services/SnapshotRefreshSlot.cs`).
 
