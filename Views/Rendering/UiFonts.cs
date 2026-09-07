@@ -151,6 +151,15 @@ namespace TaimisToolbench.Views.Rendering
             _bodyGlyphs = null;
         }
 
+        /// <summary>
+        /// The Snapshot tab's Amount column - the "30x" beside each icon.
+        /// Bold, because the ramp has no regular face two points above
+        /// <see cref="Body"/>: see TypeRampMetrics on 18-regular's space
+        /// glyph.
+        /// </summary>
+        internal static BitmapFont AmountColumn =>
+            Bold(TypeRampMetrics.AmountColumnPointSize);
+
         /// <summary>Every section title in the module.</summary>
         internal static BitmapFont SectionTitle =>
             Bold(TypeRampMetrics.SectionTitlePointSize);
