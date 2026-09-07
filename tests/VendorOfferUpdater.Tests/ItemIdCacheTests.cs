@@ -233,8 +233,67 @@ namespace VendorOfferUpdater.Tests
             var cache = ItemIdCache.Load(path);
 
             Assert.Equal(19976, cache.Ids["Mystic Coin"]);
-            Assert.True(cache.Misses.ContainsKey("Glory"));
             Assert.Empty(cache.CurrencyNames);
+
+            // This test asserted the miss survived until 2026-09-07. That
+            // assertion was wrong: a version 2 miss was recorded by a
+            // resolver that could not read a currency page at all, and
+            // trusting it kept 1,049 vendor rows out of
+            // ref/vendor_offers.json. The subject of this test is that a
+            // version 2 file still loads its ids, which it does.
+            Assert.Empty(cache.Misses);
+        }
+
+        [Fact]
+        public void AMissFromAnOlderCacheVersionIsAskedAboutAgain()
+        {
+            string path = Path_("older-miss.json");
+            File.WriteAllText(
+                path,
+                "{\n  \"cacheVersion\": 2,\n  \"ids\": { \"Mystic Coin\": 19976 },\n" +
+                "  \"misses\": { \"Tale of Dungeon Delving\": \"2026-09-05T23:39:06Z\" }\n}");
+
+            var cache = ItemIdCache.Load(path);
+
+            Assert.False(cache.Contains("Tale of Dungeon Delving"));
+            Assert.True(cache.Contains("Mystic Coin"));
+        }
+
+        [Fact]
+        public void AMissFromTheCurrentCacheVersionIsStillTrusted()
+        {
+            string path = Path_("current-miss.json");
+            File.WriteAllText(
+                path,
+                "{\n  \"cacheVersion\": " + ItemIdCache.CurrentVersion + ",\n" +
+                "  \"ids\": {},\n  \"currencies\": {},\n" +
+                "  \"misses\": { \"Ancient  Coin\": \"2026-09-05T23:39:06Z\" }\n}");
+
+            var cache = ItemIdCache.Load(path);
+
+            Assert.True(cache.Contains("Ancient  Coin"));
+        }
+
+        [Fact]
+        public void AHandEditedMissWithNoDateKeepsItsUnknownAge()
+        {
+            // Save writes null for a miss it loaded without a date, so the
+            // parse has to accept one. Nothing in the tool records an
+            // undated miss any more, which leaves a hand edit as the only
+            // way to write this file.
+            string path = Path_("undated-miss.json");
+            File.WriteAllText(
+                path,
+                "{\n  \"cacheVersion\": " + ItemIdCache.CurrentVersion + ",\n" +
+                "  \"ids\": {},\n  \"currencies\": {},\n" +
+                "  \"misses\": { \"Glory\": null }\n}");
+
+            var cache = ItemIdCache.Load(path);
+
+            Assert.True(cache.Misses.ContainsKey("Glory"));
+            Assert.Null(cache.Misses["Glory"]);
+            Assert.Equal(1, cache.UndatedMissCount);
+            Assert.Null(cache.OldestMissAge(DateTime.UtcNow));
         }
 
         // -- Re-checking --------------------------------------------
@@ -298,13 +357,13 @@ namespace VendorOfferUpdater.Tests
             var cache = ItemIdCache.Load(path);
 
             Assert.Equal(19976, cache.Ids["Mystic Coin"]);
-            Assert.True(cache.Misses.ContainsKey("Arrow Cart Blueprints"));
 
-            // The old format recorded no date, so the age is unknown rather
-            // than assumed to be today.
-            Assert.Null(cache.Misses["Arrow Cart Blueprints"]);
-            Assert.Equal(1, cache.UndatedMissCount);
-            Assert.Null(cache.OldestMissAge(DateTime.UtcNow));
+            // This test asserted the migrated miss survived, undated, until
+            // 2026-09-07. The version 1 resolver is two versions behind the
+            // current one, so its misses are the least trustworthy in the
+            // file. What is migrated rather than discarded, and what this
+            // test is named for, is the id.
+            Assert.Empty(cache.Misses);
         }
 
         [Fact]

@@ -200,8 +200,18 @@ namespace VendorOfferUpdater
         /// <summary>
         /// Reads the cache. A file that is not there is a cold start, not an
         /// error: every name simply resolves fresh. A file in the version 1
-        /// format (a flat name-to-id map, with -1 for a miss) is migrated,
-        /// with its misses left undated because that format recorded no date.
+        /// format (a flat name-to-id map, with -1 for a miss) is migrated.
+        /// <para>
+        /// A miss written below <see cref="CurrentVersion"/> is dropped, so
+        /// this run asks about that name again. A resolved id and a settled
+        /// currency name are facts about the game and are kept. A miss is
+        /// only a statement about what the resolver of the day could not
+        /// settle, and a newer resolver settles more: every one of the 40
+        /// misses in the shipped cache was recorded four hours before the
+        /// currency stem index that answers "Tale of Dungeon Delving"
+        /// existed, and 1,049 vendor rows stayed dropped because
+        /// <see cref="Contains"/> counted them as answered.
+        /// </para>
         /// </summary>
         internal static ItemIdCache Load(string path)
         {
@@ -226,6 +236,8 @@ namespace VendorOfferUpdater
                     return cache;
                 }
 
+                int version = ReadVersion(root);
+
                 if (root.TryGetProperty("ids", out _) ||
                     root.TryGetProperty("currencies", out _) ||
                     root.TryGetProperty("misses", out _))
@@ -235,6 +247,15 @@ namespace VendorOfferUpdater
                 else
                 {
                     ReadVersionOne(cache, root);
+                }
+
+                if (version < CurrentVersion && cache._misses.Count > 0)
+                {
+                    int dropped = cache.ForgetMisses();
+                    Console.WriteLine(
+                        $"  Item ID cache at {path} is version {version}, and this build " +
+                        $"writes version {CurrentVersion}. Dropped {dropped} remembered " +
+                        "miss(es) recorded by the older resolver; they are asked about again.");
                 }
 
                 Console.WriteLine(
@@ -289,6 +310,19 @@ namespace VendorOfferUpdater
                 $"  Saved item ID cache to {path}: {_ids.Count} resolved, " +
                 $"{_currencyNames.Count} currency name(s), " +
                 $"{_misses.Count} remembered misses.");
+        }
+
+        /// <summary>
+        /// The version the file names. A file with no cacheVersion is
+        /// version 1, the flat format that predates the field.
+        /// </summary>
+        private static int ReadVersion(JsonElement root)
+        {
+            return root.TryGetProperty("cacheVersion", out var version) &&
+                   version.ValueKind == JsonValueKind.Number &&
+                   version.TryGetInt32(out int parsed)
+                ? parsed
+                : 1;
         }
 
         private static void ReadCurrent(ItemIdCache cache, JsonElement root)
