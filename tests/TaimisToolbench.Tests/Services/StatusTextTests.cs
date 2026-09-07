@@ -501,5 +501,60 @@ namespace TaimisToolbench.Tests.Services
                 StatusText.ForRankerProgress(3, 12, new string('x', 30), true).Length
                     <= StatusText.RankerStatusBudgetChars);
         }
+
+        [Fact]
+        public void ForSnapshotDetail_JoinsTheAgeAndTheHoleAndDropsTheHoleWhenThereIsNone()
+        {
+            Assert.Equal(
+                "just captured, incomplete for 2 of 9 characters",
+                StatusText.ForSnapshotDetail(TimeSpan.Zero, 2, 9));
+            Assert.Equal(
+                "2d ago, incomplete for 2 of 9 characters",
+                StatusText.ForSnapshotDetail(TimeSpan.FromDays(2), 2, 9));
+
+            // No hole, no clause - the age stands on its own exactly as it
+            // did before a snapshot counted what it could not read.
+            Assert.Equal("just captured", StatusText.ForSnapshotDetail(TimeSpan.Zero, 0, 9));
+            Assert.Equal("2d ago", StatusText.ForSnapshotDetail(TimeSpan.FromDays(2), 0, 9));
+        }
+
+        [Fact]
+        public void ForSnapshotAgeSuffix_IsLongestWhenTheSnapshotIsFresh()
+        {
+            // The sub-minute case is the LONGEST branch, not the shortest.
+            // A worst-case line width taken from an AGED snapshot therefore
+            // understates the real worst case, which is a snapshot captured
+            // seconds ago that is missing a character - the reported fault's
+            // own condition.
+            string fresh = StatusText.ForSnapshotAgeSuffix(TimeSpan.Zero);
+            Assert.Equal("just captured", fresh);
+
+            double[] ages = { 1, 37, 59, 60, 719, 1439, 1440, 43199, 43200, 525600, 5256000 };
+            foreach (double minutes in ages)
+            {
+                string aged = StatusText.ForSnapshotAgeSuffix(TimeSpan.FromMinutes(minutes));
+                Assert.True(aged.Length <= fresh.Length, $"{minutes}m reads {aged}");
+            }
+        }
+
+        [Fact]
+        public void TheRankerStatusLine_AtItsWidest_StaysInsideTheStatusBand()
+        {
+            // Every term at its widest at once: the longest timestamp
+            // TimestampFormat can print, the longest age suffix, and the
+            // largest character counts a GW2 account reaches. This is the
+            // line the band has to hold, and the one a "37m ago" worst case
+            // missed by ten characters.
+            string widest = StatusText.Stamp("Analyzed", new DateTime(2026, 5, 20, 10, 0, 0))
+                + " (" + StatusText.ForSnapshotDetail(TimeSpan.Zero, 20, 20) + ")";
+
+            Assert.Equal(
+                "Analyzed - May 20, 2026 10:00 AM "
+                    + "(just captured, incomplete for 20 of 20 characters)",
+                widest);
+            Assert.True(
+                widest.Length <= StatusText.RankerStatusBudgetChars,
+                $"{widest.Length} characters, budget {StatusText.RankerStatusBudgetChars}");
+        }
     }
 }

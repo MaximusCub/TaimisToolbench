@@ -80,15 +80,23 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// Characters the Crafting Ranker's status line may run to before
-        /// it ellipsizes. RankerRowLayout.Toolbar leaves the status band
-        /// roughly 750px at the module's 1378px window minimum, once the
-        /// Analyze button, the two display toggles and the spinner have
-        /// taken theirs. MEASURED: 75 characters of this line is about
-        /// 720px in the 18-bold status face. The band's own width is
-        /// derived rather than measured in game, so treat this as a width
-        /// to stay well inside rather than a hard edge.
+        /// it ellipsizes. MEASURED on screen at the module's 1378px window
+        /// minimum, from where the ellipsizer cut a line too long for it:
+        /// RankerRowLayout.Toolbar leaves the status band at least 779 and
+        /// under 786 logical pixels once the Analyze button, the two
+        /// display toggles and the spinner have taken theirs. 86 characters
+        /// of a status line of this letter mix ink under 779; 87 ink over
+        /// 785. The band gains a pixel for every pixel the window gains, so
+        /// this is its floor.
+        /// <para>
+        /// A character count is a proxy for a pixel width and holds only
+        /// for lines of roughly this mix. Blish's ContentService sets
+        /// LetterSpacing to -1 on every font it loads, which is worth about
+        /// a pixel per character, so a budget derived from raw glyph
+        /// advances overstates an 80-character line by 80 pixels.
+        /// </para>
         /// </summary>
-        public const int RankerStatusBudgetChars = 75;
+        public const int RankerStatusBudgetChars = 86;
 
         /// <summary>
         /// The Crafting Ranker's per-item progress line: which item of how
@@ -288,13 +296,49 @@ namespace TaimisToolbench.Services
         /// </summary>
         public static string ForIncompleteCharacters(int incompleteCharacters, int characterCount)
         {
-            if (incompleteCharacters <= 0 || characterCount <= 0)
+            if (!HasIncompleteCharacters(incompleteCharacters, characterCount))
             {
                 return null;
             }
 
             int incomplete = Math.Min(incompleteCharacters, characterCount);
             return "incomplete for " + incomplete + " of " + Count(characterCount, "character");
+        }
+
+        /// <summary>
+        /// Whether a snapshot failed to read part of what a character was
+        /// holding - the condition <see cref="ForIncompleteCharacters"/>
+        /// writes its clause for. Views/MainView.cs reads it on its own to
+        /// decide the Snapshot tab's amber recolor, which is a second
+        /// consequence of the same fact rather than a second test of it.
+        /// </summary>
+        public static bool HasIncompleteCharacters(int incompleteCharacters, int characterCount)
+        {
+            return incompleteCharacters > 0 && characterCount > 0;
+        }
+
+        /// <summary>
+        /// The parenthesised detail that follows a snapshot-backed
+        /// timestamp: how old the data on screen is, then what the fetch
+        /// could not read in full. The Snapshot tab and the Crafting Ranker
+        /// both show exactly these two facts, so the join lives here rather
+        /// than in each view.
+        /// <para>
+        /// Age first, because it is the fact the reader is already looking
+        /// for beside a timestamp. Both halves are widest at once when a
+        /// FRESH snapshot is missing a character: sub-minute reads "just
+        /// captured", which is the longest string
+        /// <see cref="ForSnapshotAgeSuffix"/> has. That combination is the
+        /// reported fault's own condition, so it is also the line to size
+        /// the band against - see <see cref="RankerStatusBudgetChars"/>.
+        /// </para>
+        /// </summary>
+        public static string ForSnapshotDetail(
+            TimeSpan age, int incompleteCharacters, int characterCount)
+        {
+            string detail = ForSnapshotAgeSuffix(age);
+            string incomplete = ForIncompleteCharacters(incompleteCharacters, characterCount);
+            return incomplete == null ? detail : detail + ", " + incomplete;
         }
 
         /// <summary>
