@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
-using System.Globalization;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -2052,7 +2051,7 @@ namespace TaimisToolbench
                 Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
                 if (snapshot != null)
                 {
-                    var status = $"Updated \u2014 {snapshot.CapturedAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt", CultureInfo.InvariantCulture)}";
+                    var status = StatusText.Stamp("Updated", snapshot.CapturedAt.ToLocalTime());
                     SaveStatusThreadSafe(status);
                 }
 
@@ -2083,7 +2082,7 @@ namespace TaimisToolbench
                 // popups are a separate, deferred UX call.
                 var classification = SnapshotFailureClassifier.Classify(ex);
                 string cause = StatusText.ForRefreshFailure(classification.Kind, classification.FailedSourceCount, classification.TotalSourceCount);
-                var status = $"{cause} \u2014 {DateTime.Now.ToString("MMM d, yyyy h:mm tt", CultureInfo.InvariantCulture)}";
+                var status = StatusText.Stamp(cause, DateTime.Now);
                 SaveStatusThreadSafe(status);
             }
             finally

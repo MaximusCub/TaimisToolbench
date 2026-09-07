@@ -9,7 +9,17 @@ namespace TaimisToolbench.Tests.Services
         [Fact]
         public void Normalize_NonNull_ReturnsSameString()
         {
-            Assert.Equal("Updated \u2014 1:00 PM", StatusText.Normalize("Updated \u2014 1:00 PM"));
+            Assert.Equal("Updated - 1:00 PM", StatusText.Normalize("Updated - 1:00 PM"));
+        }
+
+        // A status.txt written by a build older than the hyphen separator
+        // still holds the em dash one, and StatusStore returns the file
+        // verbatim. Normalize is the load-side pass Views/MainView.cs runs
+        // it through.
+        [Fact]
+        public void Normalize_LegacySeparator_ReadsAsTheCurrentSeparator()
+        {
+            Assert.Equal("Updated - 1:00 PM", StatusText.Normalize("Updated \u2014 1:00 PM"));
         }
 
         [Fact]
@@ -232,7 +242,7 @@ namespace TaimisToolbench.Tests.Services
         public void Stamp_VerbAndTime_UsesTheSingleSeparatorAndFormat()
         {
             Assert.Equal(
-                "Plan generated \u2014 Aug 8, 2026 3:00 PM",
+                "Plan generated - Aug 8, 2026 3:00 PM",
                 StatusText.Stamp("Plan generated", new DateTime(2026, 8, 8, 15, 0, 0)));
         }
 
@@ -245,7 +255,7 @@ namespace TaimisToolbench.Tests.Services
             string cause = StatusText.ForRefreshFailure(
                 SnapshotFailureKind.NetworkOrApiDown, failedSourceCount: 5, totalSourceCount: 5);
             Assert.Equal(
-                "Refresh failed: could not reach the GW2 API \u2014 Aug 15, 2026 3:41 PM",
+                "Refresh failed: could not reach the GW2 API - Aug 15, 2026 3:41 PM",
                 StatusText.Stamp(cause, new DateTime(2026, 8, 15, 15, 41, 0)));
         }
 
