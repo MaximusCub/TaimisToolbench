@@ -85,7 +85,7 @@ Models/UsedMaterial.cs                                                          
 Models/VendorItemCostLine.cs                                                            42
 Models/VendorOffer.cs                                                                   73
 Models/VendorOfferDataset.cs                                                            15
-Module.cs                                                                               2954
+Module.cs                                                                               2959
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
@@ -93,6 +93,7 @@ Services/AccountItemIndex.cs                                                    
 Services/AchievementBitDedupPrePass.cs                                                  197
 Services/AcquisitionHintService.cs                                                      75
 Services/BoundedConcurrency.cs                                                          51
+Services/CharacterSnapshotCollector.cs                                                  150
 Services/ClickSoundVolume.cs                                                            90
 Services/CoinSegmentMath.cs                                                             303
 Services/ColumnBoardLayout.cs                                                           130
@@ -122,7 +123,8 @@ Services/FirstLoadSnapshotGate.cs                                               
 Services/GlyphButtonMetrics.cs                                                          69
 Services/GridLayout.cs                                                                  93
 Services/Gw2AccountRecipeClient.cs                                                      30
-Services/Gw2AccountSnapshotService.cs                                                   807
+Services/Gw2AccountSnapshotService.cs                                                   866
+Services/Gw2ApiConnectionLimit.cs                                                       45
 Services/Gw2ItemApiClient.cs                                                            261
 Services/Gw2PriceApiClient.cs                                                           66
 Services/Gw2RecipeApiClient.cs                                                          206
@@ -237,6 +239,7 @@ Services/SnapshotCommitGate.cs                                                  
 Services/SnapshotEpochGuard.cs                                                          27
 Services/SnapshotFailureClassification.cs                                               24
 Services/SnapshotFailureClassifier.cs                                                   143
+Services/SnapshotFetchBudget.cs                                                         49
 Services/SnapshotFailureKind.cs                                                         50
 Services/SnapshotFetchFailedException.cs                                                69
 Services/SnapshotHeaderLayout.cs                                                        209
