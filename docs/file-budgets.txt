@@ -412,7 +412,7 @@ tests/TaimisToolbench.Tests/Services/CraftingPlanPipelineIgnoreTests.cs         
 tests/TaimisToolbench.Tests/Services/CraftingPlanPipelineOwnMaterialsTests.cs           177
 tests/TaimisToolbench.Tests/Services/CraftingPlanPipelineOwnedCurrencyTests.cs          182
 tests/TaimisToolbench.Tests/Services/CraftingPlanPipelineProgressLoggingTests.cs        404
-tests/TaimisToolbench.Tests/Services/CraftingPlanPipelineTests.cs                       372
+tests/TaimisToolbench.Tests/Services/CraftingPlanPipelineTests.cs                       377
 tests/TaimisToolbench.Tests/Services/CraftingPlanPipelineVendorCostComponentTests.cs    538
 tests/TaimisToolbench.Tests/Services/CraftingTreeBuilderTests.cs                        2311
 tests/TaimisToolbench.Tests/Services/CurrencyDisplayResolverTests.cs                    459

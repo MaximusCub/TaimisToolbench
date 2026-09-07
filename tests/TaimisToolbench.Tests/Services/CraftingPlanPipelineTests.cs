@@ -185,16 +185,15 @@ namespace TaimisToolbench.Tests.Services
             Assert.Null(recipeB.IsMissing);
         }
 
-        // The pipeline holds no learned-recipe state between generations:
-        // every GenerateStructuredAsync asks its IAccountRecipeClient
-        // again. Any caching therefore has to live in the client, and this
-        // count stays one-per-generation whatever that client does with
-        // the request.
+        // A player can buy and use a recipe sheet, then generate again,
+        // without leaving the game. The second plan must report the recipe
+        // as known. Nothing between the pipeline and /v2/account/recipes
+        // may hold an older answer, so the client is asked once per
+        // generation and its newest answer is the one that is annotated.
         [Fact]
-        public async Task GenerateStructuredAsync_TwoGenerations_AsksTheAccountClientEachTime()
+        public async Task GenerateStructuredAsync_RecipeLearnedBetweenGenerations_SecondPlanSeesIt()
         {
             var accountClient = new InMemoryAccountRecipeClient();
-            accountClient.AddLearnedRecipe(10);
 
             var pipeline = PipelineBuilder.Create()
                 .WithSearchResult(1, 10)
@@ -215,17 +214,23 @@ namespace TaimisToolbench.Tests.Services
                 .WithAccountRecipeClient(accountClient)
                 .Build();
 
-            await pipeline.GenerateStructuredAsync(1, 1, null, CancellationToken.None,
+            var first = await pipeline.GenerateStructuredAsync(1, 1, null, CancellationToken.None,
                 priceBasis: PriceBasis.InstantBuy);
+
+            accountClient.AddLearnedRecipe(10);
+
             var second = await pipeline.GenerateStructuredAsync(1, 1, null, CancellationToken.None,
                 priceBasis: PriceBasis.InstantBuy);
 
             Assert.Equal(2, accountClient.GetCallCount);
 
-            // And the ids still reach the annotation on both runs.
-            var recipe = second.RequiredRecipes.FirstOrDefault(r => r.RecipeId == 10);
-            Assert.NotNull(recipe);
-            Assert.False(recipe.IsMissing);
+            var firstRecipe = first.RequiredRecipes.FirstOrDefault(r => r.RecipeId == 10);
+            Assert.NotNull(firstRecipe);
+            Assert.True(firstRecipe.IsMissing);
+
+            var secondRecipe = second.RequiredRecipes.FirstOrDefault(r => r.RecipeId == 10);
+            Assert.NotNull(secondRecipe);
+            Assert.False(secondRecipe.IsMissing);
         }
 
         [Fact]
