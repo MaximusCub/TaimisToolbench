@@ -24,6 +24,16 @@ namespace TaimisToolbench.Services
 
         private const int ItemBulkLimit = 200;
 
+        // How many bulk /v2/items and /v2/skins requests a resolve pass has
+        // in flight. Two passes run together, so the ceiling is 8 requests.
+        private const int MaxDetailRequestsInFlight = 4;
+
+        // Gw2Sharp's HTTP client carries the .NET 100s default request
+        // timeout, which outlasts the whole snapshot budget, so one stuck
+        // request could spend the entire allowance on its own. A GW2 API
+        // call was measured at roughly 1.5s on this account size.
+        private static readonly TimeSpan PerCallTimeout = TimeSpan.FromSeconds(20);
+
         private readonly Gw2ApiManager _apiManager;
         private readonly Dictionary<int, (string Name, string IconUrl, string Rarity)> _itemCache =
             new Dictionary<int, (string, string, string)>();
@@ -63,8 +73,17 @@ namespace TaimisToolbench.Services
             TokenPermission.Unlocks,
         };
 
-        public async Task<AccountSnapshot> FetchSnapshotAsync(CancellationToken ct)
+        /// <summary>
+        /// Fetches the whole account snapshot. Calls
+        /// <paramref name="onCharacterCountKnown"/> once, as soon as the
+        /// character list arrives, so the caller can size its own deadline
+        /// against the roster (see <see cref="SnapshotFetchBudget"/>); it
+        /// is never called if the character list itself fails.
+        /// </summary>
+        public async Task<AccountSnapshot> FetchSnapshotAsync(CancellationToken ct, Action<int> onCharacterCountKnown = null)
         {
+            Gw2ApiConnectionLimit.Apply();
+
             var snapshot = new AccountSnapshot { CapturedAt = DateTime.UtcNow };
             int failedSources = 0;
             bool canReadLegendaryArmory = _apiManager.HasPermissions(LegendaryArmoryPermissions);
@@ -75,10 +94,26 @@ namespace TaimisToolbench.Services
             // Blish-free classifier never needs a Gw2Sharp reference.
             var failedSourceExceptionTypeNames = new List<string>();
 
+            // Every account-wide request is started before the first await,
+            // so all six run together instead of one round trip after
+            // another. The results are then applied in a fixed order on
+            // this thread, which keeps snapshot.Items single-threaded and
+            // its ordering unchanged.
+            var walletTask = CallAsync(c => _apiManager.Gw2ApiClient.V2.Account.Wallet.GetAsync(c), ct);
+            var bankTask = CallAsync(c => _apiManager.Gw2ApiClient.V2.Account.Bank.GetAsync(c), ct);
+            var sharedTask = CallAsync(c => _apiManager.Gw2ApiClient.V2.Account.Inventory.GetAsync(c), ct);
+            var materialsTask = CallAsync(c => _apiManager.Gw2ApiClient.V2.Account.Materials.GetAsync(c), ct);
+            var namesTask = CallAsync(c => _apiManager.Gw2ApiClient.V2.Characters.IdsAsync(c), ct);
+            var armoryTask = canReadLegendaryArmory
+                ? CallAsync(c => _apiManager.Gw2ApiClient.V2.Account.LegendaryArmory.GetAsync(c), ct)
+                : null;
+
+            await SettleAsync(walletTask, bankTask, sharedTask, materialsTask, namesTask, armoryTask);
+
             // Wallet (also extracts coins as currency ID 1)
             try
             {
-                var wallet = await _apiManager.Gw2ApiClient.V2.Account.Wallet.GetAsync(ct);
+                var wallet = await walletTask;
                 foreach (var entry in wallet)
                 {
                     if (entry.Id == 1)
@@ -104,12 +139,10 @@ namespace TaimisToolbench.Services
                 failedSourceExceptionTypeNames.Add(ex.GetType().Name);
             }
 
-            ct.ThrowIfCancellationRequested();
-
             // Bank
             try
             {
-                var bank = await _apiManager.Gw2ApiClient.V2.Account.Bank.GetAsync(ct);
+                var bank = await bankTask;
                 foreach (var item in bank)
                 {
                     if (item == null)
@@ -136,12 +169,10 @@ namespace TaimisToolbench.Services
                 failedSourceExceptionTypeNames.Add(ex.GetType().Name);
             }
 
-            ct.ThrowIfCancellationRequested();
-
             // Shared inventory
             try
             {
-                var shared = await _apiManager.Gw2ApiClient.V2.Account.Inventory.GetAsync(ct);
+                var shared = await sharedTask;
                 foreach (var item in shared)
                 {
                     if (item == null)
@@ -168,12 +199,10 @@ namespace TaimisToolbench.Services
                 failedSourceExceptionTypeNames.Add(ex.GetType().Name);
             }
 
-            ct.ThrowIfCancellationRequested();
-
             // Material storage
             try
             {
-                var materials = await _apiManager.Gw2ApiClient.V2.Account.Materials.GetAsync(ct);
+                var materials = await materialsTask;
                 foreach (var mat in materials)
                 {
                     if (mat.Count <= 0)
@@ -197,8 +226,6 @@ namespace TaimisToolbench.Services
                 failedSourceExceptionTypeNames.Add(ex.GetType().Name);
             }
 
-            ct.ThrowIfCancellationRequested();
-
             // Legendary Armory
             //
             // Read from its own endpoint rather than inferred from
@@ -207,11 +234,11 @@ namespace TaimisToolbench.Services
             // fetch drops those entries (IsHeldByCharacter); this endpoint
             // reports each item once for the whole account, with a count of
             // how many an equipment template can draw at a time.
-            if (canReadLegendaryArmory)
+            if (armoryTask != null)
             {
                 try
                 {
-                    var armory = await _apiManager.Gw2ApiClient.V2.Account.LegendaryArmory.GetAsync(ct);
+                    var armory = await armoryTask;
                     foreach (var entry in armory)
                     {
                         if (entry == null || entry.Count <= 0)
@@ -234,79 +261,26 @@ namespace TaimisToolbench.Services
                     failedSources++;
                     failedSourceExceptionTypeNames.Add(ex.GetType().Name);
                 }
-
-                ct.ThrowIfCancellationRequested();
             }
 
-            // Character inventories + crafting disciplines
+            // Character inventories, equipment and crafting disciplines.
+            // CharacterSnapshotCollector owns the fan-out and the rule that
+            // one failed character discards every discipline.
             try
             {
-                var characterNames = await _apiManager.Gw2ApiClient.V2.Characters.IdsAsync(ct);
+                var characterNames = await namesTask;
+                var names = characterNames == null ? new List<string>() : characterNames.ToList();
+                onCharacterCountKnown?.Invoke(names.Count);
 
-                // Non-null as soon as the character list is obtained (null
-                // vs empty is meaningful - see
-                // AccountSnapshot.CharacterDisciplines). Reset to null
-                // below if any single character's crafting fetch fails: a
-                // partial list would read as an affirmative "not trained
-                // on any character" claim for characters never reached
-                // (never invent data).
-                snapshot.CharacterDisciplines = new List<SnapshotCharacterDiscipline>();
-                bool characterDisciplineDataDegraded = false;
+                var harvest = await CharacterSnapshotCollector.CollectAsync(
+                    names,
+                    CharacterSnapshotCollector.DefaultMaxCharactersInFlight,
+                    name => FetchCharacterAsync(name, ct),
+                    ct);
 
-                foreach (var name in characterNames)
-                {
-                    ct.ThrowIfCancellationRequested();
-
-                    // Inventory, equipment and crafting are fired
-                    // concurrently so the wall-clock cost stays roughly one
-                    // round trip per character within the hard snapshot
-                    // timeout. Each task catches its own failures
-                    // internally, so Task.WhenAll only faults on genuine
-                    // cancellation.
-                    var inventoryTask = FetchCharacterInventoryItemsAsync(name, ct);
-                    var equipmentTask = FetchCharacterEquipmentItemsAsync(name, ct);
-                    var craftingTask = FetchCharacterCraftingAsync(name, ct);
-                    await Task.WhenAll(inventoryTask, equipmentTask, craftingTask);
-
-                    // Inventory and equipment: a failure is tolerated -
-                    // this character's items are simply missing, a
-                    // conservative under-count (inflates buy cost, never
-                    // fabricates a claim). Does not set
-                    // characterDisciplineDataDegraded; the two are
-                    // independent signals.
-                    snapshot.Items.AddRange(inventoryTask.Result);
-
-                    var equipment = equipmentTask.Result;
-                    snapshot.Items.AddRange(equipment.Items);
-                    foreach (int armoryItemId in equipment.ArmoryItemIds)
-                    {
-                        snapshot.LegendaryArmoryEquipped.Add(new SnapshotArmoryEquip
-                        {
-                            ItemId = armoryItemId,
-                            CharacterName = name,
-                        });
-                    }
-
-                    // Crafting disciplines: unlike Inventory, ANY failure
-                    // flips characterDisciplineDataDegraded so the whole
-                    // snapshot's CharacterDisciplines is discarded - a
-                    // partial list is unacceptable here (see the flag's
-                    // comment) even though it is fine for Inventory.
-                    var craftingOutcome = craftingTask.Result;
-                    if (craftingOutcome.Degraded)
-                    {
-                        characterDisciplineDataDegraded = true;
-                    }
-                    else
-                    {
-                        snapshot.CharacterDisciplines.AddRange(craftingOutcome.Disciplines);
-                    }
-                }
-
-                if (characterDisciplineDataDegraded)
-                {
-                    snapshot.CharacterDisciplines = null;
-                }
+                snapshot.Items.AddRange(harvest.Items);
+                snapshot.LegendaryArmoryEquipped.AddRange(harvest.ArmoryEquipped);
+                snapshot.CharacterDisciplines = harvest.Disciplines;
             }
             catch (Exception ex) when (!(ex is OperationCanceledException))
             {
@@ -314,12 +288,9 @@ namespace TaimisToolbench.Services
                 ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch character list: {ex.GetType().Name} - {ex.Message}");
                 failedSources++;
                 failedSourceExceptionTypeNames.Add(ex.GetType().Name);
-                // If anything escapes the per-character loop,
-                // snapshot.CharacterDisciplines can already be a partially
-                // populated list, which would read as an affirmative "not
-                // trained" claim for characters never reached. Null it
-                // here too - same "degraded fetch -> show nothing"
-                // contract.
+
+                // A partially populated list would read as an affirmative
+                // "not trained" claim for characters never reached.
                 snapshot.CharacterDisciplines = null;
             }
 
@@ -331,12 +302,86 @@ namespace TaimisToolbench.Services
                 throw new SnapshotFetchFailedException(failedSources, totalSources, failedSourceExceptionTypeNames);
             }
 
-            // Resolve display names and icon URLs
-            await ResolveItemDetailsAsync(snapshot.Items, ct);
-            await ResolveSkinDetailsAsync(snapshot.Items, ct);
-            await ResolveCurrencyDetailsAsync(snapshot.Wallet, ct);
+            // The three resolve passes write disjoint fields (item
+            // name/icon/rarity, skin name/icon, currency name/icon) and
+            // share only _cacheLock, so they run together. None of them
+            // throws except on cancellation.
+            await Task.WhenAll(
+                ResolveItemDetailsAsync(snapshot.Items, ct),
+                ResolveSkinDetailsAsync(snapshot.Items, ct),
+                ResolveCurrencyDetailsAsync(snapshot.Wallet, ct));
 
             return snapshot;
+        }
+
+        /// <summary>
+        /// One GW2 API call under its own deadline, reported as a
+        /// <see cref="TimeoutException"/> rather than an
+        /// <see cref="OperationCanceledException"/> so a per-source catch
+        /// filter counts it as a failed source instead of letting it end
+        /// the whole fetch as a cancellation.
+        /// </summary>
+        private static async Task<T> CallAsync<T>(Func<CancellationToken, Task<T>> call, CancellationToken ct)
+        {
+            using (var callCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                callCts.CancelAfter(PerCallTimeout);
+                try
+                {
+                    return await call(callCts.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new TimeoutException($"GW2 API request exceeded {PerCallTimeout.TotalSeconds:0}s.");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Waits for every started request to finish and swallows the
+        /// result. Task.WhenAll marks all of their exceptions observed but
+        /// reports only one, so each task is awaited again afterwards,
+        /// where its own catch block can record it as a failed source.
+        /// </summary>
+        private static async Task SettleAsync(params Task[] tasks)
+        {
+            try
+            {
+                await Task.WhenAll(tasks.Where(t => t != null));
+            }
+            catch (Exception)
+            {
+                // Every failure is re-raised by the per-source await below.
+            }
+        }
+
+        /// <summary>
+        /// One character's inventory, equipment and crafting disciplines,
+        /// fetched together. Never throws except on cancellation: each of
+        /// the three reports its own failure in its result.
+        /// </summary>
+        private async Task<CharacterSnapshotPart> FetchCharacterAsync(string characterName, CancellationToken ct)
+        {
+            var inventoryTask = FetchCharacterInventoryItemsAsync(characterName, ct);
+            var equipmentTask = FetchCharacterEquipmentItemsAsync(characterName, ct);
+            var craftingTask = FetchCharacterCraftingAsync(characterName, ct);
+            await Task.WhenAll(inventoryTask, equipmentTask, craftingTask);
+
+            var part = new CharacterSnapshotPart();
+            part.Items.AddRange(inventoryTask.Result);
+
+            var equipment = equipmentTask.Result;
+            part.Items.AddRange(equipment.Items);
+            part.ArmoryItemIds.AddRange(equipment.ArmoryItemIds);
+
+            var crafting = craftingTask.Result;
+            part.DisciplinesDegraded = crafting.Degraded;
+            if (!crafting.Degraded)
+            {
+                part.Disciplines.AddRange(crafting.Disciplines);
+            }
+
+            return part;
         }
 
         // Uses the narrow per-character inventory endpoint, not the full
@@ -350,7 +395,7 @@ namespace TaimisToolbench.Services
             var items = new List<SnapshotItemEntry>();
             try
             {
-                var inventory = await _apiManager.Gw2ApiClient.V2.Characters[characterName].Inventory.GetAsync(ct);
+                var inventory = await CallAsync(c => _apiManager.Gw2ApiClient.V2.Characters[characterName].Inventory.GetAsync(c), ct);
                 if (inventory?.Bags != null)
                 {
                     foreach (var bag in inventory.Bags)
@@ -412,7 +457,7 @@ namespace TaimisToolbench.Services
             var armoryItemIds = new List<int>();
             try
             {
-                var equipment = await _apiManager.Gw2ApiClient.V2.Characters[characterName].Equipment.GetAsync(ct);
+                var equipment = await CallAsync(c => _apiManager.Gw2ApiClient.V2.Characters[characterName].Equipment.GetAsync(c), ct);
                 if (equipment?.Equipment != null)
                 {
                     foreach (var item in equipment.Equipment)
@@ -490,7 +535,7 @@ namespace TaimisToolbench.Services
             {
                 try
                 {
-                    var crafting = await _apiManager.Gw2ApiClient.V2.Characters[characterName].Crafting.GetAsync(ct);
+                    var crafting = await CallAsync(c => _apiManager.Gw2ApiClient.V2.Characters[characterName].Crafting.GetAsync(c), ct);
                     if (crafting?.Crafting == null)
                     {
                         if (attempt < maxAttempts)
@@ -527,6 +572,7 @@ namespace TaimisToolbench.Services
                 {
                     if (attempt < maxAttempts)
                     {
+                        disciplines.Clear();
                         continue;
                     }
 
@@ -557,6 +603,51 @@ namespace TaimisToolbench.Services
             return copied.Count > 0 ? copied : null;
         }
 
+        /// <summary>
+        /// Runs one bulk-detail pass over <paramref name="ids"/> in
+        /// ItemBulkLimit-sized requests, several at a time, and reports how
+        /// many requests failed along with the first failure.
+        /// <para>
+        /// The catch is per request, not around the whole pass. A full
+        /// account resolves thousands of ids, and one request the API
+        /// refuses used to skip every later request AND the apply pass, so
+        /// a single bad id cost the names of every item after it.
+        /// </para>
+        /// </summary>
+        private static async Task<(int FailedRequests, Exception First)> ResolveInChunksAsync(
+            List<int> ids,
+            Func<List<int>, CancellationToken, Task> fetchChunk,
+            CancellationToken ct)
+        {
+            int failedRequests = 0;
+            Exception firstFailure = null;
+
+            var chunks = new List<List<int>>();
+            for (int i = 0; i < ids.Count; i += ItemBulkLimit)
+            {
+                chunks.Add(ids.Skip(i).Take(ItemBulkLimit).ToList());
+            }
+
+            await BoundedConcurrency.ForEachAsync(
+                chunks,
+                MaxDetailRequestsInFlight,
+                async chunk =>
+                {
+                    try
+                    {
+                        await fetchChunk(chunk, ct);
+                    }
+                    catch (Exception ex) when (!(ex is OperationCanceledException))
+                    {
+                        Interlocked.Increment(ref failedRequests);
+                        Interlocked.CompareExchange(ref firstFailure, ex, null);
+                    }
+                },
+                ct);
+
+            return (failedRequests, firstFailure);
+        }
+
         private async Task ResolveItemDetailsAsync(List<SnapshotItemEntry> items, CancellationToken ct)
         {
             try
@@ -571,21 +662,11 @@ namespace TaimisToolbench.Services
                         .ToList();
                 }
 
-                // The catch is per chunk, not around the loop. A full
-                // account resolves thousands of ids in ItemBulkLimit-sized
-                // requests, and one request the API refuses used to skip
-                // every later chunk AND the apply pass below, so a single
-                // bad id cost the names of every item after it.
-                int failedChunks = 0;
-                Exception firstChunkFailure = null;
-
-                for (int i = 0; i < uncachedIds.Count; i += ItemBulkLimit)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    var chunk = uncachedIds.Skip(i).Take(ItemBulkLimit);
-                    try
+                var outcome = await ResolveInChunksAsync(
+                    uncachedIds,
+                    async (chunk, token) =>
                     {
-                        var fetched = await _apiManager.Gw2ApiClient.V2.Items.ManyAsync(chunk, ct);
+                        var fetched = await CallAsync(c => _apiManager.Gw2ApiClient.V2.Items.ManyAsync(chunk, c), token);
                         lock (_cacheLock)
                         {
                             foreach (var item in fetched)
@@ -595,20 +676,12 @@ namespace TaimisToolbench.Services
                                     (item.Name ?? "", url != null ? url.AbsoluteUri : "", RarityOf(item));
                             }
                         }
-                    }
-                    catch (Exception ex) when (!(ex is OperationCanceledException))
-                    {
-                        failedChunks++;
-                        if (firstChunkFailure == null)
-                        {
-                            firstChunkFailure = ex;
-                        }
-                    }
-                }
+                    },
+                    ct);
 
-                if (firstChunkFailure != null)
+                if (outcome.First != null)
                 {
-                    LogChunkFailures("item names/icons", failedChunks, firstChunkFailure);
+                    LogChunkFailures("item names/icons", outcome.FailedRequests, outcome.First);
                 }
 
                 lock (_cacheLock)
@@ -691,17 +764,11 @@ namespace TaimisToolbench.Services
                         .ToList();
                 }
 
-                // Per chunk, for the reason ResolveItemDetailsAsync gives.
-                int failedChunks = 0;
-                Exception firstChunkFailure = null;
-
-                for (int i = 0; i < uncachedIds.Count; i += ItemBulkLimit)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    var chunk = uncachedIds.Skip(i).Take(ItemBulkLimit);
-                    try
+                var outcome = await ResolveInChunksAsync(
+                    uncachedIds,
+                    async (chunk, token) =>
                     {
-                        var fetched = await _apiManager.Gw2ApiClient.V2.Skins.ManyAsync(chunk, ct);
+                        var fetched = await CallAsync(c => _apiManager.Gw2ApiClient.V2.Skins.ManyAsync(chunk, c), token);
                         lock (_cacheLock)
                         {
                             foreach (var skin in fetched)
@@ -711,20 +778,12 @@ namespace TaimisToolbench.Services
                                     (skin.Name ?? "", url != null ? url.AbsoluteUri : "");
                             }
                         }
-                    }
-                    catch (Exception ex) when (!(ex is OperationCanceledException))
-                    {
-                        failedChunks++;
-                        if (firstChunkFailure == null)
-                        {
-                            firstChunkFailure = ex;
-                        }
-                    }
-                }
+                    },
+                    ct);
 
-                if (firstChunkFailure != null)
+                if (outcome.First != null)
                 {
-                    LogChunkFailures("skin names", failedChunks, firstChunkFailure);
+                    LogChunkFailures("skin names", outcome.FailedRequests, outcome.First);
                 }
 
                 lock (_cacheLock)
@@ -774,7 +833,7 @@ namespace TaimisToolbench.Services
                 if (needsFetch)
                 {
                     ct.ThrowIfCancellationRequested();
-                    var currencies = await _apiManager.Gw2ApiClient.V2.Currencies.AllAsync(ct);
+                    var currencies = await CallAsync(c => _apiManager.Gw2ApiClient.V2.Currencies.AllAsync(c), ct);
                     lock (_cacheLock)
                     {
                         foreach (var c in currencies)
