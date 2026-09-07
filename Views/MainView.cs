@@ -353,6 +353,19 @@ namespace TaimisToolbench.Views
         private SectionChrome _itemChrome;
         private SectionChrome _walletChrome;
 
+        // Where each run's cells were last placed, so the icon window knows
+        // a section's origin, its column count and how far down the reader
+        // has scrolled into it. Written by LayoutResultGrid, which is the
+        // only thing that moves a cell.
+        private SnapshotItemGridLayout.Grid _itemGrid;
+        private SnapshotItemGridLayout.Grid _walletGrid;
+
+        // The viewport the icon window was last computed for. The ticker
+        // re-reads the viewport every frame and does nothing at all unless
+        // one of these two changed, so scrolling is what costs, not idling.
+        private int _iconWindowTop = int.MinValue;
+        private int _iconWindowHeight = -1;
+
         // Session-sticky like the search text. One state per run: sorting
         // the items must not disturb the currencies beneath them.
         private readonly TableSortState<SnapshotTableColumn> _itemSortState =
@@ -767,6 +780,12 @@ namespace TaimisToolbench.Views
             // After the content panel, and on the tab panel rather than
             // inside it: the clip a pinned band is drawn in must not scroll.
             _stickyHeaders = new StickyHeaderHost(buildPanel, _contentPanel);
+
+            // Held only by its parent, which disposes it - the same idiom
+            // Views/Rendering/StickyHeaderHost uses for its own ticker, and
+            // for the same reason: Blish raises nothing when a panel is
+            // scrolled.
+            new IconWindowTicker(this) { Parent = buildPanel };
 
             // Subscribe to resize
             buildPanel.Resized += OnPanelResized;
@@ -1679,6 +1698,72 @@ namespace TaimisToolbench.Views
 
             PlaceCells(_itemCells, _itemOrder, layout.Items.Grid, ItemRowHeight, refitText);
             PlaceCells(_walletCells, _walletOrder, layout.Wallet.Grid, WalletRowHeight, refitText);
+
+            _itemGrid = layout.Items.Grid;
+            _walletGrid = layout.Wallet.Grid;
+
+            // Every cell just moved, so whatever the window held is stale
+            // even if the viewport did not move.
+            LoadNearIcons(force: true);
+        }
+
+        /// <summary>
+        /// Asks Blish for the pictures of the cells at or near the viewport,
+        /// and for no others. Cheap to call every frame: the viewport read is
+        /// two rectangles, and nothing past it runs unless the viewport moved
+        /// or <paramref name="force"/> says the cells did.
+        /// </summary>
+        private void LoadNearIcons(bool force)
+        {
+            if (_contentPanel == null || _resultGridPanel == null || _resultGridPanel.Parent == null)
+            {
+                return;
+            }
+
+            var viewRegion = _contentPanel.ContentRegion;
+            var gridRegion = _resultGridPanel.ContentRegion;
+
+            // The grid panel's absolute position already carries the scroll,
+            // so the viewport's top in grid coordinates falls out of the two
+            // without this view knowing how Blish applies a scroll offset.
+            // Views/Rendering/StickyHeaderHost reads the same pair.
+            int viewTop = _contentPanel.AbsoluteBounds.Y + viewRegion.Y
+                - (_resultGridPanel.AbsoluteBounds.Y + gridRegion.Y);
+            int viewHeight = viewRegion.Height;
+
+            if (!force && viewTop == _iconWindowTop && viewHeight == _iconWindowHeight)
+            {
+                return;
+            }
+
+            _iconWindowTop = viewTop;
+            _iconWindowHeight = viewHeight;
+
+            LoadNearIcons(_itemCells, _itemOrder, _itemGrid, ItemRowHeight, viewTop, viewHeight);
+            LoadNearIcons(_walletCells, _walletOrder, _walletGrid, WalletRowHeight, viewTop, viewHeight);
+        }
+
+        /// <summary>One run's near cells. <paramref name="order"/> is the
+        /// sort over them, so placement index i holds cell order[i] - the
+        /// same mapping <see cref="PlaceCells"/> uses.</summary>
+        private static void LoadNearIcons(
+            List<ResultCell> cells, IReadOnlyList<int> order, SnapshotItemGridLayout.Grid grid,
+            int rowHeight, int viewTop, int viewHeight)
+        {
+            if (grid == null || cells.Count == 0)
+            {
+                return;
+            }
+
+            var span = SnapshotIconWindow.Compute(
+                cells.Count, grid.ColumnCount, rowHeight, grid.Top,
+                viewTop, viewHeight, SnapshotIconWindow.MarginPx);
+
+            bool ordered = order != null && order.Count == cells.Count;
+            for (int i = span.Start; i < span.End; i++)
+            {
+                cells[ordered ? order[i] : i].Icon?.Load();
+            }
         }
 
         /// <summary>Places one run's cells. They are held in the search's
@@ -1842,6 +1927,10 @@ namespace TaimisToolbench.Views
             _resultGridPanel = null;
             _itemChrome = null;
             _walletChrome = null;
+            _itemGrid = null;
+            _walletGrid = null;
+            _iconWindowTop = int.MinValue;
+            _iconWindowHeight = -1;
             _lastRowLayoutWidth = _contentPanel.Width;
 
             // BEFORE the disposal loop: a pinned band is not a child of the
@@ -2436,6 +2525,57 @@ namespace TaimisToolbench.Views
         }
 
         /// <summary>
+        /// Re-derives the icon window each frame, because Blish raises no
+        /// event when a panel is scrolled. Zero-sized on purpose: a control
+        /// with no area is in no hit test.
+        /// <para>
+        /// A throw stands the ticker down for good rather than repeating
+        /// once a frame. The rows keep whatever pictures they already have,
+        /// which is the pre-existing empty-frame state and not an error a
+        /// player needs to hear about more than once.
+        /// </para>
+        /// </summary>
+        private sealed class IconWindowTicker : Control
+        {
+            private readonly MainView _view;
+            private bool _stopped;
+
+            internal IconWindowTicker(MainView view)
+            {
+                _view = view;
+                Size = Point.Zero;
+                Location = Point.Zero;
+            }
+
+            public override void DoUpdate(GameTime gameTime)
+            {
+                if (_stopped)
+                {
+                    return;
+                }
+
+                try
+                {
+                    _view.LoadNearIcons(force: false);
+                }
+                catch (Exception ex)
+                {
+                    _stopped = true;
+                    Logger.Warn(ex, "Icon window update failed; stopping");
+                    ModuleLog.Shared.Write(
+                        ModuleLogLevel.Warn, "ui",
+                        "Snapshot icon loading stopped after a failure: "
+                        + ex.GetType().Name + " - " + ex.Message);
+                }
+            }
+
+            protected override void Paint(
+                Microsoft.Xna.Framework.Graphics.SpriteBatch spriteBatch, Rectangle bounds)
+            {
+            }
+        }
+
+        /// <summary>
         /// One placed result cell: the row Panel the grid moves and sizes,
         /// and the closure that re-ellipsizes its text lines against a new
         /// column width and re-pins its amount. Text and position only -
@@ -2446,9 +2586,15 @@ namespace TaimisToolbench.Views
             public readonly Panel Panel;
             public readonly Action<int> Fit;
 
-            public ResultCell(Panel panel, Action<int> fit)
+            /// <summary>The row's icon, whose picture has not been asked
+            /// for until this cell comes near the viewport - see
+            /// Views/Rendering/DeferredIconArt.cs.</summary>
+            public readonly DeferredIconArt Icon;
+
+            public ResultCell(Panel panel, DeferredIconArt icon, Action<int> fit)
             {
                 Panel = panel;
+                Icon = icon;
                 Fit = fit;
             }
         }
@@ -2555,7 +2701,7 @@ namespace TaimisToolbench.Views
             // over the row - the icon included, by CreateItemIcon itself.
             var hover = ItemRowHover(row, rarity);
 
-            IconControls.CreateItemIcon(
+            var icon = IconControls.CreateItemIconDeferredArt(
                 rowPanel, row.IconUrl, ItemIconFrame.ForRarity(rarity),
                 SnapshotItemGridLayout.CellIconX, 1,
                 ItemIconTier.BagSlot, hover);
@@ -2594,7 +2740,7 @@ namespace TaimisToolbench.Views
 
             // The cell's own Size is the grid's to write (LayoutResultGrid),
             // so this closure only re-fits what the new column width changed.
-            _itemCells.Add(new ResultCell(rowPanel, w =>
+            _itemCells.Add(new ResultCell(rowPanel, icon, w =>
             {
                 FitRowTextLabel(
                     nameLabel, nameText, SnapshotItemGridLayout.CellNameMaxWidth(w, chrome.AmountBand));
@@ -2776,7 +2922,7 @@ namespace TaimisToolbench.Views
             int currencyId = entry.CurrencyId;
             int walletValue = entry.Value;
             string currencyIconUrl = entry.IconUrl;
-            IconControls.CreateItemIcon(
+            var icon = IconControls.CreateItemIconDeferredArt(
                 rowPanel, currencyIconUrl, ItemIconFrame.Currency(),
                 SnapshotItemGridLayout.CellIconX, 2,
                 ItemIconTier.CurrencyListRow,
@@ -2807,7 +2953,7 @@ namespace TaimisToolbench.Views
             int amountWidth = (int)Math.Ceiling(UiFonts.Body.MeasureString(amountText).Width);
             var amountLabel = CreateAmountLabel(rowPanel, amountText, amountWidth, columnWidth, 6);
 
-            _walletCells.Add(new ResultCell(rowPanel, w =>
+            _walletCells.Add(new ResultCell(rowPanel, icon, w =>
             {
                 FitRowTextLabel(
                     label, name, SnapshotItemGridLayout.CellNameMaxWidth(w, chrome.AmountBand));

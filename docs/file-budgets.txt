@@ -241,7 +241,8 @@ Services/SnapshotFetchFailedException.cs                                        
 Services/SnapshotHeaderLayout.cs                                                        209
 Services/SnapshotHelpers.cs                                                             79
 Services/SnapshotHoldLine.cs                                                            300
-Services/SnapshotItemGridLayout.cs                                                      250
+Services/SnapshotIconWindow.cs                                                          126
+Services/SnapshotItemGridLayout.cs                                                      258
 Services/SnapshotRefreshSlot.cs                                                         93
 Services/SnapshotResultLayout.cs                                                        90
 Services/SnapshotSearchResultBuilder.cs                                                 501
@@ -297,7 +298,7 @@ Views/ItemInputRowStrip.cs                                                      
 Views/ItemRowState.cs                                                                   39
 Views/LogTabContent.cs                                                                  1538
 Views/MainThreadMarshal.cs                                                              141
-Views/MainView.cs                                                                       2992
+Views/MainView.cs                                                                       3138
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    425
@@ -309,6 +310,7 @@ Views/Rendering/CloseKeyButton.cs                                               
 Views/Rendering/CoinCurrencyRenderer.cs                                                 671
 Views/Rendering/ColumnHeaderRowRenderer.cs                                              221
 Views/Rendering/CraftStepsSectionRenderer.cs                                            264
+Views/Rendering/DeferredIconArt.cs                                                      90
 Views/Rendering/DisciplinesSectionRenderer.cs                                           288
 Views/Rendering/EmptyPlanStateRenderer.cs                                               81
 Views/Rendering/FeedbackButton.cs                                                       240
@@ -317,7 +319,7 @@ Views/Rendering/HeaderCellPlan.cs                                               
 Views/Rendering/HoverChainResync.cs                                                     75
 Views/Rendering/ISectionRelayoutSink.cs                                                 86
 Views/Rendering/ITreePlanHost.cs                                                        88
-Views/Rendering/IconControls.cs                                                         304
+Views/Rendering/IconControls.cs                                                         357
 Views/Rendering/IconNameRowHelpers.cs                                                   182
 Views/Rendering/InlineSpinner.cs                                                        65
 Views/Rendering/LabelHelpers.cs                                                         273
@@ -570,6 +572,7 @@ tests/TaimisToolbench.Tests/Services/SnapshotFetchFailedExceptionTests.cs       
 tests/TaimisToolbench.Tests/Services/SnapshotHeaderLayoutTests.cs                       441
 tests/TaimisToolbench.Tests/Services/SnapshotHelpersTests.cs                            95
 tests/TaimisToolbench.Tests/Services/SnapshotHoldLineTests.cs                           264
+tests/TaimisToolbench.Tests/Services/SnapshotIconWindowTests.cs                         201
 tests/TaimisToolbench.Tests/Services/SnapshotItemGridLayoutTests.cs                     336
 tests/TaimisToolbench.Tests/Services/SnapshotRefreshSlotTests.cs                        241
 tests/TaimisToolbench.Tests/Services/SnapshotResultLayoutTests.cs                       94

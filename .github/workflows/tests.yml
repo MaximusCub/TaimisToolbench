@@ -599,7 +599,12 @@ jobs:
               'Views/Rendering/IconNameRowHelpers.cs':
                   'forwards the intent its own caller named',
           }
+          # CreateItemIconDeferredArt is the same framed item icon with its
+          # picture request held back, so it is gated the same way. Without
+          # this entry the Snapshot tab's ~960 icons would leave the gate
+          # entirely, which is the tab the gate was written for.
           CALLS = ('IconControls.CreateItemIcon(',
+                   'IconControls.CreateItemIconDeferredArt(',
                    'IconNameRowHelpers.CreateIconAndEllipsizedName(')
 
           files = subprocess.run(

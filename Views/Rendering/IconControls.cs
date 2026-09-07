@@ -60,6 +60,31 @@ namespace TaimisToolbench.Views.Rendering
         }
 
         /// <summary>
+        /// The same framed item icon, built WITHOUT asking for its picture.
+        /// The caller gets a <see cref="DeferredIconArt"/> and decides when
+        /// the picture is worth fetching - see that type for the per-icon
+        /// cost this avoids.
+        /// <para>
+        /// Everything else is identical, the hover included: the frame and
+        /// its square are built here and stamped here, so a deferred icon is
+        /// never a hole in a row's hover. Only <c>BackgroundTexture</c>
+        /// waits.
+        /// </para>
+        /// </summary>
+        internal static DeferredIconArt CreateItemIconDeferredArt(
+            Panel parent, string iconUrl, ItemIconFrame frame, int x, int y,
+            ItemIconTier tier, ItemIconTooltip tooltip)
+        {
+            var panel = CreateFrame(
+                parent, iconUrl, frame, x, y,
+                ItemIconTiers.ArtSize(tier), ItemIconTiers.BorderThickness(tier),
+                tooltip.PlainText, deferArt: true, artSquare: out Panel artSquare);
+
+            tooltip.StampOnIconTree(panel);
+            return new DeferredIconArt(artSquare, iconUrl);
+        }
+
+        /// <summary>
         /// The pre-tier signature, kept ONLY so the one row builder still
         /// owned by an in-flight branch keeps compiling until it migrates -
         /// Views/Rendering/IconNameRowHelpers.cs, which forwards the size
@@ -108,7 +133,8 @@ namespace TaimisToolbench.Views.Rendering
 
             return CreateFrame(
                 parent, iconUrl, ItemIconFrame.Currency(), x, y,
-                ItemIconTiers.ArtSize(tier), ItemIconTiers.BorderThickness(tier), tooltipText);
+                ItemIconTiers.ArtSize(tier), ItemIconTiers.BorderThickness(tier), tooltipText,
+                deferArt: false, artSquare: out _);
         }
 
         private static Panel CreateFramedIcon(
@@ -116,7 +142,8 @@ namespace TaimisToolbench.Views.Rendering
             int iconSize, int borderThickness, ItemIconTooltip tooltip)
         {
             var panel = CreateFrame(
-                parent, iconUrl, frame, x, y, iconSize, borderThickness, tooltip.PlainText);
+                parent, iconUrl, frame, x, y, iconSize, borderThickness, tooltip.PlainText,
+                deferArt: false, artSquare: out _);
 
             // The rich half goes on last and on the whole tree, over the
             // plain notes just written: a builder that composes nothing
@@ -128,9 +155,12 @@ namespace TaimisToolbench.Views.Rendering
         /// <summary>The frame and its art, with the plain half of the
         /// hover on both - an unstamped frame is a hole in the icon's hover,
         /// and it resolves from the SAME rule the square gets.</summary>
+        /// <param name="artSquare">The icon's art panel, or null when the
+        /// entry has no url and drew the empty-slot placeholder instead.
+        /// Only a deferring caller needs it.</param>
         private static Panel CreateFrame(
             Panel parent, string iconUrl, ItemIconFrame frame, int x, int y,
-            int iconSize, int borderThickness, string plainText)
+            int iconSize, int borderThickness, string plainText, bool deferArt, out Panel artSquare)
         {
             int frameSize = iconSize + borderThickness * 2;
             // A PLATE for an item, a border RING for a currency. Which one
@@ -148,7 +178,9 @@ namespace TaimisToolbench.Views.Rendering
             panel.Location = new Point(x, y);
             panel.Parent = parent;
 
-            CreateUnframedIcon(panel, iconUrl, borderThickness, borderThickness, iconSize, plainText);
+            var square = CreateUnframedIcon(
+                panel, iconUrl, borderThickness, borderThickness, iconSize, plainText, deferArt);
+            artSquare = HasArt(iconUrl) ? square : null;
             TooltipFacility.ApplyPlain(panel, ResolveTooltip(iconUrl, plainText));
             return panel;
         }
@@ -171,9 +203,18 @@ namespace TaimisToolbench.Views.Rendering
         internal static Panel CreateUnframedIcon(
             Panel parent, string iconUrl, int x, int y, int size = 32, string tooltipText = null)
         {
+            return CreateUnframedIcon(parent, iconUrl, x, y, size, tooltipText, deferArt: false);
+        }
+
+        /// <summary><paramref name="deferArt"/> builds the square with no
+        /// BackgroundTexture, for a caller holding a
+        /// <see cref="DeferredIconArt"/> that will assign one later.</summary>
+        private static Panel CreateUnframedIcon(
+            Panel parent, string iconUrl, int x, int y, int size, string tooltipText, bool deferArt)
+        {
             // Missing icon: render a neutral empty-slot square, not the
             // alarming red error texture - a data gap is not a failure.
-            bool missing = string.IsNullOrEmpty(iconUrl);
+            bool missing = !HasArt(iconUrl);
             Panel icon = missing
                 ? new ClippedPanel()
                 {
@@ -186,7 +227,9 @@ namespace TaimisToolbench.Views.Rendering
                 {
                     Size = new Point(size, size),
                     Location = new Point(x, y),
-                    BackgroundTexture = GameService.Content.GetRenderServiceTexture(iconUrl),
+                    BackgroundTexture = deferArt
+                        ? null
+                        : GameService.Content.GetRenderServiceTexture(iconUrl),
                     Parent = parent,
                 };
 
@@ -253,6 +296,16 @@ namespace TaimisToolbench.Views.Rendering
 
             TooltipFacility.ApplyPlain(icon, tooltipText);
             return icon;
+        }
+
+        /// <summary>Whether an entry has a picture to show at all. Stated
+        /// once because two places have to agree: the branch that draws the
+        /// empty-slot placeholder instead, and the deferred-art handle. If
+        /// they disagreed, an icon with no url would sit waiting for a
+        /// picture nothing was ever going to ask for.</summary>
+        private static bool HasArt(string iconUrl)
+        {
+            return !string.IsNullOrEmpty(iconUrl);
         }
 
         /// <summary>What an icon says on hover: the caller's text, or the
