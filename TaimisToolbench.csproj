@@ -248,7 +248,6 @@
     <Compile Include="Services\JsonSeedReader.cs" />
     <Compile Include="Services\JustifiedColumnTracks.cs" />
     <Compile Include="Services\SeasonalVendorTipCalculator.cs" />
-    <Compile Include="Services\CachingAccountRecipeClient.cs" />
     <Compile Include="Services\CurrencyMetadataService.cs" />
     <Compile Include="Services\CurrencyDisplayResolver.cs" />
     <Compile Include="Services\CurrencyTradeUpCoalescing.cs" />
