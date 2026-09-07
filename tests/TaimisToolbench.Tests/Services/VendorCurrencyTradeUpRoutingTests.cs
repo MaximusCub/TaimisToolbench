@@ -30,6 +30,9 @@ namespace TaimisToolbench.Tests.Services
         private const int PouchOfStardust = 99964;
         private const int CaseOfCapturedLightning = 100267;
 
+        /// <summary>A legendary armour piece whose plan needs all three.</summary>
+        private const int ObsidianHeavyBreastplate = 101521;
+
         private const int CalcifiedGasp = 75;
         private const int PinchOfStardust = 73;
         private const int StaticCharge = 72;
@@ -64,6 +67,37 @@ namespace TaimisToolbench.Tests.Services
             var step = Assert.Single(result.Plan.Steps, s => s.ItemId == itemId);
             Assert.Equal(AcquisitionSource.BuyFromVendor, step.Source);
             Assert.Null(step.VendorBarterItemCosts);
+        }
+
+        /// <summary>
+        /// The reported case over the shipped corpus. The Obsidian Heavy
+        /// Breastplate needs all three materials twice over: once as 13
+        /// taken in barter by another vendor offer, once as 5 the plan buys
+        /// with the map currency. The Total Cost table used to state that
+        /// as an item line of 13 and a separate 1,250-currency line. It is
+        /// one line of 18 now.
+        /// </summary>
+        [Theory]
+        [InlineData(ClotOfCongealedScreams, CalcifiedGasp)]
+        [InlineData(PouchOfStardust, PinchOfStardust)]
+        [InlineData(CaseOfCapturedLightning, StaticCharge)]
+        public async Task ALegendaryArmourPlan_StatesEachOfTheThreeOnce(int itemId, int currencyId)
+        {
+            var f = await BuildAsync(ObsidianHeavyBreastplate, 1);
+            var result = new PlanSolver().Solve(
+                f.Tree, f.Prices, f.Offers, PriceBasis.InstantBuy,
+                vendorCostSubtrees: f.Subtrees);
+
+            var cost = Assert.Single(result.Plan.BarterItemCosts, b => b.ItemId == itemId);
+            Assert.Equal(18, cost.Amount);
+            Assert.Equal(currencyId, cost.TradeUpCurrencyId);
+            Assert.Equal(CurrencyPerUnit, cost.TradeUpCurrencyPerUnit);
+
+            // What survives on the wallet side is a genuinely different
+            // requirement: one other offer in this plan charges 250 of each
+            // of the three, and that has nothing to do with the trade-up.
+            var currency = Assert.Single(result.Plan.CurrencyCosts, c => c.CurrencyId == currencyId);
+            Assert.Equal(CurrencyPerUnit, currency.Amount);
         }
 
         [Fact]

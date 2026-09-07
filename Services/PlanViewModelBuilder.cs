@@ -672,7 +672,8 @@ namespace TaimisToolbench.Services
                     IconUrl = ResolveIconUrl(bc.ItemId, result.ItemMetadata),
                     Rarity = ResolveRarity(bc.ItemId, result.ItemMetadata),
                 };
-                ApplyOwnedSplit(row, LookupOwned(result.OwnedVendorItemAmounts, bc.ItemId));
+                int? held = LookupOwned(result.OwnedVendorItemAmounts, bc.ItemId);
+                ApplyOwnedSplit(row, held, ApplyTradeUpNote(row, bc, held, result));
                 currencyRows.Add(row);
             }
         }
@@ -699,13 +700,60 @@ namespace TaimisToolbench.Services
         /// the same coverage question differently. Reads row.Quantity, so
         /// the caller sets it first.
         /// </summary>
-        private static void ApplyOwnedSplit(PlanRowViewModel row, int? owned)
+        private static void ApplyOwnedSplit(PlanRowViewModel row, int? owned, int convertible = 0)
         {
             row.CurrencyOwnedQuantity = owned;
             row.CurrencyNeededQuantity = owned.HasValue
-                ? Math.Max(0, row.Quantity - owned.Value)
+                ? Math.Max(0, row.Quantity - owned.Value - convertible)
                 : (int?)null;
-            row.CurrencyFullyCovered = owned.HasValue && owned.Value >= row.Quantity;
+            row.CurrencyFullyCovered = owned.HasValue && owned.Value + convertible >= row.Quantity;
+        }
+
+        /// <summary>
+        /// Seats the trade-up note on a coalesced item row and answers how
+        /// many of the row's item the held sub-currency buys - the amount
+        /// ApplyOwnedSplit then takes off Needed, because a player holding
+        /// the currency converts it up before acquiring the rest any other
+        /// way.
+        /// <para>
+        /// The note and that subtraction are one decision, never two: a
+        /// Needed the note cannot account for is a number with no visible
+        /// derivation. So both are skipped together whenever the currency
+        /// resolves no icon - without one the note names nothing on screen,
+        /// because the offline fallback for these ids is the word
+        /// "Currency" (Gw2Constants.ResolveCurrencyName).
+        /// </para>
+        /// </summary>
+        private static int ApplyTradeUpNote(
+            PlanRowViewModel row, BarterItemCost cost, int? ownedItems, CraftingPlanResult result)
+        {
+            if (!cost.TradeUpCurrencyId.HasValue || !cost.TradeUpCurrencyPerUnit.HasValue)
+            {
+                return 0;
+            }
+
+            int currencyId = cost.TradeUpCurrencyId.Value;
+            int? heldCurrency = LookupOwned(result.OwnedCurrencyAmounts, currencyId);
+            if (!heldCurrency.HasValue || heldCurrency.Value <= 0)
+            {
+                return 0;
+            }
+
+            int outstanding = Math.Max(0, row.Quantity - (ownedItems ?? 0));
+            int buys = CurrencyTradeUpCoalescing.BuysNow(
+                heldCurrency.Value, cost.TradeUpCurrencyPerUnit.Value, outstanding);
+
+            string iconUrl = CurrencyDisplayResolver.ResolveIconUrl(currencyId, result.CurrencyMetadata);
+            if (string.IsNullOrEmpty(iconUrl))
+            {
+                return 0;
+            }
+
+            row.TradeUpCurrencyName = CurrencyDisplayResolver.ResolveName(currencyId, result.CurrencyMetadata);
+            row.TradeUpCurrencyIconUrl = iconUrl;
+            row.TradeUpCurrencyHeld = heldCurrency.Value;
+            row.TradeUpBuysQuantity = buys;
+            return buys;
         }
 
         /// <summary>

@@ -769,40 +769,227 @@ namespace TaimisToolbench.Tests.Services
 
         // --- ComputeCurrencyColumnEdges ---
 
-        // The previous
-        // version of this test recomputed ComputeCurrencyColumnEdges' exact
-        // formula from the same public constants it was verifying, so it
-        // could never fail unless both sides moved together. Expected
-        // values below are hard-coded pixel numbers for two panel widths -
-        // a conscious re-baseline point. If a deliberate geometry change
-        // moves these, recompute by hand from SummarySectionLayoutMath.cs's
-        // CurrencyMarkerWidth/CurrencyColumnGap/CurrencyNameX/
-        // CurrencyTrackCount constants (widestNumberWidth defaults to 0)
-        // and update the literals here.
+        // Expected values below are hard-coded pixel numbers for two panel
+        // widths - a conscious re-baseline point. A test that recomputed
+        // the formula from the same public constants it was verifying could
+        // never fail unless both sides moved together. If a deliberate
+        // geometry change moves these, recompute by hand from
+        // SummarySectionLayoutMath.cs's CurrencyMarkerWidth/
+        // CurrencyColumnGap/CurrencyNameX/CurrencyNameColumnWidth/
+        // CurrencyNumberColumnWidth constants (widestNumberWidth defaults
+        // to 0) and update the literals here.
         [Fact]
-        public void ComputeCurrencyColumnEdges_DistributesTheColumnsAcrossThePanel()
+        public void ComputeCurrencyColumnEdges_SpreadsTheColumnsOnEqualGaps()
         {
-            // 800: pinned right edge 792, marker 758, table right edge 744.
-            // The name starts at CurrencyNameX 48 (8 gutter + the 32px
-            // wallet-LIST icon + 8), so 696px carry four equal 174px tracks.
-            // A 60px band CENTRED on a 174px track starts (174-60)/2 = 57
-            // into it and ends 117 into it, so Required ends at 48+174+117
-            // = 339, Have one track later at 513 and Needed at 687 - half a
-            // track short of the last track's own end, which is where a
-            // centred band stops.
+            // 800: pinned right edge 792, marker 758. From CurrencyNameX 48
+            // (8 gutter + the 32px wallet-LIST icon + 8) to the marker is
+            // 710px, of which the name's 210 and three 60px number bands
+            // reserve 390. The 320 left over is four gaps of 80, so
+            // Required ends at 48+210+80+60 = 398, Have at 538, Needed at
+            // 678.
             var edges800 = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(800);
-            Assert.Equal(339, edges800.RequiredRightEdge);
-            Assert.Equal(513, edges800.HaveRightEdge);
-            Assert.Equal(687, edges800.NeededRightEdge);
+            Assert.Equal(398, edges800.RequiredRightEdge);
+            Assert.Equal(538, edges800.HaveRightEdge);
+            Assert.Equal(678, edges800.NeededRightEdge);
             Assert.Equal(758, edges800.MarkerX);
 
-            // 1200: table right edge 1144, span 1096, tracks 274, a 60px
-            // band 107 into each one.
+            // 1200: marker 1158, span 1110, 720 left over, gaps of 180.
             var edges1200 = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(1200);
-            Assert.Equal(489, edges1200.RequiredRightEdge);
-            Assert.Equal(763, edges1200.HaveRightEdge);
-            Assert.Equal(1037, edges1200.NeededRightEdge);
+            Assert.Equal(498, edges1200.RequiredRightEdge);
+            Assert.Equal(738, edges1200.HaveRightEdge);
+            Assert.Equal(978, edges1200.NeededRightEdge);
             Assert.Equal(1158, edges1200.MarkerX);
+        }
+
+        [Fact]
+        public void EveryGapBetweenTwoColumns_IsTheSameWidth()
+        {
+            // The law this table lays out by: each column reserves what its
+            // own widest cell needs and the rest of the row is split into
+            // equal gaps. Checked with a Note column present, which is the
+            // case that used to leave the note one minimum gap from Status
+            // while the number columns held hundreds of pixels of padding.
+            // The widths this table actually measures: "Required" at the
+            // 20-bold header face, a note of "1592", its 18px icon and
+            // "Buys 6" at the body face, and the "Status" header.
+            const int Band = 88;
+            const int Note = 112;
+            const int Marker = 66;
+            var edges = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(1310, Band, Marker, Note);
+
+            int nameGap = edges.RequiredBandX
+                - (SummarySectionLayoutMath.CurrencyNameX
+                    + SummarySectionLayoutMath.CurrencyNameColumnWidth);
+            int requiredGap = edges.HaveBandX - edges.RequiredRightEdge;
+            int haveGap = edges.NeededBandX - edges.HaveRightEdge;
+            int neededGap = edges.NoteX - edges.NeededRightEdge;
+            int noteGap = edges.MarkerX - (edges.NoteX + edges.NoteWidth);
+
+            Assert.Equal(nameGap, requiredGap);
+            Assert.Equal(nameGap, haveGap);
+            Assert.Equal(nameGap, neededGap);
+
+            // The last gap carries what integer division leaves over, so it
+            // is the only one allowed to differ, and by under a pixel per
+            // gap.
+            Assert.InRange(noteGap - nameGap, 0, 4);
+
+            // And it is real clearance, not the 14px minimum the note used
+            // to sit at.
+            Assert.True(noteGap > 3 * SummarySectionLayoutMath.CurrencyColumnGap);
+        }
+
+        [Fact]
+        public void NumberColumns_NoLongerHoldMoreRoomThanTheNoteColumn()
+        {
+            // The defect: "Note column is jammed up against status and
+            // required, have and needed are swimming in padding space". A
+            // number column's share of the row is now its own band plus one
+            // gap, the same share the note gets.
+            const int Band = 88;
+            const int Note = 112;
+            var edges = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(1310, Band, 66, Note);
+
+            int numberPitch = edges.HaveRightEdge - edges.RequiredRightEdge;
+            int notePitch = edges.MarkerX - edges.NoteX;
+
+            Assert.InRange(notePitch - (numberPitch - Band + Note), 0, 4);
+        }
+
+        [Fact]
+        public void WithNoNote_TheTableIsExactlyWhatItWasBeforeTheColumnExisted()
+        {
+            var without = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(1200, 90, 40);
+            var zeroNote = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(1200, 90, 40, 0);
+
+            Assert.Equal(without.RequiredRightEdge, zeroNote.RequiredRightEdge);
+            Assert.Equal(without.HaveRightEdge, zeroNote.HaveRightEdge);
+            Assert.Equal(without.NeededRightEdge, zeroNote.NeededRightEdge);
+            Assert.Equal(without.MarkerX, zeroNote.MarkerX);
+            Assert.Equal(0, zeroNote.NoteWidth);
+            Assert.Equal(zeroNote.MarkerX, zeroNote.NoteX);
+
+            // A Status header still measures its room from Needed, not from
+            // a note band that is not there.
+            var rooms = SummarySectionLayoutMath.CurrencyHeaderRoomsFor(zeroNote, 20, 20, 20);
+            var before = SummarySectionLayoutMath.CurrencyHeaderRoomsFor(without, 20, 20, 20);
+            Assert.Equal(before.Status.Left, rooms.Status.Left);
+            Assert.Equal(before.Status.Right, rooms.Status.Right);
+        }
+
+        [Fact]
+        public void ANoteColumnSitsBetweenNeededAndStatus()
+        {
+            const int NoteWidth = 120;
+            var edges = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(1200, 60, 34, NoteWidth);
+
+            Assert.Equal(NoteWidth, edges.NoteWidth);
+            Assert.True(edges.NoteX > edges.NeededRightEdge);
+            Assert.True(edges.NoteX + NoteWidth < edges.MarkerX);
+
+            // Every number column keeps clear of the note's left rule, the
+            // way they used to keep clear of the marker's.
+            Assert.True(
+                edges.NeededRightEdge <= edges.NoteX - SummarySectionLayoutMath.CurrencyColumnGap);
+            Assert.True(edges.HaveRightEdge < edges.NeededRightEdge);
+            Assert.True(edges.RequiredRightEdge < edges.HaveRightEdge);
+
+            // And the whole table moves left by exactly what the column
+            // took, rather than the note overlapping Status.
+            var without = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(1200, 60, 34);
+            Assert.Equal(without.MarkerX, edges.MarkerX);
+            Assert.True(edges.NeededRightEdge < without.NeededRightEdge);
+        }
+
+        /// <summary>
+        /// The pre-scan and the drawn cell place a note from the same
+        /// arithmetic, so the "Buys N" half always ends exactly on the
+        /// note's own right edge.
+        /// </summary>
+        [Fact]
+        public void ANotesPartsFillExactlyTheWidthItReserves()
+        {
+            const int NoteX = 500;
+            const int HeldBand = 30;
+            const int BuysBand = 44;
+
+            int width = SummarySectionLayoutMath.TradeUpNoteWidth(HeldBand, BuysBand);
+            Assert.Equal(
+                NoteX + width,
+                SummarySectionLayoutMath.TradeUpNoteBuysX(NoteX, HeldBand, HeldBand) + BuysBand);
+            Assert.True(
+                SummarySectionLayoutMath.TradeUpNoteIconX(NoteX, HeldBand, HeldBand)
+                    >= NoteX + HeldBand);
+            Assert.Equal(0, SummarySectionLayoutMath.TradeUpNoteWidth(0, 0));
+        }
+
+        [Fact]
+        public void EveryRowsNoteIcon_SitsAtTheSameX()
+        {
+            // The defect: the icon followed the number, so a three-digit
+            // holding and a four-digit one put it in different places and
+            // the icons staggered down the column. Held amounts right-align
+            // in the widest one's width instead.
+            const int NoteX = 500;
+            const int HeldBand = 40;
+
+            int wideIcon = SummarySectionLayoutMath.TradeUpNoteIconX(NoteX, HeldBand, HeldBand);
+            int narrowIcon = SummarySectionLayoutMath.TradeUpNoteIconX(NoteX, HeldBand, 22);
+
+            Assert.Equal(wideIcon, narrowIcon);
+            Assert.Equal(
+                SummarySectionLayoutMath.TradeUpNoteBuysX(NoteX, HeldBand, HeldBand),
+                SummarySectionLayoutMath.TradeUpNoteBuysX(NoteX, HeldBand, 22));
+
+            // The narrower number is pushed right to end where the wide one
+            // ends, which is what leaves the icon where it was.
+            Assert.Equal(NoteX, SummarySectionLayoutMath.TradeUpNoteHeldX(NoteX, HeldBand, HeldBand));
+            Assert.Equal(
+                NoteX + HeldBand,
+                SummarySectionLayoutMath.TradeUpNoteHeldX(NoteX, HeldBand, 22) + 22);
+        }
+
+        [Fact]
+        public void ANumberWiderThanTheHeldBand_IsNotTruncated()
+        {
+            // Only reachable if a caller's band is not the table's own
+            // widest held amount. The number keeps the note's left rule and
+            // pushes its own icon right, so it stays readable and only that
+            // row leaves the shared icon x.
+            const int NoteX = 500;
+            const int HeldBand = 40;
+            const int TooWide = 55;
+
+            Assert.Equal(NoteX, SummarySectionLayoutMath.TradeUpNoteHeldX(NoteX, HeldBand, TooWide));
+            Assert.True(
+                SummarySectionLayoutMath.TradeUpNoteIconX(NoteX, HeldBand, TooWide)
+                    >= NoteX + TooWide);
+        }
+
+        [Fact]
+        public void ARowWithNoHeldSubCurrencyHasNoNoteText()
+        {
+            var row = new PlanRowViewModel { RowType = PlanRowType.CurrencyCost, Quantity = 18 };
+
+            Assert.Null(SummarySectionLayoutMath.TradeUpNoteHeldText(row));
+            Assert.Null(SummarySectionLayoutMath.TradeUpNoteBuysText(row));
+            Assert.False(SummarySectionLayoutMath.AnyTradeUpNote(new[] { row }));
+        }
+
+        [Fact]
+        public void ARowWithAHeldSubCurrencyReadsAsAnAmountAndWhatItBuys()
+        {
+            var row = new PlanRowViewModel
+            {
+                RowType = PlanRowType.CurrencyCost,
+                Quantity = 18,
+                TradeUpCurrencyHeld = 1013,
+                TradeUpBuysQuantity = 4,
+            };
+
+            Assert.Equal("1013", SummarySectionLayoutMath.TradeUpNoteHeldText(row));
+            Assert.Equal("Buys 4", SummarySectionLayoutMath.TradeUpNoteBuysText(row));
+            Assert.True(SummarySectionLayoutMath.AnyTradeUpNote(new[] { row }));
         }
 
         [Fact]
@@ -871,8 +1058,9 @@ namespace TaimisToolbench.Tests.Services
             // the columns with their data all the way right aligned.. its
             // hard to track which label belongs to which row with so much
             // wide distance in between". The fix is a regular pitch - the
-            // three numeric anchors sit one track apart, so the eye has
-            // something to land on between the name and the last column.
+            // three numeric anchors sit one band and one gap apart, so the
+            // eye has something to land on between the name and the last
+            // column.
             foreach (int panelWidth in new[] { 800, 1200, 1310, 1920 })
             {
                 var edges = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(panelWidth);
@@ -881,29 +1069,15 @@ namespace TaimisToolbench.Tests.Services
                 int firstPitch = edges.HaveRightEdge - edges.RequiredRightEdge;
                 int secondPitch = edges.NeededRightEdge - edges.HaveRightEdge;
 
-                // Integer division puts at most a pixel between tracks.
-                Assert.InRange(firstPitch - secondPitch, -1, 1);
+                Assert.Equal(firstPitch, secondPitch);
 
-                // And each band sits on its own track's CENTRE line - the
-                // name takes track 0, so the band of column i (1-based)
-                // centres (2i+1) half-tracks past the name's left edge.
-                // Doubled rather than halved so a half-track stays an
-                // integer; the span is the table's own, not a pitch, so the
-                // only slack left is what integer division costs.
-                int span = edges.MarkerX - SummarySectionLayoutMath.CurrencyColumnGap
-                    - SummarySectionLayoutMath.CurrencyNameX;
-                int[] bandRightEdges = new[]
-                {
-                    edges.RequiredRightEdge, edges.HaveRightEdge, edges.NeededRightEdge,
-                };
-                for (int i = 0; i < bandRightEdges.Length; i++)
-                {
-                    int centre = bandRightEdges[i] - (band / 2);
-                    Assert.InRange(
-                        2 * (centre - SummarySectionLayoutMath.CurrencyNameX)
-                            - (((2 * (i + 1)) + 1) * span / SummarySectionLayoutMath.CurrencyTrackCount),
-                        -2, 2);
-                }
+                // The gap between the name's reserve and the first number
+                // is that same pitch less the band, so the columns run at
+                // one rhythm from the name onwards.
+                int nameGap = edges.RequiredBandX
+                    - (SummarySectionLayoutMath.CurrencyNameX
+                        + SummarySectionLayoutMath.CurrencyNameColumnWidth);
+                Assert.Equal(firstPitch - band, nameGap);
 
                 // And the first number lands near the middle of the row
                 // rather than out at its right edge, which is what the
@@ -918,11 +1092,10 @@ namespace TaimisToolbench.Tests.Services
         [Fact]
         public void ComputeCurrencyColumnEdges_NameColumnStaysReadable()
         {
-            // Even distribution is only right while the name keeps a real
-            // budget: a quarter of the row, less the Required column's own
-            // reserve. At every width the plan panel can present, that is
-            // several times the widest currency name the API returns
-            // ("Legendary Insight" measures well under 200px at Body).
+            // Equal gaps are only right while the name keeps a real
+            // budget: its own reserve plus the gap after it, less the
+            // clearance the number column needs. At every width the plan
+            // panel can present, that is at least the whole reserve.
             foreach (int panelWidth in new[] { 800, 1310, 1920 })
             {
                 var edges = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(panelWidth);
@@ -939,18 +1112,17 @@ namespace TaimisToolbench.Tests.Services
         [Fact]
         public void ComputeCurrencyColumnEdges_NarrowPanel_FallsBackToThePackedStack()
         {
-            // Below the width a track can hold a reserved number band plus
-            // its gap there is nothing to distribute, and spreading anyway
-            // would overlap the columns. 300: right edge 292, marker 258,
-            // Needed 244, and 196px of span cannot give four tracks 74px
-            // each - so the columns pack right-to-left as they always did.
+            // Below the width the columns and four minimum gaps need there
+            // is nothing to share out, and spreading anyway would overlap
+            // them. 300: right edge 292, marker 258, and 210px from the
+            // name's left edge cannot hold a 210px name reserve, three 60px
+            // bands and four 14px gaps - so the columns pack right-to-left
+            // as they always did.
             //
-            // The threshold is a function of CurrencyNameX, so the wallet-
-            // LIST icon moving that from 34 to 48 raised it from a ~386px
-            // panel to ~400px. Both are far under the module's own window
-            // minimum (a 1436px window leaves a 1310px plan panel), so the
-            // distributed regime is what actually ships and this branch
-            // exists to degrade rather than overlap.
+            // That threshold is a ~536px panel, far under the module's own
+            // window minimum (a 1436px window leaves a 1310px plan panel),
+            // so the shared-gap layout is what actually ships and this
+            // branch exists to degrade rather than overlap.
             var edges = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(300);
 
             Assert.Equal(258, edges.MarkerX);
@@ -1134,8 +1306,9 @@ namespace TaimisToolbench.Tests.Services
         [Fact]
         public void CurrencyHeaderRooms_LeaveTheNumberColumnsHundredsOfPixelsOfSlack()
         {
-            // Why no clamp fires on a real panel: the columns are a whole
-            // track apart, so the room around each one dwarfs any header.
+            // Why no clamp fires on a real panel: the columns are a band
+            // and a gap apart, so the room around each one dwarfs any
+            // header.
             var edges = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(1750, 120, 40);
             var rooms = SummarySectionLayoutMath.CurrencyHeaderRoomsFor(edges, 20, 8, 24);
 
@@ -1156,16 +1329,19 @@ namespace TaimisToolbench.Tests.Services
         [Fact]
         public void CurrencyHeaderRooms_PackedNarrowPanel_StopAtTheNeighbourRatherThanOverlapIt()
         {
-            // Below the distribution threshold the columns pack 14px apart,
+            // Below the shared-gap threshold the columns pack 14px apart,
             // and there genuinely is nowhere for a wide header to go. It
-            // degrades to the neighbour's bound - not past it.
+            // pins to its room's left bound and overhangs rightward only -
+            // the one direction that does not reach the column before it,
+            // and it still stops short of the marker.
             var edges = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(420, 60, 34);
             var rooms = SummarySectionLayoutMath.CurrencyHeaderRoomsFor(edges, 20, 20, 20);
 
             int needed = JustifiedColumnTracks.CenteredOverContentRightAligned(
                 edges.NeededRightEdge, 20, 54, rooms.Needed);
 
-            Assert.Equal(rooms.Needed.Right, needed + 54);
+            Assert.True(rooms.Needed.Width < 54);
+            Assert.Equal(rooms.Needed.Left, needed);
             Assert.True(
                 needed + 54 <= edges.MarkerX,
                 $"header right {needed + 54} past marker {edges.MarkerX}");
@@ -1192,24 +1368,22 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void ComputeCurrencyColumnEdges_WiderPanel_SharesTheIncreaseAcrossEveryTrack()
+        public void ComputeCurrencyColumnEdges_WiderPanel_SharesTheIncreaseAcrossEveryGap()
         {
             // The right-hand block used to move by the whole increase with
-            // the name column absorbing all of it. Under distribution every
-            // track takes an equal share, so a wider panel spreads the
-            // columns rather than dragging them further from the name.
-            // 400px of panel is 100px of track: a band centred on track i
-            // moves by i whole tracks plus HALF of its own track's growth,
-            // so 150, 250 and 350 - the marker alone still tracks the panel
-            // edge by the full 400, because it is pinned to that edge
-            // rather than centred on a track.
+            // the name column absorbing all of it. The four gaps take an
+            // equal share instead, so a wider panel spreads the columns
+            // rather than dragging them further from the name. 400px of
+            // panel is 100px per gap, so column i moves by i+1 of them: the
+            // marker alone still tracks the panel edge by the full 400,
+            // because it is pinned to that edge rather than placed on gaps.
             var narrow = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(1200, 90);
             var wide = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(1600, 90);
 
             Assert.Equal(400, wide.MarkerX - narrow.MarkerX);
-            Assert.Equal(350, wide.NeededRightEdge - narrow.NeededRightEdge);
-            Assert.Equal(250, wide.HaveRightEdge - narrow.HaveRightEdge);
-            Assert.Equal(150, wide.RequiredRightEdge - narrow.RequiredRightEdge);
+            Assert.Equal(300, wide.NeededRightEdge - narrow.NeededRightEdge);
+            Assert.Equal(200, wide.HaveRightEdge - narrow.HaveRightEdge);
+            Assert.Equal(100, wide.RequiredRightEdge - narrow.RequiredRightEdge);
         }
 
         [Fact]
@@ -1228,11 +1402,10 @@ namespace TaimisToolbench.Tests.Services
                 SummarySectionLayoutMath.CurrencyColumnGap,
                 nameX);
 
-            // The name's budget stops one gap before the Required BAND, and
-            // that band is centred on track 1: it moves by the name track's
-            // own 100px share plus half of its own track's growth. The rest
-            // of the 400px increase goes to the two tracks right of it.
-            Assert.Equal(150, wide - narrow);
+            // The name's budget stops one gap before the Required BAND, so
+            // it grows by exactly the gap's share of the 400px increase -
+            // the same share the three gaps right of it take.
+            Assert.Equal(100, wide - narrow);
         }
 
         // --- Regression: EffectiveCurrencyNumberColumnWidth / widened
@@ -1265,54 +1438,47 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void ComputeCurrencyColumnEdges_WidestNumberWidth_DoesNotMoveADistributedTrack()
+        public void ComputeCurrencyColumnEdges_WidestNumberWidth_TakesItsRoomFromTheGaps()
         {
-            // Under distribution the reserve decides only whether the row
-            // is wide enough to distribute at all - a track already holds
-            // its band plus the gap, so a wider value grows SYMMETRICALLY
-            // about its track's centre line and the column itself does not
-            // move. That is the difference from the packed stack, where
-            // every wider value shoved the columns to its left further left
-            // again.
+            // A wider reserve is paid for out of the shared gaps, in equal
+            // parts, and the table's right-hand edge does not move. The
+            // three number columns take 180px more between them, so each of
+            // the four gaps gives up 45.
             const int panelWidth = 800;
             var fixedFloor = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(panelWidth);
             var widened = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(panelWidth, 120);
             int floorBand = SummarySectionLayoutMath.EffectiveCurrencyNumberColumnWidth(0);
             int widerBand = SummarySectionLayoutMath.EffectiveCurrencyNumberColumnWidth(120);
 
-            Assert.Equal(fixedFloor.MarkerX, widened.MarkerX);
-            Assert.Equal(
-                fixedFloor.NeededRightEdge - (floorBand / 2),
-                widened.NeededRightEdge - (widerBand / 2));
-            Assert.Equal(
-                fixedFloor.HaveRightEdge - (floorBand / 2),
-                widened.HaveRightEdge - (widerBand / 2));
-            Assert.Equal(
-                fixedFloor.RequiredRightEdge - (floorBand / 2),
-                widened.RequiredRightEdge - (widerBand / 2));
+            int floorGap = fixedFloor.HaveRightEdge - fixedFloor.RequiredRightEdge - floorBand;
+            int widerGap = widened.HaveRightEdge - widened.RequiredRightEdge - widerBand;
 
-            // The band really did widen - the assertion above would also
+            Assert.Equal(fixedFloor.MarkerX, widened.MarkerX);
+            Assert.Equal(45, floorGap - widerGap);
+            Assert.True(widerGap >= SummarySectionLayoutMath.CurrencyColumnGap);
+
+            // The band really did widen - the assertions above would also
             // hold if nothing had changed at all.
             Assert.True(widened.RequiredRightEdge > fixedFloor.RequiredRightEdge);
         }
 
         [Fact]
-        public void ComputeCurrencyColumnEdges_WidestNumberWidth_PacksTheStackWhenATrackCannotHoldIt()
+        public void ComputeCurrencyColumnEdges_WidestNumberWidth_PacksTheStackWhenTheGapsRunOut()
         {
             // The reserve DOES decide the geometry at the boundary: a band
-            // wide enough that four equal tracks can no longer each hold
-            // one drops the row back to the packed stack, where the widened
-            // bands push Have and Required left exactly as they always did.
-            const int panelWidth = 500;
+            // wide enough that the four gaps can no longer reach their 14px
+            // minimum drops the row back to the packed stack, where the
+            // widened bands push Have and Required left as they always did.
+            const int panelWidth = 700;
             var floor = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(panelWidth);
             var widened = SummarySectionLayoutMath.ComputeCurrencyColumnEdges(panelWidth, 140);
 
             Assert.Equal(floor.MarkerX, widened.MarkerX);
 
             // Packed, the last column IS the table's right edge (marker
-            // less one gap); distributed, it centres on the last track and
-            // stops short of it. That gap is how the two regimes are told
-            // apart from the outside.
+            // less one gap); on shared gaps it stops a whole gap short of
+            // it. That is how the two regimes are told apart from the
+            // outside.
             Assert.Equal(
                 widened.MarkerX - SummarySectionLayoutMath.CurrencyColumnGap,
                 widened.NeededRightEdge);

@@ -48,16 +48,38 @@ namespace TaimisToolbench.Services
         /// </summary>
         public const int PrimePerFrame = 16;
 
+        /// <summary>
+        /// Pictures one frame asks for while the Snapshot tab is NOT the tab
+        /// on screen, so its icons are already fetched the first time it is
+        /// opened.
+        /// <para>
+        /// A quarter of <see cref="PrimePerFrame"/>, because this spends
+        /// frames the player is giving to some other tab. At the 0.015ms per
+        /// request measured above that is 0.06ms, under 0.4% of a 16.67ms
+        /// frame. The 927 pictures of the owner's snapshot take about 232
+        /// frames at this rate, or four seconds at 60fps - less than it
+        /// takes to open the window and reach the tab.
+        /// </para>
+        /// </summary>
+        public const int BackgroundPrimePerFrame = 4;
+
         /// <summary>Frames a prime of <paramref name="pictures"/> takes at
         /// <see cref="PrimePerFrame"/>.</summary>
         public static int PrimeFrames(int pictures)
         {
-            if (pictures <= 0)
+            return PrimeFrames(pictures, PrimePerFrame);
+        }
+
+        /// <summary>Frames a prime of <paramref name="pictures"/> takes at
+        /// <paramref name="perFrame"/> pictures a frame.</summary>
+        public static int PrimeFrames(int pictures, int perFrame)
+        {
+            if (pictures <= 0 || perFrame <= 0)
             {
                 return 0;
             }
 
-            return ((pictures - 1) / PrimePerFrame) + 1;
+            return ((pictures - 1) / perFrame) + 1;
         }
 
         /// <summary>A contiguous run of placement indices, or an empty

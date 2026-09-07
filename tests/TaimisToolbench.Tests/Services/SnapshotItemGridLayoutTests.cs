@@ -45,12 +45,14 @@ namespace TaimisToolbench.Tests.Services
                 + WindowSizing.WindowToTabPanelChrome;
 
             // Re-pinned when the Amount header gained its persistent sort
-            // indicator (AmountColumnFloor 95, was 79), and again when the
-            // indicator's gap doubled (floor 99): the wider column moves
-            // the thresholds right, and the two-column floor still clears
-            // the enforced window minimum.
-            Assert.Equal(1298, windowForTwoColumns);
-            Assert.Equal(1884, windowForThreeColumns);
+            // indicator (AmountColumnFloor 95, was 79), when the
+            // indicator's gap doubled (floor 99), and when the Amount
+            // column took the same gap as its own left inset (CellAmountX
+            // 8, was 2): each widened the column and moved the thresholds
+            // right, and the two-column floor still clears the enforced
+            // window minimum.
+            Assert.Equal(1310, windowForTwoColumns);
+            Assert.Equal(1902, windowForThreeColumns);
 
             // The enforced minimum sits between them, which is the whole
             // claim: every client that can hold the minimum is at least
@@ -62,6 +64,24 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(2, ColumnCountAtWindow(windowForTwoColumns));
             Assert.Equal(2, ColumnCountAtWindow(windowForThreeColumns - 1));
             Assert.Equal(3, ColumnCountAtWindow(windowForThreeColumns));
+        }
+
+        [Fact]
+        public void TheAmountColumnsLeftInset_MatchesTheGapAfterItsHeaderWord()
+        {
+            // The A in "Amount" sat 2px from the edge of its cell and read
+            // as touching it. The inset is the gap between the header word
+            // and its sort indicator, so the space before the word matches
+            // the space after it.
+            Assert.Equal(SortIndicatorLayout.Gap, SnapshotItemGridLayout.CellAmountX);
+
+            // A header block at least as wide as the band it centres in
+            // pins to that inset, which is the case every column the tab
+            // actually draws: "Amount" plus its indicator out-measures the
+            // digits under it.
+            Assert.Equal(
+                SnapshotItemGridLayout.CellAmountX,
+                SnapshotItemGridLayout.CellAmountTextX(40, 96));
         }
 
         [Fact]
@@ -189,12 +209,12 @@ namespace TaimisToolbench.Tests.Services
         [InlineData(0, 1)]
         [InlineData(-100, 1)]
         [InlineData(1, 1)]
-        [InlineData(585, 1)]
-        [InlineData(1171, 1)]
-        [InlineData(1172, 2)]
-        [InlineData(1757, 2)]
-        [InlineData(1758, 3)]
-        [InlineData(2930, 5)]
+        [InlineData(591, 1)]
+        [InlineData(1183, 1)]
+        [InlineData(1184, 2)]
+        [InlineData(1775, 2)]
+        [InlineData(1776, 3)]
+        [InlineData(2960, 5)]
         public void ComputeColumnCount_AddsAColumnPerWholeMinColumnWidth(int gridWidth, int expected)
         {
             Assert.Equal(expected, SnapshotItemGridLayout.ComputeColumnCount(gridWidth));
@@ -361,6 +381,41 @@ namespace TaimisToolbench.Tests.Services
         {
             Assert.Equal(expected, SnapshotItemGridLayout.ComputeHeight(count, 1200, 52));
             Assert.Equal(expected, SnapshotItemGridLayout.Compute(count, 1200, 52).Height);
+        }
+
+        [Theory]
+        [InlineData(0, 0)]
+        [InlineData(1, 0)]
+        [InlineData(2, 1)]
+        [InlineData(3, 2)]
+        public void ColumnDividerCount_LeavesTheLastColumnUnruled(int columnCount, int expected)
+        {
+            Assert.Equal(expected, SnapshotItemGridLayout.ColumnDividerCount(columnCount));
+        }
+
+        [Fact]
+        public void ColumnDividerX_ClearsBothCellsItSitsBetween()
+        {
+            const int ColumnWidth = 626;
+
+            int x = SnapshotItemGridLayout.ColumnDividerX(0, ColumnWidth);
+            int right = x + SnapshotItemGridLayout.ColumnDividerWidth;
+
+            // Left of it, the first cell's text ends; right of it, the
+            // second cell's Amount column begins. The rule touches neither.
+            Assert.True(x >= SnapshotItemGridLayout.CellContentRightEdge(ColumnWidth));
+            Assert.True(right <= ColumnWidth + SnapshotItemGridLayout.CellAmountX);
+        }
+
+        [Fact]
+        public void ColumnDividerX_SitsOnEveryColumnBoundary()
+        {
+            const int ColumnWidth = 626;
+
+            int first = SnapshotItemGridLayout.ColumnDividerX(0, ColumnWidth);
+            int second = SnapshotItemGridLayout.ColumnDividerX(1, ColumnWidth);
+
+            Assert.Equal(ColumnWidth, second - first);
         }
 
         private static (int, int, int, int) Cell(SnapshotItemGridLayout.Grid grid, int index)

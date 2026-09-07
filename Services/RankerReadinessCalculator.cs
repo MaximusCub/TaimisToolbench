@@ -101,7 +101,8 @@ namespace TaimisToolbench.Services
                 // row must not render the second as "done".
                 bool nothingOutstanding =
                     owned.Plan.TotalCoinCost == 0 &&
-                    (owned.Plan.CurrencyCosts == null || owned.Plan.CurrencyCosts.Count == 0);
+                    (owned.Plan.CurrencyCosts == null || owned.Plan.CurrencyCosts.Count == 0) &&
+                    (owned.Plan.BarterItemCosts == null || owned.Plan.BarterItemCosts.Count == 0);
                 metrics.Kind = nothingOutstanding
                     ? RankerReadinessKind.NothingLeft
                     : RankerReadinessKind.NotMeasurable;
