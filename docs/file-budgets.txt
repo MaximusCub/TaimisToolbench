@@ -242,7 +242,7 @@ Services/SnapshotFetchFailedException.cs                                        
 Services/SnapshotHeaderLayout.cs                                                        209
 Services/SnapshotHelpers.cs                                                             79
 Services/SnapshotHoldLine.cs                                                            355
-Services/SnapshotItemGridLayout.cs                                                      313
+Services/SnapshotItemGridLayout.cs                                                      321
 Services/SnapshotIconWindow.cs                                                          181
 Services/SnapshotRefreshSlot.cs                                                         93
 Services/SnapshotResultLayout.cs                                                        90
@@ -575,7 +575,7 @@ tests/TaimisToolbench.Tests/Services/SnapshotFetchFailedExceptionTests.cs       
 tests/TaimisToolbench.Tests/Services/SnapshotHeaderLayoutTests.cs                       441
 tests/TaimisToolbench.Tests/Services/SnapshotHelpersTests.cs                            95
 tests/TaimisToolbench.Tests/Services/SnapshotHoldLineTests.cs                           320
-tests/TaimisToolbench.Tests/Services/SnapshotItemGridLayoutTests.cs                     407
+tests/TaimisToolbench.Tests/Services/SnapshotItemGridLayoutTests.cs                     427
 tests/TaimisToolbench.Tests/Services/SnapshotIconWindowTests.cs                         279
 tests/TaimisToolbench.Tests/Services/SnapshotRefreshSlotTests.cs                        241
 tests/TaimisToolbench.Tests/Services/SnapshotResultLayoutTests.cs                       94

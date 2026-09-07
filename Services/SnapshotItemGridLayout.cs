@@ -20,10 +20,18 @@ namespace TaimisToolbench.Services
     /// </summary>
     internal static class SnapshotItemGridLayout
     {
-        /// <summary>Left edge of a cell's content, which is the Amount
-        /// column: the amount reads before the name, so a long name pushes
-        /// nothing away from where a short one puts it.</summary>
-        public const int CellAmountX = 2;
+        /// <summary>
+        /// Left edge of a cell's content, which is the Amount column: the
+        /// amount reads before the name, so a long name pushes nothing away
+        /// from where a short one puts it.
+        /// <para>
+        /// The inset is the same one <see cref="SortIndicatorLayout.Gap"/>
+        /// puts between a header's word and its sort indicator, so the
+        /// space before "Amount" matches the space after it. It was 2px,
+        /// which read as the A touching the edge of the cell.
+        /// </para>
+        /// </summary>
+        public const int CellAmountX = SortIndicatorLayout.Gap;
 
         /// <summary>
         /// Width of a cell's icon gutter: the frame (art + 1px border each
