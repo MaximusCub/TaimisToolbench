@@ -41,15 +41,6 @@ namespace TaimisToolbench
     {
         private static readonly Logger Logger = Logger.GetLogger<Module>();
 
-        // Bounds the whole multi-step account-snapshot fetch (wallet, bank,
-        // shared inventory, materials, one call per character) so a full
-        // network outage fails fast instead of stacking several ~100s HTTP
-        // timeouts sequentially (KNOWN-ISSUES #31/api-degradation F6) -
-        // mirrors CurrencyMetadataService's own internal-timeout pattern,
-        // just with a larger budget since this fetch does far more work on
-        // a genuine success than a single /v2/currencies call.
-        private static readonly TimeSpan SnapshotFetchTimeout = TimeSpan.FromSeconds(60);
-
         internal ContentsManager ContentsManager => this.ModuleParameters.ContentsManager;
 
         internal DirectoriesManager DirectoriesManager => this.ModuleParameters.DirectoriesManager;
@@ -2022,22 +2013,36 @@ namespace TaimisToolbench
             int myEpoch = _snapshotCommitGate.Epoch;
 
             AccountSnapshot snapshot;
+
+            // Bounds the whole multi-step fetch so a full network outage
+            // fails fast instead of stacking several ~100s HTTP timeouts
+            // (KNOWN-ISSUES #31/api-degradation F6). The budget starts at
+            // SnapshotFetchBudget's floor and is re-sized the moment the
+            // fetch reports how many characters the account has, because
+            // the per-character work is what makes a large account cost
+            // more than a small one.
+            var budget = SnapshotFetchBudget.For(0);
             using (var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
             {
-                timeoutCts.CancelAfter(SnapshotFetchTimeout);
+                timeoutCts.CancelAfter(budget);
                 try
                 {
-                    snapshot = await _snapshotService.FetchSnapshotAsync(timeoutCts.Token);
+                    snapshot = await _snapshotService.FetchSnapshotAsync(
+                        timeoutCts.Token,
+                        characterCount =>
+                        {
+                            budget = SnapshotFetchBudget.For(characterCount);
+                            timeoutCts.CancelAfter(budget);
+                        });
                 }
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested)
                 {
                     // The internal timeout fired, not the caller's own
-                    // token - a genuine fetch failure (KNOWN-ISSUES
-                    // #31/api-degradation F6), not a cancellation. Re-thrown as
-                    // a plain Exception so callers' "cancelled" catch
-                    // (which must stay silent) does not swallow it.
+                    // token - a genuine fetch failure, not a cancellation.
+                    // Re-thrown as a plain Exception so callers' "cancelled"
+                    // catch (which must stay silent) does not swallow it.
                     throw new TimeoutException(
-                        $"Account snapshot fetch exceeded {SnapshotFetchTimeout.TotalSeconds:0}s.");
+                        $"Account snapshot fetch exceeded {budget.TotalSeconds:0}s.");
                 }
             }
 
