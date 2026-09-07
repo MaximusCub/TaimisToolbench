@@ -1621,9 +1621,8 @@ namespace TaimisToolbench.Views
         private string _statusFullText = "";
 
         // Budget the line ellipsizes against. Held separately from
-        // Label.Width, which stays the width of the TEXT: the inline spinner
-        // is placed after the label's right edge, so a label sized to the
-        // whole budget would strand the spinner at the panel's edge.
+        // Label.Width, which stays the width of the TEXT: see
+        // InlineSpinnerLayout.LabelWidthForText.
         private int _statusBudget;
 
         private void ApplyStatusText()
@@ -1640,7 +1639,8 @@ namespace TaimisToolbench.Views
                 _statusLabel.Text = shown;
             }
 
-            _statusLabel.Width = (int)Math.Ceiling(font.MeasureString(shown).Width);
+            _statusLabel.Width = InlineSpinnerLayout.LabelWidthForText(
+                LabelHelpers.MeasureWith(font)(shown), _statusBudget);
             TooltipFacility.ApplyPlain(
                 _statusLabel,
                 string.Equals(shown, _statusFullText, StringComparison.Ordinal) ? null : _statusFullText);

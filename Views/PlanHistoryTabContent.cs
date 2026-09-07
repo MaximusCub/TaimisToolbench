@@ -367,8 +367,8 @@ namespace TaimisToolbench.Views
 
             int statusRight = _clearButton.Location.X - InlineSpinnerLayout.SnapshotStatusSize
                 - 2 * InlineSpinnerLayout.LabelGap;
-            _statusLabel.Width = Math.Max(0, statusRight - PlanHistoryRowLayout.Inset);
-            InlineSpinner.PlaceAfter(_spinner, _statusLabel, InlineSpinnerLayout.LabelGap);
+            _statusBudget = Math.Max(0, statusRight - PlanHistoryRowLayout.Inset);
+            ApplyStatusText();
 
             PositionColumnHeader(barWidth);
 
@@ -1473,11 +1473,36 @@ namespace TaimisToolbench.Views
                 return;
             }
 
-            string shown = LabelHelpers.EllipsizeToWidth(UiFonts.Status, text, Math.Max(0, _statusLabel.Width));
-            _statusLabel.Text = shown;
+            _statusFullText = text ?? "";
             _statusLabel.TextColor = isError ? ErrorColor : StatusColor;
+            ApplyStatusText();
+        }
+
+        // The status line's whole text, so a resize re-takes the ellipsis
+        // from the original rather than compounding it onto an
+        // already-shortened string.
+        private string _statusFullText = "";
+
+        // Budget the line ellipsizes against. Held separately from
+        // Label.Width, which stays the width of the TEXT: see
+        // InlineSpinnerLayout.LabelWidthForText.
+        private int _statusBudget;
+
+        private void ApplyStatusText()
+        {
+            if (_statusLabel == null)
+            {
+                return;
+            }
+
+            var font = UiFonts.Status;
+            string shown = LabelHelpers.EllipsizeToWidth(font, _statusFullText, Math.Max(0, _statusBudget));
+            _statusLabel.Text = shown;
+            _statusLabel.Width = InlineSpinnerLayout.LabelWidthForText(
+                LabelHelpers.MeasureWith(font)(shown), _statusBudget);
             TooltipFacility.ApplyPlain(
-                _statusLabel, string.Equals(shown, text, StringComparison.Ordinal) ? null : text);
+                _statusLabel,
+                string.Equals(shown, _statusFullText, StringComparison.Ordinal) ? null : _statusFullText);
             InlineSpinner.PlaceAfter(_spinner, _statusLabel, InlineSpinnerLayout.LabelGap);
         }
     }
