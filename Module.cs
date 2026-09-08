@@ -342,6 +342,16 @@ namespace TaimisToolbench
         // state instead of retrying on the next tick.
         private bool _backgroundRefreshSpinnerApplied;
 
+        // A wiki launch outcome waiting to be put on screen, as the
+        // WikiLaunchOutcome value plus one so that 0 can mean "nothing
+        // pending". Written from WikiLinkLauncher's launch task, which runs
+        // on a ThreadPool thread, and drained in Update because
+        // ScreenNotification builds a Blish control and controls belong to
+        // the frame thread - the same reason SaveStatusThreadSafe defers.
+        // Static so the handler the launcher holds does not root this Module
+        // instance past Unload.
+        private static int _pendingWikiNotice;
+
         [ImportingConstructor]
         public Module([Import("ModuleParameters")] ModuleParameters moduleParameters)
             : base(moduleParameters)
@@ -1318,6 +1328,12 @@ namespace TaimisToolbench
         /// </summary>
         private void WireEvents()
         {
+            // Right-clicking an icon opens a wiki page in the player's
+            // browser, and Windows usually refuses to let that browser come
+            // forward over the game (docs/ARCHITECTURE.md, S2.10). This is
+            // what tells the player it happened at all.
+            WikiLinkLauncher.OutcomeReported = QueueWikiLaunchNotice;
+
             // Refresh log content when switching to the Log tab
             _mainWindow.TabChanged += (s, e) =>
             {
@@ -1741,6 +1757,8 @@ namespace TaimisToolbench
                 }
             }
 
+            DrainWikiLaunchNotice();
+
             PrimeSnapshotIcons();
 
             // The Log tab's own poll, run
@@ -1962,6 +1980,12 @@ namespace TaimisToolbench
             UiFonts.ResetGlyphs();
 
             Gw2ApiManager.SubtokenUpdated -= OnSubtokenUpdated;
+
+            // WikiLinkLauncher is static and outlives this module instance,
+            // so a left-behind handler would keep notifying after unload -
+            // and Update is no longer running to drain what it queues.
+            WikiLinkLauncher.OutcomeReported = null;
+            Interlocked.Exchange(ref _pendingWikiNotice, 0);
 
             // The SettingEntry objects outlive this module instance
             // (DefineSetting returns the existing entry on re-enable), so a
@@ -2330,6 +2354,45 @@ namespace TaimisToolbench
         {
             PersistStatus(status);
             _statusDirty = true;
+        }
+
+        private static void QueueWikiLaunchNotice(WikiLaunchOutcome outcome)
+        {
+            Interlocked.Exchange(ref _pendingWikiNotice, (int)outcome + 1);
+        }
+
+        /// <summary>
+        /// Puts the last wiki launch outcome on screen, from Update so the
+        /// notification control is built on the frame thread. Only the
+        /// outcomes the player cannot see for themselves are shown: when the
+        /// browser did come forward it is already in front of them.
+        /// </summary>
+        private void DrainWikiLaunchNotice()
+        {
+            int pending = Interlocked.Exchange(ref _pendingWikiNotice, 0);
+            if (pending == 0)
+            {
+                return;
+            }
+
+            switch ((WikiLaunchOutcome)(pending - 1))
+            {
+                case WikiLaunchOutcome.ForegroundRefused:
+                    ScreenNotification.ShowNotification(
+                        "Wiki page opened in your browser, behind the game.",
+                        ScreenNotification.NotificationType.Info,
+                        null,
+                        3);
+                    break;
+
+                case WikiLaunchOutcome.Failed:
+                    ScreenNotification.ShowNotification(
+                        "Could not open the wiki page.",
+                        ScreenNotification.NotificationType.Warning,
+                        null,
+                        3);
+                    break;
+            }
         }
 
         /// <summary>
