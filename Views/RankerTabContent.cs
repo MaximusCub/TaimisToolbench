@@ -2448,14 +2448,14 @@ namespace TaimisToolbench.Views
                 return "Not yet calculated - press Analyze.";
             }
 
-            if (metrics.Kind != RankerReadinessKind.Measured)
-            {
-                return "This item has no measurable barrier left that the Ranker can score. Read the lines under the row for what is actually outstanding.";
-            }
-
+            // A row with no scored gate is one of two different statements,
+            // so the reason list is what the reader gets rather than one
+            // sentence that would have to cover both.
             var lines = new List<string>
             {
-                "Ready blends the barriers this item actually has, each measured only against itself - nothing is converted into coin.",
+                metrics.Kind == RankerReadinessKind.Measured
+                    ? "Ready blends the barriers this item actually has, each measured only against itself - nothing is converted into coin."
+                    : "The Ranker scored none of this item's barriers. Each line below says why, and the lines under the row say what is outstanding.",
                 "",
             };
             foreach (var gate in metrics.Gates)
@@ -2463,8 +2463,12 @@ namespace TaimisToolbench.Views
                 lines.Add(GateBlendLine(gate));
             }
 
-            lines.Add("");
-            lines.Add("Weights are renormalised over the barriers that apply, so an item with only materials scores exactly its materials figure.");
+            if (metrics.Kind == RankerReadinessKind.Measured)
+            {
+                lines.Add("");
+                lines.Add("Weights are renormalised over the barriers that apply, so an item with only materials scores exactly its materials figure.");
+            }
+
             return string.Join("\n", lines);
         }
 

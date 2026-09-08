@@ -259,7 +259,11 @@ namespace TaimisToolbench.Services
                 case RankerGateStatus.NoBarrier:
                     return "this item has none, so it is not part of the blend";
                 default:
-                    return "your account data does not say, so it is not part of the blend";
+                    // Cause-neutral on purpose. Unmeasured is normally an
+                    // account gap, but the same status also covers a row
+                    // whose solves never arrived, and one clause has to be
+                    // true of both.
+                    return "nothing measured it, so it is not part of the blend";
             }
         }
 
