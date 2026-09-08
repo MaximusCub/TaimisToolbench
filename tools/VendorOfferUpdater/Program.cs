@@ -435,6 +435,13 @@ namespace VendorOfferUpdater
                     Console.WriteLine();
                 }
 
+                // Step 3.6: Load the GW2 API name lists that decide which
+                // kind of gate each row's "Has requirement" text names.
+                var requirementNames =
+                    await VendorRequirementNameLoader.LoadAsync(httpClient, ct);
+                ReportAmbiguousRequirements(wikiResults, requirementNames);
+                Console.WriteLine();
+
                 // Step 4: Convert to VendorOffers
                 Console.WriteLine("Converting to vendor offers...");
                 var offers = new List<VendorOffer>();
@@ -464,7 +471,7 @@ namespace VendorOfferUpdater
                     }
 
                     var offer = ConvertToOffer(
-                        result, apiHelper, itemIdMap, unlockRecipeIdByItemId);
+                        result, apiHelper, itemIdMap, unlockRecipeIdByItemId, requirementNames);
                     if (offer != null)
                     {
                         offers.Add(offer);
@@ -479,12 +486,7 @@ namespace VendorOfferUpdater
                     $"  Converted: {offers.Count} offers " +
                     $"(skipped: {skippedNoId} no game ID, {skippedUnresolved} unresolved cost)");
 
-                // Deduplicate by OfferId
-                var uniqueOffers = offers
-                    .GroupBy(o => o.OfferId)
-                    .Select(g => g.First())
-                    .OrderBy(o => o.OfferId, StringComparer.Ordinal)
-                    .ToList();
+                var uniqueOffers = DeduplicateByOfferId(offers);
 
                 Console.WriteLine($"  Unique offers: {uniqueOffers.Count}");
                 Console.WriteLine();
@@ -914,6 +916,14 @@ namespace VendorOfferUpdater
                 // corrects a sale's coin price matches on neither and the
                 // row is lost. ComputeSameSaleKey leaves the price out.
                 var replacedBySaleKey = new Dictionary<string, VendorOffer>(StringComparer.Ordinal);
+
+                // A sale key a SECOND row shares names no single row, so it
+                // is dropped rather than resolved to one of them. Several
+                // merchants sell one item twice - full price, and cheaper to
+                // an account that already owns the thing - and the two rows
+                // share a sale key because it deliberately leaves the price
+                // out. See AmbiguousSaleKeys.
+                var ambiguousSaleKeys = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var o in baseline)
                 {
                     if (!CarriesUnhashedFields(o))
@@ -932,7 +942,23 @@ namespace VendorOfferUpdater
                     }
 
                     replacedByContentKey[ComputeContentKey(o)] = o;
-                    replacedBySaleKey[ComputeSameSaleKey(o)] = o;
+
+                    string saleKey = ComputeSameSaleKey(o);
+                    if (!replacedBySaleKey.ContainsKey(saleKey))
+                    {
+                        replacedBySaleKey[saleKey] = o;
+                    }
+                    else
+                    {
+                        ambiguousSaleKeys.Add(saleKey);
+                    }
+                }
+
+                ambiguousSaleKeys.UnionWith(
+                    AmbiguousSaleKeys(fresh, merchantsReplacedSet));
+                foreach (string saleKey in ambiguousSaleKeys)
+                {
+                    replacedBySaleKey.Remove(saleKey);
                 }
 
                 if (replacedByOfferId.Count > 0 || replacedByContentKey.Count > 0
@@ -1118,9 +1144,11 @@ namespace VendorOfferUpdater
                             continue;
                         }
 
-                        foreach (var freshRow in freshRows!)
+                        // Only when the sale key names ONE fresh row - see
+                        // AmbiguousSaleKeys for why several means none.
+                        if (freshRows!.Count == 1)
                         {
-                            CarryForwardUnhashedFields(freshRow, offer);
+                            CarryForwardUnhashedFields(freshRows[0], offer);
                         }
                     }
 
@@ -1142,6 +1170,80 @@ namespace VendorOfferUpdater
         }
 
         /// <summary>
+        /// Collapses rows that hash to the same OfferId, folding each
+        /// discarded sibling's unhashed fields into the survivor.
+        /// <para>
+        /// Two wiki rows for the identical sale can differ in nothing but
+        /// their "Has requirement" text, because WikiSmwClient's own dedupe
+        /// key folds that text in while VendorOfferHasher does not hash it.
+        /// Keeping the first row outright then discarded the other's
+        /// requirement, and the loss changed no OfferId, so no diff showed
+        /// it: measured, 8 offers reached ref/vendor_offers.json ungated
+        /// that way. Same reasoning as
+        /// <see cref="CarryForwardUnhashedFields"/>, applied one step
+        /// earlier.
+        /// </para>
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static List<VendorOffer> DeduplicateByOfferId(List<VendorOffer> offers)
+        {
+            var unique = new List<VendorOffer>();
+            var byId = new Dictionary<string, VendorOffer>(StringComparer.Ordinal);
+
+            foreach (var offer in offers)
+            {
+                string id = offer.OfferId ?? string.Empty;
+                if (byId.TryGetValue(id, out var survivor))
+                {
+                    CarryForwardUnhashedFields(survivor, offer);
+                    continue;
+                }
+
+                byId[id] = offer;
+                unique.Add(offer);
+            }
+
+            unique.Sort((a, b) => StringComparer.Ordinal.Compare(a.OfferId, b.OfferId));
+            return unique;
+        }
+
+        /// <summary>
+        /// Sale keys held by more than one of <paramref name="offers"/>,
+        /// among the merchants in <paramref name="merchants"/>.
+        /// <para>
+        /// ComputeSameSaleKey leaves the price out, so a merchant selling one
+        /// item at full price and again at a discount to an account that
+        /// already owns it has two rows under one key. Copying a dropped
+        /// row's unhashed fields to both puts the discount's requirement on
+        /// the full-price row, which has none: measured, 8 offers claimed a
+        /// Commander's Compendium gate that way.
+        /// </para>
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static HashSet<string> AmbiguousSaleKeys(
+            IEnumerable<VendorOffer> offers, ISet<string> merchants)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var ambiguous = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var offer in offers)
+            {
+                if (!merchants.Contains(offer.MerchantName ?? string.Empty))
+                {
+                    continue;
+                }
+
+                string saleKey = ComputeSameSaleKey(offer);
+                if (!seen.Add(saleKey))
+                {
+                    ambiguous.Add(saleKey);
+                }
+            }
+
+            return ambiguous;
+        }
+
+        /// <summary>
         /// True when <paramref name="offer"/> carries at least one field that
         /// <see cref="VendorOfferHasher.ComputeOfferId"/> does not hash, so
         /// losing it changes no OfferId and shows in no diff.
@@ -1152,7 +1254,8 @@ namespace VendorOfferUpdater
             return offer != null
                 && (offer.SeasonalFestival != null
                     || offer.UnlockRecipeItemId != null
-                    || offer.UnlockRecipeId != null);
+                    || offer.UnlockRecipeId != null
+                    || offer.Requirement != null);
         }
 
         /// <summary>
@@ -1190,6 +1293,11 @@ namespace VendorOfferUpdater
             {
                 target.UnlockRecipeItemId = source.UnlockRecipeItemId;
                 target.UnlockRecipeId = source.UnlockRecipeId;
+            }
+
+            if (target.Requirement == null)
+            {
+                target.Requirement = source.Requirement;
             }
         }
 
@@ -1334,7 +1442,8 @@ namespace VendorOfferUpdater
             WikiVendorResult result,
             Gw2ApiHelper apiHelper,
             Dictionary<string, int> itemIdMap,
-            IReadOnlyDictionary<int, int>? unlockRecipeIdByItemId = null)
+            IReadOnlyDictionary<int, int>? unlockRecipeIdByItemId = null,
+            VendorRequirementNames? requirementNames = null)
         {
             int outputCount = result.OutputQuantity ?? 1;
             if (outputCount <= 0)
@@ -1504,7 +1613,38 @@ namespace VendorOfferUpdater
                 SeasonalFestival = seasonalFestival,
                 UnlockRecipeItemId = unlockRecipeItemId,
                 UnlockRecipeId = unlockRecipeId,
+                Requirement = VendorRequirementClassifier.Classify(
+                    result.Requirement, requirementNames),
             };
+        }
+
+        /// <summary>
+        /// Prints every distinct requirement string that names more than
+        /// one kind of gate, which <see cref="VendorRequirementClassifier"/>
+        /// leaves unclassified. Measured over the full scrape there is
+        /// exactly one ("Follows Advice", both an achievement and a mastery
+        /// level); a second one appearing is a signal that the exact-name
+        /// rule has stopped being enough, and it would otherwise be silent.
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static void ReportAmbiguousRequirements(
+            IEnumerable<WikiVendorResult> wikiResults, VendorRequirementNames names)
+        {
+            var reported = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var result in wikiResults)
+            {
+                string? requirement = result.Requirement;
+                if (string.IsNullOrWhiteSpace(requirement) ||
+                    !reported.Add(requirement!) ||
+                    !VendorRequirementClassifier.IsAmbiguous(requirement, names))
+                {
+                    continue;
+                }
+
+                Console.WriteLine(
+                    $"  WARNING: requirement \"{requirement}\" names more than one kind of " +
+                    "gate - left unclassified, shown to the player as text only.");
+            }
         }
 
         /// <summary>

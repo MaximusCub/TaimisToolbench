@@ -48,6 +48,7 @@ namespace TaimisToolbench.Tests.Helpers
         private IReadOnlyDictionary<int, DailyCooldownItem> _dailyCooldownItems;
         private IReadOnlyDictionary<int, int> _recipeSheetItemIdByRecipeId;
         private Func<IReadOnlyList<string>> _activeFestivalNames;
+        private IAccountProgressionClient _accountProgressionClient;
 
         public static PipelineBuilder Create()
         {
@@ -144,6 +145,13 @@ namespace TaimisToolbench.Tests.Helpers
             return this;
         }
 
+        public PipelineBuilder WithAccountProgressionClient(
+            IAccountProgressionClient accountProgressionClient)
+        {
+            _accountProgressionClient = accountProgressionClient;
+            return this;
+        }
+
         /// <summary>
         /// The single construction site. Unset optionals are passed as the
         /// nulls the constructor defaults them to, so a builder that had no
@@ -165,7 +173,8 @@ namespace TaimisToolbench.Tests.Helpers
                 _moduleLog,
                 _dailyCooldownItems,
                 _recipeSheetItemIdByRecipeId,
-                _activeFestivalNames);
+                _activeFestivalNames,
+                _accountProgressionClient);
         }
 
         /// <summary>

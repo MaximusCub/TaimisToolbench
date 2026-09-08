@@ -29,6 +29,7 @@ namespace TaimisToolbench.Services
         private readonly Func<int, IReadOnlyList<VendorOffer>> _offersForRecipeSheetItem;
         private readonly InventoryReducer _reducer;
         private readonly IAccountRecipeClient _accountRecipeClient;
+        private readonly IAccountProgressionClient _accountProgressionClient;
         private readonly CurrencyMetadataService _currencyMetadataService;
         private readonly IReadOnlyDictionary<int, AcquisitionHint> _acquisitionHints;
         private readonly IReadOnlyDictionary<int, DailyCooldownItem> _dailyCooldownItems;
@@ -71,7 +72,8 @@ namespace TaimisToolbench.Services
             ModuleLog moduleLog = null,
             IReadOnlyDictionary<int, DailyCooldownItem> dailyCooldownItems = null,
             IReadOnlyDictionary<int, int> recipeSheetItemIdByRecipeId = null,
-            Func<IReadOnlyList<string>> activeFestivalNames = null)
+            Func<IReadOnlyList<string>> activeFestivalNames = null,
+            IAccountProgressionClient accountProgressionClient = null)
         {
             _recipeService = recipeService;
             _tradingPostService = tradingPostService;
@@ -89,6 +91,7 @@ namespace TaimisToolbench.Services
             _dailyCooldownItems = dailyCooldownItems;
             _recipeSheetItemIdByRecipeId = recipeSheetItemIdByRecipeId ?? new Dictionary<int, int>();
             _activeFestivalNames = activeFestivalNames ?? (() => Array.Empty<string>());
+            _accountProgressionClient = accountProgressionClient;
         }
 
         public async Task<CraftingPlanResult> GenerateStructuredAsync(
@@ -390,6 +393,13 @@ namespace TaimisToolbench.Services
             ISet<int> learnedRecipeIds = await FetchLearnedRecipeIdsAsync(
                 progress, sw, timingLog, phaseTracker, suppliedLearnedRecipeIds, ct);
 
+            sw.Restart();
+            AccountProgression accountProgression = PlanBuysFromAGatedVendor(plan)
+                ? await GetAccountProgressionAsync(ct)
+                : null;
+            sw.Stop();
+            timingLog.Add($"Fetch account progression: {sw.ElapsedMilliseconds}ms");
+
             // Build structured result
             phaseTracker.Start(PlanPhase.BuildingDisplay, "Building display", null);
             progress?.Report(new PlanStatus { Message = "Building final result..." });
@@ -400,7 +410,8 @@ namespace TaimisToolbench.Services
             // decision or total (see PlanResultBuilder.Build).
             var result = resultBuilder.Build(
                 plan, treeUsedForSolve, metadata, usedMaterials, learnedRecipeIds,
-                effectiveCharacterDisciplines, _recipeSheetItemIdByRecipeId);
+                effectiveCharacterDisciplines, _recipeSheetItemIdByRecipeId,
+                accountProgression);
             result.CurrencyMetadata = currencyMetadata;
             result.AcquisitionHints = _acquisitionHints;
             result.DailyCooldownItems = _dailyCooldownItems;
@@ -457,6 +468,7 @@ namespace TaimisToolbench.Services
                 VendorCostLineValues = solveResult.VendorCostLineValues,
                 Metadata = metadata,
                 LearnedRecipeIds = learnedRecipeIds,
+                AccountProgression = accountProgression,
                 UsedMaterials = usedMaterials,
                 PriceBasis = priceBasis,
                 CurrencyValuation = valuation,
@@ -718,7 +730,8 @@ namespace TaimisToolbench.Services
             var result = resultBuilder.Build(
                 solveResult.Plan, solveTree, context.Metadata,
                 usedMaterials, context.LearnedRecipeIds,
-                context.CharacterDisciplines, _recipeSheetItemIdByRecipeId);
+                context.CharacterDisciplines, _recipeSheetItemIdByRecipeId,
+                context.AccountProgression);
             result.CurrencyMetadata = context.CurrencyMetadata;
             result.AcquisitionHints = context.AcquisitionHints;
             result.DailyCooldownItems = context.DailyCooldownItems;
@@ -1083,6 +1096,64 @@ namespace TaimisToolbench.Services
             try
             {
                 return await _accountRecipeClient.GetLearnedRecipeIdsAsync(ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Whether any step of <paramref name="plan"/> buys from a vendor
+        /// that names a requirement. False for almost every plan - 12% of
+        /// shipped offers carry one - and the account fetch below is
+        /// skipped entirely when it is, so a plan that runs into no gated
+        /// vendor pays nothing for this feature.
+        /// </summary>
+        private static bool PlanBuysFromAGatedVendor(CraftingPlan plan)
+        {
+            if (plan?.Steps == null)
+            {
+                return false;
+            }
+
+            foreach (var step in plan.Steps)
+            {
+                if (step != null &&
+                    step.Source == AcquisitionSource.BuyFromVendor &&
+                    step.VendorRequirement != null &&
+                    !string.IsNullOrEmpty(step.VendorRequirement.Text))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Reads what the account has unlocked, for the vendor-requirement
+        /// notices. Returns null when no client is wired up and on any
+        /// non-cancellation failure, which reads downstream as "not
+        /// checked" rather than "not met". Deliberately uncached, like the
+        /// learned-recipe fetch above: a cache of exactly this shape was
+        /// deleted once for telling a player they lacked something they had
+        /// just earned.
+        /// </summary>
+        private async Task<AccountProgression> GetAccountProgressionAsync(CancellationToken ct)
+        {
+            if (_accountProgressionClient == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                return await _accountProgressionClient.GetProgressionAsync(ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

@@ -127,9 +127,13 @@ namespace TaimisToolbench.Services
             // notices are pre-filtered so a plan whose only "notice" is a
             // TP-liquid item's vendor cap gets no notices-only section.
             var vendorCapNotices = VendorCapNotices.Filter(result);
-            if (craftSteps.Count > 0 || vendorCapNotices.Count > 0)
+            var vendorRequirementNotices = result.VendorRequirementNotices
+                ?? (IReadOnlyList<VendorRequirementNotice>)Array.Empty<VendorRequirementNotice>();
+            if (craftSteps.Count > 0 || vendorCapNotices.Count > 0 ||
+                vendorRequirementNotices.Count > 0)
             {
-                vm.Sections.Add(BuildCraftingStepsSection(craftSteps, vendorCapNotices, result));
+                vm.Sections.Add(BuildCraftingStepsSection(
+                    craftSteps, vendorCapNotices, vendorRequirementNotices, result));
             }
 
             // 7. Notes section - only if it has at least one note. Last:
@@ -1151,6 +1155,7 @@ namespace TaimisToolbench.Services
 
         private PlanSectionViewModel BuildCraftingStepsSection(
             List<PlanStep> steps, IReadOnlyList<TimegatedItem> vendorCapNotices,
+            IReadOnlyList<VendorRequirementNotice> vendorRequirementNotices,
             CraftingPlanResult result)
         {
             var section = new PlanSectionViewModel
@@ -1230,6 +1235,25 @@ namespace TaimisToolbench.Services
                 {
                     RowType = PlanRowType.TimegatedNotice,
                     Label = $"{itemName} is timegated - vendor {capLabel} limit: {timegated.CapValue} (plan needs {timegated.NeededCount})",
+                });
+            }
+
+            // Vendor-requirement notices: what a vendor the plan buys from
+            // wants of the account. A requirement the account MEETS reaches
+            // no row at all (PlanResultBuilder drops it), so only two
+            // wordings exist here, and neither says a requirement is unmet
+            // when it was merely not checked.
+            foreach (var requirement in vendorRequirementNotices)
+            {
+                string itemName = ResolveName(requirement.ItemId, result.ItemMetadata);
+                string tail = requirement.Status == VendorRequirementStatus.NotMet
+                    ? "which your account does not have"
+                    : "which was not checked";
+
+                section.Rows.Add(new PlanRowViewModel
+                {
+                    RowType = PlanRowType.VendorRequirementNotice,
+                    Label = $"{itemName} - this vendor requires {requirement.RequirementText}, {tail}",
                 });
             }
 

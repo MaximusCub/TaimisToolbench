@@ -612,7 +612,8 @@ namespace TaimisToolbench
                 acquisitionHints: acquisitionHints,
                 dailyCooldownItems: dailyCooldownItems,
                 recipeSheetItemIdByRecipeId: recipeSheetItemIdByRecipeId,
-                activeFestivalNames: ReadActiveFestivalNames);
+                activeFestivalNames: ReadActiveFestivalNames,
+                accountProgressionClient: new Gw2AccountProgressionClient(Gw2ApiManager));
 
             return itemMetadataService;
         }

@@ -68,5 +68,12 @@ namespace TaimisToolbench.Models
         public int? VendorUnlockRecipeItemId { get; set; }
 
         public int? VendorUnlockRecipeId { get; set; }
+
+        // The requirement the winning vendor offer names. Null for every
+        // non-vendor step, for an ungated vendor offer, and for a vendor
+        // step whose occurrences resolved to more than one distinct offer -
+        // the same three cases that leave VendorOfferOutputCount at 0. See
+        // VendorOffer.Requirement.
+        public VendorRequirement VendorRequirement { get; set; }
     }
 }
