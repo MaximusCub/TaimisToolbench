@@ -53,7 +53,8 @@ namespace TaimisToolbench.Tests.Services
         [MemberData(nameof(TradedUpItems))]
         public async Task WithNoSnapshot_BothSurfacesStateTheSameRequirementAndCost(int itemId, int currencyId)
         {
-            var vm = new PlanViewModelBuilder().Build(await PlanAsync(null));
+            var result = await PlanAsync(null);
+            var vm = new PlanViewModelBuilder().Build(result);
 
             var tableRow = Assert.Single(NonCoinRows(vm), r => r.ItemId == itemId);
             Assert.True(tableRow.IsBarterItemCost);
@@ -66,8 +67,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(Required * PerUnit, amount.Amount);
             Assert.Equal(PerUnit, Assert.Single(shoppingRow.UnitCurrencyCosts).Amount);
 
-            var cost = Assert.Single(
-                (await PlanAsync(null)).Plan.BarterItemCosts, b => b.ItemId == itemId);
+            var cost = Assert.Single(result.Plan.BarterItemCosts, b => b.ItemId == itemId);
             Assert.Equal(currencyId, cost.TradeUpCurrencyId);
             Assert.Equal(PerUnit, cost.TradeUpCurrencyPerUnit);
         }
