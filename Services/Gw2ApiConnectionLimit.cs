@@ -24,16 +24,17 @@ namespace TaimisToolbench.Services
     internal static class Gw2ApiConnectionLimit
     {
         /// <summary>
-        /// The module's own widest moment, plus room for the host
-        /// application. 18 is a snapshot's character phase:
-        /// CharacterSnapshotCollector.DefaultMaxCharactersInFlight, 6,
-        /// times the three requests FetchCharacterAsync starts per
-        /// character. 4 is RecipeService.DefaultMaxConcurrency, plan
-        /// generation's widest phase, which can overlap the snapshot
-        /// because the snapshot refreshes on a timer. 1 is the recipe
-        /// corpus sweep, which sends one batch at a time. The last 2 is
-        /// what Blish HUD's own Gw2Sharp traffic to this host had before
-        /// the module raised anything.
+        /// Kept at 25 because it was measured there, not because a sum
+        /// still lands on it. In one sweep on a 6-character account the
+        /// same snapshot took 8180ms at 25 sockets and 15878ms at 8, and
+        /// at 2 it took 26680ms and failed to read 3 of the 6 characters
+        /// inside the per-call timeout (PR #319).
+        /// <para>
+        /// The module's widest moment is now well under the number: the
+        /// character phase sends CharacterPagePlan.MaxPagesInFlight, 6,
+        /// where it used to send 18. Headroom is the point, because plan
+        /// generation and the host application share this host.
+        /// </para>
         /// <para>
         /// A ceiling, not a fan-out: nothing here changes how many
         /// requests those bounds start, only how many of them get a socket

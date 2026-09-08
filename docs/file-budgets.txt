@@ -117,7 +117,9 @@ Services/AccountItemIndex.cs                                                    
 Services/AchievementBitDedupPrePass.cs                                                  197
 Services/AcquisitionHintService.cs                                                      75
 Services/BoundedConcurrency.cs                                                          51
-Services/CharacterSnapshotCollector.cs                                                  203
+Services/CharacterPagePlan.cs                                                           68
+Services/CharacterRecordProjection.cs                                                   221
+Services/CharacterSnapshotCollector.cs                                                  195
 Services/ClickSoundVolume.cs                                                            90
 Services/CoinSegmentMath.cs                                                             303
 Services/ColumnBoardLayout.cs                                                           130
@@ -148,7 +150,7 @@ Services/GlyphButtonMetrics.cs                                                  
 Services/GridLayout.cs                                                                  93
 Services/Gw2AccountRecipeClient.cs                                                      30
 Services/Gw2AccountSnapshotService.cs                                                   909
-Services/Gw2ApiConnectionLimit.cs                                                       70
+Services/Gw2ApiConnectionLimit.cs                                                       71
 Services/Gw2ItemApiClient.cs                                                            271
 Services/Gw2PriceApiClient.cs                                                           76
 Services/Gw2RecipeApiClient.cs                                                          217
@@ -627,7 +629,7 @@ tests/TaimisToolbench.Tests/Services/ShoppingColumnMathTests.cs                 
 tests/TaimisToolbench.Tests/Services/ShoppingListEachTimesAmountTests.cs                131
 tests/TaimisToolbench.Tests/Services/ShoppingRowTooltipFormatterTests.cs                246
 tests/TaimisToolbench.Tests/Services/ShoppingSourceBadgeTests.cs                        233
-tests/TaimisToolbench.Tests/Services/SnapshotCallRetryTests.cs                          318
+tests/TaimisToolbench.Tests/Services/SnapshotCallRetryTests.cs                          320
 tests/TaimisToolbench.Tests/Services/SnapshotCommitGateTests.cs                         239
 tests/TaimisToolbench.Tests/Services/SnapshotEpochGuardTests.cs                         33
 tests/TaimisToolbench.Tests/Services/SnapshotFailureClassifierTests.cs                  303
@@ -720,6 +722,12 @@ tests/VendorOfferUpdater.Tests/VendorOfferManifestTests.cs                      
 tests/VendorOfferUpdater.Tests/VendorUnlockRequirementParserTests.cs                    79
 tests/VendorOfferUpdater.Tests/WikiApiRefusalTests.cs                                   344
 tests/VendorOfferUpdater.Tests/WikiSmwClientTests.cs                                    707
+tools/TaimisToolbench.Harness/ByteCountingHandler.cs                                    107
+tools/TaimisToolbench.Harness/CountingGw2HttpClient.cs                                  152
+tools/TaimisToolbench.Harness/FetchProfilePlan.cs                                       286
+tools/TaimisToolbench.Harness/FetchProfiler.cs                                          639
+tools/TaimisToolbench.Harness/SnapshotComparison.cs                                     200
+tools/TaimisToolbench.Harness/SnapshotFetchShapes.cs                                    516
 tools/TaimisToolbench.Harness/Program.cs                                                861
 tools/TaimisToolbench.Harness/TerminalClassifier.cs                                    650
 tools/TaimisToolbench.RecipeSeeder/Program.cs                                           787

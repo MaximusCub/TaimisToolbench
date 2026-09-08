@@ -98,14 +98,6 @@ namespace TaimisToolbench.Services
     /// </summary>
     internal static class CharacterSnapshotCollector
     {
-        // Each character costs three requests, so this is 18 in flight.
-        // The GW2 API allows roughly 300 requests per minute plus a burst
-        // bucket, and a 14-character account issues 42 requests in total,
-        // so a whole fetch stays inside one bucket. Raising the bound past
-        // this buys less and less: 14 characters already fall into 3
-        // rounds.
-        public const int DefaultMaxCharactersInFlight = 6;
-
         public static async Task<CharacterSnapshotHarvest> CollectAsync(
             IEnumerable<string> characterNames,
             int maxCharactersInFlight,

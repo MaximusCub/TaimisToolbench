@@ -161,9 +161,9 @@ namespace TaimisToolbench.Services
                         ItemId = item.Id,
                         Count = item.Count,
                         Source = "Bank",
-                        Upgrades = SocketedIds(item.Upgrades),
-                        Infusions = SocketedIds(item.Infusions),
-                        SkinId = SkinIdOf(item.Skin),
+                        Upgrades = CharacterRecordProjection.SocketedIds(item.Upgrades),
+                        Infusions = CharacterRecordProjection.SocketedIds(item.Infusions),
+                        SkinId = CharacterRecordProjection.SkinIdOf(item.Skin),
                     });
                 }
             }
@@ -192,9 +192,9 @@ namespace TaimisToolbench.Services
                         ItemId = item.Id,
                         Count = item.Count,
                         Source = "SharedInventory",
-                        Upgrades = SocketedIds(item.Upgrades),
-                        Infusions = SocketedIds(item.Infusions),
-                        SkinId = SkinIdOf(item.Skin),
+                        Upgrades = CharacterRecordProjection.SocketedIds(item.Upgrades),
+                        Infusions = CharacterRecordProjection.SocketedIds(item.Infusions),
+                        SkinId = CharacterRecordProjection.SkinIdOf(item.Skin),
                     });
                 }
             }
@@ -274,8 +274,9 @@ namespace TaimisToolbench.Services
             }
 
             // Character inventories, equipment and crafting disciplines.
-            // CharacterSnapshotCollector owns the fan-out and the rule that
-            // one failed character discards every discipline.
+            // CharacterSnapshotCollector owns the rule that one failed
+            // character discards every discipline. The fan-out moved to
+            // CharacterPagePlan when the fetch stopped being per character.
             CharacterSnapshotHarvest harvest = null;
             try
             {
@@ -283,10 +284,15 @@ namespace TaimisToolbench.Services
                 var names = characterNames == null ? new List<string>() : characterNames.ToList();
                 onCharacterCountKnown?.Invoke(names.Count);
 
+                var parts = await FetchCharacterPagesAsync(names.Count, ct);
+
+                // The pages are already in hand, so the bound here governs
+                // no requests. It stays above the roster so the fold runs
+                // over every character.
                 harvest = await CharacterSnapshotCollector.CollectAsync(
                     names,
-                    CharacterSnapshotCollector.DefaultMaxCharactersInFlight,
-                    name => FetchCharacterAsync(name, ct),
+                    Math.Max(1, names.Count),
+                    name => Task.FromResult(PartFor(name, parts)),
                     ct);
 
                 snapshot.Items.AddRange(harvest.Items);
@@ -404,246 +410,80 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// One character's inventory, equipment and crafting disciplines,
-        /// fetched together. Never throws except on cancellation: each of
-        /// the three reports its own failure in its result.
+        /// This character's rows, or null when no page returned it. The fold
+        /// reads null as holdings the fetch could not get, which is what
+        /// stops an under-counted snapshot being committed.
         /// </summary>
-        private async Task<CharacterSnapshotPart> FetchCharacterAsync(string characterName, CancellationToken ct)
+        private static CharacterSnapshotPart PartFor(
+            string characterName, Dictionary<string, CharacterSnapshotPart> parts)
         {
-            var inventoryTask = FetchCharacterInventoryItemsAsync(characterName, ct);
-            var equipmentTask = FetchCharacterEquipmentItemsAsync(characterName, ct);
-            var craftingTask = FetchCharacterCraftingAsync(characterName, ct);
-            await Task.WhenAll(inventoryTask, equipmentTask, craftingTask);
-
-            var part = new CharacterSnapshotPart();
-            var inventory = inventoryTask.Result;
-            part.Items.AddRange(inventory.Items);
-
-            var equipment = equipmentTask.Result;
-            part.Items.AddRange(equipment.Items);
-            part.ArmoryItemIds.AddRange(equipment.ArmoryItemIds);
-            part.ItemsDegraded = inventory.Degraded || equipment.Degraded;
-
-            var crafting = craftingTask.Result;
-            part.DisciplinesDegraded = crafting.Degraded;
-            if (!crafting.Degraded)
-            {
-                part.Disciplines.AddRange(crafting.Disciplines);
-            }
-
+            CharacterSnapshotPart part;
+            parts.TryGetValue(characterName, out part);
             return part;
         }
 
-        // Uses the narrow per-character inventory endpoint, not the full
-        // character record - the full record pulls in payloads never used
-        // here and widens this feature's failure blast radius. Never
-        // throws, so the caller can Task.WhenAll it with
-        // FetchCharacterCraftingAsync without either short-circuiting the
-        // other. A failure is reported through Degraded, the way the
-        // crafting fetch reports its own: the caller has to know these bags
-        // were unreadable, not empty.
-        private async Task<(bool Degraded, List<SnapshotItemEntry> Items)>
-            FetchCharacterInventoryItemsAsync(string characterName, CancellationToken ct)
+        /// <summary>
+        /// Every character the roster names, as whole records fetched a page
+        /// at a time. A page that fails leaves its characters out of the
+        /// result, which <see cref="BuildCharacterPart"/> reports as unread.
+        /// </summary>
+        /// <remarks>
+        /// Retry is per page now, so one refused request re-asks for up to
+        /// <see cref="CharacterPagePlan.PageSize"/> characters instead of
+        /// one endpoint. That is the cheap side of the trade: without the
+        /// retry the whole snapshot is refused, because a character nobody
+        /// read makes the harvest incomplete and an incomplete harvest is
+        /// never committed.
+        /// </remarks>
+        private async Task<Dictionary<string, CharacterSnapshotPart>> FetchCharacterPagesAsync(
+            int characterCount, CancellationToken ct)
         {
-            var items = new List<SnapshotItemEntry>();
-            try
-            {
-                var inventory = await RetriedCallAsync(c => _apiManager.Gw2ApiClient.V2.Characters[characterName].Inventory.GetAsync(c), ct);
-                if (inventory?.Bags != null)
+            var parts = new Dictionary<string, CharacterSnapshotPart>(StringComparer.Ordinal);
+            var sync = new object();
+
+            await BoundedConcurrency.ForEachAsync(
+                Enumerable.Range(0, CharacterPagePlan.PageCount(characterCount)),
+                CharacterPagePlan.MaxPagesInFlight,
+                async page =>
                 {
-                    foreach (var bag in inventory.Bags)
+                    try
                     {
-                        if (bag?.Inventory == null)
+                        var fetched = await RetriedCallAsync(
+                            c => _apiManager.Gw2ApiClient.V2.Characters.PageAsync(
+                                page, CharacterPagePlan.PageSize, c),
+                            ct);
+                        if (fetched == null)
                         {
-                            continue;
+                            return;
                         }
 
-                        foreach (var item in bag.Inventory)
+                        // Projected as each page lands, so only the pages
+                        // in flight are held rather than every record at
+                        // once. A record carries payload this module never
+                        // reads, and a large roster would hold all of it.
+                        foreach (var record in fetched)
                         {
-                            if (item == null)
+                            if (record == null || string.IsNullOrEmpty(record.Name))
                             {
                                 continue;
                             }
 
-                            items.Add(new SnapshotItemEntry
+                            var part = CharacterRecordProjection.Build(record.Name, record);
+                            lock (sync)
                             {
-                                ItemId = item.Id,
-                                Count = item.Count,
-                                Source = AccountItemIndex.CharacterSourcePrefix + characterName,
-                                Upgrades = SocketedIds(item.Upgrades),
-                                Infusions = SocketedIds(item.Infusions),
-                                SkinId = SkinIdOf(item.Skin),
-                            });
-                        }
-                    }
-                }
-            }
-            catch (Exception ex) when (!(ex is OperationCanceledException))
-            {
-                Logger.Warn(ex, "Failed to fetch inventory for character {CharacterName}", characterName);
-                ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch inventory for character {characterName}: {ex.GetType().Name} - {ex.Message}");
-                return (true, items);
-            }
-
-            return (false, items);
-        }
-
-        /// <summary>
-        /// What this character is wearing, plus what its saved equipment
-        /// tabs hold, as one entry per physical item under the
-        /// "Equipped:&lt;name&gt;" source, which is not the source its bags
-        /// use. The second half of the result is the item ids this
-        /// character is wearing out of the account-wide Legendary Armory,
-        /// which are named but never counted (Models.SnapshotArmoryEquip).
-        /// <para>
-        /// /v2/characters/:id/equipment returns each physical item once and
-        /// names every tab it sits in, so an item shared by three loadouts
-        /// is one entry, not three (/v2/characters/:id/equipmenttabs is the
-        /// per-tab view that would repeat it). Which store a slot draws
-        /// from is Services.EquipmentLocationPolicy's decision. Never
-        /// throws, like the inventory fetch.
-        /// </para>
-        /// </summary>
-        private async Task<(bool Degraded, List<SnapshotItemEntry> Items, List<int> ArmoryItemIds)>
-            FetchCharacterEquipmentItemsAsync(string characterName, CancellationToken ct)
-        {
-            var items = new List<SnapshotItemEntry>();
-            var armoryItemIds = new List<int>();
-            try
-            {
-                var equipment = await RetriedCallAsync(c => _apiManager.Gw2ApiClient.V2.Characters[characterName].Equipment.GetAsync(c), ct);
-                if (equipment?.Equipment != null)
-                {
-                    foreach (var item in equipment.Equipment)
-                    {
-                        if (item == null)
-                        {
-                            continue;
-                        }
-
-                        string location = RawLocation(item);
-                        if (!EquipmentLocationPolicy.IsHeldByCharacter(location))
-                        {
-                            if (item.Id > 0
-                                && EquipmentLocationPolicy.IsEquippedFromLegendaryArmory(location))
-                            {
-                                armoryItemIds.Add(item.Id);
+                                parts[record.Name] = part;
                             }
-
-                            continue;
                         }
-
-                        items.Add(new SnapshotItemEntry
-                        {
-                            ItemId = item.Id,
-                            Count = 1,
-
-                            // Worn gear gets its own source encoding so the
-                            // snapshot can tell it apart from this same
-                            // character's bag contents.
-                            Source = AccountItemIndex.CharacterEquipmentSourcePrefix + characterName,
-                            Upgrades = SocketedIds(item.Upgrades),
-                            Infusions = SocketedIds(item.Infusions),
-                            SkinId = SkinIdOf(item.Skin),
-                        });
                     }
-                }
-            }
-            catch (Exception ex) when (!(ex is OperationCanceledException))
-            {
-                Logger.Warn(ex, "Failed to fetch equipment for character {CharacterName}", characterName);
-                ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch equipment for character {characterName}: {ex.GetType().Name} - {ex.Message}");
-                return (true, items, armoryItemIds);
-            }
-
-            return (false, items, armoryItemIds);
-        }
-
-        /// <summary>
-        /// The wire string in an equipment slot's "location" field, which is
-        /// what Services.EquipmentLocationPolicy reads. Taken raw the same
-        /// way RarityOf reads rarity, so a value Gw2Sharp's enum does not
-        /// recognise reaches the policy as itself rather than as the enum's
-        /// fallback member. "" when the slot carries no location at all.
-        /// </summary>
-        private static string RawLocation(CharacterEquipmentItem item)
-        {
-            var location = item.Location;
-            if (location == null)
-            {
-                return "";
-            }
-
-            string raw = location.RawValue;
-            return string.IsNullOrEmpty(raw) ? location.Value.ToString() : raw;
-        }
-
-        // The all-or-nothing rule means a single transient failure on one
-        // character would otherwise wipe CharacterDisciplines for the whole
-        // account, so the call is repeated in place. A response carrying no
-        // crafting payload is repeated too: that is not the same answer as
-        // a character with no disciplines. Never throws (except genuine
-        // cancellation) - the Degraded flag reports failure.
-        private async Task<(bool Degraded, List<SnapshotCharacterDiscipline> Disciplines)> FetchCharacterCraftingAsync(string characterName, CancellationToken ct)
-        {
-            var disciplines = new List<SnapshotCharacterDiscipline>();
-            try
-            {
-                var crafting = await RetriedCallAsync(
-                    c => _apiManager.Gw2ApiClient.V2.Characters[characterName].Crafting.GetAsync(c),
-                    ct,
-                    result => result?.Crafting != null);
-                if (crafting?.Crafting == null)
-                {
-                    return (true, disciplines);
-                }
-
-                foreach (var cd in crafting.Crafting)
-                {
-                    if (cd == null)
+                    catch (Exception ex) when (!(ex is OperationCanceledException))
                     {
-                        continue;
+                        Logger.Warn(ex, "Failed to fetch character page {Page}", page);
+                        ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch character page {page}: {ex.GetType().Name} - {ex.Message}");
                     }
+                },
+                ct);
 
-                    disciplines.Add(new SnapshotCharacterDiscipline
-                    {
-                        CharacterName = characterName,
-                        // RawValue preserves the literal API string even for
-                        // a discipline Gw2Sharp's enum does not recognize,
-                        // matching the plain-string shape
-                        // RequiredDiscipline.Discipline uses.
-                        Discipline = cd.Discipline?.RawValue ?? "",
-                        Rating = cd.Rating,
-                        Active = cd.Active,
-                    });
-                }
-
-                return (false, disciplines);
-            }
-            catch (Exception ex) when (!(ex is OperationCanceledException))
-            {
-                Logger.Warn(ex, "Failed to fetch crafting disciplines for character {CharacterName}", characterName);
-                ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch crafting disciplines for character {characterName}: {ex.GetType().Name} - {ex.Message}");
-                return (true, disciplines);
-            }
-        }
-
-        /// <summary>
-        /// One stack's socketed item ids in the shape
-        /// <see cref="SnapshotItemEntry.Upgrades"/> documents. Gw2Sharp
-        /// surfaces the API's omitted field as null; an empty list is
-        /// folded to null as well, so only one of the two ever reaches
-        /// disk.
-        /// </summary>
-        private static List<int> SocketedIds(IEnumerable<int> ids)
-        {
-            if (ids == null)
-            {
-                return null;
-            }
-
-            var copied = new List<int>(ids);
-            return copied.Count > 0 ? copied : null;
+            return parts;
         }
 
         /// <summary>
@@ -771,17 +611,6 @@ namespace TaimisToolbench.Services
             }
 
             return ItemRarityResolution.Normalize(raw) ?? "";
-        }
-
-        /// <summary>
-        /// One stack's applied skin as a plain id, or 0 for none. Gw2Sharp
-        /// surfaces the API's omitted field as null. Material storage and
-        /// the Legendary Armory carry no skin field at all, so their rows
-        /// never reach here.
-        /// </summary>
-        private static int SkinIdOf(int? skin)
-        {
-            return skin.HasValue && skin.Value > 0 ? skin.Value : 0;
         }
 
         /// <summary>

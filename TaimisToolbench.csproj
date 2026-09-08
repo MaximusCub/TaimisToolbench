@@ -141,6 +141,8 @@
     <Compile Include="Services\RecipeService.cs" />
     <Compile Include="Services\ResizeSettleDebounce.cs" />
     <Compile Include="Services\BoundedConcurrency.cs" />
+    <Compile Include="Services\CharacterPagePlan.cs" />
+    <Compile Include="Services\CharacterRecordProjection.cs" />
     <Compile Include="Services\CharacterSnapshotCollector.cs" />
     <Compile Include="Services\Gw2ApiConnectionLimit.cs" />
     <Compile Include="Services\Gw2ApiRequest.cs" />
