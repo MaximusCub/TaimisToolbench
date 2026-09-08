@@ -2209,8 +2209,9 @@ namespace TaimisToolbench
             {
                 // Only clears the field when it still holds THIS fetch, so
                 // a later refresh's publication survives this one's exit.
-                var cleared = Interlocked.CompareExchange(ref _snapshotFetchInFlight, null, fetch);
-                GC.KeepAlive(cleared);
+                // Discarded because the return is a Task: without it the
+                // compiler reads the call as a forgotten await.
+                _ = Interlocked.CompareExchange(ref _snapshotFetchInFlight, null, fetch);
             }
         }
 
@@ -2263,9 +2264,18 @@ namespace TaimisToolbench
 
                     Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
                 }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                catch (OperationCanceledException)
                 {
-                    throw;
+                    if (ct.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+
+                    // Clear Cache cancelled the fetch through the refresh
+                    // slot. It writes its own status line, and a "Refresh
+                    // failed" stamped over that would name the wrong cause.
+                    Logger.Debug("Snapshot refresh for a plan was cancelled");
+                    MarkPlanRefreshFailed(refresh, null);
                 }
                 catch (Exception ex)
                 {
@@ -3206,6 +3216,7 @@ namespace TaimisToolbench
             // StartGenerateAsync reads Gw2Mumble and per-plan settings,
             // so it is invoked on the main thread exactly like a Generate
             // click; only the await runs out here.
+
             // Written by the generation's own refresh callback, read after
             // the plan lands - a re-solve raises the same stale-account
             // dialog a Generate click does.

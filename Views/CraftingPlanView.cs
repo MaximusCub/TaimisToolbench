@@ -4231,9 +4231,9 @@ namespace TaimisToolbench.Views
                     _lastRenderedWidth = _contentPanel.Width;
                     RenderPlan(vm);
 
-                    // After the plan is on screen: the dialog explains what
-                    // the plan in the background does not know, so raising
-                    // it over an empty panel would read as a failure.
+                    // After the plan is drawn, because the dialog describes
+                    // the plan behind it. Raised over an empty panel it
+                    // would read as the generation having failed.
                     RaiseStaleAccountDataDialog(accountRefresh, result, useOwnMaterials);
                 });
             }
