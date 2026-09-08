@@ -1,5 +1,7 @@
 using Blish_HUD.Controls;
 using Microsoft.Xna.Framework;
+using System;
+using System.Collections.Generic;
 using MonoGame.Extended.BitmapFonts;
 using TaimisToolbench.Services;
 
@@ -9,7 +11,7 @@ namespace TaimisToolbench.Views.Rendering
     // ellipsized name label, re-ellipsized on drag-settle" shape that
     // UsedMaterialsSectionRenderer.CreateUsedMaterialRow and
     // ShoppingListSectionRenderer.CreateShoppingRow both build byte-for-byte
-    // identically: IconControls.CreateItemIcon at a fixed (x, y),
+    // identically: IconControls.DrawItemIcon at a fixed (x, y),
     // then PlanRelayoutMath.NameMaxWidthBeforeColumn -> LabelHelpers.
     // EllipsizeToWidth -> a rarity-colored, drop-shadowed name Label at
     // (nameX, nameY) - confirmed identical at every one of those call sites
@@ -77,35 +79,27 @@ namespace TaimisToolbench.Views.Rendering
         /// <see cref="ItemIconTier"/>. rightEdge/qtyWidth/nameGap are threaded
         /// straight into PlanRelayoutMath.NameMaxWidthBeforeColumn.
         /// <para>
-        /// One <paramref name="resolvedRarity"/> feeds BOTH the frame and the
-        /// name colour, so the two cannot disagree. It is what
-        /// <c>ItemRarityResolution.Resolve</c> returned; null is a legitimately
-        /// unknown rarity and renders neutral in both places.
+        /// The caller passes an ITEM ID. One resolved rarity feeds both the
+        /// frame and the name colour, and it comes from the facility rather
+        /// than the caller, so the two cannot disagree.
         /// </para>
         /// <para>
-        /// <paramref name="tooltip"/> is stamped on the icon tree and NOWHERE
-        /// else - not on the name label this helper builds beside it, and not on
-        /// the row. See <see cref="ItemIconTooltip.StampOnIconTree"/> for why.
+        /// The hover is stamped on the icon tree and NOWHERE else - not on
+        /// the name label beside it, and not on the row. See
+        /// <see cref="ItemIconTooltip.StampOnIconTree"/> for why.
         /// </para>
         /// docs/ARCHITECTURE.md, "Views: relocated design narrative".
         /// </summary>
-        internal static IconNameHandle CreateIconAndEllipsizedName(
-            Panel rowPanel, string iconUrl, string resolvedRarity, int iconX, int iconY,
+        internal static IconNameHandle DrawIconAndName(
+            Panel rowPanel, int itemId, int iconX, int iconY,
             string fullName, BitmapFont font, int rightEdge, int qtyWidth, int nameGap, int nameX, int nameY,
-            ItemIconTier tier, ItemIconTooltip tooltip)
+            ItemIconTier tier, Func<int, ItemTooltipFacts> getFacts,
+            Func<IReadOnlyList<string>> tips = null)
         {
-            return Build(
-                rowPanel, iconUrl, resolvedRarity, iconX, iconY, fullName, font,
-                rightEdge, qtyWidth, nameGap, nameX, nameY, tier, tooltip);
-        }
-
-        private static IconNameHandle Build(
-            Panel rowPanel, string iconUrl, string rarity, int iconX, int iconY,
-            string fullName, BitmapFont font, int rightEdge, int qtyWidth, int nameGap, int nameX, int nameY,
-            ItemIconTier tier, ItemIconTooltip tooltip)
-        {
-            var iconFrame = IconControls.CreateItemIcon(
-                rowPanel, iconUrl, ItemIconFrame.ForRarity(rarity), iconX, iconY, tier, tooltip);
+            var facts = getFacts(itemId);
+            var iconFrame = IconControls.DrawItemIcon(
+                rowPanel, itemId, iconX, iconY, tier, getFacts, tips);
+            string rarity = facts.Rarity;
 
             int nameMaxWidth = PlanRelayoutMath.NameMaxWidthBeforeColumn(rightEdge, qtyWidth, nameGap, nameX);
             string displayName = LabelHelpers.EllipsizeToWidth(font, fullName, nameMaxWidth);

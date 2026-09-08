@@ -1061,15 +1061,29 @@ namespace TaimisToolbench.Views.Rendering
                     rowPanel, node.ItemId, iconX, PlanContentHeightMath.TreeRowIconPad,
                     ItemIconTier.BagSidebar, _host.CurrencyFactsFor, () => currencyTips);
             }
-            else
+            else if (dimmed || !TreeRowTooltipComposer.RowIdIsAnItemId(node))
             {
-                iconFrame = IconControls.CreateItemIcon(
+                // Two rows the id cannot answer for. A dimmed reference
+                // branch takes a frame the rarity palette has no colour
+                // for. A synthesized row - a guild upgrade, an
+                // unrecognized ingredient - has a name the item store
+                // never held, so only the node knows it.
+                iconFrame = IconControls.CreateItemIconFromCapture(
                     rowPanel, node.IconUrl,
                     dimmed
                         ? ItemIconFrame.Explicit(new Color(60, 60, 60))
                         : ItemIconFrame.ForRarity(node.Rarity),
                     iconX, PlanContentHeightMath.TreeRowIconPad,
                     ItemIconTier.BagSidebar, hover);
+            }
+            else
+            {
+                var itemTips = TreeRowTooltipComposer.BuildExtraTooltipContent(
+                    node, captionText, _host.CurrentPlan);
+                iconFrame = IconControls.DrawItemIcon(
+                    rowPanel, node.ItemId, iconX, PlanContentHeightMath.TreeRowIconPad,
+                    ItemIconTier.BagSidebar, _host.ItemFactsFor,
+                    () => TooltipContentPlainLines(itemTips));
             }
 
             Panel iconScrim = null;
@@ -1832,6 +1846,32 @@ namespace TaimisToolbench.Views.Rendering
                 TreeRowTooltipComposer.WikiTargetFor(node));
         }
 
+        /// <summary>The tree's tips as prose, for the item entry point,
+        /// which takes the shape every other surface's tips take. A tree
+        /// tip carrying a coin span keeps it through the currency path and
+        /// through the dimmed path, both of which take content.</summary>
+        private static IReadOnlyList<string> TooltipContentPlainLines(TooltipContent content)
+        {
+            var lines = new List<string>();
+            if (content == null)
+            {
+                return lines;
+            }
+
+            foreach (var line in content.Lines)
+            {
+                var text = new System.Text.StringBuilder();
+                foreach (var span in line.Spans)
+                {
+                    text.Append(span.Text);
+                }
+
+                lines.Add(text.ToString());
+            }
+
+            return lines;
+        }
+
         /// <summary>
         /// The row's icon, and the scrim a dimmed row lays over the top of
         /// it - Blish resolves a tooltip on the deepest control under the
@@ -2436,7 +2476,7 @@ namespace TaimisToolbench.Views.Rendering
         /// trailing "+N" pill so the two can never disagree about pill
         /// chrome. Border simulated as an outer colored panel with a
         /// 1px-inset fill panel, the same nesting technique
-        /// IconControls.CreateItemIcon uses.
+        /// IconControls.DrawItemIcon uses.
         /// </summary>
         private static Panel CreatePillPanel(
             Panel rowPanel, string text, BitmapFont font, int pillWidth, int textWidth,

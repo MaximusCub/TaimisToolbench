@@ -18,12 +18,12 @@ namespace TaimisToolbench.Views.Rendering
     internal sealed class PlanHeaderRenderer
     {
         private readonly ISectionRelayoutSink _sink;
-        private readonly Func<int, ItemStatBlock> _getItemStatBlock;
+        private readonly Func<int, ItemTooltipFacts> _getItemFacts;
 
-        internal PlanHeaderRenderer(ISectionRelayoutSink sink, Func<int, ItemStatBlock> getItemStatBlock)
+        internal PlanHeaderRenderer(ISectionRelayoutSink sink, Func<int, ItemTooltipFacts> getItemFacts)
         {
             _sink = sink ?? throw new ArgumentNullException(nameof(sink));
-            _getItemStatBlock = getItemStatBlock;
+            _getItemFacts = getItemFacts ?? throw new ArgumentNullException(nameof(getItemFacts));
         }
 
         /// <summary>
@@ -119,17 +119,9 @@ namespace TaimisToolbench.Views.Rendering
             // Composed at hover time, so a plan restored from disk shows
             // its stats as soon as the background top-up lands (Q13).
             var treeRoot = vm.TreeRoot ?? FirstBatchRoot(vm);
-            var identity = ItemTooltipIdentity.ForItem(
-                nameText, vm.TargetIconUrl, vm.TargetRarity);
-            var hover = ItemIconTooltip.Composed(
-                identity,
-                () => TreeRowTooltipComposer.BuildStatTooltipContent(treeRoot, _getItemStatBlock),
-                null,
-                IconWikiTarget.ItemPage(nameText));
-
-            IconControls.CreateItemIcon(
-                titlePanel, vm.TargetIconUrl, ItemIconFrame.ForRarity(vm.TargetRarity),
-                headerX, iconY, ItemIconTier.BagSlot, hover);
+            IconControls.DrawItemIcon(
+                titlePanel, treeRoot == null ? 0 : treeRoot.ItemId,
+                headerX, iconY, ItemIconTier.BagSlot, _getItemFacts);
 
             int textX = headerX + frameSize + iconPad;
             var nameLabel = new Label()
@@ -247,10 +239,10 @@ namespace TaimisToolbench.Views.Rendering
             for (int i = 0; i < items.Count; i++)
             {
                 var item = items[i];
-                icons[i] = IconControls.CreateItemIcon(
-                    titlePanel, item.IconUrl, ItemIconFrame.ForRarity(item.Rarity),
+                icons[i] = IconControls.DrawItemIcon(
+                    titlePanel, item.ItemId,
                     runX + MultiItemHeaderLayout.IconX(i, iconFrame, MultiItemHeaderLayout.IconGap),
-                    iconY, ItemIconTier.BagSidebar, BatchItemHover(item));
+                    iconY, ItemIconTier.BagSidebar, _getItemFacts);
             }
 
             // Read by the marker's hover builder, which runs at hover time
@@ -291,23 +283,6 @@ namespace TaimisToolbench.Views.Rendering
 
             Fit(panelWidth);
             _sink.AddRelayout(Fit);
-        }
-
-        /// <summary>
-        /// The standard item hover for one stacked batch icon. The stat
-        /// block is read at hover time, so an icon built before the
-        /// background top-up landed still shows stats once it has.
-        /// </summary>
-        private ItemIconTooltip BatchItemHover(PlanHeaderItem item)
-        {
-            var identity = ItemTooltipIdentity.ForItem(item.Name, item.IconUrl, item.Rarity);
-            var getStatBlock = _getItemStatBlock;
-            int itemId = item.ItemId;
-
-            return ItemIconTooltip.ForItem(
-                identity,
-                getStatBlock == null ? (Func<ItemStatBlock>)null : () => getStatBlock(itemId),
-                IconWikiTarget.ItemPage(item.Name));
         }
     }
 }

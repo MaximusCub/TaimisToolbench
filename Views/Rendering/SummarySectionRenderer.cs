@@ -21,7 +21,7 @@ namespace TaimisToolbench.Views.Rendering
     internal sealed class SummarySectionRenderer
     {
         private readonly ISectionRelayoutSink _sink;
-        private readonly Func<int, ItemStatBlock> _getItemStatBlock;
+        private readonly Func<int, ItemTooltipFacts> _getItemFacts;
         private readonly Func<int, CurrencyTooltipFacts> _getCurrencyFacts;
 
         // Registers one control as a scroll anchor under a stable key
@@ -32,11 +32,11 @@ namespace TaimisToolbench.Views.Rendering
         internal SummarySectionRenderer(
             ISectionRelayoutSink sink,
             Func<int, CurrencyTooltipFacts> getCurrencyFacts,
-            Func<int, ItemStatBlock> getItemStatBlock = null,
+            Func<int, ItemTooltipFacts> getItemFacts,
             Action<string, Control> registerScrollAnchor = null)
         {
             _sink = sink ?? throw new ArgumentNullException(nameof(sink));
-            _getItemStatBlock = getItemStatBlock;
+            _getItemFacts = getItemFacts ?? throw new ArgumentNullException(nameof(getItemFacts));
             _getCurrencyFacts = getCurrencyFacts
                 ?? throw new ArgumentNullException(nameof(getCurrencyFacts));
             _registerScrollAnchor = registerScrollAnchor;
@@ -1088,16 +1088,10 @@ namespace TaimisToolbench.Views.Rendering
                 // PlanRowViewModel.IsBarterItemCost).
                 if (row.IsBarterItemCost)
                 {
-                    IconControls.CreateItemIcon(
-                        rowPanel, row.IconUrl, ItemIconFrame.ForRarity(row.Rarity),
+                    IconControls.DrawItemIcon(
+                        rowPanel, row.ItemId,
                         SummarySectionLayoutMath.CurrencyIconX, iconY,
-                        ItemIconTier.CurrencyListRow,
-                        ItemIconTooltip.ForItem(
-                            ItemTooltipIdentity.ForItem(row.Label ?? "", row.IconUrl, row.Rarity),
-                            _getItemStatBlock == null || row.ItemId <= 0
-                                ? (Func<ItemStatBlock>)null
-                                : () => _getItemStatBlock(row.ItemId),
-                            IconWikiTarget.ItemPage(row.Label)));
+                        ItemIconTier.CurrencyListRow, _getItemFacts);
                 }
                 else
                 {

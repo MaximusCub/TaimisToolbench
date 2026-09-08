@@ -68,6 +68,10 @@ namespace TaimisToolbench.Views.Rendering
         /// they cannot show different boxes for the same currency.</summary>
         CurrencyTooltipFacts CurrencyFactsFor(int currencyId);
 
+        /// <summary>Everything one item's icon draws and its tooltip shows,
+        /// from its id.</summary>
+        ItemTooltipFacts ItemFactsFor(int itemId);
+
         /// <summary>
         /// The content width the plan is laid out at RIGHT NOW, never a
         /// build-time capture - see CraftingPlanView.GetCurrentPanelWidth.

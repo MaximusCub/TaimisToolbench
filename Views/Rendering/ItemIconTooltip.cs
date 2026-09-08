@@ -8,7 +8,7 @@ namespace TaimisToolbench.Views.Rendering
 {
     /// <summary>
     /// What an item icon says on hover and which wiki page it opens - the
-    /// parameter <see cref="IconControls.CreateItemIcon"/> takes instead of
+    /// parameter <see cref="IconControls.DrawItemIcon"/> takes instead of
     /// an optional trailing tooltip string. The call site has to say which
     /// it means, and a factory name is what a diff shows.
     /// <para>
@@ -16,7 +16,7 @@ namespace TaimisToolbench.Views.Rendering
     /// enforced: the hover belongs to the item's ICON and to nothing else.
     /// There is no seam that takes a Label or a row Panel, so the only
     /// control that can carry an item tooltip is the one
-    /// <see cref="IconControls.CreateItemIcon"/> builds - see StampOnIconTree.
+    /// <see cref="IconControls.DrawItemIcon"/> builds - see StampOnIconTree.
     /// </para>
     /// <para>
     /// The rich half is always DEFERRED: a stat block can land after the row
@@ -59,9 +59,9 @@ namespace TaimisToolbench.Views.Rendering
         /// it comes from the identity the row already had.
         /// </summary>
         internal static ItemIconTooltip ForItem(
-            ItemTooltipIdentity identity, Func<ItemStatBlock> getStatBlock, IconWikiTarget wiki)
+            string name, Func<ItemTooltipFacts> getFacts, IconWikiTarget wiki)
         {
-            return ForItem(identity, getStatBlock, null, wiki);
+            return ForItem(name, getFacts, null, wiki);
         }
 
         /// <summary>
@@ -72,18 +72,27 @@ namespace TaimisToolbench.Views.Rendering
         /// The tips lead the second box; the wiki line still ends it.
         /// </summary>
         internal static ItemIconTooltip ForItem(
-            ItemTooltipIdentity identity,
-            Func<ItemStatBlock> getStatBlock,
+            string name,
+            Func<ItemTooltipFacts> getFacts,
             Func<IReadOnlyList<string>> tips,
             IconWikiTarget wiki)
         {
+            if (getFacts == null)
+            {
+                throw new ArgumentNullException(nameof(getFacts));
+            }
+
             return new ItemIconTooltip(
-                () => ItemRowTooltipComposer.BuildRowContent(
-                    ItemStatTooltipComposer.BuildContent(
-                        getStatBlock == null ? null : getStatBlock()),
-                    identity,
-                    SecondTooltipBox.Compose(tips == null ? null : tips(), wiki.Hint)),
-                identity.Name,
+                () =>
+                {
+                    var facts = getFacts();
+                    return ItemRowTooltipComposer.BuildRowContent(
+                        ItemStatTooltipComposer.BuildContent(
+                            facts.Stats, facts.Sockets, facts.Skin),
+                        facts.Identity,
+                        SecondTooltipBox.Compose(tips == null ? null : tips(), wiki.Hint));
+                },
+                name,
                 wiki);
         }
 

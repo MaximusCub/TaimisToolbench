@@ -3,6 +3,7 @@ using Blish_HUD.Content;
 using Blish_HUD.Controls;
 using Microsoft.Xna.Framework;
 using System;
+using System.Collections.Generic;
 using TaimisToolbench.Services;
 
 namespace TaimisToolbench.Views.Rendering
@@ -51,7 +52,7 @@ namespace TaimisToolbench.Views.Rendering
         /// </para>
         /// docs/ARCHITECTURE.md, "Views: relocated design narrative".
         /// </summary>
-        internal static Panel CreateItemIcon(
+        internal static Panel CreateItemIconFromCapture(
             Panel parent, string iconUrl, ItemIconFrame frame, int x, int y,
             ItemIconTier tier, ItemIconTooltip tooltip)
         {
@@ -72,7 +73,7 @@ namespace TaimisToolbench.Views.Rendering
         /// waits.
         /// </para>
         /// </summary>
-        internal static DeferredIconArt CreateItemIconDeferredArt(
+        internal static DeferredIconArt CreateItemIconDeferredArtFromCapture(
             Panel parent, string iconUrl, ItemIconFrame frame, int x, int y,
             ItemIconTier tier, ItemIconTooltip tooltip)
         {
@@ -83,6 +84,74 @@ namespace TaimisToolbench.Views.Rendering
 
             tooltip.StampOnIconTree(panel);
             return new DeferredIconArt(artSquare, iconUrl);
+        }
+
+        /// <summary>
+        /// THE item icon. The caller passes an ID and a tier, and nothing
+        /// else: art, name, rarity, border, stats and wiki page all come
+        /// from the id.
+        /// <para>
+        /// <paramref name="getFacts"/> is read TWICE. The build-time read
+        /// supplies the art, the name and the rarity that colours the
+        /// frame. The hover-time read supplies the box, so a stat block
+        /// that lands after the row was drawn still reaches it.
+        /// </para>
+        /// </summary>
+        internal static Panel DrawItemIcon(
+            Panel parent, int itemId, int x, int y, ItemIconTier tier,
+            Func<int, ItemTooltipFacts> getFacts)
+        {
+            return DrawItemIcon(parent, itemId, x, y, tier, getFacts, null);
+        }
+
+        /// <summary>The same item icon, plus this surface's own tips for
+        /// the second box. They lead it; the wiki line still ends it.</summary>
+        internal static Panel DrawItemIcon(
+            Panel parent, int itemId, int x, int y, ItemIconTier tier,
+            Func<int, ItemTooltipFacts> getFacts, Func<IReadOnlyList<string>> tips)
+        {
+            var built = BuildItemHover(itemId, getFacts, tips);
+            var panel = CreateFrame(
+                parent, built.IconUrl, built.Frame, x, y,
+                ItemIconTiers.ArtSize(tier), ItemIconTiers.BorderThickness(tier),
+                built.Hover.PlainText, deferArt: false, artSquare: out _);
+
+            built.Hover.StampOnIconTree(panel);
+            return panel;
+        }
+
+        /// <summary>The same item icon with its picture request held back.
+        /// See <see cref="DeferredIconArt"/> for the per-icon cost this
+        /// avoids.</summary>
+        internal static DeferredIconArt DrawItemIconDeferredArt(
+            Panel parent, int itemId, int x, int y, ItemIconTier tier,
+            Func<int, ItemTooltipFacts> getFacts)
+        {
+            var built = BuildItemHover(itemId, getFacts, null);
+            var panel = CreateFrame(
+                parent, built.IconUrl, built.Frame, x, y,
+                ItemIconTiers.ArtSize(tier), ItemIconTiers.BorderThickness(tier),
+                built.Hover.PlainText, deferArt: true, artSquare: out Panel artSquare);
+
+            built.Hover.StampOnIconTree(panel);
+            return new DeferredIconArt(artSquare, built.IconUrl);
+        }
+
+        private static (string IconUrl, ItemIconFrame Frame, ItemIconTooltip Hover) BuildItemHover(
+            int itemId, Func<int, ItemTooltipFacts> getFacts, Func<IReadOnlyList<string>> tips)
+        {
+            if (getFacts == null)
+            {
+                throw new ArgumentNullException(nameof(getFacts));
+            }
+
+            var known = getFacts(itemId);
+            var hover = ItemIconTooltip.ForItem(
+                known.Name,
+                () => getFacts(itemId),
+                tips,
+                IconWikiTarget.ItemPage(known.Name));
+            return (known.IconUrl, ItemIconFrame.ForRarity(known.Rarity), hover);
         }
 
         /// <summary>

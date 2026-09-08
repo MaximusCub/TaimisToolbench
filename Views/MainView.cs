@@ -2888,14 +2888,10 @@ namespace TaimisToolbench.Views
 
             string breakdown = BreakdownText(row);
 
-            // The row's hover, composed once and stamped on every control
-            // over the row - the icon included, by CreateItemIcon itself.
-            var hover = ItemRowHover(row, rarity);
-
-            var icon = IconControls.CreateItemIconDeferredArt(
-                rowPanel, row.IconUrl, ItemIconFrame.ForRarity(rarity),
+            var icon = IconControls.DrawItemIconDeferredArt(
+                rowPanel, row.ItemId,
                 SnapshotItemGridLayout.CellIconX(chrome.AmountBand), ItemIconY,
-                ItemIconTier.BagSlot, hover);
+                ItemIconTier.BagSlot, RowItemFactsFor(row));
 
             // Never display raw item IDs (repo invariant) - row.Name is
             // already the resolved display name.
@@ -2985,27 +2981,32 @@ namespace TaimisToolbench.Views
                 currencyId, _getCurrencyMetadata?.Invoke(currencyId), walletValue);
         }
 
-        private ItemIconTooltip ItemRowHover(SnapshotSearchRow row, string rarity)
+        /// <summary>
+        /// Everything one snapshot row's icon draws and its tooltip shows.
+        /// The skin is the ROW's, settled by the source filter, so the
+        /// resolver is built per row and read by id.
+        /// <para>
+        /// The rune count comes from the character wearing this stack,
+        /// named here and passed in. A stack held anywhere but one
+        /// character's worn gear has no character, so its bonuses draw with
+        /// no count rather than a wrong one.
+        /// </para>
+        /// </summary>
+        private Func<int, ItemTooltipFacts> RowItemFactsFor(SnapshotSearchRow row)
         {
-            int itemId = row.ItemId;
-            var identity = ItemTooltipIdentity.ForItem(row.Name ?? "", row.IconUrl, rarity);
-            bool hasStats = _getItemStatBlock != null && itemId > 0;
+            var skin = row.Skin;
+            string capturedName = row.Name;
+            string capturedIcon = row.IconUrl;
+            string capturedRarity = row.Rarity;
+            string equippedBy = _equippedRuneSets.EquippedBy(row.ItemId);
 
-            // Composed rather than ForItem: the socket blocks are CONTENT
-            // (coloured spans and per-component icons), and they belong
-            // inside the stat block's own line order, not appended after it
-            // as prose. Everything is read at hover time, so a stat block
-            // the socket top-up lands after the row was built still shows.
-            return ItemIconTooltip.Composed(
-                identity,
-                () =>
-                {
-                    var stats = hasStats ? _getItemStatBlock(itemId) : null;
-                    return ItemStatTooltipComposer.BuildContent(
-                        stats, SocketsFor(itemId), row.Skin);
-                },
-                null,
-                IconWikiTarget.ItemPage(row.Name));
+            return id => ItemTooltipFacts.ForCapturedItem(
+                capturedName,
+                capturedIcon,
+                ItemRarityResolution.Resolve(capturedRarity, RarityFor(id)),
+                _getItemStatBlock == null || id <= 0 ? null : _getItemStatBlock(id),
+                SocketsFor(id, equippedBy),
+                skin);
         }
 
         /// <summary>
@@ -3063,7 +3064,7 @@ namespace TaimisToolbench.Views
         /// resolved against the session stat cache - empty when they
         /// disagree, when nothing is socketed, or when the components'
         /// stat blocks have not landed yet.</summary>
-        private SocketedUpgradeView SocketsFor(int itemId)
+        private SocketedUpgradeView SocketsFor(int itemId, string equippedBy)
         {
             if (_socketsByItemId == null || _getItemStatBlock == null
                 || !_socketsByItemId.TryGetValue(itemId, out var ids))
@@ -3072,7 +3073,8 @@ namespace TaimisToolbench.Views
             }
 
             return SocketedUpgradeView.Resolve(
-                ids, _getItemStatBlock, runeId => _equippedRuneSets.WornCopies(itemId, runeId));
+                ids, _getItemStatBlock,
+                runeId => _equippedRuneSets.WornCopiesOf(equippedBy, runeId));
         }
 
         /// <summary>

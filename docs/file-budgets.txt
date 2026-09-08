@@ -117,7 +117,7 @@ Services/Diagnostics/PlanPhaseTimingSummary.cs                                  
 Services/Diagnostics/PlanTimingAnalyzer.cs                                              100
 Services/DialogLayoutMath.cs                                                            472
 Services/DisciplinesColumnMath.cs                                                       148
-Services/EquippedRuneSetIndex.cs                                                        150
+Services/EquippedRuneSetIndex.cs                                                        173
 Services/ExcessCraftOutputCalculator.cs                                                 158
 Services/FirstLoadSnapshotGate.cs                                                       86
 Services/GlyphButtonMetrics.cs                                                          69
@@ -272,6 +272,7 @@ Services/TransmutedNameIndex.cs                                                 
 Services/UiGlyphs.cs                                                                    124
 Services/GlyphFontDescriptor.cs                                                         316
 Services/IconWikiTarget.cs                                                              156
+Services/ItemTooltipFacts.cs                                                            160
 Services/SecondTooltipBox.cs                                                            82
 Services/TextWrapMath.cs                                                                324
 Services/TooltipContent.cs                                                              701
@@ -302,17 +303,17 @@ Services/WindowSizing.cs                                                        
 Views/AboutTabContent.cs                                                                1000
 Views/ApiAccessDialog.cs                                                                231
 Views/AutocompleteTextBox.cs                                                            45
-Views/CraftingPlanView.cs                                                               5423
+Views/CraftingPlanView.cs                                                               5447
 Views/FocusRelease.cs                                                                   159
 Views/ItemInputRowStrip.cs                                                              465
 Views/ItemRowState.cs                                                                   39
 Views/LogTabContent.cs                                                                  1538
 Views/MainThreadMarshal.cs                                                              141
-Views/MainView.cs                                                                       3345
+Views/MainView.cs                                                                       3347
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    425
-Views/PlanHistoryTabContent.cs                                                          1541
+Views/PlanHistoryTabContent.cs                                                          1557
 Views/RankerTabContent.cs                                                               3087
 Views/Rendering/ClickSound.cs                                                           197
 Views/Rendering/CaretKeyButton.cs                                                       109
@@ -328,8 +329,8 @@ Views/Rendering/HeaderBands.cs                                                  
 Views/Rendering/HeaderCellPlan.cs                                                       99
 Views/Rendering/HoverChainResync.cs                                                     75
 Views/Rendering/ISectionRelayoutSink.cs                                                 86
-Views/Rendering/ITreePlanHost.cs                                                        101
-Views/Rendering/IconControls.cs                                                         394
+Views/Rendering/ITreePlanHost.cs                                                        105
+Views/Rendering/IconControls.cs                                                         463
 Views/Rendering/IconNameRowHelpers.cs                                                   182
 Views/Rendering/InlineSpinner.cs                                                        65
 Views/Rendering/LabelHelpers.cs                                                         273
@@ -614,6 +615,7 @@ tests/TaimisToolbench.Tests/Services/GlyphButtonMetricsTests.cs                 
 tests/TaimisToolbench.Tests/Services/GlyphFontDescriptorTests.cs                        332
 tests/TaimisToolbench.Tests/Services/IconStandardCallSiteTests.cs                       451
 tests/TaimisToolbench.Tests/Services/IconWikiTargetTests.cs                             106
+tests/TaimisToolbench.Tests/Services/ItemTooltipStandardTests.cs                        225
 tests/TaimisToolbench.Tests/Services/RequiredRecipeSheetNamingTests.cs                  185
 tests/TaimisToolbench.Tests/Services/SecondTooltipBoxTests.cs                           123
 tests/TaimisToolbench.Tests/Services/TextWrapMathTests.cs                               297

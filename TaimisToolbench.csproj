@@ -247,6 +247,7 @@
     <Compile Include="Services\UpgradeEffectLines.cs" />
     <Compile Include="Services\ItemRowTooltipComposer.cs" />
     <Compile Include="Services\ItemTooltipIdentity.cs" />
+    <Compile Include="Services\ItemTooltipFacts.cs" />
     <Compile Include="Services\IconWikiTarget.cs" />
     <Compile Include="Services\ExcessCraftOutputCalculator.cs" />
     <Compile Include="Services\CostLineValuation.cs" />

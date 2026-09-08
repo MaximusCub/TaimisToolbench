@@ -522,6 +522,30 @@ namespace TaimisToolbench.Views
         }
 
         /// <summary>
+        /// Everything one item's icon draws and its tooltip shows, from its
+        /// id. Every item icon this tab draws reads it, so no two of its
+        /// tables can show different boxes for the same item.
+        /// <para>
+        /// Merges the plan's own captured metadata with the session stat
+        /// cache. That merge happens here and nowhere else.
+        /// </para>
+        /// </summary>
+        public ItemTooltipFacts ItemFactsFor(int itemId)
+        {
+            var plan = _currentPlan;
+            ItemMetadata meta = null;
+            if (itemId > 0 && plan?.ItemMetadata != null)
+            {
+                plan.ItemMetadata.TryGetValue(itemId, out meta);
+            }
+
+            return ItemTooltipFacts.ForItemId(
+                itemId,
+                meta,
+                _getItemStatBlock == null || itemId <= 0 ? null : _getItemStatBlock(itemId));
+        }
+
+        /// <summary>
         /// The whole content of one currency's tooltip, from its id. Every
         /// currency icon this tab draws reads it, so the Total Cost table,
         /// the Recipe Tree and the inline symbols in a value cell cannot
@@ -4734,7 +4758,7 @@ namespace TaimisToolbench.Views
 
             int panelWidth = _contentPanel.Width - RightEdgePadding;
 
-            new PlanHeaderRenderer(this, _getItemStatBlock).Render(vm, _contentPanel, panelWidth);
+            new PlanHeaderRenderer(this, ItemFactsFor).Render(vm, _contentPanel, panelWidth);
 
             // Separator under header
             var headerSeparator = new ClippedPanel()
@@ -5145,14 +5169,14 @@ namespace TaimisToolbench.Views
                     // MultiItemNote banner, and the per-currency rows) moved
                     // to Views/Rendering/SummarySectionRenderer.
                     new SummarySectionRenderer(
-                        this, CurrencyFactsFor, _getItemStatBlock, RegisterScrollAnchor)
+                        this, CurrencyFactsFor, ItemFactsFor, RegisterScrollAnchor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 case PlanSectionType.UsedMaterials:
                     // Row rendering moved to
                     // Views/Rendering/UsedMaterialsSectionRenderer.
                     new UsedMaterialsSectionRenderer(
-                        this, _usedMaterialsSort, RerenderForSortChange, _getItemStatBlock)
+                        this, _usedMaterialsSort, RerenderForSortChange, ItemFactsFor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 case PlanSectionType.ShoppingList:
@@ -5160,14 +5184,14 @@ namespace TaimisToolbench.Views
                     // Views/Rendering/ShoppingListSectionRenderer.
                     new ShoppingListSectionRenderer(
                         this, _shoppingListSort, RerenderForSortChange,
-                        CurrencyFactsFor, _getItemStatBlock)
+                        CurrencyFactsFor, ItemFactsFor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 case PlanSectionType.CraftingSteps:
                     // Row rendering (including the TimegatedNotice
                     // informational rows) moved to
                     // Views/Rendering/CraftStepsSectionRenderer.
-                    new CraftStepsSectionRenderer(this, _getItemStatBlock)
+                    new CraftStepsSectionRenderer(this, ItemFactsFor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 case PlanSectionType.RequiredDisciplines:
@@ -5343,7 +5367,7 @@ namespace TaimisToolbench.Views
                     Rows = visibleRows,
                     IsDefaultExpanded = section.IsDefaultExpanded,
                 };
-                new RecipesSectionRenderer(this, _getItemStatBlock)
+                new RecipesSectionRenderer(this, ItemFactsFor)
                     .Render(filteredSection, contentFlow, panelWidth);
             }
 
