@@ -46,10 +46,14 @@ namespace TaimisToolbench.Services
                 string json = File.ReadAllText(_filePath);
                 var loaded = JsonConvert.DeserializeObject<RankerWatchlist>(json);
 
-                if (loaded == null || loaded.SchemaVersion != RankerWatchlist.CurrentSchemaVersion)
+                if (loaded == null || !IsReadableVersion(loaded.SchemaVersion))
                 {
+                    // A RANGE, not an equality, for the reason
+                    // PlanHistoryStore.Load's own comment gives: an
+                    // equality makes the next bump cost the user their
+                    // list. Save restamps whatever the range accepted.
                     _onError?.Invoke(
-                        $"Ranker list at {_filePath} is not a version this module can read; starting from an empty list",
+                        $"Ranker list at {_filePath} is schema {loaded?.SchemaVersion.ToString() ?? "unreadable"}, and this module reads {RankerWatchlist.MinimumReadableSchemaVersion} to {RankerWatchlist.CurrentSchemaVersion}; starting from an empty list",
                         null);
                     return new RankerWatchlist { SchemaVersion = RankerWatchlist.CurrentSchemaVersion };
                 }
@@ -127,6 +131,12 @@ namespace TaimisToolbench.Services
                     return false;
                 }
             }
+        }
+
+        private static bool IsReadableVersion(int schemaVersion)
+        {
+            return schemaVersion >= RankerWatchlist.MinimumReadableSchemaVersion
+                && schemaVersion <= RankerWatchlist.CurrentSchemaVersion;
         }
     }
 }

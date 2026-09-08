@@ -432,7 +432,8 @@ namespace TaimisToolbench
                 ModuleLog.Shared.Write(ModuleLogLevel.Warn, "store", $"{message}: {ex.GetType().Name} - {ex.Message}");
 
             // PlanStore alone also reports a non-failure: a saved plan
-            // written by a build at an older shipped schema version. It is
+            // written by a build at a shipped schema version below
+            // PersistedPlan.MinimumReadableSchemaVersion. It is
             // expected, benign and repaired by the next Generate, so it
             // must read as routine in the log rather than as damage - see
             // PlanStore's own doc comment.

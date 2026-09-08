@@ -2,9 +2,12 @@
 
 One serialized plan per shipped `PersistedPlan.CurrentSchemaVersion`, plus
 one per shipped `PlanHistoryIndex.CurrentSchemaVersion`. The current build
-must still restore the **request** out of every one of them. That is the
-compatibility contract, stated in full in
-[`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md) section 12.
+must still restore the **request** out of every one of them, and the whole
+**result** out of every one stamped at or above
+`PersistedPlan.MinimumReadableSchemaVersion`. That is the compatibility
+contract, stated in full in
+[`docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md) section 12; section
+12.5 says which past versions are readable and on what evidence.
 
 ## Why the files are here
 
@@ -59,9 +62,11 @@ version reads as 1 rather than as "unrecorded".
 `plan-v1.json` and `plan-v2.json` are restamps rather than captures
 because no build that writes those versions still exists to run. Their
 `Result` subtrees therefore carry the current shape, which is deliberate
-and costs nothing: the contract discards an older result **unread**, and
-`plan-v1-alien-result.json` is the fixture that proves the result's shape
-cannot matter. Every fixture from v3 on is a live capture.
+and costs nothing: both sit below the readable floor, so the contract
+discards their result **unread**, and `plan-v1-alien-result.json` is the
+fixture that proves the result's shape cannot matter. Every fixture from
+v3 on is a live capture, and v3 is the oldest one whose result must still
+load whole.
 
 The fixtures are checked in uncompressed so a reviewer can read the diff;
 the store writes gzip, and `PlanStore.LoadLatest` sniffs the magic number,

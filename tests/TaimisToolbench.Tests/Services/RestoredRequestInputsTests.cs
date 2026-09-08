@@ -111,12 +111,12 @@ namespace TaimisToolbench.Tests.Services
             };
             _store.Save(plan);
 
-            // Age the file out of this build's result schema, through the
-            // real store: exactly what a user upgrading across a bump has
-            // on disk.
+            // Age the file below this build's readable range, through the
+            // real store: exactly what a user upgrading across a bump that
+            // moved PersistedPlan.MinimumReadableSchemaVersion has on disk.
             string path = Path.Combine(_tempDir, "plan.json");
             var onDisk = JObject.Parse(GzipJsonFile.DecompressToJson(File.ReadAllBytes(path)));
-            onDisk["SchemaVersion"] = PersistedPlan.CurrentSchemaVersion - 1;
+            onDisk["SchemaVersion"] = PersistedPlan.MinimumReadableSchemaVersion - 1;
             File.WriteAllBytes(path, GzipJsonFile.Compress(onDisk.ToString(Formatting.None)));
 
             var load = _store.LoadLatest();

@@ -20,8 +20,8 @@ namespace TaimisToolbench.Services
     /// Deliberately a SIDE TABLE rather than a field on
     /// <see cref="RecipeNode"/>: that type is reachable from
     /// <see cref="Models.PersistedPlan"/>, so hanging subtrees off it would
-    /// bump the plan schema version and discard every saved plan on the
-    /// version the change ships in.
+    /// move the persisted graph's shape hash, and a shape change that is a
+    /// rename or a retype costs every saved result written before it.
     /// </para>
     /// </summary>
     internal sealed class VendorCostLineSubtrees

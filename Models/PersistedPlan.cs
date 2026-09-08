@@ -23,11 +23,11 @@ namespace TaimisToolbench.Models
     internal class PersistedPlan
     {
         /// <summary>
-        /// The RESULT layer's version. Bump whenever the persisted graph's
-        /// SHAPE changes (a member renamed/removed/retyped anywhere
-        /// reachable from PersistedPlan) - PlanStoreHelpers rejects any
-        /// result whose SchemaVersion does not match exactly, degrading to
-        /// a request-only restore instead of a partial render.
+        /// The RESULT layer's version, and the one every write stamps.
+        /// Bump whenever the persisted graph's SHAPE changes (a member
+        /// renamed/removed/retyped anywhere reachable from PersistedPlan).
+        /// Bumping it no longer costs a saved result on its own - see
+        /// <see cref="MinimumReadableSchemaVersion"/>, which is what does.
         /// PersistedPlanSchemaMemberSetTests reflectively guards the
         /// whole graph against an unbumped shape change.
         /// <para>
@@ -39,6 +39,27 @@ namespace TaimisToolbench.Models
         /// </para>
         /// </summary>
         public const int CurrentSchemaVersion = 4;
+
+        /// <summary>
+        /// The OLDEST result version this build still reads. A file stamped
+        /// anywhere in [this, <see cref="CurrentSchemaVersion"/>] restores
+        /// its result whole; anything else keeps the request and discards
+        /// the result unread.
+        /// <para>
+        /// It is 3 because the 3 -&gt; 4 bump only REMOVED a member
+        /// (VendorOffer.Locations), and Newtonsoft skips a JSON property no
+        /// type claims, so nothing a version 3 file carries is misread. It
+        /// is no lower because the 2 -&gt; 3 bump recorded no shape change
+        /// of its own: it retired a stamp that had been left at 2 while the
+        /// graph grew ~275 unversioned lines, so "2" names no single shape,
+        /// and neither does the 1 beneath it. A later bump for a RENAME or
+        /// a RETYPE must raise this to that bump's version - both silently
+        /// lose a value the old file did carry, which an addition or a
+        /// removal cannot do.
+        /// </para>
+        /// <para>Derivation: docs/ARCHITECTURE.md section 12.</para>
+        /// </summary>
+        public const int MinimumReadableSchemaVersion = 3;
 
         /// <summary>
         /// SHA-256 of the persisted graph's public member signatures, one
