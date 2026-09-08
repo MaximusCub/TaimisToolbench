@@ -33,7 +33,16 @@ namespace TaimisToolbench.Services
 
         public const string MissingStatusTag = "Missing!";
 
-        private const string MysticForgeDiscipline = "MysticForge";
+        /// <summary>
+        /// Source tags rather than player-levelable GW2 crafting
+        /// disciplines. The Mystic Forge is a facility; "Achievement" and
+        /// "Merchant" mark seed recipes whose output is handed over once a
+        /// condition outside the crafting panel is met. None has a
+        /// "learn this recipe" unlock, and none appears in
+        /// /v2/account/recipes.
+        /// </summary>
+        private static readonly HashSet<string> UnlockFreeDisciplines =
+            new HashSet<string> { "MysticForge", "Achievement", "Merchant" };
 
         public static bool IsUnlocked(string statusTag)
         {
@@ -41,25 +50,25 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// True when every discipline on a required recipe is "MysticForge".
-        /// The forge is a facility with no unlock, so such a recipe is not
-        /// one a player can be missing and no surface may count it.
+        /// True when a required recipe carries a discipline that has no
+        /// unlock, so the player cannot be missing it and no surface may
+        /// count it.
         /// <para>
-        /// Both PlanViewModelBuilder.BuildRecipesSection and
-        /// RankerReadinessCalculator.ScoreRecipes call this, so the plan's
-        /// "N missing of M" header and the Ranker's Recipes cell score the
-        /// same set of recipes. PlanResultBuilder marks a forge recipe
-        /// IsMissing = false, so counting it padded both halves of the
-        /// Ranker's fraction and pulled the cell above the plan's own count.
+        /// This is the same "any" test PlanResultBuilder applies when it
+        /// forces IsMissing = false, and PlanViewModelBuilder.BuildRecipesSection
+        /// and RankerReadinessCalculator.ScoreRecipes both call it. That
+        /// makes one invariant: a recipe whose IsMissing is forced false for
+        /// want of an unlock is counted by nothing. Counting one padded both
+        /// halves of the Ranker's fraction and lifted the Recipes cell above
+        /// the plan's own count.
         /// </para>
         /// <para>
-        /// A recipe combining the forge with a real leveled discipline still
-        /// has something to learn and is kept. Empty or null disciplines is
-        /// NOT a match: vacuous truth would drop a recipe whose discipline
-        /// data is simply absent.
+        /// Empty or null disciplines is NOT a match: that is absent data,
+        /// and dropping the recipe would claim an unlock rule the module
+        /// never established.
         /// </para>
         /// </summary>
-        public static bool IsMysticForgeOnly(IReadOnlyList<string> disciplines)
+        public static bool IsUnlockFree(IReadOnlyList<string> disciplines)
         {
             if (disciplines == null || disciplines.Count == 0)
             {
@@ -71,13 +80,13 @@ namespace TaimisToolbench.Services
             // the Ranker calls this for every recipe of every watchlist row.
             for (int i = 0; i < disciplines.Count; i++)
             {
-                if (disciplines[i] != MysticForgeDiscipline)
+                if (UnlockFreeDisciplines.Contains(disciplines[i]))
                 {
-                    return false;
+                    return true;
                 }
             }
 
-            return true;
+            return false;
         }
 
         /// <summary>

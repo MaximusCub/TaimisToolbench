@@ -36,7 +36,6 @@
 # Format: <path> <inline-blocks-over-12> <xml-blocks-over-20>.
 Models/PlanViewModel.cs                                                                      2     0
 Module.cs                                                                                    4     0
-Services/CraftCompetencyEvaluator.cs                                                         1     0
 Services/DecisionPillPlanner.cs                                                              1     0
 Services/ItemMetadataService.cs                                                              1     0
 Services/ModuleLog.cs                                                                        1     0

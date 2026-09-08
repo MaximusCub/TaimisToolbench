@@ -780,15 +780,39 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(0.0, GateCompletion(metrics, RankerGate.Recipes), 9);
         }
 
-        [Fact]
-        public void RecipesGate_KeepsARecipeThatPairsTheForgeWithALeveledDiscipline()
+        [Theory]
+        [InlineData("Achievement")]
+        [InlineData("Merchant")]
+        public void RecipesGate_IgnoresTheOtherUnlockFreeSourceTags(string discipline)
         {
-            // A recipe combining the forge with a real discipline still has
-            // something to learn, so it stays in the score.
+            // ref/recipes_seed.json carries three "Merchant" recipes and one
+            // "Achievement" recipe. PlanResultBuilder marks each not missing
+            // on the same no-unlock rule it applies to the forge, so each
+            // padded this fraction exactly as a forge recipe used to.
             var owned = Result(coin: 50);
             owned.RequiredRecipes = new List<RequiredRecipe>
             {
-                Recipe(isMissing: true, autoLearned: false, "MysticForge", "Artificer"),
+                Recipe(isMissing: false, autoLearned: false, discipline),
+                Recipe(isMissing: true, autoLearned: false, "Weaponsmith"),
+            };
+
+            var metrics = RankerReadinessCalculator.Compute(Result(coin: 100), owned, Availability(), 0);
+
+            Assert.True(GateApplies(metrics, RankerGate.Recipes));
+            Assert.Equal(0.0, GateCompletion(metrics, RankerGate.Recipes), 9);
+        }
+
+        [Fact]
+        public void RecipesGate_DropsARecipeThatPairsTheForgeWithALeveledDiscipline()
+        {
+            // PlanResultBuilder forces IsMissing = false as soon as ONE
+            // discipline is unlock-free, so such a recipe can only ever
+            // arrive as known and can only pad the fraction.
+            var owned = Result(coin: 50);
+            owned.RequiredRecipes = new List<RequiredRecipe>
+            {
+                Recipe(isMissing: false, autoLearned: false, "MysticForge", "Artificer"),
+                Recipe(isMissing: true, autoLearned: false, "Weaponsmith"),
             };
 
             var metrics = RankerReadinessCalculator.Compute(Result(coin: 100), owned, Availability(), 0);

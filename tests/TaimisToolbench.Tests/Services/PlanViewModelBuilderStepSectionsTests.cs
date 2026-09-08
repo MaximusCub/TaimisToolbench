@@ -658,12 +658,12 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void RequiredRecipes_MysticForgeWithRealDiscipline_StaysInSection()
+        public void RequiredRecipes_MysticForgeWithRealDiscipline_LeavesSection()
         {
-            // A recipe combining MysticForge with a genuine leveled
-            // discipline still has something real to learn, so it is NOT
-            // filtered - only a recipe whose ENTIRE Disciplines list is
-            // MysticForge is excluded.
+            // PlanResultBuilder forces IsMissing = false as soon as ONE
+            // discipline is unlock-free, so a forge-plus-Weaponsmith recipe
+            // reaches this builder as permanently known. Listing it drew a
+            // row the player can never act on.
             var meta = MetaFor((2, "Blade", "b.png"));
             var result = MakeResult(
                 metadata: meta,
@@ -675,6 +675,42 @@ namespace TaimisToolbench.Tests.Services
                         OutputItemId = 2,
                         IsAutoLearned = false,
                         Disciplines = new List<string> { "MysticForge", "Weaponsmith" },
+                        MinRating = 400,
+                        IsMissing = false,
+                    },
+                });
+            var vm = _builder.Build(result);
+
+            Assert.DoesNotContain(
+                vm.Sections, s => s.SectionType == PlanSectionType.RequiredRecipes);
+        }
+
+        [Fact]
+        public void RequiredRecipes_MerchantSourceTag_LeavesSection()
+        {
+            // ref/recipes_seed.json carries three "Merchant" recipes and one
+            // "Achievement" recipe. Neither tag has an unlock, so both are
+            // filtered on the same rule the forge is.
+            var meta = MetaFor((1, "Trebuchet Part", "t.png"), (2, "Blade", "b.png"));
+            var result = MakeResult(
+                metadata: meta,
+                requiredRecipes: new List<RequiredRecipe>
+                {
+                    new RequiredRecipe
+                    {
+                        RecipeId = -1595,
+                        OutputItemId = 1,
+                        IsAutoLearned = false,
+                        Disciplines = new List<string> { "Merchant" },
+                        MinRating = 0,
+                        IsMissing = false,
+                    },
+                    new RequiredRecipe
+                    {
+                        RecipeId = 10,
+                        OutputItemId = 2,
+                        IsAutoLearned = false,
+                        Disciplines = new List<string> { "Weaponsmith" },
                         MinRating = 400,
                         IsMissing = true,
                     },
