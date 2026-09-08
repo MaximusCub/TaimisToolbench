@@ -13,6 +13,14 @@ namespace TaimisToolbench.Services
         public bool Failed { get; set; }
 
         /// <summary>
+        /// Which unbroken run of failed refreshes this failure belongs to,
+        /// or <see cref="RefreshFailureRun.None"/> when nothing failed. The
+        /// tab raises its dialog once per run - see
+        /// <see cref="StaleDataDialogGate"/>.
+        /// </summary>
+        public int FailureRunId { get; set; }
+
+        /// <summary>
         /// Which reads went unread. Empty when nothing failed. Every source
         /// when the refresh failed without naming one.
         /// </summary>

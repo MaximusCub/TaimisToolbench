@@ -308,6 +308,12 @@ namespace TaimisToolbench
         // instead), without needing a lock of its own here.
         private long _lastFailedRefreshAttemptTicks;
 
+        // The same failures, counted as runs rather than timed, so the
+        // Crafting Plan tab can raise its stale-data dialog once per outage
+        // instead of once per Generate press. Its own doc comment carries
+        // the rule; the ticks above stay the timing side and gate retries.
+        private readonly RefreshFailureRun _refreshFailures = new RefreshFailureRun();
+
         // Minimum wait after a failed background
         // refresh before RefreshSnapshotInBackgroundAsync is allowed to
         // auto-retrigger again. Deliberately does NOT gate UserRefreshAsync
@@ -2211,6 +2217,12 @@ namespace TaimisToolbench
         /// <summary>
         /// One snapshot fetch, published while it runs so a Generate Plan
         /// click can join it rather than refuse to refresh.
+        /// <para>
+        /// Every fetch the module makes - background, clicked and
+        /// plan-driven alike - passes through here, so this is where a
+        /// successful read ends the standing failure run. A null return is
+        /// a fetch Clear Cache superseded, which read nothing.
+        /// </para>
         /// </summary>
         private async Task<AccountSnapshot> TrackedFetchAsync(CancellationToken ct)
         {
@@ -2218,7 +2230,13 @@ namespace TaimisToolbench
             Volatile.Write(ref _snapshotFetchInFlight, fetch);
             try
             {
-                return await fetch;
+                var snapshot = await fetch;
+                if (snapshot != null)
+                {
+                    _refreshFailures.RecordSuccess();
+                }
+
+                return snapshot;
             }
             finally
             {
@@ -2267,6 +2285,22 @@ namespace TaimisToolbench
                     {
                         await running;
                     }
+                    else if (IsInRefreshFailureBackoff())
+                    {
+                        // A refresh failed inside the last minute, so this
+                        // press would spend a fresh account fetch to fail
+                        // the same way. The background path has waited this
+                        // window out since it was written; the plan path
+                        // did not, which is what made every Generate press
+                        // during an outage a new attempt.
+                        //
+                        // No status line is written here. The failure that
+                        // opened the window already stamped one, and a
+                        // second stamp would date an attempt that did not
+                        // happen.
+                        Logger.Debug("Skipping snapshot refresh for a plan - within backoff window after a prior failure");
+                        MarkPlanRefreshFailed(refresh, null);
+                    }
                     else if (_refreshSlot.TryClaim())
                     {
                         _backgroundRefreshInFlight = true;
@@ -2285,7 +2319,10 @@ namespace TaimisToolbench
                         }
                     }
 
-                    Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
+                    if (!refresh.Failed)
+                    {
+                        Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
+                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -2312,6 +2349,12 @@ namespace TaimisToolbench
                     MarkPlanRefreshFailed(refresh, ex as SnapshotFetchFailedException);
                 }
             }
+
+            // After the fetch, so a refresh that succeeded here has already
+            // closed the run this would otherwise re-open.
+            refresh.FailureRunId = refresh.Failed
+                ? _refreshFailures.RecordFailure()
+                : RefreshFailureRun.None;
 
             var snapshot = _currentSnapshot;
             refresh.Snapshot = snapshot;
@@ -2401,6 +2444,7 @@ namespace TaimisToolbench
                 Logger.Warn(ex, "Failed to refresh account snapshot");
                 ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot", $"Failed to refresh account snapshot: {ex.GetType().Name} - {ex.Message}");
                 Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, DateTime.UtcNow.Ticks);
+                _refreshFailures.RecordFailure();
 
                 // KNOWN-ISSUES #37 follow-up: status-text parity with
                 // MainView.RefreshNowAsync's own catch block - this

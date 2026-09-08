@@ -1,3 +1,5 @@
+using System;
+
 namespace TaimisToolbench.Services
 {
     /// <summary>
@@ -49,6 +51,25 @@ namespace TaimisToolbench.Services
         /// 24px buttons and a label, not the input row's text boxes.
         /// </summary>
         public const int TreeToolbarRowHeight = 30;
+
+        /// <summary>
+        /// Width the status label may fill before it ellipsizes. The status
+        /// row carries nothing but the label and the spinner that trails
+        /// it, so the band is the strip's own right edge less the two.
+        /// <para>
+        /// MEASURED at the 1378px window floor, from the shipped constants
+        /// rather than by eye: WindowSizing.TabPanelWidthFor leaves the
+        /// panel 1252, the strip stops one WindowSizing.RightEdgePadding
+        /// short of that (where the separator rule and the Generate button
+        /// already stop), and InlineSpinnerLayout's 20px spinner and 6px
+        /// gap take the rest - 1206. Pinned by TopRegionLayoutMathTests.
+        /// </para>
+        /// </summary>
+        public static int StatusBandWidth(int panelWidth, int spinnerSize, int labelGap)
+        {
+            return Math.Max(
+                0, panelWidth - WindowSizing.RightEdgePadding - spinnerSize - labelGap);
+        }
 
         /// <summary>
         /// Every fixed element's Y in the strip, plus the total height the

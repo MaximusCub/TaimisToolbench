@@ -99,6 +99,24 @@ namespace TaimisToolbench.Services
         public const int RankerStatusBudgetChars = 86;
 
         /// <summary>
+        /// Characters the Crafting Plan's status line may run to before it
+        /// ellipsizes. Its band is 1206 logical pixels at the same window
+        /// floor - TopRegionLayoutMath.StatusBandWidth derives that from the
+        /// shipped constants and TopRegionLayoutMathTests pins it - and the
+        /// two bands draw the same face, so this is
+        /// <see cref="RankerStatusBudgetChars"/>' own measured rate carried
+        /// across: 86 characters in 779 pixels is 9.06 a character, and 1206
+        /// buys 133 of them.
+        /// <para>
+        /// The widest line the strip composes is far past this, so it is
+        /// the ellipsizer that keeps it on screen rather than this budget.
+        /// PlanStatusLineTests builds that line through the real
+        /// composition and pins its length.
+        /// </para>
+        /// </summary>
+        public const int PlanStatusBudgetChars = 133;
+
+        /// <summary>
         /// The Crafting Ranker's per-item progress line: which item of how
         /// many is being solved, and on the first run of a session that
         /// this run is the slow one.
@@ -281,6 +299,51 @@ namespace TaimisToolbench.Services
             }
 
             return AgeMagnitude(age) + " ago";
+        }
+
+        /// <summary>
+        /// The same age spelled out - "14 minutes ago", "3 hours ago",
+        /// "2 days ago", "4 months ago". For prose a reader meets once: the
+        /// stale-account-data dialog and its Log tab line.
+        /// <para>
+        /// <see cref="ForAgeAgo"/>'s "14m ago" is written for a status band
+        /// that is already short of room and is read at a glance. Neither of
+        /// these two is, and both have the width.
+        /// </para>
+        /// <para>
+        /// Only the coarsest unit is named, so "3h 12m ago" becomes "3 hours
+        /// ago". The finer term buys a reader deciding whether to regenerate
+        /// nothing, and it costs the sentence its rhythm.
+        /// </para>
+        /// </summary>
+        public static string ForAgeAgoInWords(TimeSpan age)
+        {
+            if (age < TimeSpan.Zero)
+            {
+                age = TimeSpan.Zero;
+            }
+
+            if (age.TotalMinutes < 1)
+            {
+                return "just now";
+            }
+
+            if (age.TotalHours < 1)
+            {
+                return Count((int)age.TotalMinutes, "minute") + " ago";
+            }
+
+            if (age.TotalDays < 1)
+            {
+                return Count((int)age.TotalHours, "hour") + " ago";
+            }
+
+            if (age.TotalDays < AgeDaysPerMonth)
+            {
+                return Count((int)age.TotalDays, "day") + " ago";
+            }
+
+            return Count((int)(age.TotalDays / AgeDaysPerMonth), "month") + " ago";
         }
 
         /// <summary>

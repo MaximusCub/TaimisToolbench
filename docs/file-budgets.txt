@@ -108,7 +108,7 @@ Models/UsedMaterial.cs                                                          
 Models/VendorItemCostLine.cs                                                            42
 Models/VendorOffer.cs                                                                   77
 Models/VendorOfferDataset.cs                                                            15
-Module.cs                                                                               3303
+Module.cs                                                                               3347
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
@@ -212,6 +212,7 @@ Services/PlanRelayoutMath.cs                                                    
 Services/PlanResultBuilder.cs                                                           483
 Services/PlanRootNodes.cs                                                               46
 Services/PlanSolver.cs                                                                  2346
+Services/PlanStatusLine.cs                                                              88
 Services/PlanStore.cs                                                                   219
 Services/PlanStoreHelpers.cs                                                            374
 Services/PlanStripStatusBoard.cs                                                        307
@@ -247,6 +248,7 @@ Services/Recipes/RecipeCorpusRefresher.cs                                       
 Services/Recipes/RecipeCorpusVerifier.cs                                                259
 Services/Recipes/SeededRecipeCacheStore.cs                                              232
 Services/RecipesColumnMath.cs                                                           101
+Services/RefreshFailureRun.cs                                                           101
 Services/RequestLabelFormatter.cs                                                       63
 Services/RequiredRecipesVisibility.cs                                                   173
 Services/ResizeSettleDebounce.cs                                                        153
@@ -288,7 +290,7 @@ Services/SortIndicatorLayout.cs                                                 
 Services/SourceFilterFlowLayout.cs                                                      85
 Services/StaticItemSearchProvider.cs                                                    42
 Services/StatusStore.cs                                                                 73
-Services/StatusText.cs                                                                  510
+Services/StatusText.cs                                                                  573
 Services/StatusUpdateGuard.cs                                                           38
 Services/StickyHeaderLayout.cs                                                          117
 Services/SummarySectionLayoutMath.cs                                                   1037
@@ -297,7 +299,7 @@ Services/TransmutedNameIndex.cs                                                 
 Services/UiGlyphs.cs                                                                    124
 Services/GlyphFontDescriptor.cs                                                         316
 Services/IconWikiTarget.cs                                                              156
-Services/PlanAccountRefresh.cs                                                          40
+Services/PlanAccountRefresh.cs                                                          48
 Services/PlanItemIds.cs                                                                 73
 Services/SecondTooltipBox.cs                                                            82
 Services/SnapshotRefreshPolicy.cs                                                       88
@@ -306,7 +308,7 @@ Services/TextWrapMath.cs                                                        
 Services/TooltipContent.cs                                                              701
 Services/TooltipLayoutMath.cs                                                           628
 Services/TooltipTextFormat.cs                                                           136
-Services/TopRegionLayoutMath.cs                                                         116
+Services/TopRegionLayoutMath.cs                                                         137
 Services/TradingPostMath.cs                                                             57
 Services/TradingPostService.cs                                                          369
 Services/TreeChipStripLayout.cs                                                         202
@@ -332,7 +334,7 @@ Services/WindowSizing.cs                                                        
 Views/AboutTabContent.cs                                                                1000
 Views/ApiAccessDialog.cs                                                                231
 Views/AutocompleteTextBox.cs                                                            45
-Views/CraftingPlanView.cs                                                               5508
+Views/CraftingPlanView.cs                                                               5541
 Views/FocusRelease.cs                                                                   159
 Views/ItemInputRowStrip.cs                                                              465
 Views/ItemRowState.cs                                                                   39
@@ -559,6 +561,7 @@ tests/TaimisToolbench.Tests/Services/PlanSolverUnpricedBarterOfferTests.cs      
 tests/TaimisToolbench.Tests/Services/PlanSolverVendorBatchingTests.cs                   805
 tests/TaimisToolbench.Tests/Services/PlanSolverVendorCapTests.cs                        455
 tests/TaimisToolbench.Tests/Services/PlanSolverVendorOfferTests.cs                      614
+tests/TaimisToolbench.Tests/Services/PlanStatusLineTests.cs                             140
 tests/TaimisToolbench.Tests/Services/PlanStoreTests.cs                                  2677
 tests/TaimisToolbench.Tests/Services/PlanStripStatusBoardTests.cs                       406
 tests/TaimisToolbench.Tests/Services/PlanStripTickDecisionTests.cs                      166
@@ -603,6 +606,7 @@ tests/TaimisToolbench.Tests/Services/Recipes/RecipeCorpusRefresherTests.cs      
 tests/TaimisToolbench.Tests/Services/Recipes/RecipeCorpusVerifierTests.cs               362
 tests/TaimisToolbench.Tests/Services/Recipes/SeedFinalizeIndexTests.cs                  112
 tests/TaimisToolbench.Tests/Services/RecipesColumnMathTests.cs                          119
+tests/TaimisToolbench.Tests/Services/RefreshFailureRunTests.cs                          122
 tests/TaimisToolbench.Tests/Services/RequestLabelFormatterTests.cs                      76
 tests/TaimisToolbench.Tests/Services/RequiredRecipesVisibilityTests.cs                  198
 tests/TaimisToolbench.Tests/Services/ResizeSettleDebounceTests.cs                       353
@@ -641,7 +645,7 @@ tests/TaimisToolbench.Tests/Services/SocketedUpgradeTests.cs                    
 tests/TaimisToolbench.Tests/Services/SortIndicatorLayoutTests.cs                        151
 tests/TaimisToolbench.Tests/Services/SourceFilterFlowLayoutTests.cs                     127
 tests/TaimisToolbench.Tests/Services/StatusStoreTests.cs                                116
-tests/TaimisToolbench.Tests/Services/StatusTextTests.cs                                 662
+tests/TaimisToolbench.Tests/Services/StatusTextTests.cs                                 687
 tests/TaimisToolbench.Tests/Services/StatusUpdateGuardTests.cs                          33
 tests/TaimisToolbench.Tests/Services/StickyHeaderLayoutTests.cs                         266
 tests/TaimisToolbench.Tests/Services/SummarySectionLayoutMathTests.cs                   1610
@@ -660,7 +664,7 @@ tests/TaimisToolbench.Tests/Services/TooltipContentTests.cs                     
 tests/TaimisToolbench.Tests/Services/TooltipLayoutMathTests.cs                          831
 tests/TaimisToolbench.Tests/Services/TooltipSpanRoleTests.cs                            108
 tests/TaimisToolbench.Tests/Services/TooltipTextFormatTests.cs                          138
-tests/TaimisToolbench.Tests/Services/TopRegionLayoutMathTests.cs                        147
+tests/TaimisToolbench.Tests/Services/TopRegionLayoutMathTests.cs                        192
 tests/TaimisToolbench.Tests/Services/TradingPostMathTests.cs                            70
 tests/TaimisToolbench.Tests/Services/TradingPostServiceTests.cs                         523
 tests/TaimisToolbench.Tests/Services/TransmutedNameTests.cs                             441

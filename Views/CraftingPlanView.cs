@@ -220,9 +220,9 @@ namespace TaimisToolbench.Views
         // the search provider, before any plan work starts.
         private const string ResolvingStatus = "Resolving items...";
 
-        // Separates the strip's standing notices from the status board's own
-        // text (and from each other).
-        private const string StatusNoticeSeparator = "  |  ";
+        // What the strip says before anything has been generated this
+        // session, and what a rolled-back restore puts back.
+        private const string ReadyStatus = "Ready";
 
         // Three things that stay true about the plan on screen for longer
         // than one status write: a toolbar change it does not include, rows
@@ -879,18 +879,60 @@ namespace TaimisToolbench.Views
 
         public void SetStatus(string status)
         {
-            if (_statusLabel != null)
-            {
-                _statusLabel.Text = status ?? "";
+            _statusFullText = status ?? "";
+            ApplyStatusText();
+        }
 
-                // The label is AutoSizeWidth, so its right edge moves with
-                // every text change and the spinner has to follow it. Done
-                // here rather than only in RenderFromBoard because the
-                // strip has several other writers (Resolving..., the
-                // invalid-quantity notice, the section renderers' own
-                // SetStatus callback) and any of them can land mid-flight.
-                InlineSpinner.PlaceAfter(_statusSpinner, _statusLabel, InlineSpinnerLayout.LabelGap);
+        // The status line's whole text, so a resize re-takes the ellipsis
+        // from the original rather than compounding it onto an
+        // already-shortened string.
+        private string _statusFullText = "";
+
+        // Width the line ellipsizes against - TopRegionLayoutMath.
+        // StatusBandWidth of the live panel. Held separately from
+        // Label.Width, which stays the width of the TEXT: see
+        // InlineSpinnerLayout.LabelWidthForText.
+        private int _statusBudget;
+
+        private static int StatusBandWidthFor(int panelWidth)
+        {
+            return TopRegionLayoutMath.StatusBandWidth(
+                panelWidth, InlineSpinnerLayout.PlanStripSize, InlineSpinnerLayout.LabelGap);
+        }
+
+        /// <summary>
+        /// Paints <see cref="_statusFullText"/> into the label, shortened
+        /// to the band and with the whole line on a hover when it does not
+        /// fit. The strip's worst line runs to well over the band - see
+        /// StatusText.PlanStatusBudgetChars - and without this it clipped
+        /// with no ellipsis and no way to read the rest.
+        /// <para>
+        /// Called by every writer the strip has - RenderFromBoard's ~7Hz
+        /// spinner render, the resolving and invalid-quantity notices, the
+        /// section renderers' own callback - and by every relayout, since
+        /// the band moves with the panel.
+        /// </para>
+        /// </summary>
+        private void ApplyStatusText()
+        {
+            if (_statusLabel == null)
+            {
+                return;
             }
+
+            var font = UiFonts.Status;
+            string shown = LabelHelpers.EllipsizeToWidth(
+                font, _statusFullText, Math.Max(0, _statusBudget));
+            _statusLabel.Text = shown;
+            _statusLabel.Width = InlineSpinnerLayout.LabelWidthForText(
+                LabelHelpers.MeasureWith(font)(shown), _statusBudget);
+            TooltipFacility.ApplyPlain(
+                _statusLabel,
+                string.Equals(shown, _statusFullText, StringComparison.Ordinal) ? null : _statusFullText);
+
+            // The label's right edge moves with every text change and the
+            // spinner has to follow it.
+            InlineSpinner.PlaceAfter(_statusSpinner, _statusLabel, InlineSpinnerLayout.LabelGap);
         }
 
         /// <summary>
@@ -1170,7 +1212,7 @@ namespace TaimisToolbench.Views
 
             if (_statusBoard.ClearRestoredSeed())
             {
-                SetStatus("Ready");
+                SetStatus(ReadyStatus);
             }
         }
 
@@ -2222,7 +2264,10 @@ namespace TaimisToolbench.Views
             _controlsPanel.Location = new Point(0, layout.ControlsRowY);
             PlaceTreeToolbarRow(w, layout.TreeToolbarRowY);
             _statusLabel.Location = new Point(0, layout.StatusRowY);
-            InlineSpinner.PlaceAfter(_statusSpinner, _statusLabel, InlineSpinnerLayout.LabelGap);
+
+            // Re-ellipsizes from the whole text and re-seats the spinner.
+            _statusBudget = StatusBandWidthFor(w);
+            ApplyStatusText();
             _separator.Location = new Point(0, layout.SeparatorY);
             _contentPanel.Location = new Point(0, layout.ContentY);
             _contentPanel.Size = new Point(w, h - layout.TopRegionHeight);
@@ -2427,11 +2472,12 @@ namespace TaimisToolbench.Views
             // Status label. Its own tier: the strip reports what the module
             // is doing, and had been reporting it at the same size as
             // every row in the plan below.
+            // AutoSizeWidth off: the line is ellipsized to the band and the
+            // width is then set to the SHOWN text - see ApplyStatusText.
             _statusLabel = new Label()
             {
                 Font = UiFonts.Status,
-                Text = "Ready",
-                AutoSizeWidth = true,
+                AutoSizeWidth = false,
                 AutoSizeHeight = true,
                 Location = new Point(0, layout.StatusRowY),
                 Parent = buildPanel,
@@ -2440,7 +2486,11 @@ namespace TaimisToolbench.Views
 
             _statusSpinner = InlineSpinner.Create(buildPanel, InlineSpinnerLayout.PlanStripSize);
             _statusSpinner.ZIndex = TopStripZIndex;
-            InlineSpinner.PlaceAfter(_statusSpinner, _statusLabel, InlineSpinnerLayout.LabelGap);
+
+            // Both before the first paint: the label is empty until one
+            // runs, and the band the other measures against is zero.
+            _statusBudget = StatusBandWidthFor(w);
+            SetStatus(ReadyStatus);
 
             // Static separator between controls and content
             // WheelTransparent, not a plain Panel: it now paints above the
@@ -3125,7 +3175,10 @@ namespace TaimisToolbench.Views
             _generateButton.Location = new Point(w - 120 - RightEdgePadding, 3);
             PlaceTreeToolbarRow(w, layout.TreeToolbarRowY);
             _statusLabel.Location = new Point(0, layout.StatusRowY);
-            InlineSpinner.PlaceAfter(_statusSpinner, _statusLabel, InlineSpinnerLayout.LabelGap);
+
+            // Re-ellipsizes from the whole text and re-seats the spinner.
+            _statusBudget = StatusBandWidthFor(w);
+            ApplyStatusText();
             _separator.Size = new Point(w - RightEdgePadding, 2);
             _separator.Location = new Point(0, layout.SeparatorY);
             _contentPanel.Location = new Point(0, layout.ContentY);
@@ -4443,11 +4496,16 @@ namespace TaimisToolbench.Views
             }
         }
 
+        // One dialog per run of failed refreshes - see
+        // Services/RefreshFailureRun.cs. Held on the view because the run
+        // is the module's fact and being told about it is the user's.
+        private readonly StaleDataDialogGate _staleDataDialog = new StaleDataDialogGate();
+
         /// <summary>
         /// Tells the user their account snapshot did not refresh, but only
         /// when this plan reads something the refresh failed to read - see
-        /// Services/StaleAccountDataWarning.cs. The status line under the
-        /// toolbar carries the failure either way.
+        /// Services/StaleAccountDataWarning.cs - and only once per run of
+        /// failures. The status line and the Log tab carry every one.
         /// </summary>
         public void RaiseStaleAccountDataDialog(
             PlanAccountRefresh refresh, CraftingPlanResult result, bool usedOwnMaterials)
@@ -4476,72 +4534,47 @@ namespace TaimisToolbench.Views
             ModuleLog.Shared.Write(
                 ModuleLogLevel.Warn, "plan", StaleAccountDataWarning.ComposeLogDetail(notice));
 
+            if (!_staleDataDialog.ShouldRaise(refresh.FailureRunId))
+            {
+                return;
+            }
+
             _modalDialog?.ShowAcknowledgement(StaleAccountDataWarning.Compose(notice));
         }
 
         /// <summary>
-        /// The finished plan's status line. Carries the account-data clause
-        /// only when the plan subtracted owned materials from a snapshot
-        /// that is overdue for a refresh or missing a character - see
-        /// StatusText.ForPlanAccountDataNote, which owns that decision and
-        /// the wording.
+        /// The finished plan's status line, with the account-data clause
+        /// Services/PlanStatusLine.cs decides on. A plan solved against no
+        /// snapshot, or a view with no settings to read the staleness
+        /// threshold from, carries the bare timestamp.
         /// </summary>
         private string PlanGeneratedStatus(AccountSnapshot planned)
         {
-            string status = StatusText.Stamp("Plan generated", _planGeneratedAt);
             if (planned == null || _settings == null)
             {
-                return status;
+                return StatusText.Stamp("Plan generated", _planGeneratedAt);
             }
 
-            string clause = StatusText.ForPlanAccountDataNote(
+            return PlanStatusLine.ForGeneratedPlan(
+                _planGeneratedAt,
                 DateTime.UtcNow - planned.CapturedAt,
                 TimeSpan.FromMinutes(_settings.GetClampedSnapshotRefreshIntervalMinutes()),
                 planned.IncompleteCharacterCount,
                 planned.CharacterCount);
-
-            return clause == null ? status : status + " (" + clause + ")";
         }
 
         /// <summary>
         /// <paramref name="status"/> with the strip's standing notices
         /// appended - the facts that outlive any single status write (see
         /// _settingsChangedPending / _unresolvedRowsNotice /
-        /// _accountDataChanged). Returns <paramref name="status"/> itself,
-        /// allocating nothing, in the ordinary case where there are none:
-        /// this runs on every spinner render for the whole of every
-        /// generation.
-        /// <para>
-        /// The settings and account-data facts share one notice rather than
-        /// taking a clause each - StatusText.ForPlanStaleInputs owns that
-        /// wording and the width reasoning behind it.
-        /// </para>
+        /// _accountDataChanged). The join and the wording live in
+        /// Services/PlanStatusLine.cs, where the widest line the strip can
+        /// compose is measurable.
         /// </summary>
         private string WithStandingNotices(string status)
         {
-            if (_unresolvedRowsNotice == null && !_settingsChangedPending && !_accountDataChanged)
-            {
-                return status;
-            }
-
-            var parts = new List<string>(3);
-            if (!string.IsNullOrEmpty(status))
-            {
-                parts.Add(status);
-            }
-
-            if (_unresolvedRowsNotice != null)
-            {
-                parts.Add(_unresolvedRowsNotice);
-            }
-
-            string staleInputs = StatusText.ForPlanStaleInputs(_settingsChangedPending, _accountDataChanged);
-            if (staleInputs != null)
-            {
-                parts.Add(staleInputs);
-            }
-
-            return string.Join(StatusNoticeSeparator, parts);
+            return PlanStatusLine.WithStandingNotices(
+                status, _unresolvedRowsNotice, _settingsChangedPending, _accountDataChanged);
         }
 
         /// <summary>
