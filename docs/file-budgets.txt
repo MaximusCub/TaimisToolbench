@@ -279,7 +279,7 @@ Services/PlanAccountRefresh.cs                                                  
 Services/PlanItemIds.cs                                                                 73
 Services/SecondTooltipBox.cs                                                            82
 Services/SnapshotRefreshPolicy.cs                                                       41
-Services/StaleAccountDataWarning.cs                                                     310
+Services/StaleAccountDataWarning.cs                                                     333
 Services/TextWrapMath.cs                                                                324
 Services/TooltipContent.cs                                                              701
 Services/TooltipLayoutMath.cs                                                           628
@@ -625,7 +625,7 @@ tests/TaimisToolbench.Tests/Services/IconWikiTargetTests.cs                     
 tests/TaimisToolbench.Tests/Services/RequiredRecipeSheetNamingTests.cs                  185
 tests/TaimisToolbench.Tests/Services/SecondTooltipBoxTests.cs                           123
 tests/TaimisToolbench.Tests/Services/SnapshotRefreshPolicyTests.cs                      51
-tests/TaimisToolbench.Tests/Services/StaleAccountDataWarningTests.cs                    293
+tests/TaimisToolbench.Tests/Services/StaleAccountDataWarningTests.cs                    319
 tests/TaimisToolbench.Tests/Services/TextWrapMathTests.cs                               297
 tests/TaimisToolbench.Tests/Services/TooltipComposerContentTests.cs                     215
 tests/TaimisToolbench.Tests/Services/TooltipContentTests.cs                             208

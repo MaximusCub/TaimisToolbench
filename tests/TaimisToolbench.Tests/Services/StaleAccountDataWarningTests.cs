@@ -116,6 +116,32 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public async Task AnIngredientTheAccountCoversInFull_IsStillNamed()
+        {
+            // The reducer clears the sub-recipes of an ingredient the
+            // account covers, so the solved tree can stop carrying that
+            // branch. The reduction's own record of what it consumed is
+            // what keeps the item in the plan's set.
+            var snapshot = Snapshot(
+                Held(2, "Ingredient", AccountItemIndex.SourceMaterialStorage, count: 50));
+
+            var result = await CraftPlanAsync(snapshot);
+            Assert.Equal(0, result.Plan.TotalCoinCost);
+            Assert.Single(result.UsedMaterials);
+
+            var notice = StaleAccountDataWarning.Evaluate(
+                new[] { AccountDataSource.MaterialStorage },
+                null,
+                snapshot,
+                result,
+                planUsedHoldings: true,
+                Now);
+
+            Assert.NotNull(notice);
+            Assert.Equal(new[] { "Ingredient" }, notice.ItemNames);
+        }
+
+        [Fact]
         public async Task UseOwnMaterialsOff_SaysNothingAboutHoldings()
         {
             // The plan read no holding at all, so no item source could have

@@ -60,6 +60,7 @@ namespace TaimisToolbench.Services
 
             var planItemIds = new HashSet<int>(PlanItemIds.ForResult(result));
             AddVendorItemCostIds(result, planItemIds);
+            AddUsedMaterialIds(result, planItemIds);
 
             bool readsCurrencies = ReadsCurrencies(result);
             bool readsDisciplines = result.RequiredDisciplines != null && result.RequiredDisciplines.Count > 0;
@@ -237,6 +238,28 @@ namespace TaimisToolbench.Services
             }
 
             return result.OwnedCurrencyAmounts != null && result.OwnedCurrencyAmounts.Count > 0;
+        }
+
+        /// <summary>
+        /// Items the reduction drew out of the account. Added because the
+        /// reducer clears the sub-recipes of an ingredient the account
+        /// covers in full, so a plan can consume an item whose branch the
+        /// solved tree no longer carries.
+        /// </summary>
+        private static void AddUsedMaterialIds(CraftingPlanResult result, HashSet<int> planItemIds)
+        {
+            if (result.UsedMaterials == null)
+            {
+                return;
+            }
+
+            foreach (var used in result.UsedMaterials)
+            {
+                if (used != null && used.ItemId > 0)
+                {
+                    planItemIds.Add(used.ItemId);
+                }
+            }
         }
 
         private static void AddVendorItemCostIds(CraftingPlanResult result, HashSet<int> planItemIds)
