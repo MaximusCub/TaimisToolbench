@@ -435,6 +435,13 @@ namespace VendorOfferUpdater
                     Console.WriteLine();
                 }
 
+                // Step 3.6: Load the GW2 API name lists that decide which
+                // kind of gate each row's "Has requirement" text names.
+                var requirementNames =
+                    await VendorRequirementNameLoader.LoadAsync(httpClient, ct);
+                ReportAmbiguousRequirements(wikiResults, requirementNames);
+                Console.WriteLine();
+
                 // Step 4: Convert to VendorOffers
                 Console.WriteLine("Converting to vendor offers...");
                 var offers = new List<VendorOffer>();
@@ -464,7 +471,7 @@ namespace VendorOfferUpdater
                     }
 
                     var offer = ConvertToOffer(
-                        result, apiHelper, itemIdMap, unlockRecipeIdByItemId);
+                        result, apiHelper, itemIdMap, unlockRecipeIdByItemId, requirementNames);
                     if (offer != null)
                     {
                         offers.Add(offer);
@@ -479,12 +486,7 @@ namespace VendorOfferUpdater
                     $"  Converted: {offers.Count} offers " +
                     $"(skipped: {skippedNoId} no game ID, {skippedUnresolved} unresolved cost)");
 
-                // Deduplicate by OfferId
-                var uniqueOffers = offers
-                    .GroupBy(o => o.OfferId)
-                    .Select(g => g.First())
-                    .OrderBy(o => o.OfferId, StringComparer.Ordinal)
-                    .ToList();
+                var uniqueOffers = DeduplicateByOfferId(offers);
 
                 Console.WriteLine($"  Unique offers: {uniqueOffers.Count}");
                 Console.WriteLine();
@@ -1142,6 +1144,44 @@ namespace VendorOfferUpdater
         }
 
         /// <summary>
+        /// Collapses rows that hash to the same OfferId, folding each
+        /// discarded sibling's unhashed fields into the survivor.
+        /// <para>
+        /// Two wiki rows for the identical sale can differ in nothing but
+        /// their "Has requirement" text, because WikiSmwClient's own dedupe
+        /// key folds that text in while VendorOfferHasher does not hash it.
+        /// Keeping the first row outright then discarded the other's
+        /// requirement, and the loss changed no OfferId, so no diff showed
+        /// it: measured, 8 offers reached ref/vendor_offers.json ungated
+        /// that way. Same reasoning as
+        /// <see cref="CarryForwardUnhashedFields"/>, applied one step
+        /// earlier.
+        /// </para>
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static List<VendorOffer> DeduplicateByOfferId(List<VendorOffer> offers)
+        {
+            var unique = new List<VendorOffer>();
+            var byId = new Dictionary<string, VendorOffer>(StringComparer.Ordinal);
+
+            foreach (var offer in offers)
+            {
+                string id = offer.OfferId ?? string.Empty;
+                if (byId.TryGetValue(id, out var survivor))
+                {
+                    CarryForwardUnhashedFields(survivor, offer);
+                    continue;
+                }
+
+                byId[id] = offer;
+                unique.Add(offer);
+            }
+
+            unique.Sort((a, b) => StringComparer.Ordinal.Compare(a.OfferId, b.OfferId));
+            return unique;
+        }
+
+        /// <summary>
         /// True when <paramref name="offer"/> carries at least one field that
         /// <see cref="VendorOfferHasher.ComputeOfferId"/> does not hash, so
         /// losing it changes no OfferId and shows in no diff.
@@ -1152,7 +1192,8 @@ namespace VendorOfferUpdater
             return offer != null
                 && (offer.SeasonalFestival != null
                     || offer.UnlockRecipeItemId != null
-                    || offer.UnlockRecipeId != null);
+                    || offer.UnlockRecipeId != null
+                    || offer.Requirement != null);
         }
 
         /// <summary>
@@ -1190,6 +1231,11 @@ namespace VendorOfferUpdater
             {
                 target.UnlockRecipeItemId = source.UnlockRecipeItemId;
                 target.UnlockRecipeId = source.UnlockRecipeId;
+            }
+
+            if (target.Requirement == null)
+            {
+                target.Requirement = source.Requirement;
             }
         }
 
@@ -1334,7 +1380,8 @@ namespace VendorOfferUpdater
             WikiVendorResult result,
             Gw2ApiHelper apiHelper,
             Dictionary<string, int> itemIdMap,
-            IReadOnlyDictionary<int, int>? unlockRecipeIdByItemId = null)
+            IReadOnlyDictionary<int, int>? unlockRecipeIdByItemId = null,
+            VendorRequirementNames? requirementNames = null)
         {
             int outputCount = result.OutputQuantity ?? 1;
             if (outputCount <= 0)
@@ -1504,7 +1551,38 @@ namespace VendorOfferUpdater
                 SeasonalFestival = seasonalFestival,
                 UnlockRecipeItemId = unlockRecipeItemId,
                 UnlockRecipeId = unlockRecipeId,
+                Requirement = VendorRequirementClassifier.Classify(
+                    result.Requirement, requirementNames),
             };
+        }
+
+        /// <summary>
+        /// Prints every distinct requirement string that names more than
+        /// one kind of gate, which <see cref="VendorRequirementClassifier"/>
+        /// leaves unclassified. Measured over the full scrape there is
+        /// exactly one ("Follows Advice", both an achievement and a mastery
+        /// level); a second one appearing is a signal that the exact-name
+        /// rule has stopped being enough, and it would otherwise be silent.
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static void ReportAmbiguousRequirements(
+            IEnumerable<WikiVendorResult> wikiResults, VendorRequirementNames names)
+        {
+            var reported = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var result in wikiResults)
+            {
+                string? requirement = result.Requirement;
+                if (string.IsNullOrWhiteSpace(requirement) ||
+                    !reported.Add(requirement!) ||
+                    !VendorRequirementClassifier.IsAmbiguous(requirement, names))
+                {
+                    continue;
+                }
+
+                Console.WriteLine(
+                    $"  WARNING: requirement \"{requirement}\" names more than one kind of " +
+                    "gate - left unclassified, shown to the player as text only.");
+            }
         }
 
         /// <summary>

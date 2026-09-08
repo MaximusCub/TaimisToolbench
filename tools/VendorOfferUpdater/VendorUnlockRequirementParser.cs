@@ -34,48 +34,15 @@ namespace VendorOfferUpdater
                 return null;
             }
 
-            string text = StripSingleWikiLink(requirement!.Trim());
+            string? text = WikiRequirementText.LinkTarget(requirement);
 
-            if (!text.StartsWith(RecipeNamespacePrefix, StringComparison.Ordinal))
+            if (text == null || !text.StartsWith(RecipeNamespacePrefix, StringComparison.Ordinal))
             {
                 return null;
             }
 
             // "Recipe:" with nothing after it is a title with no page.
             return text.Length > RecipeNamespacePrefix.Length ? text : null;
-        }
-
-        /// <summary>
-        /// Unwraps a value that is exactly one wiki link and nothing else -
-        /// "[[Recipe: X]]" or "[[Recipe: X|display]]" both give "Recipe: X".
-        /// Text with a link plus any surrounding prose is returned unchanged,
-        /// so it goes on to fail the namespace test above rather than having
-        /// a fragment of itself accepted.
-        /// </summary>
-        private static string StripSingleWikiLink(string text)
-        {
-            if (!text.StartsWith("[[", StringComparison.Ordinal) ||
-                !text.EndsWith("]]", StringComparison.Ordinal) ||
-                text.Length <= 4)
-            {
-                return text;
-            }
-
-            string inner = text.Substring(2, text.Length - 4);
-
-            // A second link anywhere means this was prose, not one link.
-            if (inner.IndexOf('[') >= 0 || inner.IndexOf(']') >= 0)
-            {
-                return text;
-            }
-
-            int pipe = inner.IndexOf('|');
-            if (pipe >= 0)
-            {
-                inner = inner.Substring(0, pipe);
-            }
-
-            return inner.Trim();
         }
     }
 }

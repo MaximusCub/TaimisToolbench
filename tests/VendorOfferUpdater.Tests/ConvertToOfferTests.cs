@@ -719,5 +719,89 @@ namespace VendorOfferUpdater.Tests
             Assert.Null(untagged.UnlockRecipeItemId);
             Assert.Equal(ObsidianSheetItemId, tagged.UnlockRecipeItemId);
         }
+
+        private const int NuhochLoreMasteryId = 8;
+
+        private static VendorRequirementNames RequirementNames()
+        {
+            return VendorRequirementNames.Build(
+                new[] { new KeyValuePair<int, string>(1912, "Supply Line Management") },
+                new[]
+                {
+                    new MasteryTrack(
+                        NuhochLoreMasteryId,
+                        new[] { "Nuhoch Hunting", "Nuhoch Language" }),
+                });
+        }
+
+        [Fact]
+        public async Task ARequirementTheApiNames_ReachesTheOffer()
+        {
+            var (helper, httpClient) = await CreateLoadedHelper();
+            using var _ = httpClient;
+            var result = MakeResult(requirement: "Nuhoch Language");
+
+            var offer = Program.ConvertToOffer(
+                result, helper, new Dictionary<string, int>(), null, RequirementNames());
+
+            Assert.NotNull(offer);
+            Assert.Equal("Nuhoch Language", offer.Requirement?.Text);
+            Assert.Equal(NuhochLoreMasteryId, offer.Requirement?.MasteryId);
+            Assert.Equal(1, offer.Requirement?.MasteryLevel);
+        }
+
+        [Fact]
+        public async Task ARequirementTheApiCannotName_StillReachesTheOfferAsText()
+        {
+            var (helper, httpClient) = await CreateLoadedHelper();
+            using var _ = httpClient;
+            var result = MakeResult(
+                requirement: "the respective item not already unlocked in the wardrobe");
+
+            var offer = Program.ConvertToOffer(
+                result, helper, new Dictionary<string, int>(), null, RequirementNames());
+
+            Assert.NotNull(offer);
+            Assert.Equal(
+                "the respective item not already unlocked in the wardrobe",
+                offer.Requirement?.Text);
+            Assert.Null(offer.Requirement?.MasteryId);
+            Assert.Null(offer.Requirement?.AchievementId);
+        }
+
+        [Fact]
+        public async Task NoRequirement_LeavesTheOfferUngated()
+        {
+            var (helper, httpClient) = await CreateLoadedHelper();
+            using var _ = httpClient;
+
+            var offer = Program.ConvertToOffer(
+                MakeResult(), helper, new Dictionary<string, int>(), null, RequirementNames());
+
+            Assert.NotNull(offer);
+            Assert.Null(offer.Requirement);
+        }
+
+        [Fact]
+        public async Task ARequirement_DoesNotChangeOfferId()
+        {
+            // Not hashed, for the same reason the unlock gate above is not:
+            // back-filling it onto an already-shipped row must leave the id
+            // every consumer keys on untouched.
+            var (helper, httpClient) = await CreateLoadedHelper();
+            using var _ = httpClient;
+
+            var ungated = Program.ConvertToOffer(
+                MakeResult(), helper, new Dictionary<string, int>(), null, RequirementNames());
+            var gated = Program.ConvertToOffer(
+                MakeResult(requirement: "Nuhoch Language"),
+                helper, new Dictionary<string, int>(), null, RequirementNames());
+
+            Assert.NotNull(ungated);
+            Assert.NotNull(gated);
+            Assert.Equal(ungated.OfferId, gated.OfferId);
+            Assert.Null(ungated.Requirement);
+            Assert.NotNull(gated.Requirement);
+        }
     }
 }

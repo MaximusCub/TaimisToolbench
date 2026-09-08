@@ -7,8 +7,8 @@ using Xunit;
 
 namespace VendorOfferUpdater.Tests
 {
-    // VendorOfferHasher.ComputeOfferId does not hash SeasonalFestival,
-    // UnlockRecipeItemId or UnlockRecipeId. A merge that drops one therefore
+    // VendorOfferHasher.ComputeOfferId does not hash SeasonalFestival, the
+    // two unlock-recipe ids, or Requirement. A merge that drops one therefore
     // changes no OfferId, so the loss appears in no diff of
     // ref/vendor_offers.json and nothing downstream reports it.
     public class UnhashedFieldCarryForwardTests
@@ -26,7 +26,8 @@ namespace VendorOfferUpdater.Tests
             int coinCost = 100,
             string seasonalFestival = null,
             int? unlockRecipeItemId = null,
-            int? unlockRecipeId = null)
+            int? unlockRecipeId = null,
+            VendorRequirement requirement = null)
         {
             return new VendorOffer
             {
@@ -42,6 +43,17 @@ namespace VendorOfferUpdater.Tests
                 SeasonalFestival = seasonalFestival,
                 UnlockRecipeItemId = unlockRecipeItemId,
                 UnlockRecipeId = unlockRecipeId,
+                Requirement = requirement,
+            };
+        }
+
+        private static VendorRequirement NuhochLanguage()
+        {
+            return new VendorRequirement
+            {
+                Text = "Nuhoch Language",
+                MasteryId = 8,
+                MasteryLevel = 1,
             };
         }
 
@@ -213,6 +225,8 @@ namespace VendorOfferUpdater.Tests
         {
             Assert.False(Program.CarriesUnhashedFields(MakeOffer("a", "Lyhr")));
             Assert.True(Program.CarriesUnhashedFields(
+                MakeOffer("a", "Lyhr", requirement: NuhochLanguage())));
+            Assert.True(Program.CarriesUnhashedFields(
                 MakeOffer("a", "Lyhr", seasonalFestival: "wintersday")));
             Assert.True(Program.CarriesUnhashedFields(
                 MakeOffer("a", "Lyhr", unlockRecipeItemId: ObsidianSheetItemId)));
@@ -240,6 +254,68 @@ namespace VendorOfferUpdater.Tests
             nameof(VendorOffer.HomesteadTier),
         };
 
+        // Two wiki rows can describe the identical sale and differ only in
+        // their requirement text, which VendorOfferHasher does not hash. The
+        // dedupe pass that collapses them therefore has the same duty the
+        // merge does.
+        [Fact]
+        public void DeduplicateByOfferId_FoldsADiscardedSiblingsRequirementIn()
+        {
+            var withRequirement = MakeOffer("row-1", "Lyhr", requirement: NuhochLanguage());
+            var without = MakeOffer("row-1", "Lyhr");
+
+            var unique = Program.DeduplicateByOfferId(
+                new List<VendorOffer> { without, withRequirement });
+
+            var survivor = Assert.Single(unique);
+            Assert.Equal("Nuhoch Language", survivor.Requirement?.Text);
+        }
+
+        [Fact]
+        public void DeduplicateByOfferId_KeepsTheFirstRowsOwnRequirement()
+        {
+            var first = MakeOffer("row-1", "Lyhr", requirement: NuhochLanguage());
+            var second = MakeOffer(
+                "row-1", "Lyhr",
+                requirement: new VendorRequirement { Text = "Itzel Language" });
+
+            var survivor = Assert.Single(
+                Program.DeduplicateByOfferId(new List<VendorOffer> { first, second }));
+
+            Assert.Equal("Nuhoch Language", survivor.Requirement?.Text);
+        }
+
+        [Fact]
+        public void DeduplicateByOfferId_KeepsRowsWithDifferentIds()
+        {
+            var unique = Program.DeduplicateByOfferId(new List<VendorOffer>
+            {
+                MakeOffer("row-2", "Lyhr"),
+                MakeOffer("row-1", "Lyhr"),
+            });
+
+            Assert.Equal(2, unique.Count);
+            Assert.Equal("row-1", unique[0].OfferId);
+            Assert.Equal("row-2", unique[1].OfferId);
+        }
+
+        [Fact]
+        public void ProtectedMerchant_FreshRowWithoutTheRequirement_KeepsTheBaselineOne()
+        {
+            var baseline = new List<VendorOffer>
+            {
+                MakeOffer("row-1", "Lyhr", requirement: NuhochLanguage()),
+            };
+            var fresh = new List<VendorOffer> { MakeOffer("row-1", "Lyhr") };
+
+            var merged = Program.MergeIntoBaseline(baseline, fresh, Protecting("Lyhr")).Merged
+                .Single();
+
+            Assert.Equal("Nuhoch Language", merged.Requirement?.Text);
+            Assert.Equal(8, merged.Requirement?.MasteryId);
+            Assert.Equal(1, merged.Requirement?.MasteryLevel);
+        }
+
         [Fact]
         public void EveryUnhashedProperty_SurvivesTheCarryForward()
         {
@@ -255,7 +331,8 @@ namespace VendorOfferUpdater.Tests
                 "row-1", "Lyhr",
                 seasonalFestival: "wintersday",
                 unlockRecipeItemId: ObsidianSheetItemId,
-                unlockRecipeId: ObsidianSheetRecipeId);
+                unlockRecipeId: ObsidianSheetRecipeId,
+                requirement: NuhochLanguage());
 
             foreach (var property in unhashed)
             {
