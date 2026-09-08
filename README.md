@@ -209,7 +209,9 @@ process, all of it checkable from this repository:
   introduced after one decomposed view quietly grew back past its
   pre-refactor size with nothing watching). Comment length is ratcheted the
   same way ([`docs/comment-budgets.txt`](docs/comment-budgets.txt)), because
-  a line budget cannot tell a 50-line comment from 50 lines of code.
+  a line budget cannot tell a 50-line comment from 50 lines of code. A file
+  with no entry in the line budgets is not exempt: it is held to the default
+  that file declares, checked by `FileLineBudgetTests` in the test job.
 - **UI changes are checked in the running game**, not asserted from a diff, and
   what was actually observed is recorded: each milestone record under
   [`dev/records/`](dev/records/) ends in an explicit `Gate:` line - PASS,
