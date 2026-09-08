@@ -1807,6 +1807,19 @@ namespace TaimisToolbench
                 _rankerContent.PollForSnapshotChange();
             }
 
+            // The Crafting Plan tab's poll, on the same terms. It starts no
+            // work at all - it appends a notice to the strip saying the
+            // plan on screen predates the account data now loaded - so the
+            // visible-window gate is about where the notice can be READ
+            // rather than about what the tick can spend.
+            if (_craftingContent != null
+                && _mainWindow != null
+                && _mainWindow.Visible
+                && _mainWindow.SelectedTab == _craftingPlanTab)
+            {
+                _craftingContent.PollForSnapshotChange();
+            }
+
             // "Applying restored plan to view" - mirrors the
             // _snapshotDirty block above. Runs at most once per session
             // and must stay ahead of the early returns below (a fresh
@@ -2225,6 +2238,13 @@ namespace TaimisToolbench
         /// the snapshot already on disk, which is what every generation
         /// used before this call existed.
         /// </para>
+        /// <para>
+        /// Data newer than SnapshotRefreshPolicy.GenerateFreshness is
+        /// solved against as it stands. That skip reports no failure: a
+        /// snapshot the module chose not to refresh is not a snapshot it
+        /// could not refresh, and the Crafting Plan tab's dialog keys off
+        /// the difference.
+        /// </para>
         /// </summary>
         private async Task<PlanAccountData> RefreshForPlanAsync(
             bool useOwn, Action<PlanAccountRefresh> report, CancellationToken ct)
@@ -2235,7 +2255,8 @@ namespace TaimisToolbench
             {
                 MarkPlanRefreshFailed(refresh, null);
             }
-            else
+            else if (SnapshotRefreshPolicy.ShouldRefreshOnGenerate(
+                _currentSnapshot?.CapturedAt, DateTime.UtcNow))
             {
                 try
                 {

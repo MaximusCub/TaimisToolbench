@@ -157,8 +157,9 @@ namespace TaimisToolbench.Views
             int titleWidth = LabelHelpers.MeasureWith(UiFonts.Display)(TitleText);
 
             var screen = GameService.Graphics.SpriteScreen;
+            var paragraphs = DialogLayoutMath.Paragraphs(message);
             var layout = DialogLayoutMath.Measure(
-                new[] { message ?? "" },
+                paragraphs,
                 measure,
                 lineHeight,
                 titleWidth,
@@ -209,24 +210,30 @@ namespace TaimisToolbench.Views
             // Blish's stale-layout-pass measure and clipped the second
             // wrapped line mid-glyph, seen in a verification screenshot.
             // Each line centers by its own measured width instead.
-            var block = layout.Blocks[0];
-            for (int i = 0; i < block.Lines.Count; i++)
+            // Every block, not just the first. DialogLayoutMath has always
+            // sized and seated N paragraphs - its own ParagraphGap and
+            // per-block Y - and rendering only Blocks[0] silently dropped
+            // whatever a caller put after a blank line.
+            foreach (var block in layout.Blocks)
             {
-                var lineLabel = new Label()
+                for (int i = 0; i < block.Lines.Count; i++)
                 {
-                    Text = block.Lines[i],
-                    Font = font,
-                    AutoSizeWidth = true,
-                    AutoSizeHeight = true,
-                };
-                lineLabel.Location = new Point(
-                    DialogLayoutMath.LineX(layout.ContentWidth, lineLabel.Width),
-                    block.Y + (i * lineHeight));
-                lineLabel.Parent = _window;
+                    var lineLabel = new Label()
+                    {
+                        Text = block.Lines[i],
+                        Font = font,
+                        AutoSizeWidth = true,
+                        AutoSizeHeight = true,
+                    };
+                    lineLabel.Location = new Point(
+                        DialogLayoutMath.LineX(layout.ContentWidth, lineLabel.Width),
+                        block.Y + (i * lineHeight));
+                    lineLabel.Parent = _window;
 
-                // Only when text was actually dropped - a tooltip repeating
-                // the visible sentence is noise.
-                TooltipFacility.ApplyPlain(lineLabel, block.Truncated ? message : null);
+                    // Only when text was actually dropped - a tooltip repeating
+                    // the visible sentence is noise.
+                    TooltipFacility.ApplyPlain(lineLabel, block.Truncated ? message : null);
+                }
             }
 
             var confirmBtn = new FeedbackButton()
