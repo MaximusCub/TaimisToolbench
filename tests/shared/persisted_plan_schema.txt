@@ -36,6 +36,7 @@ CraftingPlanResult.DebugLog:List`1<String>
 CraftingPlanResult.ExcessCraftOutputs:List`1<ExcessCraftOutput>
 CraftingPlanResult.ItemMetadata:IReadOnlyDictionary`2<Int32,ItemMetadata>
 CraftingPlanResult.MaterialOpportunityCost:Nullable`1<Int64>
+CraftingPlanResult.MissingRecipeSheetSources:List`1<MissingRecipeSheetSource>
 CraftingPlanResult.MultiItemRoots:List`1<CraftingTreeNode>
 CraftingPlanResult.NetSaleValue:Nullable`1<Int64>
 CraftingPlanResult.OwnedCurrencyAmounts:IReadOnlyDictionary`2<Int32,Int32>
@@ -126,6 +127,12 @@ ItemPrice.ItemId:Int32
 ItemPrice.SellInstant:Int32
 MaterialSourceAllocation.Quantity:Int32
 MaterialSourceAllocation.Source:String
+MissingRecipeSheetSource.CoinCost:Nullable`1<Int64>
+MissingRecipeSheetSource.MerchantName:String
+MissingRecipeSheetSource.NonCoinCostLines:List`1<CostLine>
+MissingRecipeSheetSource.OtherMerchantCount:Int32
+MissingRecipeSheetSource.RecipeId:Int32
+MissingRecipeSheetSource.SheetItemId:Int32
 PersistedPlan.GeneratedAt:DateTime
 PersistedPlan.IgnoredItemIds:IReadOnlyList`1<Int32>
 PersistedPlan.NodeOverrides:IReadOnlyDictionary`2<Int32,AcquisitionSource>

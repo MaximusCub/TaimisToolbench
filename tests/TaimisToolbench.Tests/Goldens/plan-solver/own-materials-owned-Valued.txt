@@ -141,6 +141,7 @@ result.ItemMetadata[2].ItemId = 2
 result.ItemMetadata[2].Name = Ingredient
 result.ItemMetadata[2].Rarity = null
 result.MaterialOpportunityCost = 255
+result.MissingRecipeSheetSources.count = 0
 result.MultiItemRoots = null
 result.NetSaleValue = 850
 result.OwnedCurrencyAmounts = null

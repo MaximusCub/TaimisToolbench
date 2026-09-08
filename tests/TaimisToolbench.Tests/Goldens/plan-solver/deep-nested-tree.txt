@@ -281,6 +281,7 @@ result.ItemMetadata[4].ItemId = 4
 result.ItemMetadata[4].Name = Depth 3
 result.ItemMetadata[4].Rarity = Fine
 result.MaterialOpportunityCost = null
+result.MissingRecipeSheetSources.count = 0
 result.MultiItemRoots = null
 result.NetSaleValue = 15300
 result.OwnedCurrencyAmounts = null

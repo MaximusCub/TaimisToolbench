@@ -207,5 +207,13 @@ namespace TaimisToolbench.Models
         /// empty (not null) when no active festival beats this plan.
         /// </summary>
         public List<SeasonalVendorTip> SeasonalVendorTips { get; set; }
+
+        /// <summary>
+        /// See MissingRecipeSheetSourceCalculator.Apply, the sole
+        /// producer. Cosmetic display data only; null until the calculator
+        /// runs, empty (not null) when no missing recipe has a sheet any
+        /// vendor sells.
+        /// </summary>
+        public List<MissingRecipeSheetSource> MissingRecipeSheetSources { get; set; }
     }
 }

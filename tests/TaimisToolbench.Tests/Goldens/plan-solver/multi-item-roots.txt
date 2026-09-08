@@ -29,6 +29,7 @@ result.ItemMetadata[4].ItemId = 4
 result.ItemMetadata[4].Name = Ingredient B
 result.ItemMetadata[4].Rarity = null
 result.MaterialOpportunityCost = null
+result.MissingRecipeSheetSources.count = 0
 result.MultiItemRoots.count = 2
 result.MultiItemRoots[0].AcquisitionBadge = null
 result.MultiItemRoots[0].AcquisitionHint = null

@@ -230,6 +230,7 @@
     <Compile Include="Models\CompetencyOpportunity.cs" />
     <Compile Include="Services\CompetencyOpportunityCalculator.cs" />
     <Compile Include="Models\RecipeSheetSavingsOpportunity.cs" />
+    <Compile Include="Models\MissingRecipeSheetSource.cs" />
     <Compile Include="Models\SeasonalVendorTip.cs" />
     <Compile Include="Services\IItemApiClient.cs" />
     <Compile Include="Services\CurrencyIconTiers.cs" />
@@ -254,6 +255,7 @@
     <Compile Include="Services\SeasonalOfferFilter.cs" />
     <Compile Include="Services\SecondTooltipBox.cs" />
     <Compile Include="Services\RecipeSheetSavingsCalculator.cs" />
+    <Compile Include="Services\MissingRecipeSheetSourceCalculator.cs" />
     <Compile Include="Services\RecipeSheetItemSeedService.cs" />
     <Compile Include="Services\JsonSeedReader.cs" />
     <Compile Include="Services\JustifiedColumnTracks.cs" />
