@@ -146,9 +146,14 @@ try {
 
     # The second process is recorded so teardown stops it too. It is matched the
     # same way: new since this launch, and never anything that was already up.
+    #
+    # Reading StartTime throws if the process exits between the enumeration and
+    # the read. One that has already gone needs no teardown entry, so it is
+    # skipped rather than allowed to fail the launch.
     foreach ($extra in @(Get-Process -Name $blishName -ErrorAction SilentlyContinue |
             Where-Object { $before -notcontains $_.Id -and $_.Id -ne $blish.Id })) {
-        Register-Started -Process $extra -Role 'blish-secondary'
+        try { Register-Started -Process $extra -Role 'blish-secondary' }
+        catch { Write-Warning "Blish HUD pid $($extra.Id) exited before it could be recorded." }
     }
     "BLISH pid=$($blish.Id)"
 
