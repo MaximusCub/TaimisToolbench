@@ -123,6 +123,7 @@
     <Compile Include="Models\PlanAccountData.cs" />
     <Compile Include="Services\PlanItemIds.cs" />
     <Compile Include="Services\PlanAccountRefresh.cs" />
+    <Compile Include="Services\PlanStatusLine.cs" />
     <Compile Include="Services\SnapshotRefreshPolicy.cs" />
     <Compile Include="Services\StaleAccountDataWarning.cs" />
     <Compile Include="Services\PlanHistoryLabels.cs" />

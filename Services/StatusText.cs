@@ -99,6 +99,24 @@ namespace TaimisToolbench.Services
         public const int RankerStatusBudgetChars = 86;
 
         /// <summary>
+        /// Characters the Crafting Plan's status line may run to before it
+        /// ellipsizes. Its band is 1206 logical pixels at the same window
+        /// floor - TopRegionLayoutMath.StatusBandWidth derives that from the
+        /// shipped constants and TopRegionLayoutMathTests pins it - and the
+        /// two bands draw the same face, so this is
+        /// <see cref="RankerStatusBudgetChars"/>' own measured rate carried
+        /// across: 86 characters in 779 pixels is 9.06 a character, and 1206
+        /// buys 133 of them.
+        /// <para>
+        /// The widest line the strip composes is far past this, so it is
+        /// the ellipsizer that keeps it on screen rather than this budget.
+        /// PlanStatusLineTests builds that line through the real
+        /// composition and pins its length.
+        /// </para>
+        /// </summary>
+        public const int PlanStatusBudgetChars = 133;
+
+        /// <summary>
         /// The Crafting Ranker's per-item progress line: which item of how
         /// many is being solved, and on the first run of a session that
         /// this run is the slow one.
