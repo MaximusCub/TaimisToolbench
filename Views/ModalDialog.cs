@@ -210,10 +210,6 @@ namespace TaimisToolbench.Views
             // Blish's stale-layout-pass measure and clipped the second
             // wrapped line mid-glyph, seen in a verification screenshot.
             // Each line centers by its own measured width instead.
-            // Every block, not just the first. DialogLayoutMath has always
-            // sized and seated N paragraphs - its own ParagraphGap and
-            // per-block Y - and rendering only Blocks[0] silently dropped
-            // whatever a caller put after a blank line.
             foreach (var block in layout.Blocks)
             {
                 for (int i = 0; i < block.Lines.Count; i++)
