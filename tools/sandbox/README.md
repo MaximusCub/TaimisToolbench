@@ -1,10 +1,126 @@
-# Sandbox interface scale
+# Screenshot sandbox
 
 Developer tooling. Nothing here ships. `BuildBlishHUDModule` in
 `TaimisToolbench.csproj` packs `manifest.json`, `ref/**` and the build
 output into the `.bhm`, and never anything under `tools/`.
 
-## The problem
+The sandbox runs Blish HUD over a Microsoft Paint window instead of Guild
+Wars 2, so module layout can be captured with no game running. It is the
+only way an agent can see its own work.
+
+## The scripts
+
+| Script | What it does |
+| --- | --- |
+| `Start-Sandbox.ps1` | Starts Paint, sizes it, starts Blish HUD against it, and reports what it started. |
+| `Stop-Sandbox.ps1` | Stops only the processes `Start-Sandbox.ps1` recorded. |
+| `SandboxSession.ps1` | Window lookup and synthetic input, scoped to named process ids. Dot-source it. |
+| `Set-SandboxUiScale.ps1` | Pins the interface scale. See below. |
+
+```
+powershell -ExecutionPolicy Bypass -File tools\sandbox\Start-Sandbox.ps1 -Bhm C:\Dev\Blish\gate-master\TaimisToolbench.bhm
+powershell -ExecutionPolicy Bypass -File tools\sandbox\Stop-Sandbox.ps1
+```
+
+## Running it from a git worktree
+
+Sandbox work has to run from the main checkout, not from an agent worktree
+under `.claude/worktrees/`. One agent found `powershell.exe` and `cmd.exe`
+refused there while another had no trouble, and the difference is not the
+tooling.
+
+The allow rule that permits `powershell.exe` lives in
+`.claude/settings.local.json`. That file is gitignored, on line 348, so it is
+untracked. A git worktree checks out tracked files only, so the file does not
+exist in any worktree, and an agent working in one has no rule permitting
+`powershell.exe`. An agent in the main checkout has it and runs unprompted.
+
+Run the sandbox from `C:\Dev\Blish\TaimisToolbench`, or copy
+`.claude/settings.local.json` into the worktree first. This is the same trap
+that stranded the "pull requests are not reviewed" rule in an untracked file,
+which is why CLAUDE.md now states that rule in a tracked one.
+
+## Where these scripts live, and why here
+
+These belong in the repository, and the two that mattered most have been
+moved into it.
+
+The launcher and its helpers used to live only in `C:\Dev\Blish\preflight`
+and `C:\Dev\Blish\w81-gate`, outside any repository. Nothing reviewed them,
+no test ran them, and no history recorded who changed them or why. Both faults
+this file describes, a `Stop-Process` sweep over every Blish and a window
+lookup by title, sat there through many milestones. They were found by agents
+that read the scripts and declined to run them, not by any check.
+
+`Start-Sandbox.ps1`, `Stop-Sandbox.ps1` and `SandboxSession.ps1` now sit
+beside `Set-SandboxUiScale.ps1` under `tools/sandbox/`, so a change to them
+goes through the same review as everything else. The out-of-repo copies at
+`preflight\launch-sandbox.ps1`, `preflight\kill_targets.ps1` and
+`w81-gate\launch.ps1` are now short wrappers that call these, so an existing
+habit or script keeps working and cannot reach the dangerous versions.
+
+`preflight\gatekit.ps1` stays where it is for now, because a dozen other
+preflight scripts dot-source it and this branch is not the place to move them
+all. Its `Find` no longer returns the first of several same-titled windows: it
+refuses an ambiguous match and clears its rectangle. Its foreground check
+still admits any title containing "Blish" or "Paint", so prefer
+`SandboxSession.ps1` for new work. Moving the rest of `preflight\` in is
+worth doing and is not this branch's job.
+
+## Why targeting is by process id
+
+A window title is not an identity. The developer's live Blish HUD overlay
+carries the title `Blish HUD`, at 0,0,3440,1440, over Guild Wars 2 at the
+same rectangle. The sandbox's own window carries that same title.
+
+The scripts these replaced looked the window up by that title and took the
+first match. Measured 2026-09-07, with a second window titled `Blish HUD`
+open alongside a running sandbox, the old lookup returned the wrong one:
+
+```
+old [GK]::Find('Blish HUD')  ->  hwnd 86508326  pid 68048  rect 2300,250
+sandbox's actual window      ->  hwnd  8913092  pid 74224  rect 8,120
+```
+
+A click computed from that rectangle lands in whatever the other window is
+sitting over. In the case this was found in, that is the running game.
+
+Every lookup in `SandboxSession.ps1` matches on the owning process id, which
+the sandbox knows because it started the process. A title, when passed, is an
+extra condition rather than the identity. Two rules hold throughout:
+
+- **Refuse rather than guess.** A lookup that finds no window, or more than
+  one, returns nothing and leaves its rectangle zeroed. There is no
+  first-match fallback anywhere.
+- **Fail closed.** Input primitives compare the foreground window's process
+  id against a set that starts empty, so an input call made before
+  `Set-SandboxTarget` throws instead of typing into whatever holds focus. The
+  check these replaced admitted any title containing "Blish" or "Paint",
+  which the live overlay satisfies.
+
+## Nothing is stopped that the sandbox did not start
+
+`Start-Sandbox.ps1` starts processes and records their ids. It never runs
+`Stop-Process` over a name or a pattern. The scripts it replaces opened with
+a sweep over every process matching "Blish" and every `mspaint`, which killed
+the developer's live session and any Paint window holding unsaved work.
+
+`Stop-Sandbox.ps1` reads the session file the launcher wrote and stops only
+the ids in it. Each one is checked against the start time recorded at launch
+first, because Windows reuses process ids and a stale session file would
+otherwise name a stranger.
+
+A Blish HUD the launcher did not start stops the launch. There is no
+override, and this is not only a safety preference: Blish HUD allows one
+instance per machine. A second one logs `Blish HUD is already running!` and
+exits within a second, whatever settings directory it is given. Measured
+2026-09-07 against Blish HUD v1.3.0. So the sandbox cannot run beside another
+Blish, and clearing the way by force is the thing this must not do. It stops
+and says which process is in the way.
+
+## Interface scale
+
+### The problem
 
 The screenshot sandbox runs Blish HUD over a Microsoft Paint window instead
 of Guild Wars 2. No game means no MumbleLink, and Blish falls back to the
@@ -13,7 +129,7 @@ smallest interface scale. Every shipped geometry constant then renders at
 icon measures 26. Measurements taken there mean nothing until they are
 divided by 0.810, and that step has been skipped before.
 
-## Where the scale comes from
+### Where the scale comes from
 
 `Blish_HUD.GraphicsService.Rescale()` runs once per `Update` and sets:
 
@@ -40,7 +156,7 @@ with `ilspycmd`:
    1024x768. The launcher's 1900x990 clears that. A shorter window shrinks
    the whole UI again, which no setting undoes.
 
-## The override
+### The override
 
 Blish already has one, so no MumbleLink writer is needed. The
 `GraphicsConfiguration` setting `UIScalingMethod`, of type
@@ -61,7 +177,7 @@ is not `SyncWithGame`:
 has to be set before launch, because Blish loads `settings.json` at startup
 and rewrites it on exit.
 
-## Usage
+### Usage
 
 `Set-SandboxUiScale.ps1` writes the setting into the settings directory the
 sandbox launches with. It rewrites one integer and leaves every other byte
@@ -72,7 +188,7 @@ powershell -ExecutionPolicy Bypass -File tools\sandbox\Set-SandboxUiScale.ps1 -U
 ```
 
 `-SettingsDir` defaults to `C:\Dev\Blish\blish-preflight-settings`, which is
-the directory `preflight\launch-sandbox.ps1` passes to Blish as `--settings`.
+the directory `Start-Sandbox.ps1` passes to Blish as `--settings`.
 `-UiScale Game` restores Blish's own behaviour.
 
 The script throws if that directory has no `settings.json`, or if the file
@@ -81,12 +197,21 @@ so the fix in both cases is to launch the sandbox once and re-run. Run
 standalone through `-File` it then exits 1; called from another script it
 stops that script too.
 
-It also throws if Blish HUD is running. `SettingsService.Unload` calls
-`Save(forceSave: true)`, which rewrites the whole file from memory, so a
-write made while Blish is up disappears when Blish exits and nothing says
-so.
+It also throws when a Blish HUD holding this settings directory is running.
+`SettingsService.Unload` calls `Save(forceSave: true)`, which rewrites the
+whole file from memory, so a write made while that Blish is up disappears
+when it exits and nothing says so.
 
-## Confirming it
+Two details matter. The check reads each Blish process's command line rather
+than matching on the process name, because only a Blish holding this
+directory can clobber this file; the developer's live session runs on its own
+directory and is no threat to it. A command line that cannot be read counts
+as a conflict, since the safe answer under uncertainty is to refuse. And the
+check runs only when a write is actually needed: setting the scale to what it
+already is reports no change and touches nothing, so `Start-Sandbox.ps1` can
+call it unconditionally.
+
+### Confirming it
 
 The numbers above are read from Blish's code, not from a screenshot. Confirm
 on screen the first time, and after any Blish HUD upgrade.
@@ -110,27 +235,27 @@ both scales:
 | `SyncWithGame`, 0.810 | 330 | 346 | +336, +21 |
 | `Large`, 1.0 | 400 | 424 | +404, +17 |
 
-The +336, +21 offset lands outside the icon at `Large`. Anything that has to
-click or crop the corner icon must locate it at the scale the sandbox is
-running, not reuse a recorded number.
+The +336, +21 offset lands outside the icon at `Large`. Re-measured
+2026-09-07 at `Large`, cropping 24x24 around each point on a live sandbox:
+the +404, +17 point reads 153 distinct colours and is the module's icon,
+while +336, +21 reads 11 and is empty window chrome.
 
-## Wiring it into the launcher
+Anything that has to click or crop the corner icon must locate it at the
+scale the sandbox is running, not reuse a recorded number.
 
-`preflight\launch-sandbox.ps1` is not in this repository. Give it a
-`$uiScale` parameter, and call this script after its `Stop-Process` sweep
-and before it starts Blish HUD. That order matters: the sweep is what makes
-the running-Blish check above pass.
+`Start-Sandbox.ps1` reports `CORNER_ICON` from the table above, keyed on the
+`-UiScale` it launched with, and says nothing at all for a scale nobody has
+measured. It then samples 24x24 at that point and warns if the region is
+blank backdrop. That sample is a tripwire, not a locator: it catches an
+offset that has landed on nothing, and it would not have caught the 11-colour
+case above. Confirm the point on a capture before clicking it.
 
-```powershell
-param([string]$bhm = '...', [int]$width = 1900, [int]$height = 990,
-      [ValidateSet('Game','Small','Normal','Large','Larger')][string]$uiScale = 'Large')
+### Keeping the scale honest at launch
 
-& C:\Dev\Blish\TaimisToolbench\tools\sandbox\Set-SandboxUiScale.ps1 -UiScale $uiScale -SettingsDir C:\Dev\Blish\blish-preflight-settings
-```
+`Start-Sandbox.ps1` calls `Set-SandboxUiScale.ps1` before it starts Blish
+HUD, and does not wrap the call in `try`. A failed write must stop the
+launch: a sandbox that comes up at 0.810 anyway looks exactly like a normal
+one, and that is the mistake this exists to stop.
 
-Do not wrap that call in `try`. A failed write must stop the launcher: a
-sandbox that comes up at 0.810 anyway looks exactly like a normal launch,
-and that is the mistake this exists to stop.
-
-Keep `$height` at 768 or more. Below that the aspect-ratio factor shrinks
-the UI again and no scale setting compensates for it.
+The launcher refuses a `-Height` below 768. Below that the aspect-ratio
+factor shrinks the UI again and no scale setting compensates for it.
