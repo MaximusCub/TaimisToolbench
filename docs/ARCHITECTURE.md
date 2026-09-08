@@ -1616,17 +1616,19 @@ that cannot be read. Concretely, in the order the guarantees weaken:
    It is versioned by `PersistedPlan.RequestSchemaVersion`, and that
    version has never been bumped.
 2. The **result** - `Result` and `NodeOverrides`, the whole solved tree
-   with its prices, offers and metadata - survives only when
-   `PersistedPlan.SchemaVersion` matches this build exactly. Anything
-   else discards the result and keeps the request.
+   with its prices, offers and metadata - survives while
+   `PersistedPlan.SchemaVersion` sits inside
+   `[PersistedPlan.MinimumReadableSchemaVersion, CurrentSchemaVersion]`.
+   Anything else discards the result and keeps the request.
 3. Nothing is ever *partially* restored. A degraded result is discarded
    whole; the module never renders half a plan.
 
-What a schema bump costs a user is therefore one click, not their plan:
-the tab comes back with their items and settings, and Generate Plan
-re-solves them at current prices. Before this split, a bump cost every
-saved plan on every user's disk, which is why the version had been left
-stale at 2 for the whole of a ~275-line graph change.
+A schema bump therefore costs a user nothing on its own. It costs one
+click - the tab comes back with the items and settings, and Generate Plan
+re-solves at current prices - only on a bump that also moves the floor.
+Before the split, a bump cost every saved plan on every user's disk, which
+is why the version had been left stale at 2 for the whole of a ~275-line
+graph change; before the range, a bump still cost every saved *result*.
 
 **Why the layers can be read apart.** The document is one JSON object
 with one set of property names - there is no second file and no second
@@ -1646,7 +1648,10 @@ between its index row and its blob.
 **Plan History was already split** along the same line, across two files
 rather than within one: the index row in `plan_history.json` carries the
 request identity, and the expensive result lives in a per-entry blob. A
-`PersistedPlan` bump therefore already discarded blobs and kept rows.
+`PersistedPlan` bump therefore already discarded blobs and kept rows, and
+now discards a blob only when it moves the floor past that blob's version
+- `PlanHistoryBlobStore` reads through the same `DeserializePersistedPlan`
+and inherits the range with no code of its own.
 
 **The index answers the same contract by a different mechanism.** It is a
 *collection*, so its compatibility unit is the row, not a layer - there is
@@ -1665,11 +1670,12 @@ no happier than one who loses one. Two things make a row survive:
   constants. An addition is free - Newtonsoft leaves an absent member at
   its default, so every existing row still loads.
 
-`MinimumReadableSchemaVersion` is therefore the single constant in the
-module whose value *is* the amount of user data a release destroys. It is
-1, and it is pinned twice - by `PlanHistorySchemaMemberSetTests` and by
-the CI corpus step - so raising it is a deliberate, reviewed act and never
-a side effect of a merge. A newer-than-current file is still discarded:
+`PlanHistoryIndex.MinimumReadableSchemaVersion` is therefore one of the
+two constants in the module whose value *is* the amount of user data a
+release destroys; `PersistedPlan.MinimumReadableSchemaVersion` is the
+other. It is 1, and it is pinned twice - by
+`PlanHistorySchemaMemberSetTests` and by the CI corpus step - so raising
+it is a deliberate, reviewed act and never a side effect of a merge. A newer-than-current file is still discarded:
 this build cannot know what a later one wrote, which is the same answer
 the plan gives to the same question.
 
@@ -2798,9 +2804,9 @@ failure.
 The two unreadable-file verdicts carry two different severities because
 merging them once cost a full forensic investigation (2026-08-23). A
 corrupt or otherwise unparseable file goes to `onError` at Warn, the same
-as every I/O failure; a file written at an older *shipped* schema version
-- expected, benign, and repaired by the next Generate - goes to `onInfo`
-at Info. Any caller wiring one and not the other silently drops half the
+as every I/O failure; a file written at a *shipped* schema version below
+`PersistedPlan.MinimumReadableSchemaVersion` - expected, benign, and
+repaired by the next Generate - goes to `onInfo` at Info. Any caller wiring one and not the other silently drops half the
 story.
 
 `PlanStoreHelpers.DeserializePersistedPlan` is what makes that split
@@ -2863,11 +2869,10 @@ reached.
 
 `PersistedPlan.SchemaShapeHash` last moved for a REMOVAL, and removals are
 what `CurrentSchemaVersion` exists to gate: `VendorOffer.Locations` is gone,
-so the version went 3 -> 4 and every saved result written before it is
-discarded on load. The request layer is untouched, so a saved plan restores
-its requested items and asks to be generated again, and every Plan History
-row survives with its blob degraded from "Open" to "Re-solve"
-(`Models/PlanHistoryEntry.cs`). Nothing reads a location: the module dropped
+so the version went 3 -> 4. It cost no saved result, because a removal is
+the one shape change the current types absorb whole - see 12.5 - so the
+floor stayed at 3 and a version 3 file still restores its plan and every
+Plan History blob. Nothing reads a location: the module dropped
 the field to stop holding 2.19 MB of place names for the whole session, and
 `Services/VendorOfferLocations.cs` reads them back off
 `ref/vendor_offers.json` on demand. Measured saving on the loaded corpus:
@@ -2892,6 +2897,60 @@ It does cost bytes. The persisted `CurrencyMetadata` is the whole
 `/v2/currencies` reply, so every saved plan grows by the descriptions of
 all 79 currencies - measured 2026-08-28 at 8.5 KB raw, ~2.5 KB gzipped,
 per plan blob.
+
+### 12.5 Which past plan versions are readable, and why
+
+`PersistedPlan.MinimumReadableSchemaVersion` is 3. A version belongs in
+the range when nothing a file stamped that way carries can be *misread* by
+the current types - not when it merely parses.
+
+Two of the four shape changes are absorbable and two are not:
+
+- An **addition** is free. Newtonsoft leaves an absent member at its
+  default, and there was no value on disk to lose.
+- A **removal** is free. Newtonsoft skips a JSON property no type claims,
+  and nothing that survived the removal moved.
+- A **rename** is not. The old name is skipped and the new one defaults,
+  so a value the file *did* carry is silently lost.
+- A **retype** is not. Newtonsoft either throws or coerces, and a coerced
+  value is a wrong one.
+
+Read against that, each bump:
+
+| Bump | What it did | Below it readable? |
+| --- | --- | --- |
+| 3 -> 4 (`b03eb0ef`) | Removed `VendorOffer.Locations`, nothing else. | **Yes.** A removal, so a version 3 file is complete and its extra property is skipped. |
+| 2 -> 3 (`35e97ed3`) | No shape change of its own. It retired a stamp left at 2 while the graph grew ~275 unversioned lines. | **No.** "2" names no single shape, so there is nothing to check a version 2 file against. |
+| 1 -> 2 (`c55596a9`) | Added `PersistedPlan.ValueOwnMaterials`. | **No.** Additive in itself, but 1 sits under the same unversioned drift 2 does. |
+
+The evidence for the 3 -> 4 row is `tests/shared/persisted_plan_schema.txt`:
+across its whole history the only deleted line is the one for
+`VendorOffer.Locations`, and the part of version 3's life
+that predates the snapshot (`35e97ed3`..`0492fc88`) contains no property
+removal, rename or retype in any type the persisted graph reaches.
+
+A future bump for a rename or a retype must raise the floor to that bump's
+version, in the same commit, with the member named in the message. A bump
+for an addition or a removal must leave the floor alone.
+
+**Every other persisted store.** `PlanHistoryStore` already read a range.
+`PlanHistoryBlobStore` reads through `DeserializePersistedPlan` and
+inherits the plan's. `RankerStore` had the same exact-version rule the plan
+store did and now reads
+`[RankerWatchlist.MinimumReadableSchemaVersion, CurrentSchemaVersion]`;
+only version 1 has ever shipped, so its accepted set is unchanged and the
+constant is there for the next bump to decide against.
+`OverlayRecipeCacheStore` already migrates its own version 1 file rather
+than rejecting it. `SnapshotStore`, `StatusStore` and `ModuleLogStore`
+carry no version stamp at all, so there is no rule to relax;
+`VendorOfferStore` reads shipped reference data, not user data, and never
+compares its stamp.
+
+Between `b15b3fd2` and `dfdc5eac` master briefly stamped 4 for a different
+reason - a public `CraftingTreeNode.IsPlanRoot` - and that bump was
+reverted rather than released. No tag ever carried it; a file from such a
+build reads today because `IsPlanRoot` is now `internal` and its JSON
+property is skipped like any other unclaimed one.
 
 ---
 
