@@ -107,11 +107,21 @@ namespace TaimisToolbench.Tests.Services
                 Assert.Equal(new[] { "Ingredient" }, notice.ItemNames);
 
                 string message = StaleAccountDataWarning.Compose(notice);
-                Assert.Contains("Unable to refresh account snapshot.", message);
-                Assert.Contains("material storage", message);
-                Assert.Contains("Ingredient", message);
-                Assert.Contains("captured 14m ago", message);
-                Assert.Contains("We cannot tell whether a refresh would have changed this plan.", message);
+                Assert.Equal(
+                    "Could not refresh your account, so this plan used data from 14m ago. "
+                    + "Your material storage could not be read, and what you own may have changed since.",
+                    message);
+
+                // The detail the dialog no longer carries is not lost. It
+                // moved to the line the Log tab shows.
+                string detail = StaleAccountDataWarning.ComposeLogDetail(notice);
+                Assert.Contains("material storage", detail);
+                Assert.Contains("Ingredient", detail);
+                Assert.Contains("14m ago", detail);
+
+                // The item name is exactly what the dialog must not spell
+                // out - it is what grew the old message to six sentences.
+                Assert.DoesNotContain("Ingredient", message);
             }
         }
 
@@ -268,8 +278,6 @@ namespace TaimisToolbench.Tests.Services
         [Fact]
         public async Task TheMessageIsOneParagraphWithNoLineBreaks()
         {
-            // ModalDialog renders only the first paragraph of its message
-            // and does not break on a newline.
             var snapshot = Snapshot(Held(2, "Ingredient", AccountItemIndex.SourceMaterialStorage));
             var result = await CraftPlanAsync(snapshot);
 
@@ -279,6 +287,97 @@ namespace TaimisToolbench.Tests.Services
             string message = StaleAccountDataWarning.Compose(notice);
             Assert.DoesNotContain("\n", message);
             Assert.DoesNotContain("\r", message);
+        }
+
+        /// <summary>
+        /// The message this replaced ran to six sentences over four
+        /// branches, and every branch had been added one at a time. This is
+        /// the test that has to fail before a seventh can arrive.
+        /// </summary>
+        [Fact]
+        public async Task TheMessageStaysTwoSentencesAtEveryShapeItCanTake()
+        {
+            // The ingredient sits in both, so both count as unread data the
+            // plan depends on and the two-source shape is reachable.
+            var snapshot = Snapshot(
+                Held(2, "Ingredient", AccountItemIndex.SourceMaterialStorage),
+                Held(2, "Ingredient", AccountItemIndex.SourceBank));
+            var result = await CraftPlanAsync(snapshot);
+
+            var shapes = new IReadOnlyList<AccountDataSource>[]
+            {
+                new[] { AccountDataSource.MaterialStorage },
+                new[] { AccountDataSource.Bank, AccountDataSource.MaterialStorage },
+                AccountDataSources.All,
+            };
+
+            foreach (var failed in shapes)
+            {
+                var notice = StaleAccountDataWarning.Evaluate(
+                    failed, null, snapshot, result, true, Now);
+                Assert.NotNull(notice);
+
+                string message = StaleAccountDataWarning.Compose(notice);
+                Assert.True(
+                    message.Length <= StaleAccountDataWarning.MaxMessageLength,
+                    $"{message.Length} chars, over the {StaleAccountDataWarning.MaxMessageLength} cap: {message}");
+                Assert.Equal(2, message.Count(c => c == '.'));
+
+                // The four things that were cut and must not come back.
+                Assert.DoesNotContain("We cannot tell", message);
+                Assert.DoesNotContain("disciplines", message);
+                Assert.DoesNotContain("currencies", message);
+                Assert.DoesNotContain("Ingredient", message);
+            }
+        }
+
+        /// <summary>
+        /// Two unread sources are joined as prose, not as a comma list, and
+        /// three or more stop being named at all - see
+        /// StaleAccountDataWarning's own note on why.
+        /// </summary>
+        [Fact]
+        public async Task MoreThanTwoUnreadSources_AreSummarisedRatherThanListed()
+        {
+            var snapshot = Snapshot(
+                Held(2, "Ingredient", AccountItemIndex.SourceMaterialStorage),
+                Held(2, "Ingredient", AccountItemIndex.SourceBank));
+            var result = await CraftPlanAsync(snapshot);
+
+            var two = StaleAccountDataWarning.Evaluate(
+                new[] { AccountDataSource.Bank, AccountDataSource.MaterialStorage },
+                null, snapshot, result, true, Now);
+            Assert.Contains(
+                "Your bank and material storage could not be read",
+                StaleAccountDataWarning.Compose(two));
+
+            var many = StaleAccountDataWarning.Evaluate(
+                AccountDataSources.All, null, snapshot, result, true, Now);
+            string manyMessage = StaleAccountDataWarning.Compose(many);
+            Assert.Contains("Several parts of your account could not be read", manyMessage);
+            Assert.DoesNotContain("material storage", manyMessage);
+        }
+
+        /// <summary>
+        /// The honest closer survives the rewrite. It is the one sentence
+        /// that must never become either "this plan is wrong" or "this plan
+        /// is fine", and it now carries that meaning on its own.
+        /// </summary>
+        [Fact]
+        public async Task TheMessageNeitherCondemnsNorClearsThePlan()
+        {
+            var snapshot = Snapshot(Held(2, "Ingredient", AccountItemIndex.SourceMaterialStorage));
+            var result = await CraftPlanAsync(snapshot);
+
+            var notice = StaleAccountDataWarning.Evaluate(
+                new[] { AccountDataSource.MaterialStorage }, null, snapshot, result, true, Now);
+
+            string message = StaleAccountDataWarning.Compose(notice);
+            Assert.Contains("may have changed since", message);
+            Assert.DoesNotContain("wrong", message);
+            Assert.DoesNotContain("incorrect", message);
+            Assert.DoesNotContain("still correct", message);
+            Assert.DoesNotContain("unaffected", message);
         }
 
         /// <summary>

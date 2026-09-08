@@ -129,13 +129,33 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// The dialog's text. Plain sentences, no ids, and no claim that
-        /// the plan is either wrong or fine.
+        /// Longest message <see cref="Compose"/> can return, in characters.
+        /// A ceiling with room to spare over the worst shape, not a target:
+        /// it exists so a sentence added here fails a test instead of
+        /// reaching a player as a wall of prose. The message this replaced
+        /// ran to six sentences.
+        /// </summary>
+        public const int MaxMessageLength = 200;
+
+        /// <summary>
+        /// Beyond this many unread sources the message stops naming them
+        /// and says how much of the account went unread instead. A list of
+        /// three lower-case labels inside a sentence reads as a fragment,
+        /// and every label is in the log line either way.
+        /// </summary>
+        private const int NamedSourceLimit = 2;
+
+        /// <summary>
+        /// The dialog's text: what happened, and what it means for the
+        /// plan on screen. Two sentences, no ids, and no claim that the
+        /// plan is either wrong or fine - "may have changed" is the whole
+        /// of what this can honestly say, because knowing more needs the
+        /// read that just failed.
         /// <para>
-        /// One paragraph with no line breaks: ModalDialog hands its message
-        /// to DialogLayoutMath as a single paragraph and renders only the
-        /// first block, so an embedded newline would not break a line and
-        /// a second paragraph would not be drawn at all.
+        /// Everything a longer message would add - which items the unread
+        /// sources held, the currency and discipline dependencies - goes to
+        /// <see cref="ComposeLogDetail"/> and the Log tab, where a reader
+        /// who wants it can go and find it.
         /// </para>
         /// </summary>
         public static string Compose(StaleAccountDataNotice notice)
@@ -145,31 +165,74 @@ namespace TaimisToolbench.Services
                 return null;
             }
 
-            var sentences = new List<string>
+            return "Could not refresh your account, so this plan used data from "
+                + StatusText.ForAgeAgo(notice.Age) + ". "
+                + SecondSentence(notice.Sources);
+        }
+
+        /// <summary>
+        /// What the plan may be missing, named where naming it is short
+        /// enough to read. The closer is the one part that is always true
+        /// and always said: a refresh that did not happen cannot be
+        /// reported as having changed nothing.
+        /// <para>
+        /// A notice with no source at all is defensive -
+        /// <see cref="Evaluate"/> returns null rather than produce one -
+        /// and the closer then stands as the whole sentence.
+        /// </para>
+        /// </summary>
+        private static string SecondSentence(IReadOnlyList<AccountDataSource> sources)
+        {
+            const string Closer = "what you own may have changed since.";
+
+            if (sources == null || sources.Count == 0)
             {
-                "Unable to refresh account snapshot.",
-                "This plan used account data captured " + StatusText.ForAgeAgo(notice.Age) + ".",
-                "Could not read: " + JoinLabels(notice.Sources) + ".",
+                return char.ToUpperInvariant(Closer[0]) + Closer.Substring(1);
+            }
+
+            string subject = sources.Count > NamedSourceLimit
+                ? "Several parts of your account"
+                : "Your " + string.Join(" and ", sources.Select(AccountDataSources.Label));
+
+            return subject + " could not be read, and " + Closer;
+        }
+
+        /// <summary>
+        /// The whole finding, for the Log tab: every unread source the plan
+        /// depends on, the plan items those sources held, and whether the
+        /// plan reads currencies or disciplines. This is the detail the
+        /// dialog deliberately does not carry.
+        /// </summary>
+        public static string ComposeLogDetail(StaleAccountDataNotice notice)
+        {
+            if (notice == null)
+            {
+                return null;
+            }
+
+            var parts = new List<string>
+            {
+                "Refresh failed before a plan solved against data "
+                    + StatusText.ForAgeAgo(notice.Age) + ".",
+                "Unread and used by the plan: " + JoinLabels(notice.Sources) + ".",
             };
 
             if (notice.ItemNames.Count > 0)
             {
-                sentences.Add("The plan needs " + JoinItems(notice.ItemNames) + " from there.");
+                parts.Add("Plan items held there: " + JoinItems(notice.ItemNames) + ".");
             }
 
             if (notice.AffectsCurrencyAmounts)
             {
-                sentences.Add("The plan spends currencies your wallet holds.");
+                parts.Add("The plan spends currencies the wallet holds.");
             }
 
             if (notice.AffectsCraftingDisciplines)
             {
-                sentences.Add("The plan crafts, and your disciplines decide what you can make.");
+                parts.Add("The plan crafts, so character disciplines decide what it can make.");
             }
 
-            sentences.Add("We cannot tell whether a refresh would have changed this plan.");
-
-            return string.Join(" ", sentences);
+            return string.Join(" ", parts);
         }
 
         private static HashSet<AccountDataSource> UnreadSources(
