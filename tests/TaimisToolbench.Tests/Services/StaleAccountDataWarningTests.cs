@@ -359,6 +359,28 @@ namespace TaimisToolbench.Tests.Services
         }
 
         /// <summary>
+        /// Evaluate never produces a notice with no source, so this branch
+        /// is reachable only through Compose's own public seam. It is here
+        /// because the closer has to carry a capital when it becomes the
+        /// whole sentence, and nothing else exercises that.
+        /// </summary>
+        [Fact]
+        public void AMessageWithNoSourceToName_StillReadsAsASentence()
+        {
+            var notice = new StaleAccountDataNotice(
+                new AccountDataSource[0],
+                new string[0],
+                affectsCurrencyAmounts: false,
+                affectsCraftingDisciplines: false,
+                age: TimeSpan.FromMinutes(14));
+
+            Assert.Equal(
+                "Could not refresh your account, so this plan used data from 14m ago. "
+                + "What you own may have changed since.",
+                StaleAccountDataWarning.Compose(notice));
+        }
+
+        /// <summary>
         /// The honest closer survives the rewrite. It is the one sentence
         /// that must never become either "this plan is wrong" or "this plan
         /// is fine", and it now carries that meaning on its own.

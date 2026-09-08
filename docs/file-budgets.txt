@@ -625,7 +625,7 @@ tests/TaimisToolbench.Tests/Services/IconWikiTargetTests.cs                     
 tests/TaimisToolbench.Tests/Services/RequiredRecipeSheetNamingTests.cs                  185
 tests/TaimisToolbench.Tests/Services/SecondTooltipBoxTests.cs                           123
 tests/TaimisToolbench.Tests/Services/SnapshotRefreshPolicyTests.cs                      145
-tests/TaimisToolbench.Tests/Services/StaleAccountDataWarningTests.cs                    418
+tests/TaimisToolbench.Tests/Services/StaleAccountDataWarningTests.cs                    440
 tests/TaimisToolbench.Tests/Services/TextWrapMathTests.cs                               297
 tests/TaimisToolbench.Tests/Services/TooltipComposerContentTests.cs                     215
 tests/TaimisToolbench.Tests/Services/TooltipContentTests.cs                             208
