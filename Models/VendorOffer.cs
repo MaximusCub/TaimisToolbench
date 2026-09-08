@@ -69,5 +69,14 @@ namespace TaimisToolbench.Models
         public int? UnlockRecipeItemId { get; set; }
 
         public int? UnlockRecipeId { get; set; }
+
+        // What this vendor demands of the account before it will trade, or
+        // null for a vendor that demands nothing. Additive, backward-
+        // compatible - an offer written before this field deserializes with
+        // it null. NEVER read by the solver: a gated offer stays selectable
+        // and priced exactly as before, and the requirement is only
+        // reported, by Services/VendorRequirementEvaluator through
+        // PlanResultBuilder. See Models/VendorRequirement.cs.
+        public VendorRequirement Requirement { get; set; }
     }
 }

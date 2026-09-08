@@ -207,5 +207,13 @@ namespace TaimisToolbench.Models
         /// empty (not null) when no active festival beats this plan.
         /// </summary>
         public List<SeasonalVendorTip> SeasonalVendorTips { get; set; }
+
+        /// <summary>
+        /// Vendor requirements the plan's own purchases run into, that the
+        /// account does not meet or that could not be checked. Empty when
+        /// every gated vendor the plan uses is one the account can use.
+        /// Informational only - see Models/VendorRequirementNotice.cs.
+        /// </summary>
+        public List<VendorRequirementNotice> VendorRequirementNotices { get; set; }
     }
 }

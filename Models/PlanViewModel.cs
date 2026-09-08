@@ -43,6 +43,12 @@ namespace TaimisToolbench.Models
         DisciplineRow,
         RecipeRow,
 
+        // Plain informational line in the Crafting Steps section - a vendor
+        // the plan buys from whose requirement the account does not meet,
+        // or that could not be checked. Rendered exactly like
+        // TimegatedNotice below, and never numbered as a craft step.
+        VendorRequirementNotice,
+
         // Plain informational line in the Crafting Steps section
         // - a vendor-capped item whose merged demand exceeds its
         // offer's daily/weekly purchase cap. Never numbered/badged like a

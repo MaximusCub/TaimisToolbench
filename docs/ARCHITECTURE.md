@@ -2861,7 +2861,16 @@ reached.
 
 ### 12.4 What the shape hash last moved for
 
-`PersistedPlan.SchemaShapeHash` last moved for the plan-level barter item
+`PersistedPlan.SchemaShapeHash` last moved for vendor requirements, which
+are purely additive: `VendorOffer.Requirement`, `PlanStep.VendorRequirement`,
+`PlanSolveContext.AccountProgression`,
+`CraftingPlanResult.VendorRequirementNotices`, and the `VendorRequirement`,
+`VendorRequirementNotice` and `AccountProgression` types they reach. An older
+file omits all of them, Newtonsoft leaves them null, and a restored plan then
+shows no vendor-requirement notices until it is re-solved. A plan written
+before it still deserializes and `CurrentSchemaVersion` stays at 3.
+
+Before that it moved for the plan-level barter item
 total, which is purely additive: `CraftingPlan.BarterItemCosts`,
 `PlanStep.VendorBarterItemCosts` and the `BarterItemCost` type they reach.
 An older file omits all three, Newtonsoft leaves the lists null, and a
@@ -4180,3 +4189,54 @@ asserts the arithmetic instead: a partition that overflowed has more rows
 than it returned, so at least one child must hold rows. If every child
 answers with none, the partition is recorded UNRESOLVED rather than
 accepted, and the coverage gate blocks the write.
+
+### T.10 Vendor requirements: classifying free-form wiki prose
+
+Every wiki vendor row can carry a `Has requirement` value, and 9,337 of the
+70,644 scraped rows do, across 1,236 distinct strings. The property is prose
+written by editors, and it records every kind of gate the wiki knows about:
+achievements, mastery levels, expansions, festivals, renown hearts, wardrobe
+unlocks, held items. Nothing in the data marks which kind a string is, and
+the kinds are not distinguishable by shape - "Radiance of the Sun God" is an
+achievement, "Nuhoch Language" is a mastery level, and the two are the same
+sort of noun phrase.
+
+`VendorRequirementClassifier` therefore matches whole values against GW2 API
+name lists rather than parsing them. A value is classified only when, after
+one enclosing wiki link is unwrapped, the WHOLE of it is an exact API name:
+
+- an achievement name from `/v2/achievements`, or a page anchor of the form
+  `Page#achievement<id>`, which the wiki's own achievement tables emit and
+  which names the achievement's API id outright;
+- a mastery LEVEL name from `/v2/masteries` (the wiki cites the level, not
+  the track, so the track id alone would not answer the question);
+- one of the five expansion titles `/v2/account` is documented to report in
+  its `access` array.
+
+Three rules keep it from inventing an answer. A name two achievements share
+is dropped from the index rather than resolved to one of them - 193 of the
+live list's 8,230 names are shared. A value that matches two different KINDS
+is left unclassified and reported, because either answer could be the wrong
+gate. And an expansion the `access` array has no documented flag for, such
+as Visions of Eternity, stays unclassified rather than being given a flag
+derived from its title.
+
+Measured over the full scrape: 1,284 rows resolve to an achievement by name,
+115 by anchor, 965 to a mastery level, 400 to an expansion, 1 distinct value
+(5 rows) is ambiguous, and 6,568 rows carry prose nothing matches. So about
+30% of requirement rows can be checked against an account and the rest
+cannot. Every row keeps its text either way: a player who is told "this
+vendor requires Radiance of the Sun God" can act on that whether or not the
+module can verify it.
+
+The account side costs one scope. `/v2/account/achievements` and
+`/v2/account/masteries` both need `progression`; the `access` array comes
+from `/v2/account` on the `account` scope the module already requires, so an
+account that declines `progression` still gets its expansion gates checked.
+One documented quirk is coded for: an account that received Heart of Thorns
+by buying Path of Fire does not carry the `HeartOfThorns` flag, so
+`PathOfFire` satisfies a Heart of Thorns requirement.
+
+None of this changes a plan. A gated offer is selected, priced and routed
+exactly as before; the requirement is reported as a notice row beside the
+vendor purchase caps, which are handled the same way.

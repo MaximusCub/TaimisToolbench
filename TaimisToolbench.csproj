@@ -199,9 +199,14 @@
     <Compile Include="Models\SettingsFormState.cs" />
     <Compile Include="Models\CraftingPlan.cs" />
     <Compile Include="Models\TimegatedItem.cs" />
+    <Compile Include="Models\VendorRequirement.cs" />
+    <Compile Include="Models\VendorRequirementNotice.cs" />
+    <Compile Include="Models\AccountProgression.cs" />
     <Compile Include="Services\PlanSolver.cs" />
     <Compile Include="Services\VendorBatchSolver.cs" />
     <Compile Include="Services\VendorCapNotices.cs" />
+    <Compile Include="Services\VendorRequirementEvaluator.cs" />
+    <Compile Include="Services\PlanRowKinds.cs" />
     <Compile Include="Services\VendorCostLineSubtrees.cs" />
     <Compile Include="Services\VendorOfferDomination.cs" />
     <Compile Include="Services\StatusUpdateGuard.cs" />
@@ -417,6 +422,8 @@
     <Compile Include="Services\PlanResultBuilder.cs" />
     <Compile Include="Services\PlanRootNodes.cs" />
     <Compile Include="Services\IAccountRecipeClient.cs" />
+    <Compile Include="Services\IAccountProgressionClient.cs" />
+    <Compile Include="Services\Gw2AccountProgressionClient.cs" />
     <Compile Include="Models\PlanViewModel.cs" />
     <Compile Include="Services\PlanViewModelBuilder.cs" />
     <Compile Include="Services\RequiredRecipesVisibility.cs" />

@@ -55,7 +55,7 @@ namespace TaimisToolbench.Views.Rendering
             for (int i = 0; i < section.Rows.Count; i++)
             {
                 var row = section.Rows[i];
-                if (row.RowType == PlanRowType.TimegatedNotice)
+                if (PlanRowKinds.IsCraftingStepsNotice(row.RowType))
                 {
                     continue;
                 }
@@ -82,7 +82,7 @@ namespace TaimisToolbench.Views.Rendering
             {
                 var row = section.Rows[i];
                 bool isLast = i == section.Rows.Count - 1;
-                if (row.RowType == PlanRowType.TimegatedNotice)
+                if (PlanRowKinds.IsCraftingStepsNotice(row.RowType))
                 {
                     TextRowRenderer.CreateTextRow(row.Label, contentFlow, panelWidth, _sink);
                 }

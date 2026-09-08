@@ -1,3 +1,6 @@
+AccountProgression.CompletedAchievementIds:ISet`1<Int32>
+AccountProgression.ExpansionAccess:ISet`1<String>
+AccountProgression.MasteryLevelsByMasteryId:IReadOnlyDictionary`2<Int32,Int32>
 AcquisitionHint.Badge:String
 AcquisitionHint.Hint:String
 AcquisitionHint.ItemId:Int32
@@ -52,6 +55,7 @@ CraftingPlanResult.SellableQuantity:Int32
 CraftingPlanResult.SolveContext:PlanSolveContext
 CraftingPlanResult.TargetUnitSellPrice:Nullable`1<Int64>
 CraftingPlanResult.UsedMaterials:List`1<UsedMaterial>
+CraftingPlanResult.VendorRequirementNotices:List`1<VendorRequirementNotice>
 CraftingTreeNode.AcquisitionBadge:String
 CraftingTreeNode.AcquisitionHint:String
 CraftingTreeNode.BuyFromTpCostBreakdown:PillSourceCostBreakdown
@@ -146,6 +150,7 @@ PlanRequestItem.ItemId:Int32
 PlanRequestItem.Name:String
 PlanRequestItem.Quantity:Int32
 PlanSolveContext.AccountItems:IReadOnlyList`1<SnapshotItemEntry>
+PlanSolveContext.AccountProgression:AccountProgression
 PlanSolveContext.AcquisitionHints:IReadOnlyDictionary`2<Int32,AcquisitionHint>
 PlanSolveContext.ActiveCharacterName:String
 PlanSolveContext.CharacterDisciplines:IReadOnlyList`1<SnapshotCharacterDiscipline>
@@ -182,6 +187,7 @@ PlanStep.VendorCurrencyCosts:List`1<CostLine>
 PlanStep.VendorHasBarterItemCost:Boolean
 PlanStep.VendorOfferCurrencyCostLinesPerBatch:List`1<CostLine>
 PlanStep.VendorOfferOutputCount:Int32
+PlanStep.VendorRequirement:VendorRequirement
 PlanStep.VendorUnlockRecipeId:Nullable`1<Int32>
 PlanStep.VendorUnlockRecipeItemId:Nullable`1<Int32>
 RecipeNode.AchievementBit:Nullable`1<Int32>
@@ -258,8 +264,17 @@ VendorOffer.MerchantName:String
 VendorOffer.OfferId:String
 VendorOffer.OutputCount:Int32
 VendorOffer.OutputItemId:Int32
+VendorOffer.Requirement:VendorRequirement
 VendorOffer.SeasonalCap:Nullable`1<Int32>
 VendorOffer.SeasonalFestival:String
 VendorOffer.UnlockRecipeId:Nullable`1<Int32>
 VendorOffer.UnlockRecipeItemId:Nullable`1<Int32>
 VendorOffer.WeeklyCap:Nullable`1<Int32>
+VendorRequirement.AchievementId:Nullable`1<Int32>
+VendorRequirement.Expansion:String
+VendorRequirement.MasteryId:Nullable`1<Int32>
+VendorRequirement.MasteryLevel:Nullable`1<Int32>
+VendorRequirement.Text:String
+VendorRequirementNotice.ItemId:Int32
+VendorRequirementNotice.RequirementText:String
+VendorRequirementNotice.Status:VendorRequirementStatus

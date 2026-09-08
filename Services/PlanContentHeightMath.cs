@@ -352,7 +352,7 @@ namespace TaimisToolbench.Services
             int height = 0;
             foreach (var row in rows)
             {
-                height += row.RowType == PlanRowType.TimegatedNotice
+                height += PlanRowKinds.IsCraftingStepsNotice(row.RowType)
                     ? FallbackTextRowHeight
                     : CraftStepRowHeight;
             }

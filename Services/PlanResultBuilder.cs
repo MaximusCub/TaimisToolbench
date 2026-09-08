@@ -37,7 +37,10 @@ namespace TaimisToolbench.Services
             // recipe id -> unlocking sheet item id
             // (ref/recipe_sheet_items.json). Null or a miss leaves
             // RequiredRecipe.SheetItemId at 0.
-            IReadOnlyDictionary<int, int> recipeSheetItemIdByRecipeId = null)
+            IReadOnlyDictionary<int, int> recipeSheetItemIdByRecipeId = null,
+            // What the account has unlocked, for the vendor-requirement
+            // notices below. Null leaves every requirement Unknown.
+            AccountProgression accountProgression = null)
         {
             var debugLog = new List<string>();
 
@@ -395,8 +398,56 @@ namespace TaimisToolbench.Services
                 RequiredDisciplines = requiredDisciplines,
                 RequiredRecipes = requiredRecipes,
                 ProbabilisticForgeOutputItemIds = probabilisticForgeOutputItemIds,
+                VendorRequirementNotices =
+                    BuildVendorRequirementNotices(plan, accountProgression),
                 DebugLog = debugLog,
             };
+        }
+
+        /// <summary>
+        /// One notice per vendor step whose offer names a requirement the
+        /// account does not meet, or that could not be checked. A met
+        /// requirement produces nothing, and no notice ever changes the
+        /// plan - see Models/VendorRequirementNotice.cs.
+        /// </summary>
+        // internal for testability (TaimisToolbench.Tests)
+        internal static List<VendorRequirementNotice> BuildVendorRequirementNotices(
+            CraftingPlan plan, AccountProgression accountProgression)
+        {
+            var notices = new List<VendorRequirementNotice>();
+            if (plan?.Steps == null)
+            {
+                return notices;
+            }
+
+            var seenItemIds = new HashSet<int>();
+            foreach (var step in plan.Steps)
+            {
+                var requirement = step?.VendorRequirement;
+                if (step == null ||
+                    step.Source != AcquisitionSource.BuyFromVendor ||
+                    requirement == null ||
+                    string.IsNullOrEmpty(requirement.Text) ||
+                    !seenItemIds.Add(step.ItemId))
+                {
+                    continue;
+                }
+
+                var status = VendorRequirementEvaluator.Evaluate(requirement, accountProgression);
+                if (status == VendorRequirementStatus.Met)
+                {
+                    continue;
+                }
+
+                notices.Add(new VendorRequirementNotice
+                {
+                    ItemId = step.ItemId,
+                    RequirementText = requirement.Text,
+                    Status = status,
+                });
+            }
+
+            return notices;
         }
 
         // Builds a RecipeId -> RecipeOption index with a single tree walk.
