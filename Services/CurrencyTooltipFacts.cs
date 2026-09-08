@@ -11,19 +11,15 @@ namespace TaimisToolbench.Services
     /// /v2/currencies prose.
     ///
     /// <para>
-    /// It is a separate type from the item identity ON PURPOSE. Currency
-    /// ids and item ids are different id spaces that collide numerically -
-    /// id 24 is both a real item and the currency "Pristine Fractal
-    /// Relics", and "Gaeting Crystal" is both wallet currency 77 and item
-    /// 104026 - so a tooltip has to be built from the kind
-    /// the CALLER knows its id to be. Two types is what makes that a
-    /// compile-time choice instead of a name lookup.
+    /// A separate type from the item identity ON PURPOSE. Item and currency
+    /// ids collide numerically: id 24 is both a real item and the currency
+    /// "Pristine Fractal Relics". Two types make the choice a compile-time
+    /// one rather than a name lookup.
     /// </para>
     /// <para>
-    /// There is no way to build one field by field. Every surface passes
-    /// an ID, and <see cref="ForCurrencyId(int, IReadOnlyDictionary{int, CurrencyMetadata}, int?)"/>
-    /// fills all four. That is what stopped the Recipe Tree showing a bare
-    /// name where the Settings grid showed the full box.
+    /// There is no way to build one field by field. Every surface passes an
+    /// id and gets all four fields, which is what stopped the Recipe Tree
+    /// showing a bare name where the Settings grid showed the full box.
     /// </para>
     /// </summary>
     internal readonly struct CurrencyTooltipFacts

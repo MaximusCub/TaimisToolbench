@@ -2976,9 +2976,9 @@ namespace TaimisToolbench.Views
         /// breakdown is NOT here - the row already prints it under the
         /// name, and a second tooltip box repeating it says nothing new.
         /// </summary>
-        /// <summary>Everything one wallet currency's tooltip shows. The
-        /// row's own Value IS the balance the game's tooltip states, so it
-        /// is passed rather than looked up again.</summary>
+        // Everything one wallet currency's tooltip shows. The row's own
+        // Value IS the balance the game's tooltip states, so it is passed
+        // rather than looked up again.
         private CurrencyTooltipFacts CurrencyFactsFor(int currencyId, int walletValue)
         {
             return CurrencyTooltipFacts.ForCurrencyEntry(

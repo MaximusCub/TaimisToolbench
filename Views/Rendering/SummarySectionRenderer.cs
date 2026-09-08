@@ -646,10 +646,16 @@ namespace TaimisToolbench.Views.Rendering
                     SummarySectionLayoutMath.NonCoinGroupAnchorKey(groups[g].IsInventoryGroup),
                     headingRow);
 
+                // A rule between rows and none under the table's last
+                // one. A group heading gets none: the band it already
+                // carries is what separates it (HeaderBands).
+                bool lastGroup = g == groups.Count - 1;
                 var groupRows = groups[g].Rows;
                 for (int i = 0; i < groupRows.Count; i++)
                 {
-                    var costRow = CreateCurrencyTableRow(groupRows[i], parent, panelWidth, scan);
+                    bool isLast = lastGroup && i == groupRows.Count - 1;
+                    var costRow = CreateCurrencyTableRow(
+                        groupRows[i], parent, panelWidth, scan, isLast);
                     RegisterScrollAnchor(
                         SummarySectionLayoutMath.NonCoinRowAnchorKey(groupRows[i]), costRow);
                 }
@@ -1057,7 +1063,8 @@ namespace TaimisToolbench.Views.Rendering
         }
 
         private Panel CreateCurrencyTableRow(
-            PlanRowViewModel row, FlowPanel parent, int panelWidth, CurrencyColumnScan scan)
+            PlanRowViewModel row, FlowPanel parent, int panelWidth, CurrencyColumnScan scan,
+            bool isLast)
         {
             const int rowHeight = CurrencyRowHeight;
             var rowPanel = CreateCurrencyRowPanel(
@@ -1148,20 +1155,25 @@ namespace TaimisToolbench.Views.Rendering
             // background already delineates the table - introducing a
             // divider at an unproven row height risks resurrecting that
             // defect for a visual element nothing asked for.
-            _sink.AddRelayout(w =>
-            {
-                rowPanel.Size = new Point(w, rowHeight);
-                var e = scan.EdgesFor(w);
-                requiredLabel.Location = new Point(PlanRelayoutMath.RightAlignedX(e.RequiredRightEdge, requiredLabel.Width), SummarySectionLayoutMath.CurrencyRowTextY);
-                haveLabel.Location = new Point(PlanRelayoutMath.RightAlignedX(e.HaveRightEdge, haveLabel.Width), SummarySectionLayoutMath.CurrencyRowTextY);
-                neededLabel.Location = new Point(PlanRelayoutMath.RightAlignedX(e.NeededRightEdge, neededLabel.Width), SummarySectionLayoutMath.CurrencyRowTextY);
-                note.MoveTo(e.NoteX);
-                if (marker != null)
+            // The 42px row already absorbs the clearance pixel: the icon
+            // is centred with 5px above and below, and the 2px rule lands
+            // in the lower gap, so no height math moves.
+            RowRelayoutHelpers.FinishRow(
+                rowPanel, panelWidth, rowHeight, isLast,
+                PlanContentHeightMath.IconRowDividerClearance, _sink,
+                w =>
                 {
-                    marker.Location = new Point(
-                        e.MarkerX, (rowHeight - LabelHelpers.SmallTagHeight) / 2);
-                }
-            });
+                    var e = scan.EdgesFor(w);
+                    requiredLabel.Location = new Point(PlanRelayoutMath.RightAlignedX(e.RequiredRightEdge, requiredLabel.Width), SummarySectionLayoutMath.CurrencyRowTextY);
+                    haveLabel.Location = new Point(PlanRelayoutMath.RightAlignedX(e.HaveRightEdge, haveLabel.Width), SummarySectionLayoutMath.CurrencyRowTextY);
+                    neededLabel.Location = new Point(PlanRelayoutMath.RightAlignedX(e.NeededRightEdge, neededLabel.Width), SummarySectionLayoutMath.CurrencyRowTextY);
+                    note.MoveTo(e.NoteX);
+                    if (marker != null)
+                    {
+                        marker.Location = new Point(
+                            e.MarkerX, (rowHeight - LabelHelpers.SmallTagHeight) / 2);
+                    }
+                });
             _sink.AddReellipsis(w =>
             {
                 var e = scan.EdgesFor(w);

@@ -86,33 +86,22 @@ namespace TaimisToolbench.Views.Rendering
         }
 
         /// <summary>
-        /// THE currency icon: a wallet currency, in the module's one
-        /// currency treatment so no surface has to choose a border of its
-        /// own. Takes one of the two CURRENCY tiers, and the tier carries
-        /// the context: <see cref="IconFrameGeometry.CurrencyIsFramed"/>
-        /// frames a CurrencyListRow icon (a row's subject) in the module's
-        /// one currency grey (<see cref="ItemIconFrame.Currency"/>) and
-        /// draws a CurrencyBarRun icon (a currency symbol seated after
-        /// digits, in the coins' role) with no frame at all.
+        /// THE currency icon. The caller passes an ID and a tier, and
+        /// nothing else: art, name, prose, holding, border and wiki page
+        /// all come from the id.
         /// <para>
-        /// Pixel-neutral by construction: either way the icon occupies the
-        /// tier's measured window - the framed square insets its art inside
-        /// it, the frame-less one fills it - so an inline currency run's
-        /// advance, a term in the minimum-window-width derivation, does not
+        /// The tier carries the context, through
+        /// <see cref="IconFrameGeometry.CurrencyIsFramed"/>: a row's
+        /// subject keeps the ring, and a symbol seated after digits takes
+        /// no frame, like the coins beside it. Either way the icon occupies
+        /// the tier's measured window, so an inline run's advance does not
         /// move.
         /// </para>
-        /// The caller passes an ID and a tier, and nothing else. Art,
-        /// name, prose, wallet holding, border and wiki page all come from
-        /// the id through <paramref name="getFacts"/>. A caller that could
-        /// pass a name or an icon url is a caller that could pass a
-        /// different one from the next site, which is how the Recipe Tree
-        /// came to show a bare name where the Settings grid showed the
-        /// game's full box.
         /// <para>
-        /// <paramref name="getFacts"/> is read TWICE and the two reads mean
-        /// different things. The build-time read supplies the art and the
-        /// name, which are fixed for an id. The hover-time read supplies
-        /// the box, including the wallet holding, which is not.
+        /// <paramref name="getFacts"/> is read TWICE. The build-time read
+        /// supplies the art and the name, which are fixed for an id. The
+        /// hover-time read supplies the box, including the wallet holding,
+        /// which is not.
         /// </para>
         /// </summary>
         internal static Panel CreateCurrencyIcon(
