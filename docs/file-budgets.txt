@@ -53,6 +53,7 @@ Models/OwnMaterialsMode.cs                                                      
 Models/PersistedPlan.cs                                                                 173
 Models/PersistedPlanLoad.cs                                                             49
 Models/PillSourceCostBreakdown.cs                                                       76
+Models/PlanAccountData.cs                                                               31
 Models/PlanHistoryEntry.cs                                                              146
 Models/PlanRequestItem.cs                                                               26
 Models/PlanSolveContext.cs                                                              212
@@ -85,10 +86,11 @@ Models/UsedMaterial.cs                                                          
 Models/VendorItemCostLine.cs                                                            42
 Models/VendorOffer.cs                                                                   73
 Models/VendorOfferDataset.cs                                                            15
-Module.cs                                                                               3032
+Module.cs                                                                               3271
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
+Services/AccountDataSource.cs                                                           114
 Services/AccountItemIndex.cs                                                            240
 Services/AchievementBitDedupPrePass.cs                                                  197
 Services/AcquisitionHintService.cs                                                      75
@@ -103,7 +105,7 @@ Services/CompositeRecipeApiClient.cs                                            
 Services/CostLineValuation.cs                                                           121
 Services/CraftCompetencyEvaluator.cs                                                    125
 Services/CraftableItemSearchProvider.cs                                                 127
-Services/CraftingPlanPipeline.cs                                                        1752
+Services/CraftingPlanPipeline.cs                                                        1783
 Services/CraftingTreeBuilder.cs                                                         626
 Services/CurrencyDisplayResolver.cs                                                     236
 Services/CurrencyMetadataService.cs                                                     159
@@ -123,7 +125,7 @@ Services/FirstLoadSnapshotGate.cs                                               
 Services/GlyphButtonMetrics.cs                                                          69
 Services/GridLayout.cs                                                                  93
 Services/Gw2AccountRecipeClient.cs                                                      30
-Services/Gw2AccountSnapshotService.cs                                                   897
+Services/Gw2AccountSnapshotService.cs                                                   909
 Services/Gw2ApiConnectionLimit.cs                                                       70
 Services/Gw2ItemApiClient.cs                                                            271
 Services/Gw2PriceApiClient.cs                                                           76
@@ -245,7 +247,7 @@ Services/SnapshotFailureClassification.cs                                       
 Services/SnapshotFailureClassifier.cs                                                   167
 Services/SnapshotFetchBudget.cs                                                         49
 Services/SnapshotFailureKind.cs                                                         59
-Services/SnapshotFetchFailedException.cs                                                112
+Services/SnapshotFetchFailedException.cs                                                131
 Services/SnapshotHeaderLayout.cs                                                        209
 Services/SnapshotHelpers.cs                                                             79
 Services/SnapshotHoldLine.cs                                                            355
@@ -273,14 +275,18 @@ Services/TransmutedNameIndex.cs                                                 
 Services/UiGlyphs.cs                                                                    124
 Services/GlyphFontDescriptor.cs                                                         316
 Services/IconWikiTarget.cs                                                              156
+Services/PlanAccountRefresh.cs                                                          40
+Services/PlanItemIds.cs                                                                 73
 Services/SecondTooltipBox.cs                                                            82
+Services/SnapshotRefreshPolicy.cs                                                       41
+Services/StaleAccountDataWarning.cs                                                     310
 Services/TextWrapMath.cs                                                                324
 Services/TooltipContent.cs                                                              701
 Services/TooltipLayoutMath.cs                                                           628
 Services/TooltipTextFormat.cs                                                           136
 Services/TopRegionLayoutMath.cs                                                         116
 Services/TradingPostMath.cs                                                             57
-Services/TradingPostService.cs                                                          359
+Services/TradingPostService.cs                                                          369
 Services/TreeChipStripLayout.cs                                                         202
 Services/TreeCostColumnMath.cs                                                          663
 Services/TreeRowIdentity.cs                                                             94
@@ -303,7 +309,7 @@ Services/WindowSizing.cs                                                        
 Views/AboutTabContent.cs                                                                1000
 Views/ApiAccessDialog.cs                                                                231
 Views/AutocompleteTextBox.cs                                                            45
-Views/CraftingPlanView.cs                                                               5403
+Views/CraftingPlanView.cs                                                               5448
 Views/FocusRelease.cs                                                                   159
 Views/ItemInputRowStrip.cs                                                              465
 Views/ItemRowState.cs                                                                   39
@@ -413,6 +419,7 @@ tests/TaimisToolbench.Tests/Services/CompositeRecipeApiClientTests.cs           
 tests/TaimisToolbench.Tests/Services/CostLineValuationTests.cs                          132
 tests/TaimisToolbench.Tests/Services/CraftCompetencyEvaluatorTests.cs                   143
 tests/TaimisToolbench.Tests/Services/CraftableItemSearchProviderTests.cs                200
+tests/TaimisToolbench.Tests/Services/CraftingPlanPipelineAccountRefreshTests.cs         144
 tests/TaimisToolbench.Tests/Services/CraftingPlanPipelineAdvisoryAnnotationTests.cs     378
 tests/TaimisToolbench.Tests/Services/CraftingPlanPipelineCancellationTests.cs           281
 tests/TaimisToolbench.Tests/Services/CraftingPlanPipelineCharacterDisciplineTests.cs    634
@@ -617,6 +624,8 @@ tests/TaimisToolbench.Tests/Services/IconStandardCallSiteTests.cs               
 tests/TaimisToolbench.Tests/Services/IconWikiTargetTests.cs                             106
 tests/TaimisToolbench.Tests/Services/RequiredRecipeSheetNamingTests.cs                  185
 tests/TaimisToolbench.Tests/Services/SecondTooltipBoxTests.cs                           123
+tests/TaimisToolbench.Tests/Services/SnapshotRefreshPolicyTests.cs                      51
+tests/TaimisToolbench.Tests/Services/StaleAccountDataWarningTests.cs                    293
 tests/TaimisToolbench.Tests/Services/TextWrapMathTests.cs                               297
 tests/TaimisToolbench.Tests/Services/TooltipComposerContentTests.cs                     215
 tests/TaimisToolbench.Tests/Services/TooltipContentTests.cs                             208
@@ -625,7 +634,7 @@ tests/TaimisToolbench.Tests/Services/TooltipSpanRoleTests.cs                    
 tests/TaimisToolbench.Tests/Services/TooltipTextFormatTests.cs                          138
 tests/TaimisToolbench.Tests/Services/TopRegionLayoutMathTests.cs                        147
 tests/TaimisToolbench.Tests/Services/TradingPostMathTests.cs                            70
-tests/TaimisToolbench.Tests/Services/TradingPostServiceTests.cs                         507
+tests/TaimisToolbench.Tests/Services/TradingPostServiceTests.cs                         523
 tests/TaimisToolbench.Tests/Services/TransmutedNameTests.cs                             441
 tests/TaimisToolbench.Tests/Services/TreeChipStripLayoutTests.cs                        283
 tests/TaimisToolbench.Tests/Services/TreeCostColumnMathTests.cs                         768

@@ -18,7 +18,7 @@ namespace TaimisToolbench.Services
     /// acquired since is invisible here.
     /// </para>
     /// <para>The reads, established from the pipeline: see
-    /// docs/ARCHITECTURE.md, "Account data a plan reads".</para>
+    /// docs/ARCHITECTURE.md section 10a.</para>
     /// </summary>
     internal static class StaleAccountDataWarning
     {

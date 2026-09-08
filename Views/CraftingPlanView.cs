@@ -4431,13 +4431,6 @@ namespace TaimisToolbench.Views
         }
 
         /// <summary>
-        /// The finished plan's status line. Carries the account-data clause
-        /// only when the plan subtracted owned materials from a snapshot
-        /// that is overdue for a refresh or missing a character - see
-        /// StatusText.ForPlanAccountDataNote, which owns that decision and
-        /// the wording.
-        /// </summary>
-        /// <summary>
         /// Tells the user their account snapshot did not refresh, but only
         /// when this plan reads something the refresh failed to read - see
         /// Services/StaleAccountDataWarning.cs. The status line under the
@@ -4467,6 +4460,13 @@ namespace TaimisToolbench.Views
             _modalDialog?.ShowAcknowledgement(StaleAccountDataWarning.Compose(notice));
         }
 
+        /// <summary>
+        /// The finished plan's status line. Carries the account-data clause
+        /// only when the plan subtracted owned materials from a snapshot
+        /// that is overdue for a refresh or missing a character - see
+        /// StatusText.ForPlanAccountDataNote, which owns that decision and
+        /// the wording.
+        /// </summary>
         private string PlanGeneratedStatus(AccountSnapshot planned)
         {
             string status = StatusText.Stamp("Plan generated", _planGeneratedAt);
