@@ -57,12 +57,7 @@ if (-not (Test-Path -LiteralPath $settingsPath)) {
 # different file than the read above. Resolve once, here.
 $settingsPath = (Resolve-Path -LiteralPath $settingsPath).ProviderPath
 
-# Blish_HUD.SettingsService.Unload calls Save(forceSave: true), which rewrites
-# the whole file from the values it holds in memory. A write made while Blish
-# is running is therefore lost when it exits, and lost in silence.
-if (@(Get-Process -Name 'Blish HUD' -ErrorAction SilentlyContinue).Count -gt 0) {
-    throw "Blish HUD is running and rewrites $settingsPath when it exits. Close it, then re-run."
-}
+$settingsRoot = [System.IO.Path]::GetDirectoryName($settingsPath).TrimEnd('\')
 
 $text = Get-Content -LiteralPath $settingsPath -Raw
 
@@ -84,6 +79,22 @@ if (-not $currentName) { $currentName = "unknown ($current)" }
 if ($current -eq $target) {
     "UIScalingMethod already $UiScale (scale ratio $($ratio[$UiScale])). No change."
     return
+}
+
+# Blish_HUD.SettingsService.Unload calls Save(forceSave: true), which rewrites
+# the whole file from the values it holds in memory. A write made while Blish
+# is running is therefore lost when it exits, and lost in silence.
+#
+# Only a Blish holding THIS settings directory can do that, so the check reads
+# each one's command line rather than matching on the process name. The
+# developer's live session runs on its own settings directory and is no threat
+# to this file. A command line that cannot be read is counted as a conflict,
+# because the safe answer under uncertainty is to refuse the write.
+$clash = @(Get-CimInstance Win32_Process -Filter "Name = 'Blish HUD.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $null -eq $_.CommandLine -or $_.CommandLine.Replace('"', '') -like "*$settingsRoot*" })
+if ($clash.Count -gt 0) {
+    $who = ($clash | ForEach-Object { "pid $($_.ProcessId)" }) -join ', '
+    throw "Blish HUD ($who) is running on $settingsRoot and rewrites settings.json when it exits. Close it, then re-run."
 }
 
 if ($PSCmdlet.ShouldProcess($settingsPath, "Set UIScalingMethod to $UiScale ($target)")) {
