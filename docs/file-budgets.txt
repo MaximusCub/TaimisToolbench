@@ -33,7 +33,7 @@ Models/CompetencyOpportunity.cs                                                 
 Models/CostLine.cs                                                                      11
 Models/CraftingDecision.cs                                                              73
 Models/CraftingPlan.cs                                                                  31
-Models/CraftingPlanResult.cs                                                            211
+Models/CraftingPlanResult.cs                                                            219
 Models/CraftingTreeNode.cs                                                              235
 Models/CurrencyCost.cs                                                                  9
 Models/CurrencyDecisionDefaults.cs                                                      142
@@ -49,6 +49,7 @@ Models/ItemPrice.cs                                                             
 Models/ItemSlotKind.cs                                                                  33
 Models/ItemStatBlock.cs                                                                 132
 Models/MaterialSourceAllocation.cs                                                      9
+Models/MissingRecipeSheetSource.cs                                                      52
 Models/OwnMaterialsMode.cs                                                              43
 Models/PersistedPlan.cs                                                                 173
 Models/PersistedPlanLoad.cs                                                             49
@@ -103,7 +104,7 @@ Services/CompositeRecipeApiClient.cs                                            
 Services/CostLineValuation.cs                                                           121
 Services/CraftCompetencyEvaluator.cs                                                    125
 Services/CraftableItemSearchProvider.cs                                                 127
-Services/CraftingPlanPipeline.cs                                                        1752
+Services/CraftingPlanPipeline.cs                                                        1793
 Services/CraftingTreeBuilder.cs                                                         626
 Services/CurrencyDisplayResolver.cs                                                     236
 Services/CurrencyMetadataService.cs                                                     159
@@ -159,6 +160,7 @@ Services/LogLineFormat.cs                                                       
 Services/LogRowLayout.cs                                                                123
 Services/LogToolbarLayout.cs                                                            109
 Services/LogViewFloor.cs                                                                29
+Services/MissingRecipeSheetSourceCalculator.cs                                          262
 Services/ModuleLog.cs                                                                   642
 Services/ModuleLogEntry.cs                                                              43
 Services/ModuleLogLevel.cs                                                              20
@@ -192,9 +194,9 @@ Services/PlanStore.cs                                                           
 Services/PlanStoreHelpers.cs                                                            374
 Services/PlanStripStatusBoard.cs                                                        307
 Services/PlanStripTickDecision.cs                                                       97
-Services/PlanStructuralValidator.cs                                                     597
+Services/PlanStructuralValidator.cs                                                     602
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        1919
+Services/PlanViewModelBuilder.cs                                                        2019
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
