@@ -38,7 +38,7 @@ namespace TaimisToolbench.Models
         /// mismatch check. Construction sites set it explicitly instead.
         /// </para>
         /// </summary>
-        public const int CurrentSchemaVersion = 3;
+        public const int CurrentSchemaVersion = 4;
 
         /// <summary>
         /// SHA-256 of the persisted graph's public member signatures, one
@@ -58,7 +58,7 @@ namespace TaimisToolbench.Models
         /// <para>Derivation: docs/ARCHITECTURE.md section 12.</para>
         /// </summary>
         public const string SchemaShapeHash =
-            "35d7f71d5539129a341f7b519dc72f9600f903b9167db53f98d2645596589c5f";
+            "c16d97b40135cb2f1d7bbe4c9625f92c9ae6f4edca422b56b8752d8ecfa231d6";
 
         /// <summary>
         /// See <see cref="CurrentSchemaVersion"/>'s own doc comment for why

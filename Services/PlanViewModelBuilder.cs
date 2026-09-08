@@ -748,9 +748,11 @@ namespace TaimisToolbench.Services
                 return 0;
             }
 
-            int buys = SeatTradeUpNote(row, cost, ownedItems, result);
+            int outstanding = Math.Max(0, row.Quantity - (ownedItems ?? 0));
+            int buys = SeatTradeUpNote(row, cost, outstanding, result);
             tradeUpPurchases[cost.ItemId] = new TradeUpPurchase
             {
+                Outstanding = outstanding,
                 Buys = buys,
                 CurrencyId = cost.TradeUpCurrencyId.Value,
                 CurrencyPerUnit = cost.TradeUpCurrencyPerUnit.Value,
@@ -762,18 +764,21 @@ namespace TaimisToolbench.Services
         /// The note itself, for a row already known to be a trade-up. 0
         /// whenever no note is seated, so the number the note states and
         /// the number taken off Needed are always the same number.
+        /// <para>
+        /// A holding of 0 is a fact the wallet reports, so it seats a note
+        /// reading 0 rather than the blank a missing snapshot leaves.
+        /// </para>
         /// </summary>
         private static int SeatTradeUpNote(
-            PlanRowViewModel row, BarterItemCost cost, int? ownedItems, CraftingPlanResult result)
+            PlanRowViewModel row, BarterItemCost cost, int outstanding, CraftingPlanResult result)
         {
             int currencyId = cost.TradeUpCurrencyId.Value;
             int? heldCurrency = LookupOwned(result.OwnedCurrencyAmounts, currencyId);
-            if (!heldCurrency.HasValue || heldCurrency.Value <= 0)
+            if (!heldCurrency.HasValue || heldCurrency.Value < 0)
             {
                 return 0;
             }
 
-            int outstanding = Math.Max(0, row.Quantity - (ownedItems ?? 0));
             int buys = CurrencyTradeUpCoalescing.BuysNow(
                 heldCurrency.Value, cost.TradeUpCurrencyPerUnit.Value, outstanding);
 
@@ -786,14 +791,22 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// What the Total Cost table's Note says one traded-up item's held
-        /// map currency buys right now, and the vendor rate that produced
-        /// it. The Shopping List reads this rather than the plan step,
-        /// which states only the part of the requirement the solver routed
-        /// through the vendor.
+        /// One traded-up item's requirement, what the held map currency
+        /// buys of it right now, and the vendor rate behind both. The
+        /// Shopping List reads Outstanding rather than the plan step's own
+        /// quantity, which is only the part of the requirement the solver
+        /// routed through the vendor.
         /// </summary>
         private struct TradeUpPurchase
         {
+            /// <summary>
+            /// The Total Cost row's whole requirement less the items
+            /// already held: what the player still has to hand currency
+            /// over for. The Shopping List states this and the Total Cost
+            /// table states this, so the two cannot disagree.
+            /// </summary>
+            public int Outstanding;
+
             public int Buys;
 
             public int CurrencyId;
@@ -947,13 +960,15 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// The Shopping List: what to go and buy now. A traded-up item is
-        /// listed at what the held map currency buys right now, the same
-        /// number the Total Cost table's Note states, and is left out
-        /// entirely when that is none. The plan step's own quantity is only
-        /// the part of the requirement the solver routed through the
-        /// vendor, so it is not what to buy - the rest of the requirement
-        /// has other routes and the plan does not direct which.
+        /// The Shopping List: what to go and buy, and what it costs. A
+        /// traded-up item is listed at the whole outstanding requirement
+        /// and priced at the map currency that requirement really costs,
+        /// which is the same number the Total Cost table states for it. The
+        /// plan step's own quantity is only the part of the requirement the
+        /// solver routed through the vendor, so it is not what to buy.
+        /// What the wallet can convert right now is the Total Cost table's
+        /// Note, not a smaller shopping directive: a list that shrank to
+        /// the affordable part omitted most of the plan's cost.
         /// </summary>
         private PlanSectionViewModel BuildShoppingListSection(
             List<PlanStep> steps, CraftingPlanResult result,
@@ -970,7 +985,7 @@ namespace TaimisToolbench.Services
                 TradeUpPurchase purchase = default(TradeUpPurchase);
                 bool isTradeUp = step.Source == AcquisitionSource.BuyFromVendor &&
                     tradeUpPurchases.TryGetValue(step.ItemId, out purchase);
-                if (isTradeUp && purchase.Buys <= 0)
+                if (isTradeUp && purchase.Outstanding <= 0)
                 {
                     continue;
                 }
@@ -989,7 +1004,7 @@ namespace TaimisToolbench.Services
                     Label = name,
                     IconUrl = iconUrl,
                     Rarity = rarity,
-                    Quantity = isTradeUp ? purchase.Buys : step.Quantity,
+                    Quantity = isTradeUp ? purchase.Outstanding : step.Quantity,
                     CoinValue = step.TotalCost,
                     UnitCoinValue = unitCoin,
                     UnitCoinBundleQuantity = unitCoinBundle,
@@ -1015,12 +1030,9 @@ namespace TaimisToolbench.Services
         /// What the listed number of a traded-up item costs at the vendor.
         /// Re-derived from the listed quantity, not carried over from the
         /// plan step, whose currency total is for the step's own smaller
-        /// quantity.
-        /// <para>
-        /// The multiply cannot overflow: CurrencyTradeUpCoalescing.BuysNow
-        /// never returns more than the held amount divided by the rate, so
-        /// the product is at most the held amount, itself an int.
-        /// </para>
+        /// quantity. The product is taken in long and clamped, because a
+        /// requirement large enough to overflow an int at 250 units each is
+        /// reachable from a big enough target quantity.
         /// </summary>
         private static List<CostLine> TradeUpCurrencyCost(TradeUpPurchase purchase)
         {
@@ -1030,7 +1042,7 @@ namespace TaimisToolbench.Services
                 {
                     Type = "Currency",
                     Id = purchase.CurrencyId,
-                    Count = purchase.Buys * purchase.CurrencyPerUnit,
+                    Count = ClampToInt((long)purchase.Outstanding * purchase.CurrencyPerUnit),
                 },
             };
         }

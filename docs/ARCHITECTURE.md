@@ -2861,13 +2861,26 @@ reached.
 
 ### 12.4 What the shape hash last moved for
 
-`PersistedPlan.SchemaShapeHash` last moved for the plan-level barter item
+`PersistedPlan.SchemaShapeHash` last moved for a REMOVAL, and removals are
+what `CurrentSchemaVersion` exists to gate: `VendorOffer.Locations` is gone,
+so the version went 3 -> 4 and every saved result written before it is
+discarded on load. The request layer is untouched, so a saved plan restores
+its requested items and asks to be generated again, and every Plan History
+row survives with its blob degraded from "Open" to "Re-solve"
+(`Models/PlanHistoryEntry.cs`). Nothing reads a location: the module dropped
+the field to stop holding 2.19 MB of place names for the whole session, and
+`Services/VendorOfferLocations.cs` reads them back off
+`ref/vendor_offers.json` on demand. Measured saving on the loaded corpus:
+71,226,080 bytes of managed heap before, 60,178,792 after.
+
+Before that it moved for the plan-level barter item
 total, which is purely additive: `CraftingPlan.BarterItemCosts`,
 `PlanStep.VendorBarterItemCosts` and the `BarterItemCost` type they reach.
 An older file omits all three, Newtonsoft leaves the lists null, and a
 restored plan then shows no barter rows in its Total Cost table until it is
-re-solved - the same degradation shape the previous addition had. A plan
-written before it still deserializes and `CurrentSchemaVersion` stays at 3.
+re-solved - the same degradation shape the previous addition had. That one
+was additive, so a plan written before it still deserialized and
+`CurrentSchemaVersion` stayed where it was.
 
 Before that it moved for the currency tooltip work, also purely additive:
 one string, `CurrencyMetadata.Description`, absent from an older file and

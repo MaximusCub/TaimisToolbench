@@ -1197,7 +1197,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = 2, Count = 10 },
                         },
                         MerchantName = "Test Vendor",
-                        Locations = new List<string>(),
                     },
                 });
 
@@ -2109,7 +2108,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = 23, Count = 3 },
                         },
                         MerchantName = "Test NPC",
-                        Locations = new List<string>(),
                     },
                 });
 

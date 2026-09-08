@@ -14,8 +14,12 @@ namespace TaimisToolbench.Models
 
         public string MerchantName { get; set; }
 
-        public List<string> Locations { get; set; } = new List<string>();
-
+        // No Locations property, deliberately: holding them cost 2.19MB of
+        // place names across the 65,315 shipped offers for a whole session
+        // and nothing routes, prices or displays one. System.Text.Json
+        // skips the file's "locations" because nothing here claims it, and
+        // Services/VendorOfferLocations.cs reads them back off disk.
+        // Re-adding a property here would restore the cost silently.
         public int? DailyCap { get; set; }
 
         public int? WeeklyCap { get; set; }

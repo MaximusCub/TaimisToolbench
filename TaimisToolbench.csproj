@@ -399,6 +399,7 @@
     <Compile Include="Models\PlanStatus.cs" />
     <Compile Include="Services\PlanPhaseEvent.cs" />
     <Compile Include="Services\VendorOfferLoader.cs" />
+    <Compile Include="Services\VendorOfferLocations.cs" />
     <Compile Include="Services\VendorOfferStore.cs" />
     <Compile Include="Models\MaterialSourceAllocation.cs" />
     <Compile Include="Models\UsedMaterial.cs" />
@@ -604,7 +605,7 @@
     cache. Tracked or not makes no difference here - this Exclude is what
     decides what ships, and .gitignore only decides what git stores. Adding a
     ref/ line to .gitignore is therefore only half the job; the file also has
-    to be named here, and nothing yet fails a build that forgets.
+    to be named here, and PackagedRefFilesTests fails the suite when it is not.
 
     BEING A FORK IS THE HAZARD. It is pinned to 1.3.0 by hand and cannot notice
     an upstream change: bump the BlishHUD package and this file keeps packaging

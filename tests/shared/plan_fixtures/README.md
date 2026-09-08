@@ -44,6 +44,7 @@ still running that build.
 
 | File | Provenance |
 | --- | --- |
+| `plan-v4.json` | Captured live from `PlanStoreHelpers.SerializePersistedPlan` by `CurrentSchemaVersions_HaveAFixture_CapturingOneIfMissing`, on the bump that dropped `VendorOffer.Locations`. |
 | `plan-v3.json` | Captured live from `PlanStoreHelpers.SerializePersistedPlan` over a two-item plan solved by the real `CraftingPlanPipeline`. |
 | `plan-v2.json` | `plan-v3.json` restamped to schema 2. |
 | `plan-v1.json` | `plan-v2.json` restamped to schema 1, minus `ValueOwnMaterials` - the one request-layer member that did not exist at v1 (added by commit `c55596a`, which made the 1 -> 2 bump). |

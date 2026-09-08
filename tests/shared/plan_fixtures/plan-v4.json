@@ -1,0 +1,511 @@
+{
+  "SchemaVersion": 4,
+  "RequestSchemaVersion": 1,
+  "GeneratedAt": "2026-08-28T09:15:00Z",
+  "RequestItems": [
+    {
+      "ItemId": 1,
+      "Quantity": 2,
+      "Name": null
+    },
+    {
+      "ItemId": 2,
+      "Quantity": 7,
+      "Name": null
+    }
+  ],
+  "UseOwnMaterials": true,
+  "PriceBasis": "BuyOrder",
+  "ValueOwnMaterials": true,
+  "Result": {
+    "Plan": {
+      "TargetItemId": -2147483648,
+      "TargetQuantity": 1,
+      "Steps": [
+        {
+          "ItemId": 2,
+          "Quantity": 13,
+          "Source": "BuyFromTp",
+          "UnitCost": 15,
+          "TotalCost": 195,
+          "RecipeId": 0,
+          "VendorCurrencyCosts": null,
+          "VendorOfferOutputCount": 0,
+          "VendorOfferCurrencyCostLinesPerBatch": null,
+          "VendorHasBarterItemCost": false,
+          "VendorBarterItemCosts": null,
+          "VendorUnlockRecipeItemId": null,
+          "VendorUnlockRecipeId": null
+        },
+        {
+          "ItemId": 1,
+          "Quantity": 2,
+          "Source": "Craft",
+          "UnitCost": 0,
+          "TotalCost": 90,
+          "RecipeId": 10,
+          "VendorCurrencyCosts": null,
+          "VendorOfferOutputCount": 0,
+          "VendorOfferCurrencyCostLinesPerBatch": null,
+          "VendorHasBarterItemCost": false,
+          "VendorBarterItemCosts": null,
+          "VendorUnlockRecipeItemId": null,
+          "VendorUnlockRecipeId": null
+        }
+      ],
+      "TotalCoinCost": 195,
+      "CurrencyCosts": [],
+      "BarterItemCosts": [],
+      "TimegatedItems": []
+    },
+    "ItemMetadata": {
+      "1": {
+        "ItemId": 1,
+        "Name": "Target",
+        "IconUrl": "t.png",
+        "Rarity": null,
+        "IsAccountBound": false
+      },
+      "2": {
+        "ItemId": 2,
+        "Name": "Ingredient",
+        "IconUrl": "i.png",
+        "Rarity": null,
+        "IsAccountBound": false
+      }
+    },
+    "UsedMaterials": [],
+    "RequiredDisciplines": [
+      {
+        "Discipline": "Weaponsmith",
+        "MinRating": 400
+      }
+    ],
+    "RequiredRecipes": [
+      {
+        "RecipeId": 10,
+        "OutputItemId": 1,
+        "IsAutoLearned": true,
+        "IsLearnedFromItem": false,
+        "MinRating": 400,
+        "Disciplines": [
+          "Weaponsmith"
+        ],
+        "IsMissing": null,
+        "SheetItemId": 0
+      }
+    ],
+    "CompetencyOpportunities": [],
+    "CraftingTree": null,
+    "DebugLog": [
+      "Build recipe trees: 10ms (2 items)",
+      "Collect item IDs: 0ms (2 items)",
+      "Fetch TP prices: 9ms (2 items)",
+      "Query vendor offers: 0ms",
+      "Expand vendor cost lines: 2ms (0 items)",
+      "Inventory reduction: 0ms",
+      "Solve: 30ms",
+      "Fetch item metadata: 4ms (2 items)",
+      "Fetch currency metadata: 0ms",
+      "Fetch learned recipes: 0ms",
+      "Build result: 12ms",
+      "--- Timing Summary ---",
+      "Total: 67ms",
+      "Solve: 30ms (44.8%)",
+      "Build result: 12ms (17.9%)",
+      "Build recipe trees: 10ms (14.9%)",
+      "Fetch TP prices: 9ms (13.4%)",
+      "Fetch item metadata: 4ms (6.0%)",
+      "Expand vendor cost lines: 2ms (3.0%)",
+      "Collect item IDs: 0ms (0.0%)",
+      "Query vendor offers: 0ms (0.0%)",
+      "Inventory reduction: 0ms (0.0%)",
+      "Fetch currency metadata: 0ms (0.0%)",
+      "Fetch learned recipes: 0ms (0.0%)",
+      "No inventory reduction (snapshot not provided)",
+      "Item 2 (qty 13): BuyFromTp @ 15c",
+      "Item 1 (qty 2): Craft via recipe 10",
+      "Required disciplines: Weaponsmith (400)",
+      "Recipe permission not available"
+    ],
+    "PriceBasis": "BuyOrder",
+    "TargetUnitSellPrice": null,
+    "SellableQuantity": 7,
+    "NetSaleValue": 89,
+    "CraftingProfit": -16,
+    "SolveContext": {
+      "TargetItemId": -2147483648,
+      "Quantity": 1,
+      "Tree": {
+        "Id": -2147483648,
+        "IngredientType": "Item",
+        "Quantity": 1,
+        "NodeId": 0,
+        "Recipes": [
+          {
+            "RecipeId": -2147483648,
+            "OutputCount": 1,
+            "CraftsNeeded": 1,
+            "ExpectedOutputCount": 1.0,
+            "Ingredients": [
+              {
+                "Id": 1,
+                "IngredientType": "Item",
+                "Quantity": 2,
+                "NodeId": 1,
+                "Recipes": [
+                  {
+                    "RecipeId": 10,
+                    "OutputCount": 1,
+                    "CraftsNeeded": 2,
+                    "ExpectedOutputCount": 1.0,
+                    "Ingredients": [
+                      {
+                        "Id": 2,
+                        "IngredientType": "Item",
+                        "Quantity": 6,
+                        "NodeId": 2,
+                        "Recipes": [],
+                        "AchievementId": null,
+                        "AchievementBit": null,
+                        "IsAchievementBitDeduped": false
+                      }
+                    ],
+                    "Disciplines": [
+                      "Weaponsmith"
+                    ],
+                    "MinRating": 400,
+                    "Flags": [
+                      "AutoLearned"
+                    ]
+                  }
+                ],
+                "AchievementId": null,
+                "AchievementBit": null,
+                "IsAchievementBitDeduped": false
+              },
+              {
+                "Id": 2,
+                "IngredientType": "Item",
+                "Quantity": 7,
+                "NodeId": 3,
+                "Recipes": [],
+                "AchievementId": null,
+                "AchievementBit": null,
+                "IsAchievementBitDeduped": false
+              }
+            ],
+            "Disciplines": [],
+            "MinRating": 0,
+            "Flags": []
+          }
+        ],
+        "AchievementId": null,
+        "AchievementBit": null,
+        "IsAchievementBitDeduped": false
+      },
+      "Prices": {
+        "2": {
+          "ItemId": 2,
+          "BuyInstant": 12,
+          "SellInstant": 15
+        }
+      },
+      "VendorOffers": null,
+      "VendorCostLineValues": null,
+      "Metadata": {
+        "1": {
+          "ItemId": 1,
+          "Name": "Target",
+          "IconUrl": "t.png",
+          "Rarity": null,
+          "IsAccountBound": false
+        },
+        "2": {
+          "ItemId": 2,
+          "Name": "Ingredient",
+          "IconUrl": "i.png",
+          "Rarity": null,
+          "IsAccountBound": false
+        }
+      },
+      "LearnedRecipeIds": null,
+      "UsedMaterials": null,
+      "PriceBasis": "BuyOrder",
+      "CurrencyMetadata": null,
+      "CurrencyValuation": {
+        "CopperPerUnit": {},
+        "ClearedCurrencyIds": [],
+        "ItemCopperPerUnit": {},
+        "ClearedItemIds": []
+      },
+      "OwnMaterialsMode": 0,
+      "AcquisitionHints": null,
+      "DailyCooldownItems": null,
+      "OwnedQuantityUsedByNodeId": {},
+      "OwnedCurrencyAmounts": null,
+      "OwnedVendorItemAmounts": null,
+      "ForceBuyOnlyNodeIds": null,
+      "CompetencyIndependentForceBuyNodeIds": null,
+      "RequestedItems": [
+        {
+          "ItemId": 1,
+          "Quantity": 2,
+          "Name": null
+        },
+        {
+          "ItemId": 2,
+          "Quantity": 7,
+          "Name": null
+        }
+      ],
+      "HomesteadTiers": {
+        "TierByMaterialId": {}
+      },
+      "CharacterDisciplines": null,
+      "UnreducedTree": null,
+      "AccountItems": null,
+      "ActiveCharacterName": null
+    },
+    "MaterialOpportunityCost": null,
+    "CurrencyMetadata": null,
+    "AcquisitionHints": null,
+    "DailyCooldownItems": null,
+    "OwnedCurrencyAmounts": null,
+    "OwnedVendorItemAmounts": null,
+    "RequestedItems": [
+      {
+        "ItemId": 1,
+        "Quantity": 2,
+        "Name": null
+      },
+      {
+        "ItemId": 2,
+        "Quantity": 7,
+        "Name": null
+      }
+    ],
+    "MultiItemRoots": [
+      {
+        "ItemId": 1,
+        "NodeId": 1,
+        "Name": "Target",
+        "IconUrl": "t.png",
+        "Rarity": null,
+        "Quantity": 2,
+        "Decision": 0,
+        "OwnedQuantityUsed": 0,
+        "IsIgnored": false,
+        "IsAchievementBitDeduped": false,
+        "CanCraft": true,
+        "CanBuyTp": false,
+        "CanBuyVendor": false,
+        "RecipeId": 10,
+        "CraftsNeeded": 2,
+        "RecipeOutputCount": 1,
+        "RecipeExpectedOutputCount": 1.0,
+        "UnitCost": null,
+        "SubtreeCost": 90,
+        "DecisionValue": 90,
+        "VendorComponentCostsUnreliable": false,
+        "PriceSideFellBack": false,
+        "VendorCurrencyCosts": null,
+        "VendorHasBarterItemCost": false,
+        "IsReferenceBranch": false,
+        "ReferenceRecipeId": null,
+        "ReferenceRecipeDisciplines": null,
+        "ReferenceRecipeMinRating": 0,
+        "ReferenceRecipeIsLearnedFromItem": false,
+        "IsCostComponent": false,
+        "ComponentOwnedQuantity": 0,
+        "AcquisitionHint": null,
+        "AcquisitionBadge": null,
+        "CraftCostBreakdown": {
+          "IsAvailable": true,
+          "IsIncomplete": false,
+          "RawQuantitiesReducedByOwnedStock": false,
+          "RawCoin": 0,
+          "CostLines": [
+            {
+              "Type": "Item",
+              "Id": 2,
+              "Count": 6
+            }
+          ],
+          "DecisionValue": 90
+        },
+        "BuyFromTpCostBreakdown": {
+          "IsAvailable": false,
+          "IsIncomplete": false,
+          "RawQuantitiesReducedByOwnedStock": false,
+          "RawCoin": 0,
+          "CostLines": [],
+          "DecisionValue": null
+        },
+        "BuyFromVendorCostBreakdown": {
+          "IsAvailable": false,
+          "IsIncomplete": false,
+          "RawQuantitiesReducedByOwnedStock": false,
+          "RawCoin": 0,
+          "CostLines": [],
+          "DecisionValue": null
+        },
+        "CraftExcludedByCompetency": false,
+        "CraftExcludedRealCost": null,
+        "CraftExcludedDisciplines": null,
+        "CraftExcludedMinRating": 0,
+        "CheapestCraftUntrained": false,
+        "CheapestCraftRealCost": null,
+        "CheapestCraftDisciplines": null,
+        "CheapestCraftMinRating": 0,
+        "Children": [
+          {
+            "ItemId": 2,
+            "NodeId": 2,
+            "Name": "Ingredient",
+            "IconUrl": "i.png",
+            "Rarity": null,
+            "Quantity": 6,
+            "Decision": 1,
+            "OwnedQuantityUsed": 0,
+            "IsIgnored": false,
+            "IsAchievementBitDeduped": false,
+            "CanCraft": false,
+            "CanBuyTp": true,
+            "CanBuyVendor": false,
+            "RecipeId": null,
+            "CraftsNeeded": null,
+            "RecipeOutputCount": null,
+            "RecipeExpectedOutputCount": null,
+            "UnitCost": 15,
+            "SubtreeCost": 90,
+            "DecisionValue": 90,
+            "VendorComponentCostsUnreliable": false,
+            "PriceSideFellBack": false,
+            "VendorCurrencyCosts": null,
+            "VendorHasBarterItemCost": false,
+            "IsReferenceBranch": false,
+            "ReferenceRecipeId": null,
+            "ReferenceRecipeDisciplines": null,
+            "ReferenceRecipeMinRating": 0,
+            "ReferenceRecipeIsLearnedFromItem": false,
+            "IsCostComponent": false,
+            "ComponentOwnedQuantity": 0,
+            "AcquisitionHint": null,
+            "AcquisitionBadge": null,
+            "CraftCostBreakdown": {
+              "IsAvailable": false,
+              "IsIncomplete": false,
+              "RawQuantitiesReducedByOwnedStock": false,
+              "RawCoin": 0,
+              "CostLines": [],
+              "DecisionValue": null
+            },
+            "BuyFromTpCostBreakdown": {
+              "IsAvailable": true,
+              "IsIncomplete": false,
+              "RawQuantitiesReducedByOwnedStock": false,
+              "RawCoin": 90,
+              "CostLines": [],
+              "DecisionValue": 90
+            },
+            "BuyFromVendorCostBreakdown": {
+              "IsAvailable": false,
+              "IsIncomplete": false,
+              "RawQuantitiesReducedByOwnedStock": false,
+              "RawCoin": 0,
+              "CostLines": [],
+              "DecisionValue": null
+            },
+            "CraftExcludedByCompetency": false,
+            "CraftExcludedRealCost": null,
+            "CraftExcludedDisciplines": null,
+            "CraftExcludedMinRating": 0,
+            "CheapestCraftUntrained": false,
+            "CheapestCraftRealCost": null,
+            "CheapestCraftDisciplines": null,
+            "CheapestCraftMinRating": 0,
+            "Children": []
+          }
+        ]
+      },
+      {
+        "ItemId": 2,
+        "NodeId": 3,
+        "Name": "Ingredient",
+        "IconUrl": "i.png",
+        "Rarity": null,
+        "Quantity": 7,
+        "Decision": 1,
+        "OwnedQuantityUsed": 0,
+        "IsIgnored": false,
+        "IsAchievementBitDeduped": false,
+        "CanCraft": false,
+        "CanBuyTp": true,
+        "CanBuyVendor": false,
+        "RecipeId": null,
+        "CraftsNeeded": null,
+        "RecipeOutputCount": null,
+        "RecipeExpectedOutputCount": null,
+        "UnitCost": 15,
+        "SubtreeCost": 105,
+        "DecisionValue": 105,
+        "VendorComponentCostsUnreliable": false,
+        "PriceSideFellBack": false,
+        "VendorCurrencyCosts": null,
+        "VendorHasBarterItemCost": false,
+        "IsReferenceBranch": false,
+        "ReferenceRecipeId": null,
+        "ReferenceRecipeDisciplines": null,
+        "ReferenceRecipeMinRating": 0,
+        "ReferenceRecipeIsLearnedFromItem": false,
+        "IsCostComponent": false,
+        "ComponentOwnedQuantity": 0,
+        "AcquisitionHint": null,
+        "AcquisitionBadge": null,
+        "CraftCostBreakdown": {
+          "IsAvailable": false,
+          "IsIncomplete": false,
+          "RawQuantitiesReducedByOwnedStock": false,
+          "RawCoin": 0,
+          "CostLines": [],
+          "DecisionValue": null
+        },
+        "BuyFromTpCostBreakdown": {
+          "IsAvailable": true,
+          "IsIncomplete": false,
+          "RawQuantitiesReducedByOwnedStock": false,
+          "RawCoin": 105,
+          "CostLines": [],
+          "DecisionValue": 105
+        },
+        "BuyFromVendorCostBreakdown": {
+          "IsAvailable": false,
+          "IsIncomplete": false,
+          "RawQuantitiesReducedByOwnedStock": false,
+          "RawCoin": 0,
+          "CostLines": [],
+          "DecisionValue": null
+        },
+        "CraftExcludedByCompetency": false,
+        "CraftExcludedRealCost": null,
+        "CraftExcludedDisciplines": null,
+        "CraftExcludedMinRating": 0,
+        "CheapestCraftUntrained": false,
+        "CheapestCraftRealCost": null,
+        "CheapestCraftDisciplines": null,
+        "CheapestCraftMinRating": 0,
+        "Children": []
+      }
+    ],
+    "CharacterDisciplines": null,
+    "ExcessCraftOutputs": [],
+    "ProbabilisticForgeOutputItemIds": [],
+    "RecipeSheetSavingsOpportunities": [],
+    "SeasonalVendorTips": []
+  },
+  "NodeOverrides": {},
+  "IgnoredItemIds": [
+    2
+  ]
+}

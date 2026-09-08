@@ -351,7 +351,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = 100 },
                         },
                         MerchantName = "Test NPC",
-                        Locations = new List<string>(),
                     },
                 });
 
@@ -404,7 +403,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = 100 },
                         },
                         MerchantName = "Candy Corn Vendor (Weekly)",
-                        Locations = new List<string>(),
                         SeasonalFestival = Gw2Constants.HalloweenFestivalName,
                     },
                 });

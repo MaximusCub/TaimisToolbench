@@ -58,7 +58,6 @@ namespace TaimisToolbench.Tests.Services
                 OutputCount = 1,
                 CostLines = new List<CostLine> { new CostLine { Type = "Item", Id = 42, Count = 5 } },
                 MerchantName = "Barter Vendor",
-                Locations = new List<string>(),
             };
             var vendorOffers = new Dictionary<int, IReadOnlyList<VendorOffer>>
             {
@@ -959,7 +958,6 @@ namespace TaimisToolbench.Tests.Services
                                 new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = 200 },
                             },
                             MerchantName = "Test",
-                            Locations = new List<string>(),
                         },
                     }
                 },
@@ -997,7 +995,6 @@ namespace TaimisToolbench.Tests.Services
                                 new CostLine { Type = "Currency", Id = 23, Count = 50 },
                             },
                             MerchantName = "Miyani",
-                            Locations = new List<string>(),
                         },
                     }
                 },

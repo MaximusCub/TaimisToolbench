@@ -53,7 +53,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = 400 },
                         },
                         MerchantName = "Homestead Refinement\u2014Metal Forge",
-                        Locations = new List<string>(),
                         HomesteadTier = 0,
                     },
                     new VendorOffer
@@ -66,7 +65,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = 1 },
                         },
                         MerchantName = "Homestead Refinement\u2014Metal Forge",
-                        Locations = new List<string>(),
                         HomesteadTier = 2,
                     },
                 });

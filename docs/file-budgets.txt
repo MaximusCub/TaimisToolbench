@@ -105,7 +105,7 @@ Models/TransmutedItemCopy.cs                                                    
 Models/TransmutedSkin.cs                                                                38
 Models/UsedMaterial.cs                                                                  19
 Models/VendorItemCostLine.cs                                                            42
-Models/VendorOffer.cs                                                                   73
+Models/VendorOffer.cs                                                                   77
 Models/VendorOfferDataset.cs                                                            15
 Module.cs                                                                               3032
 Properties/AssemblyInfo.cs                                                              12
@@ -216,7 +216,7 @@ Services/PlanStripStatusBoard.cs                                                
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     597
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        1919
+Services/PlanViewModelBuilder.cs                                                        1931
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
@@ -316,6 +316,7 @@ Services/ValueDetailTooltipBuilder.cs                                           
 Services/VendorBatchSolver.cs                                                           1242
 Services/VendorCapNotices.cs                                                            60
 Services/VendorOfferLoader.cs                                                           51
+Services/VendorOfferLocations.cs                                                        123
 Services/VendorOfferStore.cs                                                            218
 Services/WheelDeltaSanitizer.cs                                                         92
 Services/WikiLinkBuilder.cs                                                             139
@@ -417,11 +418,12 @@ tests/TaimisToolbench.Tests/Models/HomesteadEfficiencyTiersTests.cs             
 tests/TaimisToolbench.Tests/Models/PersistedPlanSchemaMemberSetTests.cs                 73
 tests/TaimisToolbench.Tests/Models/PlanHistorySchemaMemberSetTests.cs                   87
 tests/TaimisToolbench.Tests/Models/SettingsFormStateTests.cs                            326
+tests/TaimisToolbench.Tests/PackagedRefFilesTests.cs                                    188
 tests/TaimisToolbench.Tests/Services/AboutLayoutMathTests.cs                            209
 tests/TaimisToolbench.Tests/Services/AccountCurrencyIndexTests.cs                       80
 tests/TaimisToolbench.Tests/Services/AccountItemIndexTests.cs                           465
 tests/TaimisToolbench.Tests/Services/AchievementBitDedupPrePassTests.cs                 290
-tests/TaimisToolbench.Tests/Services/AcquisitionHintSeedVendorAgreementTests.cs         142
+tests/TaimisToolbench.Tests/Services/AcquisitionHintSeedVendorAgreementTests.cs         163
 tests/TaimisToolbench.Tests/Services/AcquisitionHintServiceTests.cs                     245
 tests/TaimisToolbench.Tests/Services/AmalgamatedRiftEssenceIngestionTests.cs            358
 tests/TaimisToolbench.Tests/Services/BoundedConcurrencyTests.cs                         196
@@ -453,7 +455,8 @@ tests/TaimisToolbench.Tests/Services/CraftingTreeBuilderTests.cs                
 tests/TaimisToolbench.Tests/Services/CurrencyDisplayResolverTests.cs                    459
 tests/TaimisToolbench.Tests/Services/CurrencyMetadataServiceTests.cs                    409
 tests/TaimisToolbench.Tests/Services/CurrencyTooltipComposerTests.cs                    169
-tests/TaimisToolbench.Tests/Services/CurrencyTradeUpCoalescingTests.cs                  504
+tests/TaimisToolbench.Tests/Services/CurrencyTradeUpCoalescingTests.cs                  540
+tests/TaimisToolbench.Tests/Services/CurrencyTradeUpRealCorpusTests.cs                  201
 tests/TaimisToolbench.Tests/Services/CurrencyTradeUpRowTests.cs                         254
 tests/TaimisToolbench.Tests/Services/CurrencyValuationSerializerTests.cs                274
 tests/TaimisToolbench.Tests/Services/DailyCooldownItemServiceTests.cs                   209
@@ -665,6 +668,7 @@ tests/TaimisToolbench.Tests/Services/VendorCoinCostShippedDataTests.cs          
 tests/TaimisToolbench.Tests/Services/VendorCostLineExpansionRealCorpusTests.cs         398
 tests/TaimisToolbench.Tests/Services/VendorCurrencyTradeUpRoutingTests.cs               248
 tests/TaimisToolbench.Tests/Services/VendorCapNoticeAgreementTests.cs                   124
+tests/TaimisToolbench.Tests/Services/VendorOfferLocationsTests.cs                       113
 tests/TaimisToolbench.Tests/Services/VendorOfferStoreTests.cs                           576
 tests/TaimisToolbench.Tests/Services/VendorUnlockRecipeTests.cs                         233
 tests/TaimisToolbench.Tests/Services/WheelDeltaSanitizerTests.cs                        183

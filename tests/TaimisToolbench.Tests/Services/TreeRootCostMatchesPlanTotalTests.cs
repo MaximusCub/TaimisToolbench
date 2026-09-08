@@ -100,7 +100,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = 1, Count = 5 },
                         },
                         MerchantName = "Test NPC",
-                        Locations = new List<string>(),
                     },
                 });
 

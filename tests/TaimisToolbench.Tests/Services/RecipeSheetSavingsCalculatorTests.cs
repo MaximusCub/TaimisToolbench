@@ -67,7 +67,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = coinCost },
                 },
                 MerchantName = "TestMerchant",
-                Locations = new List<string>(),
             };
         }
 
@@ -608,7 +607,7 @@ namespace TaimisToolbench.Tests.Services
                 {
                     OfferId = "expensive", OutputItemId = 500, OutputCount = 1,
                     CostLines = new List<CostLine> { new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = 999 } },
-                    MerchantName = "Expensive", Locations = new List<string>(),
+                    MerchantName = "Expensive",
                 },
                 CoinSheetOffer(500, 200));
             var sheetMap = new Dictionary<int, int> { { 999, 500 } };
