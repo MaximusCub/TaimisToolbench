@@ -166,6 +166,34 @@ namespace TaimisToolbench.Tests.Services
                 s => s.SectionType == PlanSectionType.Notes);
         }
 
+        /// <summary>
+        /// A plan saved by a build whose calculator wrote the row
+        /// differently could restore with neither half of a price. The
+        /// price is the whole point of the note, so the builder drops it
+        /// rather than render "sold by Miyani for" and nothing.
+        /// </summary>
+        [Fact]
+        public void RestoredSourceCarryingNoPriceAtAll_DrawsNoRow()
+        {
+            var result = MakeResult(
+                metadata: new Dictionary<int, ItemMetadata>
+                {
+                    { SheetItemId, new ItemMetadata { Name = "Recipe: Gift of Light" } },
+                },
+                requiredRecipes: RequiredRecipes(missing: true));
+            result.MissingRecipeSheetSources = new List<MissingRecipeSheetSource>
+            {
+                new MissingRecipeSheetSource
+                {
+                    RecipeId = RecipeId, SheetItemId = SheetItemId, MerchantName = "Miyani",
+                },
+            };
+
+            Assert.DoesNotContain(
+                new PlanViewModelBuilder().Build(result).Sections,
+                s => s.SectionType == PlanSectionType.Notes);
+        }
+
         private static PlanSectionViewModel NotesFor(params VendorOffer[] offers)
         {
             var result = MakeResult(

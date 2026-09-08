@@ -196,7 +196,7 @@ Services/PlanStripStatusBoard.cs                                                
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     602
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        2019
+Services/PlanViewModelBuilder.cs                                                        2030
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87

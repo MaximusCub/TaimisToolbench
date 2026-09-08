@@ -1569,9 +1569,20 @@ namespace TaimisToolbench.Services
                         continue;
                     }
 
-                    string costText = BuildSheetBarterDescription(
-                        source.NonCoinCostLines, result.ItemMetadata, result.CurrencyMetadata);
-                    if (source.NonCoinCostLines != null && costText == null)
+                    bool hasNonCoin = source.NonCoinCostLines != null &&
+                        source.NonCoinCostLines.Count > 0;
+                    if (!hasNonCoin && !source.CoinCost.HasValue)
+                    {
+                        // A restored plan can carry a row with neither half
+                        // of a price. The note's whole content is the price.
+                        continue;
+                    }
+
+                    string costText = hasNonCoin
+                        ? BuildSheetBarterDescription(
+                            source.NonCoinCostLines, result.ItemMetadata, result.CurrencyMetadata)
+                        : null;
+                    if (hasNonCoin && costText == null)
                     {
                         continue;
                     }
