@@ -74,13 +74,13 @@ namespace TaimisToolbench.Harness
             int accountWide = includeArmory ? 5 : 4;
             if (Approach == FetchApproach.FullAll)
             {
-                return accountWide + 1;
+                return accountWide + 1 + DetailRequests;
             }
 
             if (Approach == FetchApproach.FullPaged)
             {
                 int pages = (characterCount + PageSize - 1) / PageSize;
-                return accountWide + Math.Max(1, pages);
+                return accountWide + Math.Max(1, pages) + DetailRequests;
             }
 
             return accountWide + 1 + (RosterSize(characterCount) * 3) + DetailRequests;

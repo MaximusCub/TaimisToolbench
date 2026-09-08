@@ -100,7 +100,10 @@ and needs no key.
 | `--per-minute <n>` | 55 | Requests allowed in any trailing 60 seconds |
 | `--max-requests <n>` | 750 | Hard stop for the whole experiment |
 | `--characters <n>` | 6 | Roster size `--dry-run` assumes; a real run probes it |
-| `--only <substring>` | all | Run just the configs whose name contains this |
+| `--only <names>` | all | Comma-separated config names to run, matched exactly |
+| `--runs <n>` | per config | Override every selected config's run count |
+| `--compare` | off | Fetch the account both ways and diff the two snapshots |
+| `--compare-runs <n>` | 3 | How many times `--compare` fetches both ways |
 | `--out <dir>` | `%LOCALAPPDATA%\TaimisToolbench\fetch-profile` | Where raw per-run timings are written |
 
 Raw timings go to one JSON-lines file per invocation, outside the repo, so
@@ -117,6 +120,24 @@ two runs can be compared.
 - A roster padded past the real one, to stand in for a larger account. A
   padded entry re-requests a name already in the list, so those rows are a
   simulation and are named as one.
+
+### Comparing the old shape against the new one (`--compare`)
+
+`--compare` fetches the same account twice in one process, once with the
+three narrow calls per character the module used to make and once with the
+paged full record it makes now, and reports every field the two snapshots
+disagree on. An empty report is the evidence that the change kept the
+snapshot.
+
+The paged side runs `Services/CharacterPagePlan.cs` and
+`Services/CharacterRecordProjection.cs`, the code the module ships, so a
+clean result is evidence about the module rather than about a copy of it.
+The narrow side keeps this project's own projection, because that shape no
+longer exists in the module.
+
+Measured on 2026-09-08 across 5 comparisons: identical every time, 1039 item
+rows, 53 wallet rows, 9 discipline rows, matching row for row and in the same
+order.
 
 ### Rate discipline
 

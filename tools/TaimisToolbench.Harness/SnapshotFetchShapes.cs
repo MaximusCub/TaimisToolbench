@@ -155,7 +155,8 @@ namespace TaimisToolbench.Harness
             return await CharacterSnapshotCollector.CollectAsync(
                 names,
                 Math.Max(1, names.Count),
-                name => Task.FromResult(PartFromRecord(byName[name])),
+                name => Task.FromResult(
+                    CharacterRecordProjection.Build(name, byName[name])),
                 ct);
         }
 
@@ -167,10 +168,10 @@ namespace TaimisToolbench.Harness
                 return (await v2.Characters.AllAsync(ct)).ToList();
             }
 
-            // The page count comes from the roster size the probe learned. In
-            // the module it would come off page 0's X-Page-Total header, so
-            // it costs no extra request either way.
-            int pages = Math.Max(1, (characterCount + config.PageSize - 1) / config.PageSize);
+            // The module's own arithmetic, over the roster size the probe
+            // learned. The module reads that size from /v2/characters, which
+            // it already asks for, so neither pays a request to learn it.
+            int pages = Math.Max(1, CharacterPagePlan.PageCount(characterCount, config.PageSize));
             var tasks = new List<Task<IApiV2ObjectList<Character>>>();
             for (int page = 0; page < pages; page++)
             {
@@ -244,35 +245,6 @@ namespace TaimisToolbench.Harness
             catch (Exception ex) when (!(ex is OperationCanceledException))
             {
                 part.DisciplinesDegraded = true;
-            }
-
-            return part;
-        }
-
-        private static CharacterSnapshotPart PartFromRecord(Character record)
-        {
-            var part = new CharacterSnapshotPart();
-            string name = record.Name ?? string.Empty;
-
-            // A full record that carries no bags or no equipment is missing
-            // holdings, which is the same degradation a failed narrow call
-            // is. Without this a full-record run could report a complete
-            // harvest that a narrow run would have refused, and the two
-            // approaches would not be held to the same bar.
-            if (record.Bags == null || record.Equipment == null)
-            {
-                part.ItemsDegraded = true;
-            }
-
-            AddBags(part.Items, record.Bags, name);
-            AddEquipment(part, record.Equipment, name);
-            if (record.Crafting == null)
-            {
-                part.DisciplinesDegraded = true;
-            }
-            else
-            {
-                AddDisciplines(part, record.Crafting, name);
             }
 
             return part;

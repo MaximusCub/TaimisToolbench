@@ -218,17 +218,22 @@ jobs:
           # without them. `item.Id` is what marks a row built from an
           # account API item; material storage builds from `mat` and
           # carries neither field.
-          f=Services/Gw2AccountSnapshotService.cs
-          rows=$(grep -c 'ItemId = item.Id,' "$f" || true)
-          ups=$(grep -c 'Upgrades = SocketedIds(item.Upgrades),' "$f" || true)
-          infs=$(grep -c 'Infusions = SocketedIds(item.Infusions),' "$f" || true)
-          skins=$(grep -c 'SkinId = SkinIdOf(item.Skin),' "$f" || true)
+          # Both files, because the per-character rows moved to the second
+          # one when the fetch changed shape; counting only the first would
+          # have kept passing while checking half as much. The optional
+          # qualifier is the same helper called across a file boundary.
+          f="Services/Gw2AccountSnapshotService.cs Services/CharacterRecordProjection.cs"
+          q='\(CharacterRecordProjection\.\)\?'
+          rows=$(cat $f | grep -c 'ItemId = item.Id,' || true)
+          ups=$(cat $f | grep -c "Upgrades = ${q}SocketedIds(item.Upgrades)," || true)
+          infs=$(cat $f | grep -c "Infusions = ${q}SocketedIds(item.Infusions)," || true)
+          skins=$(cat $f | grep -c "SkinId = ${q}SkinIdOf(item.Skin)," || true)
           if [ "$rows" -lt 1 ] || [ "$ups" -ne "$rows" ] || [ "$infs" -ne "$rows" ] \
               || [ "$skins" -ne "$rows" ]; then
-            echo "$f builds $rows rows from an account API item, but records"
+            echo "$f build $rows rows from an account API item, but record"
             echo "Upgrades on $ups of them, Infusions on $infs and SkinId on $skins."
             echo "Every such row must carry all three, the way the bank rows do."
-            grep -n 'ItemId = item.Id,' "$f"
+            grep -n 'ItemId = item.Id,' $f
             exit 1
           fi
           echo "$rows rows built from an account item; all record sockets and skin."

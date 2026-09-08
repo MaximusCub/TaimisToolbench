@@ -248,7 +248,9 @@ namespace TaimisToolbench.Tests.Services
 
             var harvest = await CharacterSnapshotCollector.CollectAsync(
                 names,
-                CharacterSnapshotCollector.DefaultMaxCharactersInFlight,
+                // Any bound reaches the same total; the roster is what
+                // multiplies, not how much of it runs at once.
+                6,
                 name => SnapshotCallRetry.RunAsync<CharacterSnapshotPart>(
                     ct =>
                     {

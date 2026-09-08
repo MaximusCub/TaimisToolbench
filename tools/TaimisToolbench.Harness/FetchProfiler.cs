@@ -13,6 +13,7 @@ using Gw2Sharp;
 using Gw2Sharp.WebApi;
 using Gw2Sharp.WebApi.Caching;
 using Gw2Sharp.WebApi.V2;
+using TaimisToolbench.Models;
 using TaimisToolbench.Services;
 using Gw2SharpHttpClient = Gw2Sharp.WebApi.Http.HttpClient;
 
@@ -52,6 +53,9 @@ namespace TaimisToolbench.Harness
             int assumedCharacters = 6;
             string outputDirectory = null;
             string only = null;
+            int runsOverride = 0;
+            bool compare = false;
+            int compareRuns = 3;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -95,16 +99,43 @@ namespace TaimisToolbench.Harness
                         }
 
                         break;
+                    case "--compare":
+                        compare = true;
+                        break;
+                    case "--compare-runs":
+                        if (i + 1 < args.Length)
+                        {
+                            compareRuns = int.Parse(args[++i], CultureInfo.InvariantCulture);
+                        }
+
+                        break;
+                    case "--runs":
+                        if (i + 1 < args.Length)
+                        {
+                            runsOverride = int.Parse(args[++i], CultureInfo.InvariantCulture);
+                        }
+
+                        break;
                 }
             }
 
             var configs = BuildConfigs();
             if (only != null)
             {
-                configs = configs.Where(c => c.Name.Contains(only)).ToList();
+                var wanted = new HashSet<string>(
+                    only.Split(','), StringComparer.OrdinalIgnoreCase);
+                configs = configs.Where(c => wanted.Contains(c.Name)).ToList();
             }
 
-            if (configs.Count == 0)
+            if (runsOverride > 0)
+            {
+                foreach (var config in configs)
+                {
+                    config.Runs = runsOverride;
+                }
+            }
+
+            if (configs.Count == 0 && !compare)
             {
                 Console.Error.WriteLine("--only matched no config.");
                 return 1;
@@ -114,6 +145,11 @@ namespace TaimisToolbench.Harness
             {
                 PrintPlan(configs, assumedCharacters, perMinute, maxRequests);
                 return 0;
+            }
+
+            if (compare)
+            {
+                configs = new List<FetchConfig>();
             }
 
             string apiKey = Environment.GetEnvironmentVariable(KeyVariable);
@@ -127,6 +163,11 @@ namespace TaimisToolbench.Harness
                 Console.Error.WriteLine(
                     "Add --dry-run to print the schedule without a key.");
                 return 2;
+            }
+
+            if (compare)
+            {
+                return await CompareAsync(apiKey, compareRuns, perMinute, maxRequests);
             }
 
             return await MeasureAsync(apiKey, configs, perMinute, maxRequests, outputDirectory);
@@ -435,6 +476,125 @@ namespace TaimisToolbench.Harness
                 result.SlowestRequestMs = slowest.DurationMs;
                 result.SlowestRequestUrl = slowest.Url;
             }
+        }
+
+        /// <summary>
+        /// Fetches the same account both ways, in one process, and reports
+        /// every field the two snapshots disagree on.
+        /// </summary>
+        /// <remarks>
+        /// The paged side runs Services/CharacterRecordProjection.cs and
+        /// Services/CharacterPagePlan.cs, the code the module ships, so a
+        /// clean result is evidence about the module and not about a copy of
+        /// it. The narrow side keeps this project's own projection, because
+        /// it is the shape the module no longer has.
+        /// </remarks>
+        private static async Task<int> CompareAsync(
+            string apiKey, int runs, int perMinute, int maxRequests)
+        {
+            var ledger = new RequestRateLedger(perMinute);
+            int mismatches = 0;
+            using (var cts = new CancellationTokenSource())
+            {
+                var probe = await ProbeAsync(apiKey, ledger, cts.Token);
+                bool includeArmory = probe.Item1;
+                int characterCount = probe.Item2;
+                Console.WriteLine(
+                    "Roster: " + characterCount + " characters. Page size "
+                    + CharacterPagePlan.PageSize + ", "
+                    + CharacterPagePlan.PageCount(characterCount) + " pages.");
+                Console.WriteLine();
+
+                var oldShape = Narrow("old-narrow", 6, 25, 1);
+                var newShape = Full("new-paged", FetchApproach.FullPaged, CharacterPagePlan.PageSize, 1);
+
+                for (int run = 0; run < runs; run++)
+                {
+                    int expected = oldShape.ExpectedRequests(characterCount, includeArmory)
+                        + newShape.ExpectedRequests(characterCount, includeArmory);
+                    if (ledger.Total + expected > maxRequests)
+                    {
+                        Console.WriteLine(
+                            "Stopping: " + ledger.Total + " requests sent, " + maxRequests
+                            + " is the cap.");
+                        break;
+                    }
+
+                    await ledger.WaitForRoomAsync(
+                        oldShape.ExpectedRequests(characterCount, includeArmory), cts.Token);
+                    var before = await FetchOnceAsync(
+                        apiKey, oldShape, includeArmory, characterCount, ledger, cts.Token);
+
+                    await ledger.WaitForRoomAsync(
+                        newShape.ExpectedRequests(characterCount, includeArmory), cts.Token);
+                    var after = await FetchOnceAsync(
+                        apiKey, newShape, includeArmory, characterCount, ledger, cts.Token);
+
+                    var differences = SnapshotComparison.Differences(before, after);
+                    Console.WriteLine(
+                        "run " + run + ": narrow " + Describe(before) + "; paged "
+                        + Describe(after));
+                    if (differences.Count == 0)
+                    {
+                        Console.WriteLine("  identical");
+                        continue;
+                    }
+
+                    mismatches++;
+                    foreach (string difference in differences)
+                    {
+                        Console.WriteLine("  " + difference);
+                    }
+                }
+
+                Console.WriteLine();
+                Console.WriteLine("Total requests sent: " + ledger.Total);
+                Console.WriteLine(
+                    mismatches == 0
+                        ? "Every comparison found an identical snapshot."
+                        : mismatches + " comparisons found a difference.");
+            }
+
+            return mismatches == 0 ? 0 : 1;
+        }
+
+        private static async Task<AccountSnapshot> FetchOnceAsync(
+            string apiKey,
+            FetchConfig config,
+            bool includeArmory,
+            int characterCount,
+            RequestRateLedger ledger,
+            CancellationToken ct)
+        {
+            Gw2ApiConnectionLimit.Apply();
+            var transport = new HttpClientHandler();
+            transport.MaxConnectionsPerServer = config.ConnectionLimit;
+            using (var handler = new ByteCountingHandler(transport))
+            {
+                var counter = NewCountingClient(handler);
+                try
+                {
+                    using (var client = NewClient(apiKey, counter, config))
+                    {
+                        return await SnapshotFetchShapes.BuildAsync(
+                            client, config, includeArmory, characterCount, ct);
+                    }
+                }
+                finally
+                {
+                    ledger.Record(counter.Requests.Count);
+                }
+            }
+        }
+
+        private static string Describe(AccountSnapshot snapshot)
+        {
+            return snapshot.Items.Count + " items, "
+                + snapshot.Wallet.Count + " wallet rows, "
+                + (snapshot.CharacterDisciplines == null
+                    ? "no disciplines"
+                    : snapshot.CharacterDisciplines.Count + " disciplines")
+                + ", " + snapshot.IncompleteCharacterCount + " incomplete";
         }
 
         private static string OpenResultFile(string outputDirectory)
