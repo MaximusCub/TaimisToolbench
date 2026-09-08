@@ -50,6 +50,14 @@ namespace TaimisToolbench.Services
         /// </summary>
         public IReadOnlyList<string> IncompleteCharacterNames { get; }
 
+        /// <summary>
+        /// Which account-wide reads failed, as opposed to how many. Never
+        /// null; empty when the caller supplied no names, which a reader
+        /// must not read as "none failed" - check
+        /// <see cref="FailedSourceCount"/> for that.
+        /// </summary>
+        public IReadOnlyList<AccountDataSource> FailedSources { get; }
+
         public SnapshotFetchFailedException(int failedSourceCount, int totalSourceCount)
             : this(failedSourceCount, totalSourceCount, null)
         {
@@ -65,12 +73,23 @@ namespace TaimisToolbench.Services
             int totalSourceCount,
             IEnumerable<string> failedSourceExceptionTypeNames,
             IEnumerable<string> incompleteCharacterNames)
+            : this(failedSourceCount, totalSourceCount, failedSourceExceptionTypeNames, incompleteCharacterNames, null)
+        {
+        }
+
+        public SnapshotFetchFailedException(
+            int failedSourceCount,
+            int totalSourceCount,
+            IEnumerable<string> failedSourceExceptionTypeNames,
+            IEnumerable<string> incompleteCharacterNames,
+            IEnumerable<AccountDataSource> failedSources)
             : base(BuildMessage(failedSourceCount, totalSourceCount, Names(incompleteCharacterNames)))
         {
             FailedSourceCount = failedSourceCount;
             TotalSourceCount = totalSourceCount;
             FailedSourceExceptionTypeNames = failedSourceExceptionTypeNames?.ToList() ?? new List<string>();
             IncompleteCharacterNames = Names(incompleteCharacterNames);
+            FailedSources = failedSources?.ToList() ?? new List<AccountDataSource>();
         }
 
         private static List<string> Names(IEnumerable<string> names)

@@ -112,7 +112,12 @@ namespace TaimisToolbench.Services
             // Ids already fetched by a caller generating several plans in a
             // row; see GetLearnedRecipeIdsAsync. Null means this generation
             // fetches its own.
-            ISet<int> learnedRecipeIds = null)
+            ISet<int> learnedRecipeIds = null,
+            // An account refresh running alongside this generation; see
+            // Models/PlanAccountData.cs. When set, its result replaces
+            // `snapshot` and `characterDisciplines` at the one point the
+            // pipeline first reads them. Null keeps the passed values.
+            Func<Task<PlanAccountData>> accountDataAsync = null)
         {
             Gw2ApiConnectionLimit.Apply();
 
@@ -153,7 +158,8 @@ namespace TaimisToolbench.Services
             return await RunPipelineAsync(
                 tree, targetItemId, quantity, items: null, snapshot, ct, progress,
                 activeCharacterName, priceBasis, valuation, ownMaterialsMode, tiers,
-                characterDisciplines, learnedRecipeIds, sw, timingLog, phaseTracker);
+                characterDisciplines, learnedRecipeIds, sw, timingLog, phaseTracker,
+                accountDataAsync);
         }
 
         /// <summary>
@@ -182,7 +188,8 @@ namespace TaimisToolbench.Services
             ISet<int> suppliedLearnedRecipeIds,
             Stopwatch sw,
             List<string> timingLog,
-            PhaseTracker phaseTracker)
+            PhaseTracker phaseTracker,
+            Func<Task<PlanAccountData>> accountDataAsync)
         {
             // Always applied; a no-op when the tree has no achievement-bit
             // ingredients. Must run before inventory reduction and the
@@ -220,6 +227,24 @@ namespace TaimisToolbench.Services
             // SeasonalOfferFilter); `vendorOffers` stays the raw, unfiltered
             // dictionary for everything else in this method.
             var solverVendorOffers = SeasonalOfferFilter.ExcludeSeasonal(vendorOffers);
+
+            // The last point before anything reads the account, and so
+            // where a Generate's own refresh is collected: everything above
+            // ran alongside it. The elapsed figure below is what the
+            // overlap did not hide, not the refresh's own duration.
+            if (accountDataAsync != null)
+            {
+                sw.Restart();
+                var accountData = await accountDataAsync();
+                sw.Stop();
+                timingLog.Add($"Await account refresh: {sw.ElapsedMilliseconds}ms");
+
+                if (accountData != null)
+                {
+                    snapshot = accountData.Snapshot;
+                    characterDisciplines = accountData.CharacterDisciplines ?? characterDisciplines;
+                }
+            }
 
             // gw2e's "Value Own Materials" force-buy pre-pass - only when
             // the setting is Valued and a snapshot drives reduction (see
@@ -524,7 +549,9 @@ namespace TaimisToolbench.Services
             // lines; null falls back to "(N items)".
             string requestLabel = null,
             // See the single-item overload's matching parameter.
-            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null)
+            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null,
+            // See the single-item overload's matching parameter.
+            Func<Task<PlanAccountData>> accountDataAsync = null)
         {
             // Marked async so this validation throws inside the returned
             // Task, like every other failure mode of this method.
@@ -548,14 +575,16 @@ namespace TaimisToolbench.Services
                     result = await GenerateStructuredAsync(
                         items[0].ItemId, items[0].Quantity, snapshot, ct, progress,
                         activeCharacterName, priceBasis, currencyValuation, ownMaterialsMode,
-                        homesteadTiers, phaseProgress, characterDisciplines: characterDisciplines);
+                        homesteadTiers, phaseProgress, characterDisciplines: characterDisciplines,
+                        accountDataAsync: accountDataAsync);
                 }
                 else
                 {
                     result = await GenerateStructuredMultiAsync(
                         items, snapshot, ct, progress, activeCharacterName,
                         priceBasis, currencyValuation, ownMaterialsMode, homesteadTiers,
-                        phaseProgress, characterDisciplines: characterDisciplines);
+                        phaseProgress, characterDisciplines: characterDisciplines,
+                        accountDataAsync: accountDataAsync);
                 }
 
                 // Compact per-phase summary derived from the timing lines
@@ -600,7 +629,8 @@ namespace TaimisToolbench.Services
             OwnMaterialsMode ownMaterialsMode,
             HomesteadEfficiencyTiers homesteadTiers,
             IProgress<PlanPhaseEvent> phaseProgress,
-            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null)
+            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null,
+            Func<Task<PlanAccountData>> accountDataAsync = null)
         {
             Gw2ApiConnectionLimit.Apply();
 
@@ -639,7 +669,8 @@ namespace TaimisToolbench.Services
             return await RunPipelineAsync(
                 tree, Gw2Constants.MultiItemWrapperItemId, quantity: 1, items, snapshot, ct,
                 progress, activeCharacterName, priceBasis, valuation, ownMaterialsMode, tiers,
-                characterDisciplines, suppliedLearnedRecipeIds: null, sw, timingLog, phaseTracker);
+                characterDisciplines, suppliedLearnedRecipeIds: null, sw, timingLog, phaseTracker,
+                accountDataAsync);
         }
 
         /// <summary>

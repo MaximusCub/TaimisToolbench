@@ -384,6 +384,72 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// Whether the account snapshot has moved since the plan on screen
+        /// was solved. True only when both stamps are known and the live
+        /// one is strictly newer.
+        /// <para>
+        /// A plan with no stamp of its own never reports moved data. Two
+        /// plans have none: one restored from disk, which no longer knows
+        /// what it was solved against, and one solved with Use Own
+        /// Materials off, which read no holdings and so cannot be
+        /// superseded by new ones.
+        /// </para>
+        /// </summary>
+        public static bool PlanAccountDataMoved(
+            DateTime? planCapturedAtUtc, DateTime? currentCapturedAtUtc)
+        {
+            if (planCapturedAtUtc == null || currentCapturedAtUtc == null)
+            {
+                return false;
+            }
+
+            return currentCapturedAtUtc.Value > planCapturedAtUtc.Value;
+        }
+
+        /// <summary>
+        /// The Crafting Plan strip's standing notice: what has changed
+        /// since this plan was solved that the next Generate would pick up.
+        /// Null when nothing has.
+        /// <para>
+        /// Both facts share ONE remedy clause rather than carrying one
+        /// each. The strip is a single unellipsized line, and its worst
+        /// realistic content already overruns the 1246px the label has at
+        /// the 1378px window minimum; two copies of "Generate Plan to
+        /// apply" cost a further 292px of that overrun and tell the reader
+        /// nothing the first did not.
+        /// </para>
+        /// <para>
+        /// Deliberately not merged with
+        /// <see cref="ForPlanAccountDataNote"/>. That clause is frozen into
+        /// the completion text and describes the data the plan USED; this
+        /// one is standing state and reports data that arrived AFTER it.
+        /// </para>
+        /// </summary>
+        public static string ForPlanStaleInputs(bool settingsChanged, bool accountDataChanged)
+        {
+            if (!settingsChanged && !accountDataChanged)
+            {
+                return null;
+            }
+
+            string subject;
+            if (settingsChanged && accountDataChanged)
+            {
+                subject = "Settings and account data";
+            }
+            else if (settingsChanged)
+            {
+                subject = "Settings";
+            }
+            else
+            {
+                subject = "Account data";
+            }
+
+            return subject + " changed - Generate Plan to apply";
+        }
+
+        /// <summary>
         /// Whether a snapshot of the given age counts as stale against the
         /// caller-supplied threshold. The Snapshot tab's staleness recolor
         /// (Views/MainView.cs) and Module.Update()'s auto-refresh gate both

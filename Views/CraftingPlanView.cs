@@ -119,7 +119,9 @@ namespace TaimisToolbench.Views
         // phaseProgress carries live coarse-phase events for the status
         // strip; requestLabel is a best-effort item-name label; the
         // valueOwnMaterials bool is a per-plan session choice, like useOwn.
-        private readonly Func<IReadOnlyList<PlanRequestItem>, bool, bool, PriceBasis, CancellationToken, IProgress<PlanStatus>, IProgress<PlanPhaseEvent>, string, Task<CraftingPlanResult>> _generateAsync;
+        // The last argument is called once, before the returned task
+        // completes, with what the generation's own account refresh did.
+        private readonly Func<IReadOnlyList<PlanRequestItem>, bool, bool, PriceBasis, CancellationToken, IProgress<PlanStatus>, IProgress<PlanPhaseEvent>, string, Action<PlanAccountRefresh>, Task<CraftingPlanResult>> _generateAsync;
         private readonly Func<PlanSolveContext, IReadOnlyDictionary<int, AcquisitionSource>, ISet<int>, CraftingPlanResult> _resolveOverridesSync;
         private readonly ModalDialog _modalDialog;
         // Session-scoped item stat lookup (ItemMetadataService's own cache -
@@ -214,16 +216,6 @@ namespace TaimisToolbench.Views
         // of every generation.
         private static readonly TimeSpan SpinnerTickInterval = TimeSpan.FromMilliseconds(150);
 
-        // The toolbar's Use Own Materials / Prices / Value Own Materials
-        // controls only take effect on the next Generate, unlike the
-        // instant-apply controls that look just like them on other tabs.
-        // Every one of them says so through the status label at the moment
-        // it changes.
-        // "press" is filler and "update" said nothing about WHAT updates;
-        // "apply" says what happens to the settings, and the button is
-        // named exactly.
-        private const string SettingsChangedStatus = "Settings changed - Generate Plan to apply";
-
         // Shown while Generate resolves typed-but-unpicked row names against
         // the search provider, before any plan work starts.
         private const string ResolvingStatus = "Resolving items...";
@@ -232,15 +224,23 @@ namespace TaimisToolbench.Views
         // text (and from each other).
         private const string StatusNoticeSeparator = "  |  ";
 
-        // Two things that stay true about the plan on screen for longer than
-        // one status write: a toolbar change it does not include, and rows
-        // that were left out of it. Held as state rather than written
-        // straight into the label because RenderFromBoard re-renders the
-        // strip from _statusBoard about seven times a second during a
-        // generation and again on every rebuild - a bare SetStatus is erased
-        // within one spinner tick by the very run the notice is about.
+        // Three things that stay true about the plan on screen for longer
+        // than one status write: a toolbar change it does not include, rows
+        // that were left out of it, and an account snapshot that landed
+        // after it. Held as state rather than written straight into the
+        // label because RenderFromBoard re-renders the strip from
+        // _statusBoard about seven times a second during a generation and
+        // again on every rebuild - a bare SetStatus is erased within one
+        // spinner tick by the very run the notice is about.
         private bool _settingsChangedPending;
         private string _unresolvedRowsNotice;
+        private bool _accountDataChanged;
+
+        // CapturedAt of the snapshot the plan on screen was solved against,
+        // or null when it was solved against none - see
+        // StatusText.PlanAccountDataMoved, which owns what that means. Read
+        // by PollForSnapshotChange only; nothing renders it.
+        private DateTime? _plannedCapturedAtUtc;
 
         // How far the plan on screen is dimmed while a new one generates -
         // enough to read as superseded, not so far that it stops being
@@ -811,7 +811,7 @@ namespace TaimisToolbench.Views
 
         #region Construction & status
         public CraftingPlanView(
-            Func<IReadOnlyList<PlanRequestItem>, bool, bool, PriceBasis, CancellationToken, IProgress<PlanStatus>, IProgress<PlanPhaseEvent>, string, Task<CraftingPlanResult>> generateAsync,
+            Func<IReadOnlyList<PlanRequestItem>, bool, bool, PriceBasis, CancellationToken, IProgress<PlanStatus>, IProgress<PlanPhaseEvent>, string, Action<PlanAccountRefresh>, Task<CraftingPlanResult>> generateAsync,
             ModalDialog modalDialog,
             IItemSearchProvider itemSearchProvider,
             ModuleSettings settings,
@@ -952,6 +952,12 @@ namespace TaimisToolbench.Views
             _lastDebugLog = result.DebugLog;
             _currentPlan = vm;
             _planGeneratedAt = generatedAt;
+
+            // A plan off disk does not record which snapshot it was solved
+            // against, so there is no stamp to notice a newer one against.
+            // Its own status line already says to Generate for fresh data.
+            _plannedCapturedAtUtc = null;
+            _accountDataChanged = false;
 
             RestoreRequestControls(
                 requestItems, result.ItemMetadata, useOwnMaterials, priceBasis, valueOwnMaterials);
@@ -1146,6 +1152,8 @@ namespace TaimisToolbench.Views
             _lastDebugLog = null;
             _currentPlan = null;
             _planGeneratedAt = default(DateTime);
+            _plannedCapturedAtUtc = null;
+            _accountDataChanged = false;
 
             ResetContentPanelToEmpty();
             // ResetContentPanelToEmpty withdrew the toolbar commands; the
@@ -4153,14 +4161,22 @@ namespace TaimisToolbench.Views
 
             // Read here rather than when the result lands: a background
             // refresh committing mid-generation would otherwise make the
-            // finished plan describe a snapshot it never used.
+            // finished plan describe a snapshot it never used. The
+            // generation's own refresh reports through accountRefresh
+            // below and replaces this reading when it does.
             AccountSnapshot plannedSnapshot = useOwnMaterials ? _getSnapshot?.Invoke() : null;
+            PlanAccountRefresh accountRefresh = null;
 
             try
             {
                 var result = await _generateAsync(
                     requestItems, useOwnMaterials, _valueOwnMaterials, _priceBasis,
-                    ModuleLifetimeToken(), null, phaseProgress, requestLabel);
+                    ModuleLifetimeToken(), null, phaseProgress, requestLabel,
+                    refresh =>
+                    {
+                        accountRefresh = refresh;
+                        plannedSnapshot = refresh.UsedHoldings ? refresh.Snapshot : null;
+                    });
 
                 // Blish HUD's XNA host has no SynchronizationContext, so this
                 // continuation may resume on a ThreadPool thread. vm-building
@@ -4198,6 +4214,13 @@ namespace TaimisToolbench.Views
                     _currentPlan = vm;
                     _planGeneratedAt = DateTime.Now;
 
+                    // This plan's own account data, so the poll compares
+                    // against what THIS run solved with. Cleared together:
+                    // a snapshot that superseded the previous plan has been
+                    // folded into this one.
+                    _plannedCapturedAtUtc = plannedSnapshot?.CapturedAt;
+                    _accountDataChanged = false;
+
                     // Unconditional board write, deliberately BEFORE the
                     // panel-liveness bail: a completion landing while the
                     // panel is torn down must not drop the "Plan
@@ -4220,6 +4243,11 @@ namespace TaimisToolbench.Views
 
                     _lastRenderedWidth = _contentPanel.Width;
                     RenderPlan(vm);
+
+                    // After the plan is drawn, because the dialog describes
+                    // the plan behind it. Raised over an empty panel it
+                    // would read as the generation having failed.
+                    RaiseStaleAccountDataDialog(accountRefresh, result, useOwnMaterials);
                 });
             }
             catch (Exception ex)
@@ -4416,6 +4444,42 @@ namespace TaimisToolbench.Views
         }
 
         /// <summary>
+        /// Tells the user their account snapshot did not refresh, but only
+        /// when this plan reads something the refresh failed to read - see
+        /// Services/StaleAccountDataWarning.cs. The status line under the
+        /// toolbar carries the failure either way.
+        /// </summary>
+        public void RaiseStaleAccountDataDialog(
+            PlanAccountRefresh refresh, CraftingPlanResult result, bool usedOwnMaterials)
+        {
+            if (refresh == null || !refresh.Failed)
+            {
+                return;
+            }
+
+            var notice = StaleAccountDataWarning.Evaluate(
+                refresh.FailedSources,
+                refresh.IncompleteCharacterNames,
+                refresh.Snapshot,
+                result,
+                usedOwnMaterials && refresh.UsedHoldings,
+                DateTime.UtcNow);
+
+            if (notice == null)
+            {
+                return;
+            }
+
+            // The detail the dialog no longer carries. Written first, so it
+            // is already in the Log tab by the time a reader dismisses the
+            // box and goes looking for what it left out.
+            ModuleLog.Shared.Write(
+                ModuleLogLevel.Warn, "plan", StaleAccountDataWarning.ComposeLogDetail(notice));
+
+            _modalDialog?.ShowAcknowledgement(StaleAccountDataWarning.Compose(notice));
+        }
+
+        /// <summary>
         /// The finished plan's status line. Carries the account-data clause
         /// only when the plan subtracted owned materials from a snapshot
         /// that is overdue for a refresh or missing a character - see
@@ -4442,14 +4506,20 @@ namespace TaimisToolbench.Views
         /// <summary>
         /// <paramref name="status"/> with the strip's standing notices
         /// appended - the facts that outlive any single status write (see
-        /// _settingsChangedPending / _unresolvedRowsNotice). Returns
-        /// <paramref name="status"/> itself, allocating nothing, in the
-        /// ordinary case where there are none: this runs on every spinner
-        /// render for the whole of every generation.
+        /// _settingsChangedPending / _unresolvedRowsNotice /
+        /// _accountDataChanged). Returns <paramref name="status"/> itself,
+        /// allocating nothing, in the ordinary case where there are none:
+        /// this runs on every spinner render for the whole of every
+        /// generation.
+        /// <para>
+        /// The settings and account-data facts share one notice rather than
+        /// taking a clause each - StatusText.ForPlanStaleInputs owns that
+        /// wording and the width reasoning behind it.
+        /// </para>
         /// </summary>
         private string WithStandingNotices(string status)
         {
-            if (_unresolvedRowsNotice == null && !_settingsChangedPending)
+            if (_unresolvedRowsNotice == null && !_settingsChangedPending && !_accountDataChanged)
             {
                 return status;
             }
@@ -4465,12 +4535,47 @@ namespace TaimisToolbench.Views
                 parts.Add(_unresolvedRowsNotice);
             }
 
-            if (_settingsChangedPending)
+            string staleInputs = StatusText.ForPlanStaleInputs(_settingsChangedPending, _accountDataChanged);
+            if (staleInputs != null)
             {
-                parts.Add(SettingsChangedStatus);
+                parts.Add(staleInputs);
             }
 
             return string.Join(StatusNoticeSeparator, parts);
+        }
+
+        /// <summary>
+        /// Notices the account snapshot moving under the plan on screen and
+        /// says so on the strip. Nothing regenerates: a plan carries the
+        /// user's own craft-or-buy decisions, and discarding those to spend
+        /// a solve nobody asked for is the worse trade. The next Generate
+        /// is theirs to press.
+        /// <para>
+        /// Run by Module.Update only while this is the selected tab of a
+        /// visible window, on the same terms as the Ranker's own poll. One
+        /// nullable-DateTime compare per tick, and none at all once the
+        /// notice is up or the plan has no stamp to compare against.
+        /// </para>
+        /// </summary>
+        public void PollForSnapshotChange()
+        {
+            if (_accountDataChanged || _plannedCapturedAtUtc == null)
+            {
+                return;
+            }
+
+            if (_contentPanel == null || _contentPanel.Parent == null)
+            {
+                return;
+            }
+
+            if (!StatusText.PlanAccountDataMoved(_plannedCapturedAtUtc, _getSnapshot?.Invoke()?.CapturedAt))
+            {
+                return;
+            }
+
+            _accountDataChanged = true;
+            RenderFromBoard(_statusBoard.Snapshot());
         }
 
         /// <summary>

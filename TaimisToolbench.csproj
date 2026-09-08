@@ -120,6 +120,11 @@
     <Compile Include="Services\PlanHistoryRowLayout.cs" />
     <Compile Include="Services\PlanHistoryIndexEdits.cs" />
     <Compile Include="Services\PlanHistoryItemIds.cs" />
+    <Compile Include="Models\PlanAccountData.cs" />
+    <Compile Include="Services\PlanItemIds.cs" />
+    <Compile Include="Services\PlanAccountRefresh.cs" />
+    <Compile Include="Services\SnapshotRefreshPolicy.cs" />
+    <Compile Include="Services\StaleAccountDataWarning.cs" />
     <Compile Include="Services\PlanHistoryLabels.cs" />
     <Compile Include="Views\PlanHistoryTabContent.cs" />
     <Compile Include="Services\PlanStore.cs" />
@@ -409,6 +414,7 @@
     <Compile Include="Models\MaterialSourceAllocation.cs" />
     <Compile Include="Models\UsedMaterial.cs" />
     <Compile Include="Models\ReducedTreeResult.cs" />
+    <Compile Include="Services\AccountDataSource.cs" />
     <Compile Include="Services\AccountItemIndex.cs" />
     <Compile Include="Services\AccountCurrencyIndex.cs" />
     <Compile Include="Services\InventoryReducer.cs" />

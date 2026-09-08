@@ -130,6 +130,14 @@ namespace TaimisToolbench
         // being asked for by both.
         private bool _iconPrimeHandedOver;
 
+        private TradingPostService _tradingPostService;
+
+        // Item ids of the plan this session restored, kept so opening the
+        // module window can warm their trading post prices. Null until a
+        // result-carrying plan is restored, and never updated afterwards:
+        // a generation refills the same cache itself.
+        private IReadOnlyList<int> _restoredPlanPriceWarmIds;
+
         private SnapshotStore _snapshotStore;
         private StatusStore _statusStore;
         private Gw2AccountSnapshotService _snapshotService;
@@ -245,6 +253,12 @@ namespace TaimisToolbench
         // unsynchronized statements) - see SnapshotRefreshSlot's own doc
         // comment for the race that shape allowed.
         private readonly SnapshotRefreshSlot _refreshSlot = new SnapshotRefreshSlot();
+
+        // The fetch a later caller joins instead of starting its own. Only
+        // a caller holding _refreshSlot ever publishes one, so at most one
+        // is live; a joiner can still read one that has just finished,
+        // which costs it an already-completed await.
+        private Task<AccountSnapshot> _snapshotFetchInFlight;
 
         // Cancels the background /v2/build lookup and the corpus probe
         // behind it - both retry/run across several seconds and hold
@@ -600,9 +614,14 @@ namespace TaimisToolbench
 
             _currencyMetadataService = new CurrencyMetadataService(_httpClient);
 
+            // Hoisted for the same reason itemMetadataService is: the
+            // window-open price warm has to fill the very cache the next
+            // generation reads, not a second one.
+            _tradingPostService = new TradingPostService(priceApi);
+
             _craftingPipeline = new CraftingPlanPipeline(
                 recipeService,
-                new TradingPostService(priceApi),
+                _tradingPostService,
                 new PlanSolver(),
                 itemMetadataService,
                 _vendorOfferStore,
@@ -1003,10 +1022,10 @@ namespace TaimisToolbench
             // single-item method inside the pipeline, so the lambda needs
             // no single-vs-multi branch of its own.
             _craftingContent = new CraftingPlanView(
-                (items, useOwn, valueOwnMaterials, priceBasis, ct, progress, phaseProgress, requestLabel) =>
+                (items, useOwn, valueOwnMaterials, priceBasis, ct, progress, phaseProgress, requestLabel, onAccountRefresh) =>
                     StartGenerateAsync(
                         items, useOwn, valueOwnMaterials, priceBasis, ct,
-                        progress, phaseProgress, requestLabel, lifetimeToken),
+                        progress, phaseProgress, requestLabel, onAccountRefresh, lifetimeToken),
                 _modalDialog,
                 _itemSearchProvider,
                 _settings,
@@ -1250,10 +1269,18 @@ namespace TaimisToolbench
 
             _snapshotTab = new Tab(
                 AsyncTexture2D.FromAssetId(156699),
-                () => new ViewAdapter(
-                    "Account Snapshot",
-                    c => _snapshotContent.Build(c),
-                    b => _snapshotContent.BuildHeaderActions(b)),
+                () =>
+                {
+                    // Blish calls this factory every time the tab is
+                    // selected, on the main thread, just before it queues
+                    // the off-thread Build - the same seam the other tabs
+                    // use to start their own rebuild.
+                    RefreshSnapshotOnTabOpen();
+                    return new ViewAdapter(
+                        "Account Snapshot",
+                        c => _snapshotContent.Build(c),
+                        b => _snapshotContent.BuildHeaderActions(b));
+                },
                 "Account Snapshot");
             _mainWindow.Tabs.Add(_snapshotTab);
 
@@ -1344,6 +1371,8 @@ namespace TaimisToolbench
                 }
             };
 
+            _mainWindow.Shown += (s, e) => WarmRestoredPlanPrices();
+
             _cornerIcon = new CornerIcon()
             {
                 IconName = "Taimi's Toolbench",
@@ -1377,6 +1406,7 @@ namespace TaimisToolbench
             IProgress<PlanStatus> progress,
             IProgress<PlanPhaseEvent> phaseProgress,
             string requestLabel,
+            Action<PlanAccountRefresh> onAccountRefresh,
             CancellationToken lifetimeToken)
         {
             // The corpus probe retries here when its startup run failed
@@ -1445,17 +1475,27 @@ namespace TaimisToolbench
             var generateCts = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetimeToken);
             ct = generateCts.Token;
 
-            Task<CraftingPlanResult> generateTask = useOwn
-                ? _craftingPipeline.GenerateStructuredAsync(
-                    items, _currentSnapshot, ct, progress,
-                    activeChar, priceBasis, currencyValuation, ownMaterialsMode,
-                    homesteadTiers, phaseProgress, requestLabel,
-                    characterDisciplines: _currentSnapshot?.CharacterDisciplines)
-                : _craftingPipeline.GenerateStructuredAsync(
-                    items, null, ct, progress,
-                    null, priceBasis, currencyValuation, ownMaterialsMode,
-                    homesteadTiers, phaseProgress, requestLabel,
-                    characterDisciplines: _currentSnapshot?.CharacterDisciplines);
+            // Started here and awaited inside the pipeline, after the price
+            // fetch: the refresh runs alongside the tree build and the
+            // prices instead of ahead of them, so a generation waits for
+            // the longer of the two rather than their sum. It supplies both
+            // the snapshot and the disciplines, which is why neither is
+            // passed by value any more.
+            var accountRefresh = RefreshForPlanAsync(useOwn, onAccountRefresh, ct);
+
+            // A pipeline that throws before the seam - a failed tree build -
+            // never awaits the refresh, and a cancelled refresh would then
+            // be an unobserved fault.
+            accountRefresh.ContinueWith(
+                t => { var ignored = t.Exception; },
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+
+            Task<CraftingPlanResult> generateTask = _craftingPipeline.GenerateStructuredAsync(
+                items, snapshot: null, ct, progress,
+                useOwn ? activeChar : null, priceBasis, currencyValuation, ownMaterialsMode,
+                homesteadTiers, phaseProgress, requestLabel,
+                characterDisciplines: null,
+                accountDataAsync: () => accountRefresh);
 
             return PersistAfterGenerateAsync(generateTask, items, useOwn, priceBasis, valueOwnMaterials, myPersistGen, ct, generateCts);
         }
@@ -1769,6 +1809,19 @@ namespace TaimisToolbench
                 _rankerContent.PollForSnapshotChange();
             }
 
+            // The Crafting Plan tab's poll, on the same terms. It starts no
+            // work at all - it appends a notice to the strip saying the
+            // plan on screen predates the account data now loaded - so the
+            // visible-window gate is about where the notice can be READ
+            // rather than about what the tick can spend.
+            if (_craftingContent != null
+                && _mainWindow != null
+                && _mainWindow.Visible
+                && _mainWindow.SelectedTab == _craftingPlanTab)
+            {
+                _craftingContent.PollForSnapshotChange();
+            }
+
             // "Applying restored plan to view" - mirrors the
             // _snapshotDirty block above. Runs at most once per session
             // and must stay ahead of the early returns below (a fresh
@@ -1809,6 +1862,7 @@ namespace TaimisToolbench
                         var restored = _pendingPlanRestore.Plan;
                         if (_pendingPlanRestore.HasResult)
                         {
+                            _restoredPlanPriceWarmIds = PlanItemIds.ForResult(restored.Result);
                             _craftingContent?.ApplyRestoredPlan(
                                 restored.Result,
                                 restored.GeneratedAt,
@@ -2154,6 +2208,143 @@ namespace TaimisToolbench
                 DateTime.UtcNow - new DateTime(lastFailedTicks, DateTimeKind.Utc) < RefreshFailureBackoff;
         }
 
+        /// <summary>
+        /// One snapshot fetch, published while it runs so a Generate Plan
+        /// click can join it rather than refuse to refresh.
+        /// </summary>
+        private async Task<AccountSnapshot> TrackedFetchAsync(CancellationToken ct)
+        {
+            var fetch = FetchAndSaveSnapshotAsync(ct);
+            Volatile.Write(ref _snapshotFetchInFlight, fetch);
+            try
+            {
+                return await fetch;
+            }
+            finally
+            {
+                // Only clears the field when it still holds THIS fetch, so
+                // a later refresh's publication survives this one's exit.
+                // Discarded because the return is a Task: without it the
+                // compiler reads the call as a forgotten await.
+                _ = Interlocked.CompareExchange(ref _snapshotFetchInFlight, null, fetch);
+            }
+        }
+
+        /// <summary>
+        /// The account refresh one Generate Plan click makes. Hands the
+        /// pipeline the account data to solve against, and tells
+        /// <paramref name="report"/> what happened so the Crafting Plan tab
+        /// can raise it.
+        /// <para>
+        /// A failed refresh never blocks a plan. The generation then uses
+        /// the snapshot already on disk, which is what every generation
+        /// used before this call existed.
+        /// </para>
+        /// <para>
+        /// Data newer than SnapshotRefreshPolicy.GenerateFreshness is
+        /// solved against as it stands. That skip reports no failure: a
+        /// snapshot the module chose not to refresh is not a snapshot it
+        /// could not refresh, and the Crafting Plan tab's dialog keys off
+        /// the difference.
+        /// </para>
+        /// </summary>
+        private async Task<PlanAccountData> RefreshForPlanAsync(
+            bool useOwn, Action<PlanAccountRefresh> report, CancellationToken ct)
+        {
+            var refresh = new PlanAccountRefresh();
+
+            if (!_snapshotService.HasRequiredPermissions())
+            {
+                MarkPlanRefreshFailed(refresh, null);
+            }
+            else if (SnapshotRefreshPolicy.ShouldRefreshOnGenerate(
+                _currentSnapshot?.CapturedAt, DateTime.UtcNow))
+            {
+                try
+                {
+                    var running = Volatile.Read(ref _snapshotFetchInFlight);
+                    if (running != null)
+                    {
+                        await running;
+                    }
+                    else if (_refreshSlot.TryClaim())
+                    {
+                        _backgroundRefreshInFlight = true;
+                        try
+                        {
+                            var fetched = await TrackedFetchAsync(_refreshSlot.BeginFetch());
+                            if (fetched != null)
+                            {
+                                SaveStatusThreadSafe(StatusText.Stamp("Updated", fetched.CapturedAt.ToLocalTime()));
+                            }
+                        }
+                        finally
+                        {
+                            _backgroundRefreshInFlight = false;
+                            _refreshSlot.Release();
+                        }
+                    }
+
+                    Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
+                }
+                catch (OperationCanceledException)
+                {
+                    if (ct.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+
+                    // Clear Cache cancelled the fetch through the refresh
+                    // slot. It writes its own status line, and a "Refresh
+                    // failed" stamped over that would name the wrong cause.
+                    Logger.Debug("Snapshot refresh for a plan was cancelled");
+                    MarkPlanRefreshFailed(refresh, null);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "Failed to refresh account snapshot for a plan");
+                    ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot",
+                        $"Failed to refresh account snapshot for a plan: {ex.GetType().Name} - {ex.Message}");
+                    Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, DateTime.UtcNow.Ticks);
+
+                    var classification = SnapshotFailureClassifier.Classify(ex);
+                    SaveStatusThreadSafe(StatusText.Stamp(StatusText.ForRefreshFailure(classification), DateTime.Now));
+                    MarkPlanRefreshFailed(refresh, ex as SnapshotFetchFailedException);
+                }
+            }
+
+            var snapshot = _currentSnapshot;
+            refresh.Snapshot = snapshot;
+            refresh.UsedHoldings = useOwn && snapshot != null;
+            report?.Invoke(refresh);
+
+            return new PlanAccountData
+            {
+                Snapshot = refresh.UsedHoldings ? snapshot : null,
+                CharacterDisciplines = snapshot?.CharacterDisciplines,
+            };
+        }
+
+        /// <summary>
+        /// Records which reads went unread. A fetch that named none - a
+        /// whole-fetch timeout, a token the module cannot use - read none
+        /// of them, so every source is named.
+        /// </summary>
+        private static void MarkPlanRefreshFailed(PlanAccountRefresh refresh, SnapshotFetchFailedException detail)
+        {
+            refresh.Failed = true;
+
+            if (detail != null &&
+                (detail.FailedSources.Count > 0 || detail.IncompleteCharacterNames.Count > 0))
+            {
+                refresh.FailedSources = detail.FailedSources;
+                refresh.IncompleteCharacterNames = detail.IncompleteCharacterNames;
+                return;
+            }
+
+            refresh.FailedSources = AccountDataSources.All;
+        }
+
         private async Task RefreshSnapshotInBackgroundAsync()
         {
             if (_refreshSlot.IsClaimed)
@@ -2188,7 +2379,7 @@ namespace TaimisToolbench
 
             try
             {
-                var snapshot = await FetchAndSaveSnapshotAsync(_refreshSlot.BeginFetch());
+                var snapshot = await TrackedFetchAsync(_refreshSlot.BeginFetch());
                 Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
                 if (snapshot != null)
                 {
@@ -2248,7 +2439,7 @@ namespace TaimisToolbench
                 // to leave the claim set forever, and with it every later
                 // refresh - automatic and clicked - silently declined for the
                 // rest of the session.
-                return await FetchAndSaveSnapshotAsync(_refreshSlot.BeginFetch());
+                return await TrackedFetchAsync(_refreshSlot.BeginFetch());
             }
             finally
             {
@@ -2299,6 +2490,76 @@ namespace TaimisToolbench
             }
 
             KickCorpusVerification();
+        }
+
+        /// <summary>
+        /// Refreshes the account when the Account Snapshot tab is opened
+        /// over data older than SnapshotRefreshPolicy.TabOpenFreshness.
+        /// <para>
+        /// Routed through the background refresh, so a refresh already
+        /// running wins and the one-minute backoff after a failed one still
+        /// holds. Flicking tabs during an API outage therefore does not
+        /// retry every switch.
+        /// </para>
+        /// </summary>
+        private void RefreshSnapshotOnTabOpen()
+        {
+            if (!SnapshotRefreshPolicy.ShouldRefreshOnTabOpen(_currentSnapshot?.CapturedAt, DateTime.UtcNow))
+            {
+                return;
+            }
+
+            if (!_snapshotService.HasRequiredPermissions())
+            {
+                return;
+            }
+
+            _ = RefreshSnapshotInBackgroundAsync();
+        }
+
+        /// <summary>
+        /// Warms trading post prices for the plan this session restored, so
+        /// the next Generate on it does not pay for that fetch.
+        /// <para>
+        /// Fired when the module window opens, not when the module loads: a
+        /// price is only cached for TradingPostService.CacheTtl, and a warm
+        /// at Blish start would have expired long before the user opened
+        /// anything. The restored plan's own tree is the warm set because it
+        /// is exactly what the next Generate on it prices.
+        /// </para>
+        /// </summary>
+        private void WarmRestoredPlanPrices()
+        {
+            var ids = _restoredPlanPriceWarmIds;
+            if (ids == null || ids.Count == 0 || _tradingPostService == null)
+            {
+                return;
+            }
+
+            var token = _lifetimeCts?.Token ?? CancellationToken.None;
+            _ = WarmPricesAsync(ids, token);
+        }
+
+        private async Task WarmPricesAsync(IReadOnlyList<int> itemIds, CancellationToken ct)
+        {
+            try
+            {
+                await _tradingPostService.GetPricesAsync(itemIds, ct);
+                ModuleLog.Shared.Write(ModuleLogLevel.Debug, "plan",
+                    $"Warmed trading post prices for {itemIds.Count} restored plan items.");
+            }
+            catch (OperationCanceledException)
+            {
+                // The module is unloading, or the window closed with the
+                // fetch still out. Nothing to report.
+            }
+            catch (Exception ex)
+            {
+                // A warm that fails costs the next generation nothing but
+                // the fetch it would have made anyway.
+                ModuleLog.Shared.Write(ModuleLogLevel.Debug, "plan",
+                    $"Price warm failed: {ex.GetType().Name} - {ex.Message}");
+            }
         }
 
         private void PersistStatus(string status)
@@ -2978,6 +3239,12 @@ namespace TaimisToolbench
             // StartGenerateAsync reads Gw2Mumble and per-plan settings,
             // so it is invoked on the main thread exactly like a Generate
             // click; only the await runs out here.
+
+            // Written by the generation's own refresh callback, read after
+            // the plan lands - a re-solve raises the same stale-account
+            // dialog a Generate click does.
+            PlanAccountRefresh accountRefresh = null;
+
             var startTcs = new TaskCompletionSource<Task<CraftingPlanResult>>();
             MainThreadMarshal.Run(() =>
             {
@@ -2985,7 +3252,9 @@ namespace TaimisToolbench
                 {
                     startTcs.SetResult(StartGenerateAsync(
                         requestItems, useOwnMaterials, valueOwnMaterials, priceBasis,
-                        ct, null, null, requestLabel, _lifetimeCts.Token));
+                        ct, null, null, requestLabel,
+                        refresh => Volatile.Write(ref accountRefresh, refresh),
+                        _lifetimeCts.Token));
                 }
                 catch (Exception ex)
                 {
@@ -3025,6 +3294,8 @@ namespace TaimisToolbench
                     requestItems,
                     useOwnMaterials,
                     priceBasis);
+                _craftingContent?.RaiseStaleAccountDataDialog(
+                    Volatile.Read(ref accountRefresh), result, useOwnMaterials);
                 _mainWindow.SelectedTab = _craftingPlanTab;
             });
 

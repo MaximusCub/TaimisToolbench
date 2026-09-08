@@ -463,6 +463,79 @@ namespace TaimisToolbench.Tests.Services
                 TimeSpan.FromMinutes(minutes), DefaultRefreshInterval, 0, 9));
         }
 
+        // ---- ForPlanStaleInputs and PlanAccountDataMoved: the strip's
+        // standing notice, and the decision behind its account-data half.
+        [Fact]
+        public void ForPlanStaleInputs_NothingChanged_SaysNothing()
+        {
+            Assert.Null(StatusText.ForPlanStaleInputs(false, false));
+        }
+
+        [Fact]
+        public void ForPlanStaleInputs_NamesWhicheverChanged()
+        {
+            Assert.Equal(
+                "Settings changed - Generate Plan to apply",
+                StatusText.ForPlanStaleInputs(true, false));
+            Assert.Equal(
+                "Account data changed - Generate Plan to apply",
+                StatusText.ForPlanStaleInputs(false, true));
+        }
+
+        /// <summary>
+        /// Both facts, ONE remedy clause. Two notices each ending in
+        /// "Generate Plan to apply" cost 292px of a status line that
+        /// already overruns its label at the window minimum.
+        /// </summary>
+        [Fact]
+        public void ForPlanStaleInputs_BothChanged_StateTheRemedyOnce()
+        {
+            string both = StatusText.ForPlanStaleInputs(true, true);
+
+            Assert.Equal("Settings and account data changed - Generate Plan to apply", both);
+            Assert.Equal(1, CountOccurrences(both, "Generate Plan to apply"));
+        }
+
+        private static int CountOccurrences(string haystack, string needle)
+        {
+            int count = 0;
+            for (int i = haystack.IndexOf(needle, StringComparison.Ordinal); i >= 0;
+                 i = haystack.IndexOf(needle, i + needle.Length, StringComparison.Ordinal))
+            {
+                count++;
+            }
+
+            return count;
+        }
+
+        [Fact]
+        public void PlanAccountDataMoved_OnlyWhenTheLiveStampIsStrictlyNewer()
+        {
+            var solved = new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
+
+            Assert.True(StatusText.PlanAccountDataMoved(solved, solved.AddSeconds(1)));
+            Assert.False(StatusText.PlanAccountDataMoved(solved, solved));
+
+            // An older live stamp is Clear Cache restoring an earlier
+            // capture, not the plan falling behind one.
+            Assert.False(StatusText.PlanAccountDataMoved(solved, solved.AddMinutes(-5)));
+        }
+
+        /// <summary>
+        /// A restored plan and a plan solved with Use Own Materials off
+        /// both carry no stamp, and neither can be told it is behind data
+        /// it never read.
+        /// </summary>
+        [Fact]
+        public void PlanAccountDataMoved_WithNoStampOnEitherSide_IsFalse()
+        {
+            var stamp = new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
+
+            Assert.False(StatusText.PlanAccountDataMoved(null, stamp));
+            Assert.False(StatusText.PlanAccountDataMoved(stamp, null));
+            Assert.False(StatusText.PlanAccountDataMoved(null, null));
+        }
+
         // ForAgeAgo rides the SAME ladder and the same framing - the Plan
         // History detail panel's cost-delta line - and differs only below a
         // minute.

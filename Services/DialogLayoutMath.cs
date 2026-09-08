@@ -373,6 +373,33 @@ namespace TaimisToolbench.Services
                 hasCancel ? confirmX + seat + ButtonGap : 0, hasCancel ? seat : 0);
         }
 
+        /// <summary>
+        /// One message string as the paragraphs it asks for: a blank line
+        /// starts a new one, and a single newline stays inside the one it
+        /// is in, where TextWrapMath.Wrap already breaks the line hard.
+        /// <para>
+        /// A message with no blank line yields exactly one paragraph, so a
+        /// caller that has never thought about paragraphs is laid out
+        /// exactly as it was before this existed.
+        /// </para>
+        /// </summary>
+        public static IReadOnlyList<string> Paragraphs(string message)
+        {
+            string text = (message ?? "").Replace("\r\n", "\n").Replace('\r', '\n');
+
+            var kept = new List<string>();
+            foreach (string part in text.Split(new[] { "\n\n" }, StringSplitOptions.None))
+            {
+                string trimmed = part.Trim();
+                if (trimmed.Length > 0)
+                {
+                    kept.Add(trimmed);
+                }
+            }
+
+            return kept.Count == 0 ? new[] { string.Empty } : (IReadOnlyList<string>)kept;
+        }
+
         // A null or empty request is still one paragraph: TextWrapMath.Wrap
         // returns a single empty line for empty text, and a dialog that drew
         // no message row before must still draw one.

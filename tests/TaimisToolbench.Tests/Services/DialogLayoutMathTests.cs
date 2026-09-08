@@ -480,5 +480,84 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(21, DialogLayoutMath.TitleLineY(0));
             Assert.Equal(21, DialogLayoutMath.TitleLineY(-40));
         }
+
+        /// <summary>
+        /// Every message the module ships today has no blank line in it, so
+        /// this is the guarantee that the paragraph split changed none of
+        /// them: one paragraph in, one paragraph out, same string.
+        /// </summary>
+        [Fact]
+        public void Paragraphs_APlainMessage_IsOneParagraphUnchanged()
+        {
+            var only = DialogLayoutMath.Paragraphs(
+                "Could not refresh your account, so this plan used data from 14m ago.");
+
+            Assert.Equal(
+                new[] { "Could not refresh your account, so this plan used data from 14m ago." },
+                only);
+        }
+
+        [Fact]
+        public void Paragraphs_ABlankLine_StartsANewParagraph()
+        {
+            Assert.Equal(
+                new[] { "First.", "Second." },
+                DialogLayoutMath.Paragraphs("First.\n\nSecond."));
+        }
+
+        /// <summary>
+        /// A single newline stays inside its paragraph: TextWrapMath.Wrap
+        /// already breaks the line hard there, so splitting on it too would
+        /// insert a paragraph gap the caller did not ask for.
+        /// </summary>
+        [Fact]
+        public void Paragraphs_ASingleNewline_StaysInsideItsParagraph()
+        {
+            Assert.Equal(
+                new[] { "First.\nStill first." },
+                DialogLayoutMath.Paragraphs("First.\nStill first."));
+        }
+
+        [Fact]
+        public void Paragraphs_WindowsLineEndingsAndRunsOfBlankLines_ReadTheSame()
+        {
+            Assert.Equal(
+                new[] { "First.", "Second." },
+                DialogLayoutMath.Paragraphs("First.\r\n\r\nSecond."));
+            Assert.Equal(
+                new[] { "First.", "Second." },
+                DialogLayoutMath.Paragraphs("First.\n\n\n\nSecond."));
+        }
+
+        [Fact]
+        public void Paragraphs_NothingToSay_IsStillOneEmptyParagraph()
+        {
+            // Measure and the dialog both expect at least one block: a
+            // dialog that drew an empty message row must keep drawing one.
+            Assert.Equal(new[] { string.Empty }, DialogLayoutMath.Paragraphs(null));
+            Assert.Equal(new[] { string.Empty }, DialogLayoutMath.Paragraphs(""));
+            Assert.Equal(new[] { string.Empty }, DialogLayoutMath.Paragraphs("\n\n  \n\n"));
+        }
+
+        /// <summary>
+        /// The whole point of the split: a second paragraph is sized and
+        /// seated, not silently dropped. Blocks[0] was the only one the
+        /// dialog rendered before, and nothing failed when a caller passed
+        /// two.
+        /// </summary>
+        [Fact]
+        public void Measure_TwoParagraphs_SeatsTheSecondBelowTheFirst()
+        {
+            var layout = DialogLayoutMath.Measure(
+                DialogLayoutMath.Paragraphs("First.\n\nSecond."),
+                Fixed10, Pitch, 0, 60, -1, RoomyWidth, RoomyHeight);
+
+            Assert.Equal(2, layout.Blocks.Count);
+            Assert.Equal(new[] { "First." }, layout.Blocks[0].Lines);
+            Assert.Equal(new[] { "Second." }, layout.Blocks[1].Lines);
+            Assert.Equal(
+                layout.Blocks[0].Y + Pitch + DialogLayoutMath.ParagraphGap,
+                layout.Blocks[1].Y);
+        }
     }
 }

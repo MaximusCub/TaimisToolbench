@@ -1557,6 +1557,42 @@ calculator's own class doc comment for its individual rationale.
 
 ---
 
+## 10a. Account data a plan reads
+
+**What:** which parts of the account snapshot a plan generation actually
+consults, established from `Services/CraftingPlanPipeline.cs` rather than
+assumed. `Services/StaleAccountDataWarning.cs` is the executable copy of
+this table, and it decides whether a failed refresh is worth a dialog.
+
+| Snapshot member | What the plan does with it | When it is read |
+| --- | --- | --- |
+| `Items` | `AccountItemIndex` feeds `InventoryReducer.Reduce`, which subtracts owned stock from the tree. Also the source of the display-only owned amounts on vendor item cost lines. | Only when Use Own Materials is on, which is the same thing as the pipeline being handed a non-null snapshot. |
+| `Wallet` | `AccountCurrencyIndex` fills `CraftingPlanResult.OwnedCurrencyAmounts`, the "you have N" figure beside a currency cost. Never fed back into a decision. | Only when the plan has a non-coin currency cost, a barter trade-up currency, or a vendor offer currency cost line. |
+| `CharacterDisciplines` | `CraftCompetencyEvaluator.BuildBestRatingByDiscipline` gates whether a Craft decision may win automatically. | Whenever the plan crafts. Passed independently of Use Own Materials, so it is read even when the plan ignores holdings. |
+| `CoinCopper` | Nothing. | Never. The solver folds coin costs into `Plan.TotalCoinCost` and never asks what the account holds. The Crafting Ranker reads it; a plan does not. |
+| `LegendaryArmoryEquipped` | Nothing. | Never. It names who wears an armory item; the armory's counts arrive in `Items` under the `LegendaryArmory` source. |
+| `CapturedAt`, `CharacterCount`, `IncompleteCharacterCount` | Status text only. | Never by the solve. |
+
+`Items` is one flat list, and the only record of which part of the account
+holds what is the `Source` string on each entry
+(`Services/AccountItemIndex.cs` owns that vocabulary). So "does material
+storage hold anything this plan needs" is answered from what material
+storage held at the last successful capture. That is exact for what the
+plan subtracted, and blind to anything the account acquired since - which
+is the limit the dialog's wording respects.
+
+**What this cannot say:** whether refreshing a source would have changed
+the plan. Knowing that needs the read that failed. The dialog therefore
+names what went unread and what in the plan depends on it, and claims
+neither that the plan is wrong nor that it is fine.
+
+**Where:** `Services/StaleAccountDataWarning.cs` (the decision and the
+wording), `Services/AccountDataSource.cs` (the source vocabulary),
+`Services/PlanItemIds.cs` (what the plan needs),
+`Views/CraftingPlanView.cs` (`RaiseStaleAccountDataDialog`).
+
+---
+
 ## 11. Typography: the measured type ramp
 
 **What:** `Services/TypeRampMetrics.cs` holds the measured Menomonia glyph
