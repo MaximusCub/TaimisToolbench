@@ -121,7 +121,7 @@ namespace TaimisToolbench.Views.Rendering
             var treeRoot = vm.TreeRoot ?? FirstBatchRoot(vm);
             IconControls.DrawItemIcon(
                 titlePanel, treeRoot == null ? 0 : treeRoot.ItemId,
-                headerX, iconY, ItemIconTier.BagSlot, _getItemFacts);
+                headerX, iconY, ItemIconTier.BagSlot, TargetFactsFor(vm));
 
             int textX = headerX + frameSize + iconPad;
             var nameLabel = new Label()
@@ -183,6 +183,23 @@ namespace TaimisToolbench.Views.Rendering
                 vm.AdditionalTargetItems, titlePanel,
                 textX + nameWidth + suffixWidth + MultiItemHeaderLayout.TextGap,
                 headerHeight, panelWidth);
+        }
+
+        /// <summary>
+        /// Everything the header item's icon draws and its tooltip shows.
+        /// The view model's captured identity leads: a plan whose tree
+        /// failed to build has no root id, and a restored plan may name an
+        /// item this session's store never fetched.
+        /// </summary>
+        private Func<int, ItemTooltipFacts> TargetFactsFor(PlanViewModel vm)
+        {
+            string name = vm.TargetItemName;
+            string iconUrl = vm.TargetIconUrl;
+            string rarity = vm.TargetRarity;
+            var fromStore = _getItemFacts;
+
+            return id => ItemTooltipFacts.ForCapturedItem(
+                name, iconUrl, rarity, fromStore(id).Stats);
         }
 
         /// <summary>

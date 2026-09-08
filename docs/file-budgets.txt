@@ -330,7 +330,7 @@ Views/Rendering/HeaderCellPlan.cs                                               
 Views/Rendering/HoverChainResync.cs                                                     75
 Views/Rendering/ISectionRelayoutSink.cs                                                 86
 Views/Rendering/ITreePlanHost.cs                                                        105
-Views/Rendering/IconControls.cs                                                         463
+Views/Rendering/IconControls.cs                                                         477
 Views/Rendering/IconNameRowHelpers.cs                                                   182
 Views/Rendering/InlineSpinner.cs                                                        65
 Views/Rendering/LabelHelpers.cs                                                         273

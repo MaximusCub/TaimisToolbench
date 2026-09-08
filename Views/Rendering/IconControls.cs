@@ -101,7 +101,8 @@ namespace TaimisToolbench.Views.Rendering
             Panel parent, int itemId, int x, int y, ItemIconTier tier,
             Func<int, ItemTooltipFacts> getFacts)
         {
-            return DrawItemIcon(parent, itemId, x, y, tier, getFacts, null);
+            return DrawItemIcon(
+                parent, itemId, x, y, tier, getFacts, (Func<TooltipContent>)null);
         }
 
         /// <summary>The same item icon, plus this surface's own tips for
@@ -109,6 +110,19 @@ namespace TaimisToolbench.Views.Rendering
         internal static Panel DrawItemIcon(
             Panel parent, int itemId, int x, int y, ItemIconTier tier,
             Func<int, ItemTooltipFacts> getFacts, Func<IReadOnlyList<string>> tips)
+        {
+            return DrawItemIcon(
+                parent, itemId, x, y, tier, getFacts,
+                tips == null
+                    ? (Func<TooltipContent>)null
+                    : () => SecondTooltipBox.Compose(tips(), null));
+        }
+
+        /// <summary>The same item icon whose tips are CONTENT, so a coin
+        /// amount in one keeps its coin span.</summary>
+        internal static Panel DrawItemIcon(
+            Panel parent, int itemId, int x, int y, ItemIconTier tier,
+            Func<int, ItemTooltipFacts> getFacts, Func<TooltipContent> tips)
         {
             var built = BuildItemHover(itemId, getFacts, tips);
             var panel = CreateFrame(
@@ -127,7 +141,7 @@ namespace TaimisToolbench.Views.Rendering
             Panel parent, int itemId, int x, int y, ItemIconTier tier,
             Func<int, ItemTooltipFacts> getFacts)
         {
-            var built = BuildItemHover(itemId, getFacts, null);
+            var built = BuildItemHover(itemId, getFacts, (Func<TooltipContent>)null);
             var panel = CreateFrame(
                 parent, built.IconUrl, built.Frame, x, y,
                 ItemIconTiers.ArtSize(tier), ItemIconTiers.BorderThickness(tier),
@@ -138,7 +152,7 @@ namespace TaimisToolbench.Views.Rendering
         }
 
         private static (string IconUrl, ItemIconFrame Frame, ItemIconTooltip Hover) BuildItemHover(
-            int itemId, Func<int, ItemTooltipFacts> getFacts, Func<IReadOnlyList<string>> tips)
+            int itemId, Func<int, ItemTooltipFacts> getFacts, Func<TooltipContent> tips)
         {
             if (getFacts == null)
             {

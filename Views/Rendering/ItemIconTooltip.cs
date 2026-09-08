@@ -54,14 +54,13 @@ namespace TaimisToolbench.Views.Rendering
         /// happens to hold one, headed either way by the icon+name row the
         /// game's own tooltip opens with, and a second box carrying the
         /// right-click affordance.
-        /// <paramref name="getStatBlock"/> may be null on a surface with no
-        /// session stat cache to read - the header still renders, because
-        /// it comes from the identity the row already had.
+        /// The facts come from the id, so the header renders whether or
+        /// not this session has fetched the item's stat block.
         /// </summary>
         internal static ItemIconTooltip ForItem(
             string name, Func<ItemTooltipFacts> getFacts, IconWikiTarget wiki)
         {
-            return ForItem(name, getFacts, null, wiki);
+            return ForItem(name, getFacts, (Func<TooltipContent>)null, wiki);
         }
 
         /// <summary>
@@ -75,6 +74,26 @@ namespace TaimisToolbench.Views.Rendering
             string name,
             Func<ItemTooltipFacts> getFacts,
             Func<IReadOnlyList<string>> tips,
+            IconWikiTarget wiki)
+        {
+            return ForItem(
+                name,
+                getFacts,
+                tips == null
+                    ? (Func<TooltipContent>)null
+                    : () => SecondTooltipBox.Compose(tips(), null),
+                wiki);
+        }
+
+        /// <summary>
+        /// The same item hover for a surface whose tips are CONTENT rather
+        /// than prose - a Recipe Tree row, whose unit price has to keep its
+        /// coin span instead of being spelled out as "1s 0c".
+        /// </summary>
+        internal static ItemIconTooltip ForItem(
+            string name,
+            Func<ItemTooltipFacts> getFacts,
+            Func<TooltipContent> tips,
             IconWikiTarget wiki)
         {
             if (getFacts == null)

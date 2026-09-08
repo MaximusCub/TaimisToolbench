@@ -1083,7 +1083,7 @@ namespace TaimisToolbench.Views.Rendering
                 iconFrame = IconControls.DrawItemIcon(
                     rowPanel, node.ItemId, iconX, PlanContentHeightMath.TreeRowIconPad,
                     ItemIconTier.BagSidebar, _host.ItemFactsFor,
-                    () => TooltipContentPlainLines(itemTips));
+                    () => itemTips);
             }
 
             Panel iconScrim = null;
@@ -1844,32 +1844,6 @@ namespace TaimisToolbench.Views.Rendering
                 () => TreeRowTooltipComposer.BuildStatTooltipContent(node, getStatBlock),
                 () => extraContent,
                 TreeRowTooltipComposer.WikiTargetFor(node));
-        }
-
-        /// <summary>The tree's tips as prose, for the item entry point,
-        /// which takes the shape every other surface's tips take. A tree
-        /// tip carrying a coin span keeps it through the currency path and
-        /// through the dimmed path, both of which take content.</summary>
-        private static IReadOnlyList<string> TooltipContentPlainLines(TooltipContent content)
-        {
-            var lines = new List<string>();
-            if (content == null)
-            {
-                return lines;
-            }
-
-            foreach (var line in content.Lines)
-            {
-                var text = new System.Text.StringBuilder();
-                foreach (var span in line.Spans)
-                {
-                    text.Append(span.Text);
-                }
-
-                lines.Add(text.ToString());
-            }
-
-            return lines;
         }
 
         /// <summary>
