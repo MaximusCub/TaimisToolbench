@@ -223,7 +223,7 @@ namespace TaimisToolbench.Harness
                 builder.AppendLine(
                     Pad(config.Name, 26) + "  "
                     + Pad(rows.Count.ToString(CultureInfo.InvariantCulture), 4) + "  "
-                    + Pad(rows[0].Requests.ToString(CultureInfo.InvariantCulture), 8) + "  "
+                    + Pad(DescribeRequests(rows), 8) + "  "
                     + Pad(
                         Fixed(Median(wall)) + " / " + Fixed(wall.Min()) + "-" + Fixed(wall.Max()),
                         27) + "  "
@@ -234,6 +234,21 @@ namespace TaimisToolbench.Harness
             }
 
             return builder.ToString();
+        }
+
+        /// <summary>
+        /// The request count, or its range when the runs disagreed. They
+        /// disagree when a run failed part way, and printing one run's count
+        /// as the config's would hide that.
+        /// </summary>
+        private static string DescribeRequests(List<FetchRunResult> rows)
+        {
+            int low = rows.Min(r => r.Requests);
+            int high = rows.Max(r => r.Requests);
+            return low == high
+                ? low.ToString(CultureInfo.InvariantCulture)
+                : low.ToString(CultureInfo.InvariantCulture) + "-"
+                    + high.ToString(CultureInfo.InvariantCulture);
         }
 
         public static double Median(List<double> values)

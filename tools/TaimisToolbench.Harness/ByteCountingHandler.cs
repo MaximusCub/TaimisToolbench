@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -83,7 +84,7 @@ namespace TaimisToolbench.Harness
             return response;
         }
 
-        private static byte[] Decode(byte[] raw, System.Collections.Generic.List<string> encodings)
+        private static byte[] Decode(byte[] raw, List<string> encodings)
         {
             bool gzip = encodings.Any(e => string.Equals(e, "gzip", StringComparison.OrdinalIgnoreCase));
             bool deflate = encodings.Any(e => string.Equals(e, "deflate", StringComparison.OrdinalIgnoreCase));

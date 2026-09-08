@@ -104,6 +104,12 @@ namespace TaimisToolbench.Harness
                 configs = configs.Where(c => c.Name.Contains(only)).ToList();
             }
 
+            if (configs.Count == 0)
+            {
+                Console.Error.WriteLine("--only matched no config.");
+                return 1;
+            }
+
             if (dryRun)
             {
                 PrintPlan(configs, assumedCharacters, perMinute, maxRequests);

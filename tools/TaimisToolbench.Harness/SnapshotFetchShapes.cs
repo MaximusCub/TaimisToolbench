@@ -253,6 +253,17 @@ namespace TaimisToolbench.Harness
         {
             var part = new CharacterSnapshotPart();
             string name = record.Name ?? string.Empty;
+
+            // A full record that carries no bags or no equipment is missing
+            // holdings, which is the same degradation a failed narrow call
+            // is. Without this a full-record run could report a complete
+            // harvest that a narrow run would have refused, and the two
+            // approaches would not be held to the same bar.
+            if (record.Bags == null || record.Equipment == null)
+            {
+                part.ItemsDegraded = true;
+            }
+
             AddBags(part.Items, record.Bags, name);
             AddEquipment(part, record.Equipment, name);
             if (record.Crafting == null)

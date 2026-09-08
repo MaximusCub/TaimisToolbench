@@ -66,14 +66,6 @@ namespace TaimisToolbench.Harness
             }
         }
 
-        public void Reset()
-        {
-            lock (_lock)
-            {
-                _requests.Clear();
-            }
-        }
-
         public async Task<IWebApiResponse> RequestAsync(
             IWebApiRequest request, CancellationToken cancellationToken)
         {
