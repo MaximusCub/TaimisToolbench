@@ -582,6 +582,7 @@ tests/TaimisToolbench.Tests/Services/PlanViewModelBuilderSublabelTests.cs       
 tests/TaimisToolbench.Tests/Services/PlanViewModelBuilderSummaryTests.cs                1314
 tests/TaimisToolbench.Tests/Services/RankerCascadeIntegrationTests.cs                   361
 tests/TaimisToolbench.Tests/Services/RankerGateStatusTests.cs                           281
+tests/TaimisToolbench.Tests/Services/RankerMaterialsCurrencyValueTests.cs               328
 tests/TaimisToolbench.Tests/Services/RankerPriorityCascadeTests.cs                      377
 tests/TaimisToolbench.Tests/Services/RankerPriorityOrderingTests.cs                     256
 tests/TaimisToolbench.Tests/Services/RankerRarityAdoptionTests.cs                       130

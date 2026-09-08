@@ -1421,6 +1421,32 @@ time-gated daily craft is absent on purpose. Absent is a supported state,
 not an unfinished one - the offer still reaches the user, as an honestly
 unranked fallback (section 8's barter-offer rule).
 
+**Where a decision value may appear.** The original rule was "may tip a
+comparison, never reaches a displayed total". It now has a second permitted
+use, and the boundary moved from *what may consult a valuation* to *what
+kind of number may carry one*:
+
+- A decision value may weight a **ratio** - a dimensionless 0..1 figure the
+  module prints as a percentage. The Crafting Ranker's materials gate is
+  the one such reader (`Services/RankerReadinessCalculator.cs`,
+  `ScoreMaterials`): the gate is the plan's whole bill in copper, so the
+  same valuation stands above and below its line and a wrong rate moves
+  both halves together.
+- A decision value may **never** reach a coin total the module presents as
+  money. `CraftingPlan.TotalCoinCost`, the Ranker's Remaining column and
+  every Total Cost row stay coin the user will actually spend.
+
+An unvalued currency is not zero under either rule. The solver demotes its
+offer to the fallback tier (section 7.1); the materials gate drops it from
+both halves, reports it in
+`RankerRowMetrics.MaterialsUnpricedCurrencyIds`, and the Ready hover names
+it. The Ranker's separate currencies gate scores it in its own units
+regardless, which is why dropping it from a copper ratio loses a weighting
+rather than a barrier. MEASURED over the shipped corpus: 61 distinct
+non-coin currencies appear as a vendor cost, 45 of them carry a value, and
+820 of the 33,849 offers with a non-coin currency cost - 2.4 percent -
+charge one that does not.
+
 ---
 
 ## 9. Data pipeline: seeds, wiki scrapes, dev-only caches
@@ -3692,12 +3718,17 @@ calls about substitutability, which is a property the game itself decides:
 
 - A daily reset cannot be bought at any price. It is the only barrier with
   no substitute, so it takes the largest share.
-- Coin is the bulk of the work and the one gate measured exactly, by the
-  real solver at real prices. Equal claim on precision grounds; no better
-  claim than time on difficulty grounds.
-- Currencies are a real barrier measured only as within-currency ratios, so
-  each point carries less information than a coin point. Weighted below
-  materials for that reason, not because currencies matter less.
+- The bill is the bulk of the work and the gate measured most precisely, by
+  the real solver at real prices. Equal claim on precision grounds; no
+  better claim than time on difficulty grounds. It is a copper figure, so a
+  currency the plan pays enters it at the decision valuation (section 8.3)
+  and an unvalued one enters neither half.
+- The currencies gate measures something else: what the WALLET covers of
+  what the plan still needs, as within-currency ratios. The materials gate
+  measures the bill, this one measures the ability to pay it, and a row can
+  owe a large Karma cost it can already afford. Each point carries less
+  information than a coin point, which is why it is weighted below
+  materials - not because currencies matter less.
 - A discipline is a hard wall - you cannot craft at all without it - but a
   short one next to a legendary's materials bill, and usually either
   satisfied already or cheap to satisfy. Non-zero because it is real; small

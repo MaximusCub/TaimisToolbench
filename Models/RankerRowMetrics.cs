@@ -165,6 +165,14 @@ namespace TaimisToolbench.Models
         /// <summary>Vendor purchase caps - informational only, never scored. Empty, never null.</summary>
         public IReadOnlyList<TimegatedItem> VendorCappedItems { get; set; }
 
+        /// <summary>
+        /// Currency ids this plan spends that have no coin valuation, so the
+        /// materials gate left them out of both halves of its ratio rather
+        /// than pricing them at zero. Ascending, empty, never null. Every one
+        /// is still scored by the currencies gate, in its own units.
+        /// </summary>
+        public IReadOnlyList<int> MaterialsUnpricedCurrencyIds { get; set; }
+
         /// <summary>Empty, never null. Includes satisfied disciplines so the row can say so.</summary>
         public IReadOnlyList<RankerDisciplineGap> DisciplineGaps { get; set; }
 

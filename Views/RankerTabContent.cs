@@ -950,7 +950,7 @@ namespace TaimisToolbench.Views
         private static readonly string[] Captions =
         {
             "In priority order, each item is measured against what the items above it leave behind - higher rows have first claim on your materials, currencies, coin and daily crafts. Each on its own measures every item against your full account, ignoring the other rows, and sorts the closest-to-done to the top.",
-            "Ready blends six separate barriers - materials at buy-order prices, account currencies, time-gated daily crafts, crafting disciplines, recipe unlocks and the items a vendor takes instead of coin - and counts only the ones this item actually has. Hover it for the breakdown.",
+            "Ready blends six separate barriers - the coin and currency bill at buy-order prices, the currencies your wallet is short, time-gated daily crafts, crafting disciplines, recipe unlocks and the items a vendor takes instead of coin - and counts only the ones this item actually has. Hover it for the breakdown.",
         };
 
         private int MeasureCaptionsHeight(int barWidth)
@@ -2441,7 +2441,7 @@ namespace TaimisToolbench.Views
             return null;
         }
 
-        private static string ReadyTooltip(RankerRowMetrics metrics)
+        private string ReadyTooltip(RankerRowMetrics metrics)
         {
             if (metrics == null)
             {
@@ -2454,13 +2454,20 @@ namespace TaimisToolbench.Views
             var lines = new List<string>
             {
                 metrics.Kind == RankerReadinessKind.Measured
-                    ? "Ready blends the barriers this item actually has, each measured only against itself - nothing is converted into coin."
+                    ? "Ready blends the barriers this item actually has. Materials is the whole bill in coin, counting each currency this plan pays at its value in Settings. Every other barrier is measured only against itself."
                     : "The Ranker scored none of this item's barriers. Each line below says why, and the lines under the row say what is outstanding.",
                 "",
             };
             foreach (var gate in metrics.Gates)
             {
                 lines.Add(GateBlendLine(gate));
+            }
+
+            string unpriced = UnpricedCurrencyNotice(metrics);
+            if (unpriced != null)
+            {
+                lines.Add("");
+                lines.Add(unpriced);
             }
 
             if (metrics.Kind == RankerReadinessKind.Measured)
@@ -2521,6 +2528,56 @@ namespace TaimisToolbench.Views
             return " Barter counts the account-bound items a vendor takes instead of coin, each measured in its own units: " +
                 StatusText.Count(owed, "item") + " on this plan, " + outstanding + " still short.";
         }
+
+        /// <summary>
+        /// Names the currencies Materials had to leave out, so the figure
+        /// never quietly reports a smaller bill than the plan has. Null when
+        /// the plan spends none. Currencies still scores every one of them,
+        /// which is what makes leaving them out of a coin ratio honest
+        /// rather than free.
+        /// </summary>
+        private string UnpricedCurrencyNotice(RankerRowMetrics metrics)
+        {
+            var ids = metrics.MaterialsUnpricedCurrencyIds;
+            if (ids == null || ids.Count == 0)
+            {
+                return null;
+            }
+
+            // Distinct NAMES, not ids: every currency the session holds no
+            // metadata for resolves to the same offline placeholder, and
+            // "Currency, Currency" reads as a bug rather than a missing name.
+            var names = new List<string>(ids.Count);
+            foreach (int currencyId in ids)
+            {
+                string name = CurrencyDisplayResolver.ResolveName(
+                    currencyId, CurrencyMetadataFor(currencyId));
+                if (!names.Contains(name))
+                {
+                    names.Add(name);
+                }
+            }
+
+            string listed = string.Join(", ", names.Take(NamedUnpricedCurrencyLimit));
+            int rest = names.Count - Math.Min(names.Count, NamedUnpricedCurrencyLimit);
+            if (rest > 0)
+            {
+                listed += " and " + rest.ToString(CultureInfo.InvariantCulture) + " more";
+            }
+
+            return names.Count == 1
+                ? "No coin value exists for " + listed +
+                  ", so Materials leaves it out of its bill. Currencies still scores it."
+                : "No coin value exists for " + listed +
+                  ", so Materials leaves them out of its bill. Currencies still scores them.";
+        }
+
+        /// <summary>
+        /// How many unpriced currencies the Ready hover names before it
+        /// counts the rest. One shipped plan (the legendary ring Endless
+        /// Summer) spends five, which is a paragraph rather than a line.
+        /// </summary>
+        private const int NamedUnpricedCurrencyLimit = 3;
 
         private static string DaysTooltip(RankerRowMetrics metrics)
         {
@@ -2871,7 +2928,8 @@ namespace TaimisToolbench.Views
 
                     ct.ThrowIfCancellationRequested();
 
-                    var metrics = RankerReadinessCalculator.Compute(baseline, owned, availability, slot, mode);
+                    var metrics = RankerReadinessCalculator.Compute(
+                        baseline, owned, availability, slot, mode, valuation);
                     if (mode == RankerMode.Cascade)
                     {
                         cascade.Consume(owned);
