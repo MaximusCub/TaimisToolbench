@@ -119,7 +119,9 @@ namespace TaimisToolbench.Views
         // phaseProgress carries live coarse-phase events for the status
         // strip; requestLabel is a best-effort item-name label; the
         // valueOwnMaterials bool is a per-plan session choice, like useOwn.
-        private readonly Func<IReadOnlyList<PlanRequestItem>, bool, bool, PriceBasis, CancellationToken, IProgress<PlanStatus>, IProgress<PlanPhaseEvent>, string, Task<CraftingPlanResult>> _generateAsync;
+        // The last argument is called once, before the returned task
+        // completes, with what the generation's own account refresh did.
+        private readonly Func<IReadOnlyList<PlanRequestItem>, bool, bool, PriceBasis, CancellationToken, IProgress<PlanStatus>, IProgress<PlanPhaseEvent>, string, Action<PlanAccountRefresh>, Task<CraftingPlanResult>> _generateAsync;
         private readonly Func<PlanSolveContext, IReadOnlyDictionary<int, AcquisitionSource>, ISet<int>, CraftingPlanResult> _resolveOverridesSync;
         private readonly ModalDialog _modalDialog;
         // Session-scoped item stat lookup (ItemMetadataService's own cache -
@@ -811,7 +813,7 @@ namespace TaimisToolbench.Views
 
         #region Construction & status
         public CraftingPlanView(
-            Func<IReadOnlyList<PlanRequestItem>, bool, bool, PriceBasis, CancellationToken, IProgress<PlanStatus>, IProgress<PlanPhaseEvent>, string, Task<CraftingPlanResult>> generateAsync,
+            Func<IReadOnlyList<PlanRequestItem>, bool, bool, PriceBasis, CancellationToken, IProgress<PlanStatus>, IProgress<PlanPhaseEvent>, string, Action<PlanAccountRefresh>, Task<CraftingPlanResult>> generateAsync,
             ModalDialog modalDialog,
             IItemSearchProvider itemSearchProvider,
             ModuleSettings settings,
@@ -4153,14 +4155,22 @@ namespace TaimisToolbench.Views
 
             // Read here rather than when the result lands: a background
             // refresh committing mid-generation would otherwise make the
-            // finished plan describe a snapshot it never used.
+            // finished plan describe a snapshot it never used. The
+            // generation's own refresh reports through accountRefresh
+            // below and replaces this reading when it does.
             AccountSnapshot plannedSnapshot = useOwnMaterials ? _getSnapshot?.Invoke() : null;
+            PlanAccountRefresh accountRefresh = null;
 
             try
             {
                 var result = await _generateAsync(
                     requestItems, useOwnMaterials, _valueOwnMaterials, _priceBasis,
-                    ModuleLifetimeToken(), null, phaseProgress, requestLabel);
+                    ModuleLifetimeToken(), null, phaseProgress, requestLabel,
+                    refresh =>
+                    {
+                        accountRefresh = refresh;
+                        plannedSnapshot = refresh.UsedHoldings ? refresh.Snapshot : null;
+                    });
 
                 // Blish HUD's XNA host has no SynchronizationContext, so this
                 // continuation may resume on a ThreadPool thread. vm-building
@@ -4220,6 +4230,11 @@ namespace TaimisToolbench.Views
 
                     _lastRenderedWidth = _contentPanel.Width;
                     RenderPlan(vm);
+
+                    // After the plan is on screen: the dialog explains what
+                    // the plan in the background does not know, so raising
+                    // it over an empty panel would read as a failure.
+                    RaiseStaleAccountDataDialog(accountRefresh, result, useOwnMaterials);
                 });
             }
             catch (Exception ex)
@@ -4422,6 +4437,36 @@ namespace TaimisToolbench.Views
         /// StatusText.ForPlanAccountDataNote, which owns that decision and
         /// the wording.
         /// </summary>
+        /// <summary>
+        /// Tells the user their account snapshot did not refresh, but only
+        /// when this plan reads something the refresh failed to read - see
+        /// Services/StaleAccountDataWarning.cs. The status line under the
+        /// toolbar carries the failure either way.
+        /// </summary>
+        public void RaiseStaleAccountDataDialog(
+            PlanAccountRefresh refresh, CraftingPlanResult result, bool usedOwnMaterials)
+        {
+            if (refresh == null || !refresh.Failed)
+            {
+                return;
+            }
+
+            var notice = StaleAccountDataWarning.Evaluate(
+                refresh.FailedSources,
+                refresh.IncompleteCharacterNames,
+                refresh.Snapshot,
+                result,
+                usedOwnMaterials && refresh.UsedHoldings,
+                DateTime.UtcNow);
+
+            if (notice == null)
+            {
+                return;
+            }
+
+            _modalDialog?.ShowAcknowledgement(StaleAccountDataWarning.Compose(notice));
+        }
+
         private string PlanGeneratedStatus(AccountSnapshot planned)
         {
             string status = StatusText.Stamp("Plan generated", _planGeneratedAt);

@@ -94,6 +94,11 @@ namespace TaimisToolbench.Services
             // Blish-free classifier never needs a Gw2Sharp reference.
             var failedSourceExceptionTypeNames = new List<string>();
 
+            // Which reads failed, alongside how many. A caller deciding
+            // whether a stale snapshot matters to the plan in front of it
+            // needs the names, not the tally.
+            var failedSourceNames = new List<AccountDataSource>();
+
             // Every account-wide request is started before the first await,
             // so all six run together instead of one round trip after
             // another. The results are then applied in a fixed order on
@@ -137,6 +142,7 @@ namespace TaimisToolbench.Services
                 ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch wallet: {ex.GetType().Name} - {ex.Message}");
                 failedSources++;
                 failedSourceExceptionTypeNames.Add(ex.GetType().Name);
+                failedSourceNames.Add(AccountDataSource.Wallet);
             }
 
             // Bank
@@ -167,6 +173,7 @@ namespace TaimisToolbench.Services
                 ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch bank: {ex.GetType().Name} - {ex.Message}");
                 failedSources++;
                 failedSourceExceptionTypeNames.Add(ex.GetType().Name);
+                failedSourceNames.Add(AccountDataSource.Bank);
             }
 
             // Shared inventory
@@ -197,6 +204,7 @@ namespace TaimisToolbench.Services
                 ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch shared inventory: {ex.GetType().Name} - {ex.Message}");
                 failedSources++;
                 failedSourceExceptionTypeNames.Add(ex.GetType().Name);
+                failedSourceNames.Add(AccountDataSource.SharedInventory);
             }
 
             // Material storage
@@ -224,6 +232,7 @@ namespace TaimisToolbench.Services
                 ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch material storage: {ex.GetType().Name} - {ex.Message}");
                 failedSources++;
                 failedSourceExceptionTypeNames.Add(ex.GetType().Name);
+                failedSourceNames.Add(AccountDataSource.MaterialStorage);
             }
 
             // Legendary Armory
@@ -260,6 +269,7 @@ namespace TaimisToolbench.Services
                     ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch legendary armory: {ex.GetType().Name} - {ex.Message}");
                     failedSources++;
                     failedSourceExceptionTypeNames.Add(ex.GetType().Name);
+                    failedSourceNames.Add(AccountDataSource.LegendaryArmory);
                 }
             }
 
@@ -291,6 +301,7 @@ namespace TaimisToolbench.Services
                 ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot-fetch", $"Failed to fetch character list: {ex.GetType().Name} - {ex.Message}");
                 failedSources++;
                 failedSourceExceptionTypeNames.Add(ex.GetType().Name);
+                failedSourceNames.Add(AccountDataSource.Characters);
 
                 // A partially populated list would read as an affirmative
                 // "not trained" claim for characters never reached.
@@ -318,7 +329,8 @@ namespace TaimisToolbench.Services
                     failedSources,
                     totalSources,
                     failedSourceExceptionTypeNames,
-                    harvest?.IncompleteCharacterNames);
+                    harvest?.IncompleteCharacterNames,
+                    failedSourceNames);
             }
 
             // The three resolve passes write disjoint fields (item
