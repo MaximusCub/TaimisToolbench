@@ -55,7 +55,7 @@ Models/CompetencyOpportunity.cs                                                 
 Models/CostLine.cs                                                                      11
 Models/CraftingDecision.cs                                                              73
 Models/CraftingPlan.cs                                                                  31
-Models/CraftingPlanResult.cs                                                            211
+Models/CraftingPlanResult.cs                                                            219
 Models/CraftingTreeNode.cs                                                              236
 Models/CurrencyCost.cs                                                                  9
 Models/CurrencyDecisionDefaults.cs                                                      142
@@ -83,7 +83,7 @@ Models/PlanStatus.cs                                                            
 Models/PlanStep.cs                                                                      79
 Models/PlanViewModel.cs                                                                 520
 Models/PriceBasis.cs                                                                    32
-Models/RankerRowMetrics.cs                                                              213
+Models/RankerRowMetrics.cs                                                              221
 Models/RankerSlotAvailability.cs                                                        59
 Models/RankerWatchlistEntry.cs                                                          114
 Models/RecipeNode.cs                                                                    49
@@ -106,9 +106,9 @@ Models/TransmutedItemCopy.cs                                                    
 Models/TransmutedSkin.cs                                                                38
 Models/UsedMaterial.cs                                                                  19
 Models/VendorItemCostLine.cs                                                            42
-Models/VendorOffer.cs                                                                   77
+Models/VendorOffer.cs                                                                   86
 Models/VendorOfferDataset.cs                                                            15
-Module.cs                                                                               3347
+Module.cs                                                                               3349
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
@@ -129,7 +129,7 @@ Services/CompositeRecipeApiClient.cs                                            
 Services/CostLineValuation.cs                                                           121
 Services/CraftCompetencyEvaluator.cs                                                    125
 Services/CraftableItemSearchProvider.cs                                                 127
-Services/CraftingPlanPipeline.cs                                                        1823
+Services/CraftingPlanPipeline.cs                                                        1854
 Services/CraftingTreeBuilder.cs                                                         626
 Services/CurrencyDisplayResolver.cs                                                     236
 Services/CurrencyMetadataService.cs                                                     159
@@ -149,7 +149,7 @@ Services/FirstLoadSnapshotGate.cs                                               
 Services/GlyphButtonMetrics.cs                                                          69
 Services/GridLayout.cs                                                                  93
 Services/Gw2AccountRecipeClient.cs                                                      30
-Services/Gw2AccountSnapshotService.cs                                                   909
+Services/Gw2AccountSnapshotService.cs                                                   738
 Services/Gw2ApiConnectionLimit.cs                                                       71
 Services/Gw2ItemApiClient.cs                                                            271
 Services/Gw2PriceApiClient.cs                                                           76
@@ -221,11 +221,11 @@ Services/PlanStripStatusBoard.cs                                                
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     597
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        1931
+Services/PlanViewModelBuilder.cs                                                        1959
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
-Services/RankerReadinessCalculator.cs                                                   894
+Services/RankerReadinessCalculator.cs                                                   960
 Services/RankerReadinessRamp.cs                                                         265
 Services/RankerReadinessWeights.cs                                                      61
 Services/RankerResultCache.cs                                                           263
@@ -347,7 +347,7 @@ Views/DialogWindow.cs                                                           
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    428
 Views/PlanHistoryTabContent.cs                                                          1529
-Views/RankerTabContent.cs                                                               3151
+Views/RankerTabContent.cs                                                               3209
 Views/Rendering/ClickSound.cs                                                           197
 Views/Rendering/CaretKeyButton.cs                                                       109
 Views/Rendering/CloseKeyButton.cs                                                       64

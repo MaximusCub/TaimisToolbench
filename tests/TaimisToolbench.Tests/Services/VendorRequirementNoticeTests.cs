@@ -33,7 +33,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Currency", Id = TokenCurrencyId, Count = 3 },
                 },
                 MerchantName = "Quartermaster",
-                Locations = new List<string> { "Outer Ring" },
                 Requirement = requirement,
             };
         }

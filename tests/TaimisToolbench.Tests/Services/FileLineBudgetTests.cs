@@ -221,11 +221,26 @@ namespace TaimisToolbench.Tests.Services
             foreach (var child in Directory.GetDirectories(directory))
             {
                 string name = Path.GetFileName(child);
-                if (!ExcludedDirectories.Contains(name, StringComparer.OrdinalIgnoreCase))
+                if (!ExcludedDirectories.Contains(name, StringComparer.OrdinalIgnoreCase)
+                    && !IsNestedCheckout(child))
                 {
                     Collect(root, child, sizes);
                 }
             }
+        }
+
+        /// <summary>
+        /// A checkout of this same repository nested inside the working tree.
+        /// A `git worktree` writes a `.git` FILE there rather than a
+        /// directory, and gitignore keeps the whole subtree out of
+        /// `git ls-files`, so walking into one counts a second copy of every
+        /// source against the budgets - each at whatever length it happens to
+        /// have on that branch.
+        /// </summary>
+        private static bool IsNestedCheckout(string directory)
+        {
+            string marker = Path.Combine(directory, ".git");
+            return File.Exists(marker) || Directory.Exists(marker);
         }
 
         /// <summary>Newlines, which is what `wc -l` counts and what every
