@@ -203,10 +203,8 @@ namespace TaimisToolbench.Services
         /// <para>
         /// "n/a" is a barrier this item does not have. A dash is a barrier
         /// it has that nothing measured, and a missing gate object, which is
-        /// a row that has never been measured at all. Neither prints a
-        /// percentage: an inapplicable gate used to read 100% here, so an
-        /// API key without the recipes permission drew a full green Recipes
-        /// cell for a set of unlocks the module had not looked at.
+        /// a row that has never been measured at all. Neither may print a
+        /// percentage, because a percentage here reads as a measurement.
         /// </para>
         /// </summary>
         public static string FormatGate(RankerGateScore gate)
@@ -399,9 +397,7 @@ namespace TaimisToolbench.Services
         /// The item-id twin of <see cref="ScoreCurrencies"/>: the account-bound
         /// tokens a vendor takes in place of coin, which
         /// CraftingPlan.BarterItemCosts keeps out of TotalCoinCost because
-        /// they have no Trading Post price to fold in. Before this gate
-        /// existed, a plan that paid one was scored as though that cost was
-        /// not there.
+        /// they have no Trading Post price to fold in.
         /// <para>
         /// The holding comes from the plan result rather than from the
         /// cascade ledger the currency gate reads: the solver never sees the
@@ -539,9 +535,8 @@ namespace TaimisToolbench.Services
 
             // Null means no discipline data was ever captured, which is
             // distinct from captured-and-empty. Never fabricate a "not
-            // trained" claim for a snapshot that did not look - and never
-            // let the cell read as satisfied either, which is what
-            // Unmeasured buys over the plain "does not apply" this was.
+            // trained" claim for a snapshot that did not look, and never let
+            // the cell read as satisfied either.
             var characters = owned.CharacterDisciplines;
             if (characters == null)
             {
@@ -636,9 +631,7 @@ namespace TaimisToolbench.Services
             // surfaces count one set. IsMissing null means the
             // learned-recipes check never ran (an API key without the
             // recipes permission), which is an account gap and leaves the
-            // gate Unmeasured rather than satisfied - it used to leave it
-            // "does not apply", and the cell then drew a full 100% bar for
-            // unlocks the module had not looked at.
+            // gate Unmeasured rather than satisfied.
             int counted = 0;
             int known = 0;
             bool sawUncheckable = false;

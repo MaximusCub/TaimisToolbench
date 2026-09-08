@@ -97,12 +97,6 @@ namespace TaimisToolbench.Services
         /// PlanViewModelBuilder.BuildRecipesSection and
         /// RankerReadinessCalculator.ScoreRecipes, so the plan's Required
         /// Recipes header and the Ranker's Recipes cell count one set.
-        /// <para>
-        /// They did not. The Ranker dropped auto-learned recipes and the
-        /// plan listed them, so The Bifrost scored 6 required recipes while
-        /// its plan header said "showing 6 missing of 15" - the 9 the game
-        /// hands you on levelling the discipline.
-        /// </para>
         /// </summary>
         public static bool HasNoUnlockBarrier(bool isAutoLearned, IReadOnlyList<string> disciplines)
         {
@@ -144,8 +138,9 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// Section header title. Always states the TOTAL recipe count, after
-        /// the Mystic Forge filter BuildRecipesSection applied upstream, so
-        /// the header never understates what the plan needs.
+        /// the <see cref="HasNoUnlockBarrier"/> filter BuildRecipesSection
+        /// applied upstream, so the header never understates what the plan
+        /// needs and never counts a recipe nobody can be missing.
         /// <para>
         /// The word "missing" is used only when every visible row is
         /// actually Missing. The filter also keeps rows the module could not
