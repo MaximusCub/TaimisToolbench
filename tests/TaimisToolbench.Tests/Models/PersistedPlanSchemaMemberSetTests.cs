@@ -29,6 +29,37 @@ namespace TaimisToolbench.Tests.Models
         }
 
         [Fact]
+        public void MinimumReadableSchemaVersion_IsStillThree()
+        {
+            // Raising this is the only act that costs users a saved result,
+            // so it may not happen as a side effect of a bump, a refactor
+            // or a merge. It sits at 3 because the 3 -> 4 bump only removed
+            // a member; the reasoning per version is on the constant.
+            Assert.True(
+                PersistedPlan.MinimumReadableSchemaVersion == 3,
+                "PersistedPlan.MinimumReadableSchemaVersion is "
+                + PersistedPlan.MinimumReadableSchemaVersion
+                + ", not 3. Every user whose saved plan was written at a version below "
+                + "that floor loses its solved result on upgrade and has to press Generate "
+                + "Plan again. Move this line only for a bump that RENAMES or RETYPES a "
+                + "member, and say which member in the commit message - an addition or a "
+                + "removal is readable and must leave the floor where it is.");
+        }
+
+        [Fact]
+        public void MinimumReadableSchemaVersion_IsNotAboveCurrent()
+        {
+            // A floor above the stamp every write uses would reject the
+            // module's own freshly saved plan on the next module load.
+            Assert.True(
+                PersistedPlan.MinimumReadableSchemaVersion <= PersistedPlan.CurrentSchemaVersion,
+                "PersistedPlan.MinimumReadableSchemaVersion ("
+                + PersistedPlan.MinimumReadableSchemaVersion
+                + ") is above CurrentSchemaVersion (" + PersistedPlan.CurrentSchemaVersion
+                + "), which leaves no readable version at all.");
+        }
+
+        [Fact]
         public void PersistedPlanGraph_PublicMemberSignature_MatchesSnapshot()
         {
             string[] actual = ModelGraphSignatures.For(typeof(PersistedPlan));
