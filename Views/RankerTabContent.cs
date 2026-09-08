@@ -1455,7 +1455,7 @@ namespace TaimisToolbench.Views
                 row.Panel, entry.IconUrl, rarity,
                 bands.IconX, MainLineIconY, row.FullName, UiFonts.Status,
                 bands.NameX + bands.NameWidth, 0, 0, bands.NameX, MainLineNameY,
-                hover, iconSize: RankerRowLayout.IconSize);
+                ItemIconTier.BagSlot, hover);
 
             // Chip and placeholder are both exactly StatusCellWidth wide
             // (MeasureRowCells measures whichever of the two this row has),
@@ -1526,7 +1526,8 @@ namespace TaimisToolbench.Views
             {
                 row.RemainingCell = CoinCurrencyRenderer.RenderValueCellRightAligned(
                     row.Panel, metrics.RemainingCoinCost, null,
-                    RemainingCellRightEdge(bands, row), MainLineTextY, UiFonts.Body);
+                    RemainingCellRightEdge(bands, row), MainLineTextY, UiFonts.Body,
+                    CurrencyFactsFor);
             }
 
             row.Up = null;
@@ -1859,10 +1860,9 @@ namespace TaimisToolbench.Views
 
                 string fullName = CurrencyName(shortfall);
                 row.CurrencyNameFulls.Add(fullName);
-                row.CurrencyIconFrames.Add(IconControls.CreateItemIcon(
-                    row.Panel, CurrencyIconUrl(shortfall), ItemIconFrame.Currency(),
-                    0, y, ItemIconTier.CurrencyListRow,
-                    CurrencyHover(shortfall.CurrencyId, fullName)));
+                row.CurrencyIconFrames.Add(IconControls.CreateCurrencyIcon(
+                    row.Panel, shortfall.CurrencyId, 0, y,
+                    ItemIconTier.CurrencyListRow, CurrencyFactsFor));
                 row.CurrencyNameLabels.Add(new Label
                 {
                     Font = UiFonts.Caption,
@@ -2269,20 +2269,10 @@ namespace TaimisToolbench.Views
         /// drops the line rather than guessing at it.
         /// </para>
         /// </summary>
-        private ItemIconTooltip CurrencyHover(int currencyId, string fullName)
+        private CurrencyTooltipFacts CurrencyFactsFor(int currencyId)
         {
-            return ItemIconTooltip.ForCurrency(
-                fullName,
-                () =>
-                {
-                    var metadata = CurrencyMetadataFor(currencyId);
-                    return CurrencyTooltipFacts.For(
-                        fullName,
-                        CurrencyDisplayResolver.ResolveIconUrl(currencyId, metadata),
-                        CurrencyDisplayResolver.ResolveDescription(currencyId, metadata),
-                        null);
-                },
-                IconWikiTarget.ItemPage(fullName));
+            return CurrencyTooltipFacts.ForCurrencyId(
+                currencyId, CurrencyMetadataFor(currencyId), (int?)null);
         }
 
         private string CurrencyIconUrl(RankerCurrencyShortfall shortfall)

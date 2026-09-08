@@ -24,13 +24,23 @@ namespace TaimisToolbench.Tests.Services
     /// </summary>
     public class IconStandardCallSiteTests
     {
-        // Every entry point that builds an icon a reader can hover.
+        // Every entry point that builds an ITEM icon a reader can hover.
+        // The item half still hands over a composed intent, so these are
+        // the calls that have to name one.
         private static readonly string[] IconCalls =
         {
             "IconControls.CreateItemIcon(",
             "IconControls.CreateItemIconDeferredArt(",
-            "IconControls.CreateCurrencyIcon(",
             "IconNameRowHelpers.CreateIconAndEllipsizedName(",
+        };
+
+        // The currency entry points take an ID and a bucket, and build the
+        // whole hover themselves. A caller has nothing left to get wrong,
+        // so the audit asks only that it named a bucket.
+        private static readonly string[] CurrencyCalls =
+        {
+            "IconControls.CreateCurrencyIcon(",
+            "IconControls.CreateCurrencyIconDeferredArt(",
         };
 
         // The factories that produce a hover. None() is deliberately absent:
@@ -50,14 +60,10 @@ namespace TaimisToolbench.Tests.Services
             "Views/Rendering/IconNameRowHelpers.cs",
         };
 
-        // The files that still call a pre-tier overload, each owned by the
-        // branch that will migrate it. Removing an entry is the act of the
-        // commit that migrates its call.
-        private static readonly string[] PreTier =
-        {
-            "Views/RankerTabContent.cs",
-            "Views/Rendering/IconNameRowHelpers.cs",
-        };
+        // Empty, and it should stay that way. Both overloads that took a
+        // raw pixel size are deleted, so a bucket is now the only way to
+        // ask for one.
+        private static readonly string[] PreTier = new string[0];
 
         private static string RepoRoot()
         {
@@ -222,7 +228,81 @@ namespace TaimisToolbench.Tests.Services
                 }
             }
 
-            Assert.True(sites >= 15, "Found only " + sites + " icon sites.");
+            Assert.True(sites >= 12, "Found only " + sites + " item icon sites.");
+            Assert.Equal(new string[0], offenders.ToArray());
+        }
+
+        /// <summary>
+        /// A currency icon takes an id and a bucket. It cannot be handed a
+        /// name, an icon url, a description or a holding, so it cannot be
+        /// handed a different one from the next site.
+        /// </summary>
+        [Fact]
+        public void EveryCurrencyIconSiteNamesOnlyAnIdAndABucket()
+        {
+            var files = ModuleSources();
+            var offenders = new List<string>();
+            int sites = 0;
+
+            foreach (var call in CallsTo(files, CurrencyCalls))
+            {
+                sites++;
+                if (call.Item3 == null)
+                {
+                    offenders.Add(call.Item1 + ":" + call.Item2 + " - unbalanced call");
+                    continue;
+                }
+
+                if (call.Item1 == "Views/Rendering/IconControls.cs")
+                {
+                    continue;
+                }
+
+                if (!call.Item3.Contains("ItemIconTier."))
+                {
+                    offenders.Add(call.Item1 + ":" + call.Item2 + " - names no ItemIconTier");
+                }
+
+                if (call.Item3.Contains("ItemIconTooltip.") || call.Item3.Contains("CurrencyTooltipFacts.For"))
+                {
+                    offenders.Add(
+                        call.Item1 + ":" + call.Item2 + " - builds its own facts or hover");
+                }
+            }
+
+            Assert.True(sites >= 6, "Found only " + sites + " currency icon sites.");
+            Assert.Equal(new string[0], offenders.ToArray());
+        }
+
+        /// <summary>
+        /// A size bucket is the only way to ask for an icon size. Both
+        /// overloads that took a raw pixel number are gone, so a call site
+        /// cannot pick one at all.
+        /// </summary>
+        [Fact]
+        public void NoIconEntryPointTakesARawPixelSize()
+        {
+            // Only the internal entry points. CreateFrame below them is
+            // private plumbing and still works in pixels, which is where
+            // the tier's own numbers land.
+            var offenders = new List<string>();
+            foreach (var file in new[]
+            {
+                "Views/Rendering/IconControls.cs",
+                "Views/Rendering/IconNameRowHelpers.cs",
+            })
+            {
+                string text = Read(file);
+                foreach (Match m in Regex.Matches(text, @"internal static [^\n]*\("))
+                {
+                    string args = Arguments(text, m.Index + m.Length - 1);
+                    if (args != null && args.Contains("int iconSize"))
+                    {
+                        offenders.Add(file + ": " + m.Value.Trim());
+                    }
+                }
+            }
+
             Assert.Equal(new string[0], offenders.ToArray());
         }
 

@@ -52,13 +52,21 @@ namespace TaimisToolbench.Views.Rendering
         // pre-stats tooltip when it has nothing for this item.
         private readonly Func<int, ItemStatBlock> _getItemStatBlock;
 
+        /// <summary>Everything one currency's tooltip shows, from its id.
+        /// Required, not defaulted: an optional resolver is how one
+        /// surface came to hand its currency icons less than another.</summary>
+        private readonly Func<int, CurrencyTooltipFacts> _getCurrencyFacts;
+
         internal ShoppingListSectionRenderer(
             ISectionRelayoutSink sink, TableSortState<PlanTableColumn> sortState, Action onSortChanged,
+            Func<int, CurrencyTooltipFacts> getCurrencyFacts,
             Func<int, ItemStatBlock> getItemStatBlock = null)
         {
             _sink = sink ?? throw new ArgumentNullException(nameof(sink));
             _sortState = sortState ?? throw new ArgumentNullException(nameof(sortState));
             _onSortChanged = onSortChanged ?? throw new ArgumentNullException(nameof(onSortChanged));
+            _getCurrencyFacts = getCurrencyFacts
+                ?? throw new ArgumentNullException(nameof(getCurrencyFacts));
             _getItemStatBlock = getItemStatBlock;
         }
 
@@ -433,8 +441,10 @@ namespace TaimisToolbench.Views.Rendering
             // never a blank cell.
             var eachCell = CoinCurrencyRenderer.RenderValueCellRightAligned(
                 rowPanel, row.UnitCoinValue, row.UnitCurrencyCosts, edges.EachRightEdge, RowTextY, font,
-                coinBundleQuantity: row.UnitCoinBundleQuantity);
-            var totalCell = CoinCurrencyRenderer.RenderValueCellRightAligned(rowPanel, row.CoinValue, row.CurrencyCosts, edges.TotalRightEdge, RowTextY, font);
+                _getCurrencyFacts, coinBundleQuantity: row.UnitCoinBundleQuantity);
+            var totalCell = CoinCurrencyRenderer.RenderValueCellRightAligned(
+                rowPanel, row.CoinValue, row.CurrencyCosts, edges.TotalRightEdge, RowTextY, font,
+                _getCurrencyFacts);
 
             // An UNKNOWN row's dash takes the badge's own red, so "no
             // source" and "no price" read as one statement about the row

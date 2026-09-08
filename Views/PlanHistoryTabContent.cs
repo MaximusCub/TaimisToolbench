@@ -615,7 +615,7 @@ namespace TaimisToolbench.Views
 
             row.CostCell = CoinCurrencyRenderer.RenderValueCellRightAligned(
                 row.Panel, entry.TotalCoinCostAtGeneration, null, bands.CostRightEdge,
-                PlanHistoryRowLayout.MainLineTextY, UiFonts.Body);
+                PlanHistoryRowLayout.MainLineTextY, UiFonts.Body, CurrencyFactsFor);
 
             row.WhenLabel = LabelHelpers.CreateRightAlignedLabel(
                 row.Panel, WhenText(entry), UiFonts.Body, StatusColor,
@@ -739,6 +739,18 @@ namespace TaimisToolbench.Views
             return ItemIconTooltip.ForItem(
                 identity, stats, () => extras,
                 IconWikiTarget.ItemPage(itemLines.Count > 0 ? itemLines[0] : null));
+        }
+
+        /// <summary>
+        /// This tab stores a plan's coin total and nothing about
+        /// currencies, so a currency here is named from the module's own
+        /// id table and carries no prose and no holding. The cells above
+        /// pass no currency amounts, so nothing calls this today; it exists
+        /// because the resolver is required rather than defaulted.
+        /// </summary>
+        private static CurrencyTooltipFacts CurrencyFactsFor(int currencyId)
+        {
+            return CurrencyTooltipFacts.ForCurrencyEntry(currencyId, null, null);
         }
 
         /// <summary>

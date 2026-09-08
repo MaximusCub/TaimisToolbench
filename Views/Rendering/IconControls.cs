@@ -2,6 +2,7 @@ using Blish_HUD;
 using Blish_HUD.Content;
 using Blish_HUD.Controls;
 using Microsoft.Xna.Framework;
+using System;
 using TaimisToolbench.Services;
 
 namespace TaimisToolbench.Views.Rendering
@@ -85,24 +86,6 @@ namespace TaimisToolbench.Views.Rendering
         }
 
         /// <summary>
-        /// The pre-tier signature, kept ONLY so the one row builder still
-        /// owned by an in-flight branch keeps compiling until it migrates -
-        /// Views/Rendering/IconNameRowHelpers.cs, which forwards the size
-        /// its own pre-tier caller passed. The defaults are gone so nothing
-        /// new can drift into it by accident, and the tests workflow's
-        /// "Every item icon renders at a named tier" step allow-lists
-        /// exactly that file and fails on any other caller.
-        /// </summary>
-        internal static Panel CreateItemIcon(
-            Panel parent, string iconUrl, string rarity, int x, int y,
-            int iconSize, int borderThickness, ItemIconTooltip tooltip)
-        {
-            return CreateFramedIcon(
-                parent, iconUrl, ItemIconFrame.ForRarity(rarity), x, y,
-                iconSize, borderThickness, tooltip);
-        }
-
-        /// <summary>
         /// THE currency icon: a wallet currency, in the module's one
         /// currency treatment so no surface has to choose a border of its
         /// own. Takes one of the two CURRENCY tiers, and the tier carries
@@ -118,24 +101,82 @@ namespace TaimisToolbench.Views.Rendering
         /// advance, a term in the minimum-window-width derivation, does not
         /// move.
         /// </para>
-        /// Takes the same <see cref="ItemIconTooltip"/> every other icon
-        /// does, so a currency icon gets the same second box and the same
-        /// right-click.
+        /// The caller passes an ID and a tier, and nothing else. Art,
+        /// name, prose, wallet holding, border and wiki page all come from
+        /// the id through <paramref name="getFacts"/>. A caller that could
+        /// pass a name or an icon url is a caller that could pass a
+        /// different one from the next site, which is how the Recipe Tree
+        /// came to show a bare name where the Settings grid showed the
+        /// game's full box.
+        /// <para>
+        /// <paramref name="getFacts"/> is read TWICE and the two reads mean
+        /// different things. The build-time read supplies the art and the
+        /// name, which are fixed for an id. The hover-time read supplies
+        /// the box, including the wallet holding, which is not.
+        /// </para>
         /// </summary>
         internal static Panel CreateCurrencyIcon(
-            Panel parent, string iconUrl, int x, int y, ItemIconTier tier, ItemIconTooltip tooltip)
+            Panel parent, int currencyId, int x, int y, ItemIconTier tier,
+            Func<int, CurrencyTooltipFacts> getFacts)
         {
+            return CreateCurrencyIcon(parent, currencyId, x, y, tier, getFacts, null);
+        }
+
+        /// <summary>The same currency icon, plus this surface's own tips
+        /// for the second box. They lead it; the wiki line still ends
+        /// it.</summary>
+        internal static Panel CreateCurrencyIcon(
+            Panel parent, int currencyId, int x, int y, ItemIconTier tier,
+            Func<int, CurrencyTooltipFacts> getFacts, Func<TooltipContent> tips)
+        {
+            var built = BuildCurrencyHover(currencyId, getFacts, tips);
             Panel panel = IconFrameGeometry.CurrencyIsFramed(tier)
                 ? CreateFrame(
-                    parent, iconUrl, ItemIconFrame.Currency(), x, y,
+                    parent, built.IconUrl, ItemIconFrame.Currency(), x, y,
                     ItemIconTiers.ArtSize(tier), ItemIconTiers.BorderThickness(tier),
-                    tooltip.PlainText, deferArt: false, artSquare: out _)
+                    built.Hover.PlainText, deferArt: false, artSquare: out _)
                 : CreateUnframedIcon(
-                    parent, iconUrl, x, y, ItemIconTiers.FrameSize(tier),
-                    tooltip.PlainText, deferArt: false);
+                    parent, built.IconUrl, x, y, ItemIconTiers.FrameSize(tier),
+                    built.Hover.PlainText, deferArt: false);
 
-            tooltip.StampOnIconTree(panel);
+            built.Hover.StampOnIconTree(panel);
             return panel;
+        }
+
+        /// <summary>
+        /// The same currency icon with its picture request held back - the
+        /// Snapshot tab's wallet rows, which build every row up front. See
+        /// <see cref="DeferredIconArt"/> for the per-icon cost this avoids.
+        /// </summary>
+        internal static DeferredIconArt CreateCurrencyIconDeferredArt(
+            Panel parent, int currencyId, int x, int y, ItemIconTier tier,
+            Func<int, CurrencyTooltipFacts> getFacts)
+        {
+            var built = BuildCurrencyHover(currencyId, getFacts, null);
+            var panel = CreateFrame(
+                parent, built.IconUrl, ItemIconFrame.Currency(), x, y,
+                ItemIconTiers.ArtSize(tier), ItemIconTiers.BorderThickness(tier),
+                built.Hover.PlainText, deferArt: true, artSquare: out Panel artSquare);
+
+            built.Hover.StampOnIconTree(panel);
+            return new DeferredIconArt(artSquare, built.IconUrl);
+        }
+
+        private static (string IconUrl, ItemIconTooltip Hover) BuildCurrencyHover(
+            int currencyId, Func<int, CurrencyTooltipFacts> getFacts, Func<TooltipContent> tips)
+        {
+            if (getFacts == null)
+            {
+                throw new System.ArgumentNullException(nameof(getFacts));
+            }
+
+            var known = getFacts(currencyId);
+            var hover = ItemIconTooltip.ForCurrency(
+                known.Name,
+                () => getFacts(currencyId),
+                tips,
+                IconWikiTarget.ItemPage(known.Name));
+            return (known.IconUrl, hover);
         }
 
         private static Panel CreateFramedIcon(

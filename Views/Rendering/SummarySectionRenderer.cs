@@ -22,6 +22,7 @@ namespace TaimisToolbench.Views.Rendering
     {
         private readonly ISectionRelayoutSink _sink;
         private readonly Func<int, ItemStatBlock> _getItemStatBlock;
+        private readonly Func<int, CurrencyTooltipFacts> _getCurrencyFacts;
 
         // Registers one control as a scroll anchor under a stable key
         // (Services/ScrollAnchorMath). Optional - a null one simply leaves
@@ -29,11 +30,15 @@ namespace TaimisToolbench.Views.Rendering
         private readonly Action<string, Control> _registerScrollAnchor;
 
         internal SummarySectionRenderer(
-            ISectionRelayoutSink sink, Func<int, ItemStatBlock> getItemStatBlock = null,
+            ISectionRelayoutSink sink,
+            Func<int, CurrencyTooltipFacts> getCurrencyFacts,
+            Func<int, ItemStatBlock> getItemStatBlock = null,
             Action<string, Control> registerScrollAnchor = null)
         {
             _sink = sink ?? throw new ArgumentNullException(nameof(sink));
             _getItemStatBlock = getItemStatBlock;
+            _getCurrencyFacts = getCurrencyFacts
+                ?? throw new ArgumentNullException(nameof(getCurrencyFacts));
             _registerScrollAnchor = registerScrollAnchor;
         }
 
@@ -1069,29 +1074,31 @@ namespace TaimisToolbench.Views.Rendering
                 // they actually belong to - a barter row's id is an ITEM
                 // id, which the wallet and /v2/currencies know nothing
                 // about (see PlanRowViewModel.IsBarterItemCost).
-                IconControls.CreateItemIcon(
-                    rowPanel, row.IconUrl,
-                    row.IsBarterItemCost
-                        ? ItemIconFrame.ForRarity(row.Rarity)
-                        : ItemIconFrame.Currency(),
-                    SummarySectionLayoutMath.CurrencyIconX, iconY,
-                    ItemIconTier.CurrencyListRow,
-                    row.IsBarterItemCost
-                        ? ItemIconTooltip.ForItem(
+                // The two row kinds this table carries go to the two
+                // icon entry points by the id space they belong to. A
+                // barter row's id is an ITEM id, which the wallet and
+                // /v2/currencies know nothing about (see
+                // PlanRowViewModel.IsBarterItemCost).
+                if (row.IsBarterItemCost)
+                {
+                    IconControls.CreateItemIcon(
+                        rowPanel, row.IconUrl, ItemIconFrame.ForRarity(row.Rarity),
+                        SummarySectionLayoutMath.CurrencyIconX, iconY,
+                        ItemIconTier.CurrencyListRow,
+                        ItemIconTooltip.ForItem(
                             ItemTooltipIdentity.ForItem(row.Label ?? "", row.IconUrl, row.Rarity),
                             _getItemStatBlock == null || row.ItemId <= 0
                                 ? (Func<ItemStatBlock>)null
                                 : () => _getItemStatBlock(row.ItemId),
-                            IconWikiTarget.ItemPage(row.Label))
-                        // CurrencyOwnedQuantity is already the raw
-                        // unclamped wallet holding the game's tooltip
-                        // states.
-                        : ItemIconTooltip.ForCurrency(
-                            row.Label,
-                            () => CurrencyTooltipFacts.For(
-                                row.Label, row.IconUrl, row.CurrencyDescription,
-                                row.CurrencyOwnedQuantity),
                             IconWikiTarget.ItemPage(row.Label)));
+                }
+                else
+                {
+                    IconControls.CreateCurrencyIcon(
+                        rowPanel, row.CurrencyId,
+                        SummarySectionLayoutMath.CurrencyIconX, iconY,
+                        ItemIconTier.CurrencyListRow, _getCurrencyFacts);
+                }
             }
 
             const int nameX = SummarySectionLayoutMath.CurrencyNameX;
@@ -1178,7 +1185,7 @@ namespace TaimisToolbench.Views.Rendering
         /// only thing that names the currency, so it is never drawn
         /// without one.
         /// </summary>
-        private static TradeUpNoteHandle CreateTradeUpNote(
+        private TradeUpNoteHandle CreateTradeUpNote(
             PlanRowViewModel row, Panel rowPanel,
             SummarySectionLayoutMath.CurrencyColumnEdges edges, BitmapFont font,
             int heldBandWidth)
@@ -1205,19 +1212,12 @@ namespace TaimisToolbench.Views.Rendering
                 Parent = rowPanel,
             });
 
-            string tradeUpName = row.TradeUpCurrencyName;
-            string tradeUpIconUrl = row.TradeUpCurrencyIconUrl;
-            int? tradeUpHeld = row.TradeUpCurrencyHeld;
             var icon = IconControls.CreateCurrencyIcon(
-                rowPanel, tradeUpIconUrl,
+                rowPanel, row.TradeUpCurrencyId,
                 SummarySectionLayoutMath.TradeUpNoteIconX(edges.NoteX, heldBandWidth, heldWidth),
                 iconY,
                 ItemIconTier.CurrencyBarRun,
-                ItemIconTooltip.ForCurrency(
-                    tradeUpName,
-                    () => CurrencyTooltipFacts.For(
-                        tradeUpName, tradeUpIconUrl, null, tradeUpHeld),
-                    IconWikiTarget.ItemPage(tradeUpName)));
+                _getCurrencyFacts);
 
             var buysLabel = LabelHelpers.WithDescenderClearance(new Label()
             {

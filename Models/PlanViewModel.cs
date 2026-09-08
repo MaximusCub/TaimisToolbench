@@ -253,6 +253,11 @@ namespace TaimisToolbench.Models
     {
         public long Amount { get; set; }
 
+        // The wallet currency this amount is of. Set by
+        // CurrencyDisplayResolver alongside Name and IconUrl, so an icon
+        // drawn from this view model can resolve its whole tooltip.
+        public int CurrencyId { get; set; }
+
         public string Name { get; set; }
 
         public string IconUrl { get; set; }
@@ -451,6 +456,8 @@ namespace TaimisToolbench.Models
         // is capped at what the row still needs, so it never claims a
         // holding covers more than the plan asks for. Null/0 everywhere
         // else, which is what suppresses the table's Note column.
+        public int TradeUpCurrencyId { get; set; }
+
         public string TradeUpCurrencyName { get; set; }
 
         public string TradeUpCurrencyIconUrl { get; set; }
@@ -458,6 +465,12 @@ namespace TaimisToolbench.Models
         public int? TradeUpCurrencyHeld { get; set; }
 
         public int TradeUpBuysQuantity { get; set; }
+
+        // The wallet currency this row is about, on a CurrencyCost row
+        // that is not a barter item. Zero elsewhere. The row's icon
+        // resolves its whole tooltip from this id, so the table and the
+        // Recipe Tree cannot show different boxes for the same currency.
+        public int CurrencyId { get; set; }
 
         // Identity of one CurrencyCost row, stable across a re-solve: the
         // row's id with the id space it came from written into the string.

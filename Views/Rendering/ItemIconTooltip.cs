@@ -133,6 +133,20 @@ namespace TaimisToolbench.Views.Rendering
         internal static ItemIconTooltip ForCurrency(
             string name, Func<CurrencyTooltipFacts> getFacts, IconWikiTarget wiki)
         {
+            return ForCurrency(name, getFacts, null, wiki);
+        }
+
+        /// <summary>
+        /// The same currency hover plus this surface's own tips - a unit
+        /// price on a Recipe Tree row. They lead the second box; the wiki
+        /// line still ends it.
+        /// </summary>
+        internal static ItemIconTooltip ForCurrency(
+            string name,
+            Func<CurrencyTooltipFacts> getFacts,
+            Func<TooltipContent> tips,
+            IconWikiTarget wiki)
+        {
             if (getFacts == null)
             {
                 throw new ArgumentNullException(nameof(getFacts));
@@ -141,7 +155,7 @@ namespace TaimisToolbench.Views.Rendering
             return new ItemIconTooltip(
                 () => SecondTooltipBox.Attach(
                     CurrencyTooltipComposer.BuildContent(getFacts()),
-                    SecondTooltipBox.Compose((TooltipContent)null, wiki.Hint)),
+                    SecondTooltipBox.Compose(tips == null ? null : tips(), wiki.Hint)),
                 name,
                 wiki);
         }

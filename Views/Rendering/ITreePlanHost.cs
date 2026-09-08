@@ -1,5 +1,6 @@
 using Blish_HUD.Controls;
 using TaimisToolbench.Models;
+using TaimisToolbench.Services;
 using System;
 using System.Collections.Generic;
 
@@ -61,6 +62,11 @@ namespace TaimisToolbench.Views.Rendering
         /// re-solve.
         /// </summary>
         PlanViewModel CurrentPlan { get; set; }
+
+        /// <summary>Everything one currency's tooltip shows, from its id.
+        /// The tree's currency rows and its cost cells both read it, so
+        /// they cannot show different boxes for the same currency.</summary>
+        CurrencyTooltipFacts CurrencyFactsFor(int currencyId);
 
         /// <summary>
         /// The content width the plan is laid out at RIGHT NOW, never a

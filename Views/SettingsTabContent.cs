@@ -2323,29 +2323,22 @@ namespace TaimisToolbench.Views
                 return;
             }
 
-            int currencyId = row.Id;
-            string currencyName = row.Name;
-            row.Icon = IconControls.CreateItemIcon(
+            row.Icon = IconControls.CreateCurrencyIcon(
                 row.Cell,
-                CurrencyDisplayResolver.ResolveIconUrl(currencyId, _currencyMetadata),
-                // A currency has no rarity to resolve: neutral by intent,
-                // the same call ItemIconFrame.Currency() records at the
-                // Snapshot tab's wallet rows.
-                ItemIconFrame.Currency(),
+                row.Id,
                 SettingsCurrencyGridLayout.CellIconX,
                 SettingsCurrencyGridLayout.CellIconY,
                 ItemIconTier.CurrencyListRow,
-                ItemIconTooltip.ForCurrency(
-                    currencyName,
-                    // No balance: this tab reads no wallet snapshot, and
-                    // null is "not known", which drops the line rather than
-                    // claiming the player holds none.
-                    () => CurrencyTooltipFacts.For(
-                        currencyName,
-                        CurrencyDisplayResolver.ResolveIconUrl(currencyId, _currencyMetadata),
-                        CurrencyDisplayResolver.ResolveDescription(currencyId, _currencyMetadata),
-                        null),
-                    IconWikiTarget.ItemPage(currencyName)));
+                CurrencyFactsFor);
+        }
+
+        /// <summary>No balance: this tab reads no wallet snapshot, and
+        /// null is "not known", which drops the line rather than claiming
+        /// the player holds none.</summary>
+        private CurrencyTooltipFacts CurrencyFactsFor(int currencyId)
+        {
+            return CurrencyTooltipFacts.ForCurrencyId(
+                currencyId, _currencyMetadata, (int?)null);
         }
 
         /// <summary>

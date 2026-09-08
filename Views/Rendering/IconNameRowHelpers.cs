@@ -96,36 +96,16 @@ namespace TaimisToolbench.Views.Rendering
         {
             return Build(
                 rowPanel, iconUrl, resolvedRarity, iconX, iconY, fullName, font,
-                rightEdge, qtyWidth, nameGap, nameX, nameY,
-                ItemIconTiers.ArtSize(tier), ItemIconTiers.BorderThickness(tier), tooltip);
-        }
-
-        /// <summary>
-        /// The pre-tier signature, kept ONLY so the one row builder still
-        /// owned by an in-flight branch keeps compiling until it migrates:
-        /// Views/RankerTabContent.cs, which passes iconSize and leans on the
-        /// borderThickness default, and becomes ItemIconTier.BagSlot with no
-        /// pixel change. The defaults stay because that call relies on one;
-        /// the tests workflow's named-tier step allow-lists exactly that
-        /// file and this one, which carries the shim.
-        /// </summary>
-        internal static IconNameHandle CreateIconAndEllipsizedName(
-            Panel rowPanel, string iconUrl, string rarity, int iconX, int iconY,
-            string fullName, BitmapFont font, int rightEdge, int qtyWidth, int nameGap, int nameX, int nameY,
-            ItemIconTooltip tooltip, int iconSize = 32, int borderThickness = 1)
-        {
-            return Build(
-                rowPanel, iconUrl, rarity, iconX, iconY, fullName, font,
-                rightEdge, qtyWidth, nameGap, nameX, nameY, iconSize, borderThickness, tooltip);
+                rightEdge, qtyWidth, nameGap, nameX, nameY, tier, tooltip);
         }
 
         private static IconNameHandle Build(
             Panel rowPanel, string iconUrl, string rarity, int iconX, int iconY,
             string fullName, BitmapFont font, int rightEdge, int qtyWidth, int nameGap, int nameX, int nameY,
-            int iconSize, int borderThickness, ItemIconTooltip tooltip)
+            ItemIconTier tier, ItemIconTooltip tooltip)
         {
             var iconFrame = IconControls.CreateItemIcon(
-                rowPanel, iconUrl, rarity, iconX, iconY, iconSize, borderThickness, tooltip);
+                rowPanel, iconUrl, ItemIconFrame.ForRarity(rarity), iconX, iconY, tier, tooltip);
 
             int nameMaxWidth = PlanRelayoutMath.NameMaxWidthBeforeColumn(rightEdge, qtyWidth, nameGap, nameX);
             string displayName = LabelHelpers.EllipsizeToWidth(font, fullName, nameMaxWidth);

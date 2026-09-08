@@ -42,14 +42,20 @@ namespace TaimisToolbench.Services
         /// Ranker's shortfall list) and keeps the ring; a CurrencyBarRun
         /// icon sits after digits in the gold/silver/copper coins' role, a
         /// unit symbol rather than a subject, and the coins take no frame
-        /// at all. A tier outside the currency pair is a programming error,
-        /// not a frame decision.
+        /// at all. A tier no currency is ever drawn at is a programming
+        /// error, not a frame decision.
         /// </summary>
         public static bool CurrencyIsFramed(ItemIconTier tier)
         {
             switch (tier)
             {
                 case ItemIconTier.CurrencyListRow: return true;
+
+                // The Recipe Tree draws a currency row in the same column
+                // as its item rows, at the item row's size. It is still a
+                // row's subject, so it keeps the ring.
+                case ItemIconTier.BagSidebar: return true;
+
                 case ItemIconTier.CurrencyBarRun: return false;
                 default:
                     throw new System.ArgumentOutOfRangeException(

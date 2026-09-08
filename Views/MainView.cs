@@ -2976,6 +2976,15 @@ namespace TaimisToolbench.Views
         /// breakdown is NOT here - the row already prints it under the
         /// name, and a second tooltip box repeating it says nothing new.
         /// </summary>
+        /// <summary>Everything one wallet currency's tooltip shows. The
+        /// row's own Value IS the balance the game's tooltip states, so it
+        /// is passed rather than looked up again.</summary>
+        private CurrencyTooltipFacts CurrencyFactsFor(int currencyId, int walletValue)
+        {
+            return CurrencyTooltipFacts.ForCurrencyEntry(
+                currencyId, _getCurrencyMetadata?.Invoke(currencyId), walletValue);
+        }
+
         private ItemIconTooltip ItemRowHover(SnapshotSearchRow row, string rarity)
         {
             int itemId = row.ItemId;
@@ -3127,24 +3136,15 @@ namespace TaimisToolbench.Views
             }
 
             int walletValue = entry.Value;
-            string currencyIconUrl = entry.IconUrl;
-            var icon = IconControls.CreateItemIconDeferredArt(
-                rowPanel, currencyIconUrl, ItemIconFrame.Currency(),
+            // A WALLET row is a wallet currency by construction - the id
+            // came out of /v2/account/wallet - so the kind needs no
+            // guessing, and this row's own Value IS the balance the game's
+            // tooltip states.
+            var icon = IconControls.CreateCurrencyIconDeferredArt(
+                rowPanel, currencyId,
                 SnapshotItemGridLayout.CellIconX(chrome.AmountBand), WalletIconY,
                 ItemIconTier.CurrencyListRow,
-                // A WALLET row is a wallet currency by construction - the
-                // id came out of /v2/account/wallet - so the kind needs no
-                // guessing, and this row's own Value IS the balance the
-                // game's tooltip states.
-                ItemIconTooltip.ForCurrency(
-                    currencyName,
-                    () => CurrencyTooltipFacts.For(
-                        currencyName,
-                        currencyIconUrl,
-                        _getCurrencyMetadata == null
-                            ? null : _getCurrencyMetadata(currencyId)?.Description,
-                        walletValue),
-                    IconWikiTarget.ItemPage(currencyName)));
+                id => CurrencyFactsFor(id, walletValue));
 
             // Never display raw currency IDs (repo invariant). Same two
             // columns as the item run above, so one header pair shape

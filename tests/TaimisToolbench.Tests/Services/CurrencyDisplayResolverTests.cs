@@ -275,12 +275,22 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void ResolveAmounts_NeverExposesRawCurrencyId()
+        public void ResolveAmounts_NeverPutsTheRawCurrencyIdInAnythingDrawn()
         {
-            // CurrencyAmountViewModel has no id field at all - structural
-            // enforcement of the no-displayed-IDs invariant.
-            var props = typeof(CurrencyAmountViewModel).GetProperties();
-            Assert.DoesNotContain(props, p => p.Name.IndexOf("Id", System.StringComparison.OrdinalIgnoreCase) >= 0);
+            // The view model carries the id so a tooltip can be resolved
+            // from it. Nothing a reader sees may be that number, which is
+            // the invariant this used to assert by having no id field at
+            // all - and having none is what made each surface carry its own
+            // name and description instead.
+            var costLines = new List<CostLine> { new CostLine { Type = "Currency", Id = 23, Count = 5 } };
+
+            var result = CurrencyDisplayResolver.ResolveAmounts(costLines, null);
+
+            Assert.Equal(23, result[0].CurrencyId);
+            foreach (var text in new[] { result[0].Name, result[0].IconUrl, result[0].BundleLabel })
+            {
+                Assert.True(text == null || text.IndexOf("23", System.StringComparison.Ordinal) < 0, text);
+            }
         }
 
         // --- ResolveUnitAmounts (winning-offer true per-unit

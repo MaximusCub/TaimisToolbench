@@ -521,6 +521,24 @@ namespace TaimisToolbench.Views
             set => _currentPlan = value;
         }
 
+        /// <summary>
+        /// The whole content of one currency's tooltip, from its id. Every
+        /// currency icon this tab draws reads it, so the Total Cost table,
+        /// the Recipe Tree and the inline symbols in a value cell cannot
+        /// show different boxes for the same currency.
+        /// <para>
+        /// Reads <c>_currentPlan</c> per call rather than capturing its
+        /// dictionaries, so a re-solve's wallet figures reach the next
+        /// hover.
+        /// </para>
+        /// </summary>
+        public CurrencyTooltipFacts CurrencyFactsFor(int currencyId)
+        {
+            var plan = _currentPlan;
+            return CurrencyTooltipFacts.ForCurrencyId(
+                currencyId, plan?.CurrencyMetadata, plan?.OwnedCurrencyAmounts);
+        }
+
         int ITreePlanHost.PanelWidth => GetCurrentPanelWidth();
 
         void ITreePlanHost.SetLastDebugLog(IReadOnlyList<string> log) => _lastDebugLog = log;
@@ -5126,7 +5144,8 @@ namespace TaimisToolbench.Views
                     // Row rendering (the cost-tile row, the
                     // MultiItemNote banner, and the per-currency rows) moved
                     // to Views/Rendering/SummarySectionRenderer.
-                    new SummarySectionRenderer(this, _getItemStatBlock, RegisterScrollAnchor)
+                    new SummarySectionRenderer(
+                        this, CurrencyFactsFor, _getItemStatBlock, RegisterScrollAnchor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 case PlanSectionType.UsedMaterials:
@@ -5140,7 +5159,8 @@ namespace TaimisToolbench.Views
                     // Row rendering moved to
                     // Views/Rendering/ShoppingListSectionRenderer.
                     new ShoppingListSectionRenderer(
-                        this, _shoppingListSort, RerenderForSortChange, _getItemStatBlock)
+                        this, _shoppingListSort, RerenderForSortChange,
+                        CurrencyFactsFor, _getItemStatBlock)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 case PlanSectionType.CraftingSteps:
@@ -5162,7 +5182,7 @@ namespace TaimisToolbench.Views
                     // needs its own case rather than the default fallback
                     // below, since CreateTextRow never draws a coin value
                     // and this section's excess/reclaim lines carry one.
-                    notesBodyHeight = new NotesSectionRenderer(this)
+                    notesBodyHeight = new NotesSectionRenderer(this, CurrencyFactsFor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 // PlanSectionType.RequiredRecipes is handled entirely by

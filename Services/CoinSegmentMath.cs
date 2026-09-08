@@ -249,13 +249,16 @@ namespace TaimisToolbench.Services
             public string Text;
             public int TextWidth;
 
-            // Display name of this currency (in-game finding B's name-
-            // tooltip sweep principle: anywhere a currency icon shows, its
-            // name must be available) - never rendered as text here
-            // (width-neutral), only surfaced via the icon's BasicTooltipText
-            // in LayoutCurrencySegments. Null/empty is handled the same as
-            // every other icon-only cell (no tooltip set at all).
+            // Display name of this currency - never rendered as text here
+            // (width-neutral), only surfaced through the icon's hover in
+            // LayoutCurrencySegments.
             public string Name;
+
+            // The wallet currency this segment is of. The icon resolves
+            // its whole tooltip from this id, the same way every other
+            // currency icon in the module does, so an inline symbol beside
+            // a number says as much as a row's own icon.
+            public int CurrencyId;
         }
 
         /// <summary>

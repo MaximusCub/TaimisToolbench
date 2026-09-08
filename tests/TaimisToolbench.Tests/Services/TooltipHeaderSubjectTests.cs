@@ -16,6 +16,10 @@ namespace TaimisToolbench.Tests.Services
     /// </summary>
     public class TooltipHeaderSubjectTests
     {
+        // The composer never reads the id; it is the key the
+        // facts are resolved by.
+        private const int TestCurrencyId = 23;
+
         private const string ItemIcon = "https://render.guildwars2.com/file/AAA/1.png";
         private const string CurrencyIcon = "https://render.guildwars2.com/file/BBB/2.png";
 
@@ -27,7 +31,16 @@ namespace TaimisToolbench.Tests.Services
         private static TooltipContent CurrencyContent(string description = "Earned in the mists.")
         {
             return CurrencyTooltipComposer.BuildContent(
-                CurrencyTooltipFacts.For("Spirit Shards", CurrencyIcon, description, 412));
+                CurrencyTooltipFacts.ForCurrencyEntry(
+                TestCurrencyId,
+                new CurrencyMetadata
+                {
+                    CurrencyId = TestCurrencyId,
+                    Name = "Spirit Shards",
+                    IconUrl = CurrencyIcon,
+                    Description = description,
+                },
+                412));
         }
 
         [Fact]
