@@ -194,7 +194,7 @@ Services/PlanStripStatusBoard.cs                                                
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     597
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        1942
+Services/PlanViewModelBuilder.cs                                                        1943
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
@@ -666,7 +666,7 @@ tests/VendorOfferUpdater.Tests/SeasonalFestivalMappingTests.cs                  
 tests/VendorOfferUpdater.Tests/SeasonalFestivalRoundTripTests.cs                        151
 tests/VendorOfferUpdater.Tests/SerializeDatasetGoldenFileTests.cs                       116
 tests/VendorOfferUpdater.Tests/TemporaryTemplateParserTests.cs                          191
-tests/VendorOfferUpdater.Tests/UnhashedFieldCarryForwardTests.cs                        361
+tests/VendorOfferUpdater.Tests/UnhashedFieldCarryForwardTests.cs                        408
 tests/VendorOfferUpdater.Tests/VendorOfferDiffTests.cs                                  378
 tests/VendorOfferUpdater.Tests/VendorOfferHasherGoldenVectorTests.cs                    82
 tests/VendorOfferUpdater.Tests/VendorOfferHasherTests.cs                                365
@@ -688,7 +688,7 @@ tools/VendorOfferUpdater/Models/Gw2Constants.cs                                 
 tools/VendorOfferUpdater/Models/VendorOffer.cs                                          82
 tools/VendorOfferUpdater/Models/VendorOfferDataset.cs                                   21
 tools/VendorOfferUpdater/Models/VendorOfferManifest.cs                                  33
-tools/VendorOfferUpdater/Program.cs                                                     2550
+tools/VendorOfferUpdater/Program.cs                                                     2612
 tools/VendorOfferUpdater/QueryOptions.cs                                                56
 tools/VendorOfferUpdater/QueryStats.cs                                                  79
 tools/VendorOfferUpdater/RecipeSheetMapBuilder.cs                                       366

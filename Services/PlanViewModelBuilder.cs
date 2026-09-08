@@ -1227,9 +1227,10 @@ namespace TaimisToolbench.Services
             }
 
             // Vendor-requirement notices: what a vendor the plan buys from
-            // wants of the account. Two states only - a requirement the
-            // account MEETS produces no notice, and the wording never says
-            // a requirement is unmet when it was merely not checked.
+            // wants of the account. A requirement the account MEETS reaches
+            // no row at all (PlanResultBuilder drops it), so only two
+            // wordings exist here, and neither says a requirement is unmet
+            // when it was merely not checked.
             foreach (var requirement in vendorRequirementNotices)
             {
                 string itemName = ResolveName(requirement.ItemId, result.ItemMetadata);

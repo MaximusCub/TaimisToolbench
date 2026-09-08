@@ -49,7 +49,7 @@ namespace VendorOfferUpdater
         private static async Task<List<KeyValuePair<int, string>>> LoadAchievementsAsync(
             HttpClient httpClient, CancellationToken ct)
         {
-            string idsResponse = await httpClient.GetStringAsync(AchievementsUrl);
+            string idsResponse = await httpClient.GetStringAsync(AchievementsUrl, ct);
             var ids = JsonSerializer.Deserialize<List<int>>(idsResponse)
                 ?? throw new InvalidOperationException(
                     "GW2 API achievements response deserialized to null.");
@@ -62,7 +62,7 @@ namespace VendorOfferUpdater
 
                 var batch = ids.GetRange(i, Math.Min(BatchSize, ids.Count - i));
                 string url = $"{AchievementsUrl}?ids={string.Join(",", batch)}";
-                string response = await httpClient.GetStringAsync(url);
+                string response = await httpClient.GetStringAsync(url, ct);
                 using var parsed = JsonDocument.Parse(response);
 
                 foreach (var achievement in parsed.RootElement.EnumerateArray())
@@ -89,7 +89,7 @@ namespace VendorOfferUpdater
         {
             ct.ThrowIfCancellationRequested();
 
-            string response = await httpClient.GetStringAsync(MasteriesUrl);
+            string response = await httpClient.GetStringAsync(MasteriesUrl, ct);
             using var parsed = JsonDocument.Parse(response);
 
             var tracks = new List<MasteryTrack>();

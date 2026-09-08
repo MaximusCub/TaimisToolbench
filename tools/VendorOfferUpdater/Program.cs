@@ -916,6 +916,14 @@ namespace VendorOfferUpdater
                 // corrects a sale's coin price matches on neither and the
                 // row is lost. ComputeSameSaleKey leaves the price out.
                 var replacedBySaleKey = new Dictionary<string, VendorOffer>(StringComparer.Ordinal);
+
+                // A sale key a SECOND row shares names no single row, so it
+                // is dropped rather than resolved to one of them. Several
+                // merchants sell one item twice - full price, and cheaper to
+                // an account that already owns the thing - and the two rows
+                // share a sale key because it deliberately leaves the price
+                // out. See AmbiguousSaleKeys.
+                var ambiguousSaleKeys = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var o in baseline)
                 {
                     if (!CarriesUnhashedFields(o))
@@ -934,7 +942,23 @@ namespace VendorOfferUpdater
                     }
 
                     replacedByContentKey[ComputeContentKey(o)] = o;
-                    replacedBySaleKey[ComputeSameSaleKey(o)] = o;
+
+                    string saleKey = ComputeSameSaleKey(o);
+                    if (!replacedBySaleKey.ContainsKey(saleKey))
+                    {
+                        replacedBySaleKey[saleKey] = o;
+                    }
+                    else
+                    {
+                        ambiguousSaleKeys.Add(saleKey);
+                    }
+                }
+
+                ambiguousSaleKeys.UnionWith(
+                    AmbiguousSaleKeys(fresh, merchantsReplacedSet));
+                foreach (string saleKey in ambiguousSaleKeys)
+                {
+                    replacedBySaleKey.Remove(saleKey);
                 }
 
                 if (replacedByOfferId.Count > 0 || replacedByContentKey.Count > 0
@@ -1120,9 +1144,11 @@ namespace VendorOfferUpdater
                             continue;
                         }
 
-                        foreach (var freshRow in freshRows!)
+                        // Only when the sale key names ONE fresh row - see
+                        // AmbiguousSaleKeys for why several means none.
+                        if (freshRows!.Count == 1)
                         {
-                            CarryForwardUnhashedFields(freshRow, offer);
+                            CarryForwardUnhashedFields(freshRows[0], offer);
                         }
                     }
 
@@ -1179,6 +1205,42 @@ namespace VendorOfferUpdater
 
             unique.Sort((a, b) => StringComparer.Ordinal.Compare(a.OfferId, b.OfferId));
             return unique;
+        }
+
+        /// <summary>
+        /// Sale keys held by more than one of <paramref name="offers"/>,
+        /// among the merchants in <paramref name="merchants"/>.
+        /// <para>
+        /// ComputeSameSaleKey leaves the price out, so a merchant selling one
+        /// item at full price and again at a discount to an account that
+        /// already owns it has two rows under one key. Copying a dropped
+        /// row's unhashed fields to both puts the discount's requirement on
+        /// the full-price row, which has none: measured, 8 offers claimed a
+        /// Commander's Compendium gate that way.
+        /// </para>
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static HashSet<string> AmbiguousSaleKeys(
+            IEnumerable<VendorOffer> offers, ISet<string> merchants)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var ambiguous = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var offer in offers)
+            {
+                if (!merchants.Contains(offer.MerchantName ?? string.Empty))
+                {
+                    continue;
+                }
+
+                string saleKey = ComputeSameSaleKey(offer);
+                if (!seen.Add(saleKey))
+                {
+                    ambiguous.Add(saleKey);
+                }
+            }
+
+            return ambiguous;
         }
 
         /// <summary>

@@ -154,6 +154,53 @@ namespace VendorOfferUpdater.Tests
             Assert.Equal(ObsidianSheetRecipeId, merged.UnlockRecipeId);
         }
 
+        // A merchant that sells the same item twice - full price, and
+        // cheaper to an account that already owns the thing - has two rows
+        // under one sale key. The dropped baseline row's fields belong to
+        // neither in particular, so they go to neither: putting them on both
+        // gives the full-price row a requirement it does not have.
+        [Fact]
+        public void TwoFreshRowsForOneSale_TakeNothingFromTheDroppedRow()
+        {
+            var baseline = new List<VendorOffer>
+            {
+                MakeOffer("old-price", "Lyhr", coinCost: 200, requirement: NuhochLanguage()),
+            };
+            var fresh = new List<VendorOffer>
+            {
+                MakeOffer("full-price", "Lyhr", coinCost: 3000000),
+                MakeOffer("discounted", "Lyhr", coinCost: 1500000),
+            };
+
+            var result = Program.MergeIntoBaseline(baseline, fresh, Protecting("Lyhr"));
+
+            Assert.Equal(2, result.Merged.Count);
+            Assert.All(result.Merged, o => Assert.Null(o.Requirement));
+        }
+
+        // The same ambiguity on the replaced-merchant path, which harvests a
+        // baseline row's fields BEFORE `kept` drops it. Protecting nothing
+        // makes Lyhr a replaced merchant.
+        [Fact]
+        public void TwoFreshRowsForOneSale_TakeNothingOnTheReplacedPathEither()
+        {
+            var baseline = new List<VendorOffer>
+            {
+                MakeOffer("old-price", "Lyhr", coinCost: 200, requirement: NuhochLanguage()),
+            };
+            var fresh = new List<VendorOffer>
+            {
+                MakeOffer("full-price", "Lyhr", coinCost: 3000000),
+                MakeOffer("discounted", "Lyhr", coinCost: 1500000),
+            };
+
+            var result = Program.MergeIntoBaseline(
+                baseline, fresh, new HashSet<string>());
+
+            Assert.Equal(2, result.Merged.Count);
+            Assert.All(result.Merged, o => Assert.Null(o.Requirement));
+        }
+
         // One row can hold the festival tag and the other the gate. Both have
         // to reach the survivor, or fixing one field costs the other.
         [Fact]
