@@ -133,8 +133,18 @@ namespace TaimisToolbench.Services
         /// </summary>
         public const int MinRemainingCellWidth = 100;
 
-        /// <summary>The five gate cells of the breakdown sub-line.</summary>
-        public const int GateCellCount = 5;
+        /// <summary>
+        /// The six gate cells of the breakdown sub-line.
+        /// <para>
+        /// MEASURED at the narrowest real width the suite drives
+        /// (a 1378px screen, a 1232px row, an 1112px sub-line band): six
+        /// cells leave an 85px bar past an 80px label band, against 122px
+        /// with five. The figure a cell draws is Caption-tier and well
+        /// inside that, so the sixth cell costs bar length and no
+        /// legibility.
+        /// </para>
+        /// </summary>
+        public const int GateCellCount = 6;
 
         /// <summary>Below this the pinned block cannot fit and the name band collapses to zero.</summary>
         public const int MinNameWidth = 40;
@@ -449,7 +459,7 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// One cell of the gate-breakdown sub-line. The five cells divide the
+        /// One cell of the gate-breakdown sub-line. The cells divide the
         /// sub-line's full width evenly so the strip is justified to the panel
         /// rather than left-packed with dead space on the right.
         /// </summary>
@@ -472,14 +482,14 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// The painted bar inside gate cell <paramref name="index"/>: it
-        /// starts past a label band wide enough for the widest of the five
+        /// starts past a label band wide enough for the widest of the
         /// gate names (measured by the caller, since that is a
         /// MeasureString) and runs to a gap short of the cell's own end.
         /// <para>
-        /// The label band is one width for all five cells rather than each
+        /// The label band is one width for every cell rather than each
         /// cell's own label width, so the bars start at the same offset in
-        /// every cell and the strip reads as five gauges rather than five
-        /// sentences. The gap it fills is exactly the dead space between a
+        /// every cell and the strip reads as a row of gauges rather than a
+        /// row of sentences. The gap it fills is exactly the dead space between a
         /// gate's name and its right-aligned percentage.
         /// </para>
         /// </summary>

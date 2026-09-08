@@ -3706,6 +3706,32 @@ calls about substitutability, which is a property the game itself decides:
   hard wall, but most recipes are purchasable sheets or cheap unlocks, so it
   takes the disciplines weight rather than inventing a new tier. First call,
   reviewable like the others.
+- A barter item - the account-bound token a vendor takes in place of coin -
+  is a wallet currency in a different id space, so it takes the currencies
+  weight. `Models/BarterItemCost.cs` says why the two are separate types;
+  nothing about that split makes one barrier easier than the other. The
+  consequence is that a plan paying both weights the un-substitutable class
+  at 0.40 against its 0.35 coin bill, which is the intended reading of a
+  bill no amount of gold shortens.
+
+**`RankerReadinessWeights` - what a gate that is not scored does.** A gate
+is a term of the headline only when the module measured it. There are two
+other outcomes and neither may read as complete:
+
+- `NoBarrier`, the item has no such barrier. Dropped from the weighted mean,
+  which renormalises, so the gate ends up worth the mean of the others
+  rather than pulling the mean upward. The cell reads "n/a".
+- `Unmeasured`, the barrier exists and the ACCOUNT data needed to score it
+  does not - an API key without the recipes permission, a snapshot with no
+  character disciplines. Also dropped, because entering a number nothing
+  measured is the fault the whole model exists to avoid, but it additionally
+  bars the headline from reaching 100%. The cell reads as a dash.
+
+A shipped seed that is not wired is NOT an account gap and stays
+`NoBarrier`, matching what `Services/PlanViewModelBuilder.cs` already does
+with a missing daily-cooldown seed. The practical effect of the split is
+that a percentage now appears in exactly the cells the headline was blended
+from, which is the row's own disclosure of what it counted.
 
 **`RankerResultCache` - why two sets.** The two comparison modes answer
 different questions about the same rows, and a row's answer under one says

@@ -32,19 +32,26 @@ namespace TaimisToolbench.Tests.Services
         // recipe in this plan carries a source tag rather than a discipline.
         private const int InfiniteTrebuchetBlueprint = 103980;
 
+        /// <summary>The legendary staff, and the legendary ring.</summary>
+        private const int TheBifrost = 30698;
+
+        private const int EndlessSummer = 107022;
+
         private static Task<CraftingPlanResult> PlanGiftOfDedicationAsync()
         {
             return PlanAsync(GiftOfDedication);
         }
 
-        private static async Task<CraftingPlanResult> PlanAsync(int itemId)
+        private static async Task<CraftingPlanResult> PlanAsync(
+            int itemId, params int[] learnedRecipeIds)
         {
             var corpus = RealCorpusFixture.Load();
 
-            // Empty learned set: the account has unlocked nothing, which is
-            // what makes the Auric Ingot recipe report IsMissing = true.
+            // Empty learned set by default: the account has unlocked nothing,
+            // which is what makes the Auric Ingot recipe report
+            // IsMissing = true.
             var accountRecipes = new InMemoryAccountRecipeClient();
-            accountRecipes.SetLearnedRecipes();
+            accountRecipes.SetLearnedRecipes(learnedRecipeIds);
 
             var pipeline = new CraftingPlanPipeline(
                 corpus.NewRecipeService(),
@@ -120,10 +127,9 @@ namespace TaimisToolbench.Tests.Services
             var result = await PlanGiftOfDedicationAsync();
             var rows = RecipeRows(result);
 
-            // No recipe in this plan is auto-learned, so every listed row is
-            // one the Ranker also scores and the two counts line up exactly.
-            // The Ranker drops auto-learned recipes; the plan still lists
-            // them, so a plan that has some would not satisfy this equality.
+            // Both surfaces filter by RequiredRecipesVisibility.
+            // HasNoUnlockBarrier, so no listed row is one the Ranker skips
+            // and no scored recipe is one the plan hides.
             Assert.DoesNotContain(rows, r => r.StatusTag == "Auto-learned");
 
             int unlocked = rows.Count(r => RequiredRecipesVisibility.IsUnlocked(r.StatusTag));
@@ -132,6 +138,57 @@ namespace TaimisToolbench.Tests.Services
             var gate = RecipesGate(result);
             Assert.True(gate.Applies);
             Assert.Equal(expected, gate.Completion, 9);
+        }
+
+        /// <summary>
+        /// The reported disagreement, on the two items it was measured on.
+        /// The Ranker's denominator was 6 and 12 while the plan's header read
+        /// "showing 6 missing of 15" and "showing 12 missing of 27" - the gap
+        /// being exactly the auto-learned recipes, which the game hands the
+        /// player with the discipline rating and which neither surface now
+        /// counts.
+        /// </summary>
+        [Theory]
+        [InlineData(TheBifrost, 6)]
+        [InlineData(EndlessSummer, 12)]
+        public async Task ThePlanHeaderAndTheRankerDenominatorAreOneNumber(
+            int itemId, int expectedBarrierCount)
+        {
+            var result = await PlanAsync(itemId);
+
+            // The plan HAS auto-learned recipes, which is what made these two
+            // items disagree; the Gift of Dedication above has none.
+            Assert.NotEmpty(result.RequiredRecipes.Where(r => r.IsAutoLearned));
+
+            var rows = RecipeRows(result);
+            Assert.Equal(expectedBarrierCount, rows.Count);
+
+            var visible = RequiredRecipesVisibility.ApplyFilter(rows, hideUnlocked: true);
+            Assert.Equal(
+                "Required Recipes (showing " + expectedBarrierCount +
+                    " missing of " + expectedBarrierCount + ")",
+                RequiredRecipesVisibility.BuildHeaderTitle(rows, visible, hideUnlocked: true));
+
+            // The Ranker's denominator is read off its own arithmetic rather
+            // than recounted here: learning exactly one of the recipes the
+            // plan lists has to move the cell to 1/N, which pins N.
+            var gate = await RecipesGateWithOneLearnedAsync(itemId, result);
+            Assert.Equal(1.0 / expectedBarrierCount, gate.Completion, 9);
+        }
+
+        /// <summary>
+        /// Re-solves with a single recipe learned - the first one the plan
+        /// reports missing, so it is one of the rows the header counted.
+        /// </summary>
+        private static async Task<RankerGateScore> RecipesGateWithOneLearnedAsync(
+            int itemId, CraftingPlanResult fromEmpty)
+        {
+            int learnedRecipeId = fromEmpty.RequiredRecipes
+                .First(r => r.IsMissing == true &&
+                            !RequiredRecipesVisibility.HasNoUnlockBarrier(r.IsAutoLearned, r.Disciplines))
+                .RecipeId;
+
+            return RecipesGate(await PlanAsync(itemId, learnedRecipeId));
         }
 
         [Fact]

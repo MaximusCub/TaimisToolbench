@@ -11,7 +11,7 @@ namespace TaimisToolbench.Services
     /// display-ready numbers a Crafting Ranker row shows. Pure and
     /// Blish-free; every edge case is settled here rather than in the view.
     ///
-    /// The headline is a weighted mean of five gate completions, renormalised
+    /// The headline is a weighted mean of six gate completions, renormalised
     /// over the gates that apply to the item (see RankerReadinessWeights).
     /// Nothing is ever converted into anything else: every ratio the model
     /// computes carries the same unit above and below the line, which is what
@@ -43,8 +43,9 @@ namespace TaimisToolbench.Services
             {
                 Mode = mode,
                 Kind = RankerReadinessKind.NotMeasurable,
-                Gates = BuildInapplicableGates(),
+                Gates = BuildUnmeasuredGates(),
                 CurrencyShortfalls = Array.Empty<RankerCurrencyShortfall>(),
+                BarterItemShortfalls = Array.Empty<RankerBarterItemShortfall>(),
                 VendorCappedItems = Array.Empty<TimegatedItem>(),
                 DisciplineGaps = Array.Empty<RankerDisciplineGap>(),
                 PriorityIndex = priorityIndex,
@@ -63,13 +64,14 @@ namespace TaimisToolbench.Services
             var claimedGated = availability?.ClaimedGatedUnits ?? EmptyIntMap;
             var heldCurrency = availability?.Currency ?? EmptyIntMap;
 
-            var gates = new List<RankerGateScore>(5)
+            var gates = new List<RankerGateScore>(6)
             {
                 ScoreMaterials(baseline, owned),
                 ScoreCurrencies(baseline, owned, heldCurrency, metrics),
                 ScoreTimeGates(baseline, owned, claimedGated, metrics),
                 ScoreDisciplines(owned, metrics),
                 ScoreRecipes(owned),
+                ScoreBarterItems(baseline, owned, metrics),
             };
             metrics.Gates = gates;
 
@@ -81,6 +83,17 @@ namespace TaimisToolbench.Services
             bool anyIncomplete = false;
             foreach (var gate in gates)
             {
+                if (gate.Status == RankerGateStatus.Unmeasured)
+                {
+                    // Excluded from the blend, because entering a number the
+                    // module never measured is the fault this whole model
+                    // exists to avoid - but it still bars a full headline.
+                    // A row cannot read 100% while a barrier it has is
+                    // unknown.
+                    anyIncomplete = true;
+                    continue;
+                }
+
                 if (!gate.Applies)
                 {
                     continue;
@@ -96,13 +109,16 @@ namespace TaimisToolbench.Services
 
             if (weightSum <= 0)
             {
-                // No gate applies. Either there is genuinely nothing left, or
+                // No gate scored. Either there is genuinely nothing left, or
                 // the plan is unpriceable - two different statements, and the
-                // row must not render the second as "done".
+                // row must not render the second as "done". anyIncomplete can
+                // only be set by an Unmeasured gate here, so it is the third
+                // statement: a barrier exists and nothing looked at it.
                 bool nothingOutstanding =
                     owned.Plan.TotalCoinCost == 0 &&
                     (owned.Plan.CurrencyCosts == null || owned.Plan.CurrencyCosts.Count == 0) &&
-                    (owned.Plan.BarterItemCosts == null || owned.Plan.BarterItemCosts.Count == 0);
+                    (owned.Plan.BarterItemCosts == null || owned.Plan.BarterItemCosts.Count == 0) &&
+                    !anyIncomplete;
                 metrics.Kind = nothingOutstanding
                     ? RankerReadinessKind.NothingLeft
                     : RankerReadinessKind.NotMeasurable;
@@ -113,8 +129,8 @@ namespace TaimisToolbench.Services
             double readiness = Clamp01(weighted / weightSum);
 
             // A 100% that is not actually finished is the single most
-            // trust-destroying number this tab can print, and with five gates
-            // there are five ways to earn one by rounding.
+            // trust-destroying number this tab can print, and with six gates
+            // there are six ways to earn one by rounding.
             if (anyIncomplete && readiness > 0.99)
             {
                 readiness = 0.99;
@@ -180,21 +196,15 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// One gate's cell in the breakdown sub-line: "82%", or 100% for a
-        /// gate the item does not have - nothing is outstanding behind a
-        /// barrier that is not there.
+        /// One gate's cell in the breakdown sub-line. A percentage ONLY when
+        /// the gate was scored, so the cells carrying one are exactly the
+        /// cells the headline was blended from - which is the row's own
+        /// disclosure of what it counted.
         /// <para>
-        /// The cell is NOT a term of the headline. An inapplicable gate is
-        /// dropped from the weighted mean entirely (see <see cref="Compute"/>),
-        /// which is not the same as entering it at 1.0: dropping
-        /// renormalises, so the gate ends up worth the mean of the others
-        /// rather than pulling the mean upward. A row can therefore read
-        /// 100% in this cell and still be under 100% overall, and the Ready
-        /// hover is what says which gates the headline was blended from.
-        /// </para>
-        /// <para>
-        /// The dash survives for a MISSING gate object - a row that has
-        /// never been measured, not a barrier the item does not have.
+        /// "n/a" is a barrier this item does not have. A dash is a barrier
+        /// it has that nothing measured, and a missing gate object, which is
+        /// a row that has never been measured at all. Neither may print a
+        /// percentage, because a percentage here reads as a measurement.
         /// </para>
         /// </summary>
         public static string FormatGate(RankerGateScore gate)
@@ -204,7 +214,55 @@ namespace TaimisToolbench.Services
                 return DashText;
             }
 
-            return FormatPercent(gate.Applies ? gate.Completion : 1.0);
+            switch (gate.Status)
+            {
+                case RankerGateStatus.Scored:
+                    return FormatPercent(gate.Completion);
+                case RankerGateStatus.NoBarrier:
+                    return NotApplicableText;
+                default:
+                    return DashText;
+            }
+        }
+
+        /// <summary>
+        /// How full a gate cell's bar draws, 0..1. Only a scored gate paints
+        /// any fill: a full bar is a completion claim, and the two other
+        /// statuses have no measurement to make one from. The view does no
+        /// arithmetic, so this lives here beside the text that has to agree
+        /// with it.
+        /// </summary>
+        public static double GateBarFraction(RankerGateScore gate)
+        {
+            return gate != null && gate.Applies ? Clamp01(gate.Completion) : 0.0;
+        }
+
+        /// <summary>
+        /// Why a gate is not a term of the headline, as one clause for the
+        /// Ready hover and the gate cell's own tooltip. Null for a scored
+        /// gate, which the caller renders with its figure and weight
+        /// instead.
+        /// </summary>
+        public static string GateExclusionReason(RankerGateScore gate)
+        {
+            if (gate == null)
+            {
+                return "not yet calculated";
+            }
+
+            switch (gate.Status)
+            {
+                case RankerGateStatus.Scored:
+                    return null;
+                case RankerGateStatus.NoBarrier:
+                    return "this item has none, so it is not part of the blend";
+                default:
+                    // Cause-neutral on purpose. Unmeasured is normally an
+                    // account gap, but the same status also covers a row
+                    // whose solves never arrived, and one clause has to be
+                    // true of both.
+                    return "nothing measured it, so it is not part of the blend";
+            }
         }
 
         /// <summary>
@@ -242,6 +300,7 @@ namespace TaimisToolbench.Services
                 case RankerGate.TimeGates: return "Time gates";
                 case RankerGate.Disciplines: return "Disciplines";
                 case RankerGate.Recipes: return "Recipes";
+                case RankerGate.BarterItems: return "Barter";
                 default: return "";
             }
         }
@@ -249,6 +308,9 @@ namespace TaimisToolbench.Services
         public const string NotMeasurableText = "Not measurable";
         public const string NothingLeftText = "Nothing left";
         public const string DashText = "-";
+
+        /// <summary>A gate cell for a barrier this item does not have - see <see cref="FormatGate"/>.</summary>
+        public const string NotApplicableText = "n/a";
 
         /// <summary>A measured absence of any daily gate - see <see cref="FormatDays"/>.</summary>
         public const string ZeroDaysText = "0";
@@ -264,7 +326,7 @@ namespace TaimisToolbench.Services
                 return gate;
             }
 
-            gate.Applies = true;
+            gate.Status = RankerGateStatus.Scored;
             gate.Completion = Clamp01(1.0 - (double)owned.Plan.TotalCoinCost / baselineCoin);
             return gate;
         }
@@ -326,8 +388,85 @@ namespace TaimisToolbench.Services
             shortfalls.Sort((a, b) => b.Short.CompareTo(a.Short));
             metrics.CurrencyShortfalls = shortfalls;
 
-            gate.Applies = true;
+            gate.Status = RankerGateStatus.Scored;
             gate.Completion = Clamp01(total / currencyIds.Count);
+            return gate;
+        }
+
+        /// <summary>
+        /// The item-id twin of <see cref="ScoreCurrencies"/>: the account-bound
+        /// tokens a vendor takes in place of coin, which
+        /// CraftingPlan.BarterItemCosts keeps out of TotalCoinCost because
+        /// they have no Trading Post price to fold in.
+        /// <para>
+        /// The holding comes from the plan result rather than from the
+        /// cascade ledger the currency gate reads: the solver never sees the
+        /// wallet, so the Ranker nets currencies itself, while item holdings
+        /// are already in the snapshot handed to the pipeline.
+        /// </para>
+        /// <para>
+        /// One limit follows from that. RankerPriorityCascade.Consume
+        /// reduces the snapshot by what higher slots CRAFT with and not by
+        /// what they hand a vendor as a barter cost, so a token two rows
+        /// both pay is credited to each of them.
+        /// </para>
+        /// </summary>
+        private static RankerGateScore ScoreBarterItems(
+            CraftingPlanResult baseline, CraftingPlanResult owned, RankerRowMetrics metrics)
+        {
+            var gate = NewGate(RankerGate.BarterItems);
+
+            var baselineNeed = SumBarterItems(baseline.Plan.BarterItemCosts);
+            var ownedNeed = SumBarterItems(owned.Plan.BarterItemCosts);
+
+            // Union, for the reason the currency gate gives: reduction can
+            // flip a node onto a vendor route that introduces a cost the
+            // baseline never had.
+            var itemIds = new HashSet<int>(baselineNeed.Keys);
+            itemIds.UnionWith(ownedNeed.Keys);
+            if (itemIds.Count == 0)
+            {
+                return gate;
+            }
+
+            var held = owned.OwnedVendorItemAmounts;
+            var shortfalls = new List<RankerBarterItemShortfall>(itemIds.Count);
+
+            double total = 0;
+            foreach (int itemId in itemIds)
+            {
+                ownedNeed.TryGetValue(itemId, out long need);
+                baselineNeed.TryGetValue(itemId, out long fromScratch);
+
+                long have = 0;
+                if (held != null && held.TryGetValue(itemId, out int owns))
+                {
+                    have = owns;
+                }
+
+                long shortAmount = Math.Max(0, need - have);
+                long denominator = Math.Max(fromScratch, need);
+
+                shortfalls.Add(new RankerBarterItemShortfall
+                {
+                    ItemId = itemId,
+                    Needed = need,
+                    Held = have,
+                    Short = shortAmount,
+                    BaselineNeeded = denominator,
+                });
+
+                // Unweighted, for the reason the currency gate gives: one
+                // token is not comparable with another token, and the only
+                // comparison made is within a single item.
+                total += denominator <= 0 ? 1.0 : Clamp01(1.0 - (double)shortAmount / denominator);
+            }
+
+            shortfalls.Sort((a, b) => b.Short.CompareTo(a.Short));
+            metrics.BarterItemShortfalls = shortfalls;
+
+            gate.Status = RankerGateStatus.Scored;
+            gate.Completion = Clamp01(total / itemIds.Count);
             return gate;
         }
 
@@ -343,6 +482,11 @@ namespace TaimisToolbench.Services
             // cap does not: a cap that is not binding is not a barrier, and
             // the shipped seed can cap an item as TP-liquid as Glob of
             // Ectoplasm through one incidental festival-vendor offer.
+            //
+            // Null is a cooldown seed that was never wired, not an account
+            // gap, so it leaves the gate NoBarrier rather than Unmeasured -
+            // the same call PlanViewModelBuilder.BuildCooldownNotices makes
+            // for the same null.
             var cooldowns = owned.DailyCooldownItems ?? baseline.DailyCooldownItems;
             if (cooldowns == null || cooldowns.Count == 0)
             {
@@ -374,7 +518,7 @@ namespace TaimisToolbench.Services
                 return gate;
             }
 
-            gate.Applies = true;
+            gate.Status = RankerGateStatus.Scored;
             gate.Completion = Clamp01(1.0 - (double)metrics.DaysRemaining / metrics.DaysFromScratch);
             return gate;
         }
@@ -391,10 +535,12 @@ namespace TaimisToolbench.Services
 
             // Null means no discipline data was ever captured, which is
             // distinct from captured-and-empty. Never fabricate a "not
-            // trained" claim for a snapshot that did not look.
+            // trained" claim for a snapshot that did not look, and never let
+            // the cell read as satisfied either.
             var characters = owned.CharacterDisciplines;
             if (characters == null)
             {
+                gate.Status = RankerGateStatus.Unmeasured;
                 return gate;
             }
 
@@ -456,13 +602,16 @@ namespace TaimisToolbench.Services
 
             if (counted == 0)
             {
+                // Requirements existed and none carried a readable
+                // discipline name, so the barrier is real and unscored.
+                gate.Status = RankerGateStatus.Unmeasured;
                 return gate;
             }
 
             gaps.Sort((a, b) => (a.BestRating - a.RequiredRating).CompareTo(b.BestRating - b.RequiredRating));
             metrics.DisciplineGaps = gaps;
 
-            gate.Applies = true;
+            gate.Status = RankerGateStatus.Scored;
             gate.Completion = Clamp01(total / counted);
             return gate;
         }
@@ -477,24 +626,26 @@ namespace TaimisToolbench.Services
                 return gate;
             }
 
-            // IsMissing null means the learned-recipes check never ran (no
-            // account recipe data) - same never-fabricate rule as the
-            // disciplines gate's null-characters branch. Auto-learned
-            // recipes carry no unlock barrier and are excluded outright, and
-            // so are the ones RequiredRecipesVisibility.IsUnlockFree names,
-            // which the plan's own Required Recipes section calls for the
-            // same purpose.
+            // RequiredRecipesVisibility.HasNoUnlockBarrier is the predicate
+            // the plan's own Required Recipes section filters by, so the two
+            // surfaces count one set. IsMissing null means the
+            // learned-recipes check never ran (an API key without the
+            // recipes permission), which is an account gap and leaves the
+            // gate Unmeasured rather than satisfied.
             int counted = 0;
             int known = 0;
+            bool sawUncheckable = false;
             foreach (var recipe in required)
             {
-                if (recipe == null || recipe.IsAutoLearned || !recipe.IsMissing.HasValue)
+                if (recipe == null ||
+                    RequiredRecipesVisibility.HasNoUnlockBarrier(recipe.IsAutoLearned, recipe.Disciplines))
                 {
                     continue;
                 }
 
-                if (RequiredRecipesVisibility.IsUnlockFree(recipe.Disciplines))
+                if (!recipe.IsMissing.HasValue)
                 {
+                    sawUncheckable = true;
                     continue;
                 }
 
@@ -507,10 +658,13 @@ namespace TaimisToolbench.Services
 
             if (counted == 0)
             {
+                gate.Status = sawUncheckable
+                    ? RankerGateStatus.Unmeasured
+                    : RankerGateStatus.NoBarrier;
                 return gate;
             }
 
-            gate.Applies = true;
+            gate.Status = RankerGateStatus.Scored;
             gate.Completion = Clamp01((double)known / counted);
             return gate;
         }
@@ -656,27 +810,63 @@ namespace TaimisToolbench.Services
             return summed;
         }
 
+        private static Dictionary<int, long> SumBarterItems(IReadOnlyList<BarterItemCost> costs)
+        {
+            var summed = new Dictionary<int, long>();
+            if (costs == null)
+            {
+                return summed;
+            }
+
+            foreach (var cost in costs)
+            {
+                if (cost == null || cost.Amount <= 0)
+                {
+                    continue;
+                }
+
+                summed[cost.ItemId] = summed.TryGetValue(cost.ItemId, out long existing)
+                    ? existing + cost.Amount
+                    : cost.Amount;
+            }
+
+            return summed;
+        }
+
         private static RankerGateScore NewGate(RankerGate gate)
         {
             return new RankerGateScore
             {
                 Gate = gate,
-                Applies = false,
+                Status = RankerGateStatus.NoBarrier,
                 Completion = 0,
                 Weight = RankerReadinessWeights.For(gate),
             };
         }
 
-        private static IReadOnlyList<RankerGateScore> BuildInapplicableGates()
+        /// <summary>
+        /// The gate list for a row whose solves never arrived. Every gate is
+        /// Unmeasured, not NoBarrier: nothing looked at this item, so no cell
+        /// may claim it has no such barrier.
+        /// </summary>
+        private static IReadOnlyList<RankerGateScore> BuildUnmeasuredGates()
         {
-            return new List<RankerGateScore>(5)
+            var gates = new List<RankerGateScore>(6)
             {
                 NewGate(RankerGate.Materials),
                 NewGate(RankerGate.Currencies),
                 NewGate(RankerGate.TimeGates),
                 NewGate(RankerGate.Disciplines),
                 NewGate(RankerGate.Recipes),
+                NewGate(RankerGate.BarterItems),
             };
+
+            foreach (var gate in gates)
+            {
+                gate.Status = RankerGateStatus.Unmeasured;
+            }
+
+            return gates;
         }
 
         private static double Clamp01(double value)

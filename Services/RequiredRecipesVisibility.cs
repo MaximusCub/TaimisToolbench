@@ -90,6 +90,20 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// True when a required recipe carries no unlock the player could be
+        /// missing, either because the game grants it with discipline rating
+        /// (auto-learned) or because its source tag has no unlock at all
+        /// (<see cref="IsUnlockFree"/>). One predicate, called by
+        /// PlanViewModelBuilder.BuildRecipesSection and
+        /// RankerReadinessCalculator.ScoreRecipes, so the plan's Required
+        /// Recipes header and the Ranker's Recipes cell count one set.
+        /// </summary>
+        public static bool HasNoUnlockBarrier(bool isAutoLearned, IReadOnlyList<string> disciplines)
+        {
+            return isAutoLearned || IsUnlockFree(disciplines);
+        }
+
+        /// <summary>
         /// Returns the rows that should render given the current filter
         /// state: every row when hideUnlocked is false, otherwise every row
         /// that is NOT Learned/Auto-learned. Never mutates the input list -
@@ -124,8 +138,9 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// Section header title. Always states the TOTAL recipe count, after
-        /// the Mystic Forge filter BuildRecipesSection applied upstream, so
-        /// the header never understates what the plan needs.
+        /// the <see cref="HasNoUnlockBarrier"/> filter BuildRecipesSection
+        /// applied upstream, so the header never understates what the plan
+        /// needs and never counts a recipe nobody can be missing.
         /// <para>
         /// The word "missing" is used only when every visible row is
         /// actually Missing. The filter also keeps rows the module could not

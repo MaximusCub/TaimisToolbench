@@ -147,7 +147,7 @@ namespace TaimisToolbench.Tests.Services
                     {
                         RecipeId = 10,
                         OutputItemId = 1,
-                        IsAutoLearned = true,
+                        IsAutoLearned = false,
                         Disciplines = new List<string> { "Weaponsmith", "Armorsmith", "Huntsman" },
                         MinRating = 400,
                     },

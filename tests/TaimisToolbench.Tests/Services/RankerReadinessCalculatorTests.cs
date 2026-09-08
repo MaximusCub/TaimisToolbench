@@ -94,10 +94,17 @@ namespace TaimisToolbench.Tests.Services
             {
                 Assert.Equal(RankerReadinessKind.NotMeasurable, metrics.Kind);
                 Assert.Equal(0, metrics.Readiness);
-                Assert.Equal(5, metrics.Gates.Count);
+                Assert.Equal(6, metrics.Gates.Count);
                 Assert.Empty(metrics.CurrencyShortfalls);
+                Assert.Empty(metrics.BarterItemShortfalls);
                 Assert.Empty(metrics.VendorCappedItems);
                 Assert.Empty(metrics.DisciplineGaps);
+
+                // Nothing looked at this item, so no cell may claim it has
+                // no such barrier: every gate reads as unmeasured, not "n/a".
+                Assert.All(metrics.Gates, g => Assert.Equal(
+                    RankerReadinessCalculator.DashText,
+                    RankerReadinessCalculator.FormatGate(g)));
             }
         }
 
@@ -175,23 +182,30 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void AGateTheItemDoesNotHave_Reads100PercentWithoutJoiningTheBlend()
+        public void AGateTheItemDoesNotHave_ReadsNotApplicableRatherThanComplete()
         {
-            // The rule: nothing is outstanding behind a barrier the
-            // item does not have, so its cell reads 100% rather than a dash.
-            // The cell is NOT a term of the mean, and this row is what proves
-            // it - four of the five gates read 100% while the headline stays
-            // at the materials figure. Entering four gates at 1.0 instead of
-            // dropping them would put this row at 90%.
+            // A percentage appears in exactly the cells the headline was
+            // blended from, which is the row's own disclosure of what it
+            // counted. The five barriers this item does not have read "n/a";
+            // reading 100% there made a cell the mean never saw look like a
+            // finished one.
             var metrics = RankerReadinessCalculator.Compute(
                 Result(coin: 1000), Result(coin: 270), Availability(), 0);
 
             foreach (var gate in metrics.Gates)
             {
                 Assert.Equal(
-                    gate.Gate == RankerGate.Materials ? "73%" : "100%",
+                    gate.Gate == RankerGate.Materials
+                        ? "73%"
+                        : RankerReadinessCalculator.NotApplicableText,
                     RankerReadinessCalculator.FormatGate(gate));
             }
+
+            // Nor does such a cell paint a full bar, which would make the
+            // same claim in the other medium.
+            Assert.All(
+                metrics.Gates.Where(g => g.Gate != RankerGate.Materials),
+                g => Assert.Equal(0.0, RankerReadinessCalculator.GateBarFraction(g)));
 
             Assert.Equal(0.73, metrics.Readiness, 6);
             Assert.Equal("73%", RankerReadinessCalculator.FormatReadiness(metrics));
