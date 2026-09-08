@@ -90,6 +90,26 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// True when a required recipe carries no unlock the player could be
+        /// missing, either because the game grants it with discipline rating
+        /// (auto-learned) or because its source tag has no unlock at all
+        /// (<see cref="IsUnlockFree"/>). One predicate, called by
+        /// PlanViewModelBuilder.BuildRecipesSection and
+        /// RankerReadinessCalculator.ScoreRecipes, so the plan's Required
+        /// Recipes header and the Ranker's Recipes cell count one set.
+        /// <para>
+        /// They did not. The Ranker dropped auto-learned recipes and the
+        /// plan listed them, so The Bifrost scored 6 required recipes while
+        /// its plan header said "showing 6 missing of 15" - the 9 the game
+        /// hands you on levelling the discipline.
+        /// </para>
+        /// </summary>
+        public static bool HasNoUnlockBarrier(bool isAutoLearned, IReadOnlyList<string> disciplines)
+        {
+            return isAutoLearned || IsUnlockFree(disciplines);
+        }
+
+        /// <summary>
         /// Returns the rows that should render given the current filter
         /// state: every row when hideUnlocked is false, otherwise every row
         /// that is NOT Learned/Auto-learned. Never mutates the input list -

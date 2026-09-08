@@ -401,8 +401,14 @@ namespace TaimisToolbench.Tests.Services
 
         // --- Required Recipes ---
         [Fact]
-        public void RequiredRecipes_AutoLearned_StatusTag()
+        public void RequiredRecipes_AutoLearned_IsNotListedAtAll()
         {
+            // The game grants an auto-learned recipe with the discipline
+            // rating, so there is no unlock the player can be missing. The
+            // section drops it for the same reason it drops a Mystic Forge
+            // one, through the same predicate the Ranker's Recipes gate
+            // counts by - which is what makes the header's total and that
+            // cell's denominator one number.
             var result = MakeResult(requiredRecipes: new List<RequiredRecipe>
             {
                 new RequiredRecipe
@@ -417,8 +423,8 @@ namespace TaimisToolbench.Tests.Services
             });
             var vm = _builder.Build(result);
 
-            var section = vm.Sections.First(s => s.SectionType == PlanSectionType.RequiredRecipes);
-            Assert.Equal("Auto-learned", section.Rows[0].StatusTag);
+            Assert.DoesNotContain(
+                vm.Sections, s => s.SectionType == PlanSectionType.RequiredRecipes);
         }
 
         [Fact]
@@ -544,8 +550,8 @@ namespace TaimisToolbench.Tests.Services
         /// </summary>
         [Theory]
         [InlineData(false, false)]
-        [InlineData(true, true)]
-        public void RequiredRecipes_LearnedAndAutoLearnedRowsStillReachTheWiki(
+        [InlineData(false, true)]
+        public void RequiredRecipes_LearnedAndMissingRowsStillReachTheWiki(
             bool isAutoLearned, bool isMissing)
         {
             var meta = MetaFor((1, "Bolt of Damask", "bolt.png"));
@@ -581,7 +587,7 @@ namespace TaimisToolbench.Tests.Services
                     {
                         RecipeId = 10,
                         OutputItemId = 5,
-                        IsAutoLearned = true,
+                        IsAutoLearned = false,
                         Disciplines = new List<string> { "Weaponsmith" },
                         MinRating = 400,
                     },
@@ -754,7 +760,7 @@ namespace TaimisToolbench.Tests.Services
                     {
                         RecipeId = 20,
                         OutputItemId = 2,
-                        IsAutoLearned = true,
+                        IsAutoLearned = false,
                         Disciplines = new List<string> { "Weaponsmith" },
                         MinRating = 500,
                     },

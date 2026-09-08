@@ -1653,10 +1653,14 @@ namespace TaimisToolbench.Services
             {
                 // A recipe with no unlock has nothing to learn, so it is
                 // skipped rather than shown as an always-"Learned" row. The
-                // rule lives in RequiredRecipesVisibility.IsUnlockFree.
+                // rule lives in RequiredRecipesVisibility.HasNoUnlockBarrier,
+                // which the Ranker's Recipes gate calls too so the header's
+                // total and that cell's denominator are one number.
                 // Touches only this section's row list - a Mystic Forge
-                // craft STEP keeps its location sublabel.
-                if (RequiredRecipesVisibility.IsUnlockFree(recipe.Disciplines))
+                // craft STEP keeps its location sublabel, and an auto-learned
+                // recipe still gets its Crafting Steps row.
+                if (RequiredRecipesVisibility.HasNoUnlockBarrier(
+                        recipe.IsAutoLearned, recipe.Disciplines))
                 {
                     continue;
                 }
