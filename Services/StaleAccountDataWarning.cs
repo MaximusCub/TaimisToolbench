@@ -166,7 +166,7 @@ namespace TaimisToolbench.Services
             }
 
             return "Could not refresh your account, so this plan used data from "
-                + StatusText.ForAgeAgo(notice.Age) + ". "
+                + StatusText.ForAgeAgoInWords(notice.Age) + ". "
                 + SecondSentence(notice.Sources);
         }
 
@@ -213,7 +213,7 @@ namespace TaimisToolbench.Services
             var parts = new List<string>
             {
                 "Refresh failed before a plan solved against data "
-                    + StatusText.ForAgeAgo(notice.Age) + ".",
+                    + StatusText.ForAgeAgoInWords(notice.Age) + ".",
                 "Unread and used by the plan: " + JoinLabels(notice.Sources) + ".",
             };
 

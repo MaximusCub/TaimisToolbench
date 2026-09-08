@@ -4496,11 +4496,16 @@ namespace TaimisToolbench.Views
             }
         }
 
+        // One dialog per run of failed refreshes - see
+        // Services/RefreshFailureRun.cs. Held on the view because the run
+        // is the module's fact and being told about it is the user's.
+        private readonly StaleDataDialogGate _staleDataDialog = new StaleDataDialogGate();
+
         /// <summary>
         /// Tells the user their account snapshot did not refresh, but only
         /// when this plan reads something the refresh failed to read - see
-        /// Services/StaleAccountDataWarning.cs. The status line under the
-        /// toolbar carries the failure either way.
+        /// Services/StaleAccountDataWarning.cs - and only once per run of
+        /// failures. The status line and the Log tab carry every one.
         /// </summary>
         public void RaiseStaleAccountDataDialog(
             PlanAccountRefresh refresh, CraftingPlanResult result, bool usedOwnMaterials)
@@ -4528,6 +4533,11 @@ namespace TaimisToolbench.Views
             // box and goes looking for what it left out.
             ModuleLog.Shared.Write(
                 ModuleLogLevel.Warn, "plan", StaleAccountDataWarning.ComposeLogDetail(notice));
+
+            if (!_staleDataDialog.ShouldRaise(refresh.FailureRunId))
+            {
+                return;
+            }
 
             _modalDialog?.ShowAcknowledgement(StaleAccountDataWarning.Compose(notice));
         }

@@ -302,6 +302,51 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// The same age spelled out - "14 minutes ago", "3 hours ago",
+        /// "2 days ago", "4 months ago". For prose a reader meets once: the
+        /// stale-account-data dialog and its Log tab line.
+        /// <para>
+        /// <see cref="ForAgeAgo"/>'s "14m ago" is written for a status band
+        /// that is already short of room and is read at a glance. Neither of
+        /// these two is, and both have the width.
+        /// </para>
+        /// <para>
+        /// Only the coarsest unit is named, so "3h 12m ago" becomes "3 hours
+        /// ago". The finer term buys a reader deciding whether to regenerate
+        /// nothing, and it costs the sentence its rhythm.
+        /// </para>
+        /// </summary>
+        public static string ForAgeAgoInWords(TimeSpan age)
+        {
+            if (age < TimeSpan.Zero)
+            {
+                age = TimeSpan.Zero;
+            }
+
+            if (age.TotalMinutes < 1)
+            {
+                return "just now";
+            }
+
+            if (age.TotalHours < 1)
+            {
+                return Count((int)age.TotalMinutes, "minute") + " ago";
+            }
+
+            if (age.TotalDays < 1)
+            {
+                return Count((int)age.TotalHours, "hour") + " ago";
+            }
+
+            if (age.TotalDays < AgeDaysPerMonth)
+            {
+                return Count((int)age.TotalDays, "day") + " ago";
+            }
+
+            return Count((int)(age.TotalDays / AgeDaysPerMonth), "month") + " ago";
+        }
+
+        /// <summary>
         /// How much of the account's character data a snapshot is missing,
         /// or null when it is missing none. A character counts when its
         /// bags, its equipment or its disciplines failed to fetch, so its

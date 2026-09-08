@@ -556,6 +556,31 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal("just now", StatusText.ForAgeAgo(TimeSpan.FromSeconds(-5)));
         }
 
+        // ForAgeAgoInWords is the same ladder spelled out, for the two
+        // places a reader meets an age in prose rather than in a band: the
+        // stale-account-data dialog and its Log tab line.
+        [Theory]
+        [InlineData(0.5, "just now")]
+        [InlineData(1, "1 minute ago")]
+        [InlineData(14, "14 minutes ago")]
+        [InlineData(59, "59 minutes ago")]
+        [InlineData(60, "1 hour ago")]
+        [InlineData(192, "3 hours ago")]
+        [InlineData(1440, "1 day ago")]
+        [InlineData(2880, "2 days ago")]
+        [InlineData(43200, "1 month ago")]
+        [InlineData(172800, "4 months ago")]
+        public void ForAgeAgoInWords_SpellsTheCoarsestUnitOnly(double minutes, string expected)
+        {
+            Assert.Equal(expected, StatusText.ForAgeAgoInWords(TimeSpan.FromMinutes(minutes)));
+        }
+
+        [Fact]
+        public void ForAgeAgoInWords_Negative_ClampedToZero()
+        {
+            Assert.Equal("just now", StatusText.ForAgeAgoInWords(TimeSpan.FromSeconds(-5)));
+        }
+
         [Theory]
         [InlineData(1)]
         [InlineData(59)]

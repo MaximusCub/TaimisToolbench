@@ -108,7 +108,7 @@ namespace TaimisToolbench.Tests.Services
 
                 string message = StaleAccountDataWarning.Compose(notice);
                 Assert.Equal(
-                    "Could not refresh your account, so this plan used data from 14m ago. "
+                    "Could not refresh your account, so this plan used data from 14 minutes ago. "
                     + "Your material storage could not be read, and what you own may have changed since.",
                     message);
 
@@ -117,7 +117,7 @@ namespace TaimisToolbench.Tests.Services
                 string detail = StaleAccountDataWarning.ComposeLogDetail(notice);
                 Assert.Contains("material storage", detail);
                 Assert.Contains("Ingredient", detail);
-                Assert.Contains("14m ago", detail);
+                Assert.Contains("14 minutes ago", detail);
 
                 // The item name is exactly what the dialog must not spell
                 // out - it is what grew the old message to six sentences.
@@ -375,7 +375,7 @@ namespace TaimisToolbench.Tests.Services
                 age: TimeSpan.FromMinutes(14));
 
             Assert.Equal(
-                "Could not refresh your account, so this plan used data from 14m ago. "
+                "Could not refresh your account, so this plan used data from 14 minutes ago. "
                 + "What you own may have changed since.",
                 StaleAccountDataWarning.Compose(notice));
         }
