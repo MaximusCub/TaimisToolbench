@@ -674,6 +674,11 @@ tests/VendorOfferUpdater.Tests/VendorOfferManifestTests.cs                      
 tests/VendorOfferUpdater.Tests/VendorUnlockRequirementParserTests.cs                    79
 tests/VendorOfferUpdater.Tests/WikiApiRefusalTests.cs                                   344
 tests/VendorOfferUpdater.Tests/WikiSmwClientTests.cs                                    707
+tools/TaimisToolbench.Harness/ByteCountingHandler.cs                                    106
+tools/TaimisToolbench.Harness/CountingGw2HttpClient.cs                                  160
+tools/TaimisToolbench.Harness/FetchProfilePlan.cs                                       271
+tools/TaimisToolbench.Harness/FetchProfiler.cs                                          473
+tools/TaimisToolbench.Harness/SnapshotFetchShapes.cs                                    533
 tools/TaimisToolbench.Harness/Program.cs                                                861
 tools/TaimisToolbench.RecipeSeeder/Program.cs                                           787
 tools/MysticForgeSeeder/Program.cs                                                      818
