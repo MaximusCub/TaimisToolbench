@@ -62,7 +62,7 @@ namespace TaimisToolbench.Services
                 case AccountDataSource.LegendaryArmory:
                     return "legendary armory";
                 case AccountDataSource.Characters:
-                    return "character bags and equipment";
+                    return "characters";
                 default:
                     return "account data";
             }
