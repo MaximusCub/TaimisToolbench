@@ -28,7 +28,16 @@ namespace TaimisToolbench.Tests.Services
         private const int GiftOfDedication = 78936;
         private const int AuricIngotRecipeId = 10229;
 
-        private static async Task<CraftingPlanResult> PlanGiftOfDedicationAsync()
+        // Its one Achievement recipe is fed by three Merchant ones, so every
+        // recipe in this plan carries a source tag rather than a discipline.
+        private const int InfiniteTrebuchetBlueprint = 103980;
+
+        private static Task<CraftingPlanResult> PlanGiftOfDedicationAsync()
+        {
+            return PlanAsync(GiftOfDedication);
+        }
+
+        private static async Task<CraftingPlanResult> PlanAsync(int itemId)
         {
             var corpus = RealCorpusFixture.Load();
 
@@ -45,7 +54,7 @@ namespace TaimisToolbench.Tests.Services
                 accountRecipeClient: accountRecipes);
 
             return await pipeline.GenerateStructuredAsync(
-                GiftOfDedication, 1, null, CancellationToken.None);
+                itemId, 1, null, CancellationToken.None);
         }
 
         private static List<PlanRowViewModel> RecipeRows(CraftingPlanResult result)
@@ -123,6 +132,25 @@ namespace TaimisToolbench.Tests.Services
             var gate = RecipesGate(result);
             Assert.True(gate.Applies);
             Assert.Equal(expected, gate.Completion, 9);
+        }
+
+        [Fact]
+        public async Task NeitherSurfaceCountsAnAchievementOrMerchantRecipe()
+        {
+            var result = await PlanAsync(InfiniteTrebuchetBlueprint);
+
+            Assert.Equal(4, result.RequiredRecipes.Count);
+            Assert.All(result.RequiredRecipes, r => Assert.False(r.IsMissing));
+            Assert.All(result.RequiredRecipes, r =>
+                Assert.True(RequiredRecipesVisibility.IsUnlockFree(r.Disciplines)));
+
+            // Nothing here can be learned, so the plan raises no Required
+            // Recipes section and the Ranker's Recipes gate does not apply.
+            // Scoring these four used to report a measured 4-of-4.
+            Assert.DoesNotContain(
+                new PlanViewModelBuilder().Build(result).Sections,
+                s => s.SectionType == PlanSectionType.RequiredRecipes);
+            Assert.False(RecipesGate(result).Applies);
         }
     }
 }

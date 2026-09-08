@@ -7,14 +7,6 @@ namespace TaimisToolbench.Services
 {
     internal class PlanResultBuilder
     {
-        // Disciplines that are informational source tags, not real,
-        // player-levelable GW2 crafting disciplines: a recipe carrying one
-        // of these is inherently available whenever its ingredients are,
-        // with no "learn this recipe" unlock concept at all (mirrors the
-        // pre-existing Mystic Forge treatment below).
-        private static readonly HashSet<string> InherentlyAvailableDisciplines =
-            new HashSet<string> { "MysticForge", "Achievement", "Merchant" };
-
         // "Achievement"/"Merchant" are informational source tags on seed
         // recipes, and the Mystic Forge is a facility with no rating or
         // unlock concept - none are player-levelable disciplines, so all
@@ -291,12 +283,14 @@ namespace TaimisToolbench.Services
                 // recipe unlocked via a consumable recipe sheet.
                 bool isLearnedFromItem = option.Flags.Contains("LearnedFromItem");
                 bool? isMissing;
-                if (option.Disciplines.Any(d => InherentlyAvailableDisciplines.Contains(d)))
+                if (RequiredRecipesVisibility.IsUnlockFree(option.Disciplines))
                 {
                     // Membership check on the recipe's declared
                     // Disciplines, not a "recipeId < 0" sign check - the
                     // achievement/merchant seed recipes also use negative
-                    // ids. All are inherently available - no unlock.
+                    // ids. The shared predicate is what keeps the surfaces
+                    // that COUNT these recipes agreeing with this decision
+                    // not to give them an unlock state.
                     isMissing = false;
                 }
                 else

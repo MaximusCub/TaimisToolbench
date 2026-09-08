@@ -664,8 +664,8 @@ namespace TaimisToolbench.Tests.Services
             // inherently available - no "learn this recipe" concept
             // applies - exactly like a real Mystic Forge recipe, even
             // though the underlying check is no longer a bare
-            // "recipeId < 0" sign check (see PlanResultBuilder's
-            // InherentlyAvailableDisciplines).
+            // "recipeId < 0" sign check (see
+            // RequiredRecipesVisibility.IsUnlockFree).
             var tree = TreeWithCraftStep(
                 1, -1592, 1,
                 new List<string> { "Achievement" }, 0, new List<string>(),
