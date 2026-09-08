@@ -481,9 +481,9 @@ namespace TaimisToolbench.Services
             // account recipe data) - same never-fabricate rule as the
             // disciplines gate's null-characters branch. Auto-learned
             // recipes carry no unlock barrier and are excluded outright, and
-            // so are Mystic-Forge-only ones - see
-            // RequiredRecipesVisibility.IsMysticForgeOnly, which the plan's
-            // own Required Recipes section calls for the same purpose.
+            // so are the ones RequiredRecipesVisibility.IsUnlockFree names,
+            // which the plan's own Required Recipes section calls for the
+            // same purpose.
             int counted = 0;
             int known = 0;
             foreach (var recipe in required)
@@ -493,7 +493,7 @@ namespace TaimisToolbench.Services
                     continue;
                 }
 
-                if (RequiredRecipesVisibility.IsMysticForgeOnly(recipe.Disciplines))
+                if (RequiredRecipesVisibility.IsUnlockFree(recipe.Disciplines))
                 {
                     continue;
                 }

@@ -110,9 +110,9 @@ namespace TaimisToolbench.Services
                 vm.Sections.Add(BuildDisciplinesSection(result));
             }
 
-            // 5. Required Recipes section (only if at least one
-            // non-Mystic-Forge recipe remains once BuildRecipesSection
-            // filters MF-only rows out)
+            // 5. Required Recipes section (only if at least one recipe
+            // remains once BuildRecipesSection filters the unlock-free
+            // rows out)
             if (result.RequiredRecipes != null && result.RequiredRecipes.Count > 0)
             {
                 var recipesSection = BuildRecipesSection(result);
@@ -1651,12 +1651,12 @@ namespace TaimisToolbench.Services
 
             foreach (var recipe in result.RequiredRecipes)
             {
-                // A sole-Mystic-Forge recipe has nothing to learn, so it is
+                // A recipe with no unlock has nothing to learn, so it is
                 // skipped rather than shown as an always-"Learned" row. The
-                // rule lives in RequiredRecipesVisibility.IsMysticForgeOnly.
+                // rule lives in RequiredRecipesVisibility.IsUnlockFree.
                 // Touches only this section's row list - a Mystic Forge
                 // craft STEP keeps its location sublabel.
-                if (RequiredRecipesVisibility.IsMysticForgeOnly(recipe.Disciplines))
+                if (RequiredRecipesVisibility.IsUnlockFree(recipe.Disciplines))
                 {
                     continue;
                 }

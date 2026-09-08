@@ -24,15 +24,12 @@ namespace TaimisToolbench.Services
         // real, player-levelable GW2 crafting disciplines - a recipe
         // carrying only these is inherently available whenever its
         // ingredients are, with no "train this discipline" concept and
-        // therefore nothing for competency to gate on. Mirrors
-        // PlanResultBuilder's own NonCraftingDisciplines/
-        // InherentlyAvailableDisciplines sets value-for-value (that file
-        // already carries two independent copies of this same list for its
-        // own two call sites - see its own doc comments) - kept as an
-        // independent copy here too, rather than a new cross-file
-        // dependency, since PlanSolver's Services layer should not reach
-        // into PlanResultBuilder's display-adjacent internals for a solver-
-        // path decision.
+        // therefore nothing for competency to gate on. The same three tags
+        // appear in PlanResultBuilder's NonCraftingDisciplines and in
+        // RequiredRecipesVisibility's UnlockFreeDisciplines - kept as an
+        // independent copy here rather than a new cross-file dependency,
+        // since PlanSolver's Services layer should not reach into a
+        // display-adjacent internal for a solver-path decision.
         private static readonly HashSet<string> NonLevelableDisciplineTags =
             new HashSet<string>(StringComparer.Ordinal) { "MysticForge", "Achievement", "Merchant" };
 
