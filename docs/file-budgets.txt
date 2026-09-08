@@ -17,13 +17,35 @@
 # Lowering a budget is the explicit act of a refactor commit. Raising one
 # is allowed, and should say in the commit message why the code earned it.
 #
-# Only tracked .cs files are gated, and only the ones listed here; a file
-# added without an entry is ungated until someone adds it. An entry whose
-# path no longer exists also fails, so a rename has to re-anchor its
-# budget rather than silently drop it.
+# Every tracked .cs file is gated, listed here or not. A file with no entry
+# is held to the default below. The entries are the exceptions: files that
+# are allowed to be longer than the default, each at the size it was on the
+# day its entry was added. An entry whose path no longer exists also fails,
+# so a rename has to re-anchor its budget rather than silently drop it.
+#
+# default 300
+#
+# Where 300 comes from, over the 734 tracked .cs files on 2026-09-06. It is
+# the 75th percentile of their line counts, which is 290, rounded up to a
+# multiple of 50. It is also where the count of files over the line stops
+# falling quickly: 150 lines catches 378 files, 200 catches 300, 250
+# catches 225 and 300 catches 180, after which each further 50 lines takes
+# out at most 30 more. Three quarters of the tree is under it and a quarter
+# is over, so it binds on a file that has grown without binding on ordinary
+# code.
+#
+# An entry below the default still binds at the entry, not at 300. Nothing
+# here got looser when the default arrived, and an entry under 300 is not
+# redundant: on the same date, dropping the 499 entries at or under 300
+# would have handed those files 83,161 lines of free growth between them.
 #
 # Format: <path> <max-lines>. Seeded 2026-08-25 from the tree at that
 # commit (git ls-files '*.cs' | xargs wc -l).
+#
+# The gate is FileLineBudgetTests in tests/TaimisToolbench.Tests. It walks
+# the tree, so it sees a file with no entry; the "Files stay within their
+# line budgets" step in .github/workflows/tests.yml walks this file instead
+# and so can only check the entries, which is a subset of the same rule.
 Contracts/IItemSearchProvider.cs                                                        74
 Models/AccountSnapshot.cs                                                               49
 Models/AcquisitionHint.cs                                                               26
@@ -403,6 +425,7 @@ tests/TaimisToolbench.Tests/Services/AcquisitionHintSeedVendorAgreementTests.cs 
 tests/TaimisToolbench.Tests/Services/AcquisitionHintServiceTests.cs                     245
 tests/TaimisToolbench.Tests/Services/AmalgamatedRiftEssenceIngestionTests.cs            358
 tests/TaimisToolbench.Tests/Services/BoundedConcurrencyTests.cs                         196
+tests/TaimisToolbench.Tests/Services/CharacterSnapshotCollectorTests.cs                422
 tests/TaimisToolbench.Tests/Services/ClickSoundVolumeTests.cs                           131
 tests/TaimisToolbench.Tests/Services/ClipTopSlipSimulationTests.cs                      158
 tests/TaimisToolbench.Tests/Services/CoinFormattingTests.cs                             211
@@ -436,6 +459,7 @@ tests/TaimisToolbench.Tests/Services/CurrencyValuationSerializerTests.cs        
 tests/TaimisToolbench.Tests/Services/DailyCooldownItemServiceTests.cs                   209
 tests/TaimisToolbench.Tests/Services/DecisionPillPlannerSubduingTests.cs                187
 tests/TaimisToolbench.Tests/Services/DecisionPillPlannerTests.cs                        1036
+tests/TaimisToolbench.Tests/Services/DeferredReflowGateTests.cs                        375
 tests/TaimisToolbench.Tests/Services/DialogLayoutMathTests.cs                           484
 tests/TaimisToolbench.Tests/Services/DisciplinesColumnMathTests.cs                      177
 tests/TaimisToolbench.Tests/Services/EquippedRuneSetTests.cs                            217
@@ -498,6 +522,7 @@ tests/TaimisToolbench.Tests/Services/PlanHistoryRetentionTests.cs               
 tests/TaimisToolbench.Tests/Services/PlanHistoryRowLayoutTests.cs                       422
 tests/TaimisToolbench.Tests/Services/PlanHistoryStoreTests.cs                           323
 tests/TaimisToolbench.Tests/Services/PlanHistoryTableSorterTests.cs                     177
+tests/TaimisToolbench.Tests/Services/PlanNonCoinCostTotalsTests.cs                     518
 tests/TaimisToolbench.Tests/Services/PlanPhaseTimingSummaryTests.cs                     201
 tests/TaimisToolbench.Tests/Services/PlanRelayoutMathTests.cs                           829
 tests/TaimisToolbench.Tests/Services/PlanResultBuilderTests.cs                          1103
@@ -629,6 +654,7 @@ tests/TaimisToolbench.Tests/Services/TradingPostServiceTests.cs                 
 tests/TaimisToolbench.Tests/Services/TransmutedNameTests.cs                             441
 tests/TaimisToolbench.Tests/Services/TreeChipStripLayoutTests.cs                        283
 tests/TaimisToolbench.Tests/Services/TreeCostColumnMathTests.cs                         768
+tests/TaimisToolbench.Tests/Services/TreePillColumnMathTests.cs                        826
 tests/TaimisToolbench.Tests/Services/TreeRootCostMatchesPlanTotalTests.cs               116
 tests/TaimisToolbench.Tests/Services/TreeRowIdentityTests.cs                            246
 tests/TaimisToolbench.Tests/Services/TreeRowShapeGoldenTests.cs                         145
@@ -636,6 +662,7 @@ tests/TaimisToolbench.Tests/Services/TreeRowTooltipComposerTests.cs             
 tests/TaimisToolbench.Tests/Services/TypeRampMetricsTests.cs                            206
 tests/TaimisToolbench.Tests/Services/ValueDetailTooltipBuilderTests.cs                  191
 tests/TaimisToolbench.Tests/Services/VendorCoinCostShippedDataTests.cs                  101
+tests/TaimisToolbench.Tests/Services/VendorCostLineExpansionRealCorpusTests.cs         398
 tests/TaimisToolbench.Tests/Services/VendorCurrencyTradeUpRoutingTests.cs               248
 tests/TaimisToolbench.Tests/Services/VendorCapNoticeAgreementTests.cs                   124
 tests/TaimisToolbench.Tests/Services/VendorOfferStoreTests.cs                           576
@@ -675,6 +702,7 @@ tests/VendorOfferUpdater.Tests/VendorUnlockRequirementParserTests.cs            
 tests/VendorOfferUpdater.Tests/WikiApiRefusalTests.cs                                   344
 tests/VendorOfferUpdater.Tests/WikiSmwClientTests.cs                                    707
 tools/TaimisToolbench.Harness/Program.cs                                                861
+tools/TaimisToolbench.Harness/TerminalClassifier.cs                                    650
 tools/TaimisToolbench.RecipeSeeder/Program.cs                                           787
 tools/MysticForgeSeeder/Program.cs                                                      818
 tools/MysticForgeSeeder/WikiRecipeClient.cs                                             681
