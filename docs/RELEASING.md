@@ -434,9 +434,15 @@ was introduced and to this `Exclude` never. `release.yml` builds from a clean
 checkout, so no published `.bhm` ever carried them. A locally built one did,
 which is the artifact step 10 above installs for in-game testing. The
 seasonal cache measured 69,672 bytes on one such machine on 2026-09-07. That
-is the third time the two lists have drifted apart, and nothing in CI yet
-compares them, so adding a `ref/` line to `.gitignore` still means adding the
-same file to this `Exclude` by hand.
+is the third time the two lists have drifted apart.
+
+**Compared in CI since the faithful-costs branch:**
+`tests/TaimisToolbench.Tests/PackagedRefFilesTests.cs` reads `.gitignore` and
+the `RefFiles` `Exclude` in `TaimisToolbench.csproj` and fails when a `ref/`
+path is in the first and not the second. It asserts the rule, not a built
+artefact: no `.bhm` is unpacked and no Windows build is needed. Adding a
+`ref/` line to `.gitignore` still means adding the same file to this
+`Exclude`; the suite now says so instead of a player finding out.
 
 None of the six is
 copied into `$(OutDir)ref` or zipped into the `.bhm` any more, regardless of

@@ -395,6 +395,7 @@ tests/TaimisToolbench.Tests/Models/HomesteadEfficiencyTiersTests.cs             
 tests/TaimisToolbench.Tests/Models/PersistedPlanSchemaMemberSetTests.cs                 73
 tests/TaimisToolbench.Tests/Models/PlanHistorySchemaMemberSetTests.cs                   87
 tests/TaimisToolbench.Tests/Models/SettingsFormStateTests.cs                            326
+tests/TaimisToolbench.Tests/PackagedRefFilesTests.cs                                    188
 tests/TaimisToolbench.Tests/Services/AboutLayoutMathTests.cs                            209
 tests/TaimisToolbench.Tests/Services/AccountCurrencyIndexTests.cs                       80
 tests/TaimisToolbench.Tests/Services/AccountItemIndexTests.cs                           465
