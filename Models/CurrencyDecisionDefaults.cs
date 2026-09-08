@@ -36,21 +36,21 @@ namespace TaimisToolbench.Models
     /// <summary>
     /// Curated default DECISION-ONLY currency valuations (copper per unit).
     /// Every key is the official GW2 wallet currency id, cross-checked
-    /// against the live API. The table has two provenance blocks, kept apart
-    /// below and never interleaved: values adapted from gw2efficiency's
+    /// against the live API. Two provenance blocks below, kept apart and
+    /// never interleaved: values adapted from gw2efficiency's
     /// CURRENCY_DECISION_PRICES, and values derived here under the rule
-    /// stated on that block. A currency in neither block stays unvalued
-    /// rather than gaining an invented rate.
+    /// stated on that block. A currency in neither stays unvalued rather
+    /// than gaining an invented rate.
     /// <para>
-    /// DECISION-ONLY: a value here may tip a comparison but must never be
-    /// folded into any displayed gold total. See
-    /// CurrencyValuation.TryGetEffectiveCopperValue for the
+    /// DECISION-ONLY: a value here may tip a comparison, and may weight a
+    /// ratio the module prints as a percentage, but must never be folded
+    /// into any displayed gold total. CurrencyValuation carries the
     /// user-override/cleared/default precedence. Shipping this curated
     /// table is a one-time waiver of the repo's "do not invent data" rule
-    /// for this table only - every value is either sourced and attributed
-    /// upstream, under the licence at the top of this file, or derived from
-    /// live GW2 API data. Derivations, and the currencies deliberately left
-    /// unvalued: docs/ARCHITECTURE.md section 8.3.
+    /// for this table only: every value is sourced and attributed upstream,
+    /// under the licence at the top of this file, or derived from live GW2
+    /// API data. Derivations, the currencies deliberately left unvalued,
+    /// and where a decision value may appear: docs/ARCHITECTURE.md 8.3.
     /// </para>
     /// </summary>
     internal static class CurrencyDecisionDefaults

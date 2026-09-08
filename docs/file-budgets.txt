@@ -60,7 +60,7 @@ Models/PlanStatus.cs                                                            
 Models/PlanStep.cs                                                                      72
 Models/PlanViewModel.cs                                                                 514
 Models/PriceBasis.cs                                                                    32
-Models/RankerRowMetrics.cs                                                              152
+Models/RankerRowMetrics.cs                                                              160
 Models/RankerSlotAvailability.cs                                                        59
 Models/RankerWatchlistEntry.cs                                                          95
 Models/RecipeNode.cs                                                                    49
@@ -198,7 +198,7 @@ Services/PlanViewModelBuilder.cs                                                
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
-Services/RankerReadinessCalculator.cs                                                   697
+Services/RankerReadinessCalculator.cs                                                   770
 Services/RankerReadinessRamp.cs                                                         265
 Services/RankerReadinessWeights.cs                                                      61
 Services/RankerResultCache.cs                                                           263
@@ -314,7 +314,7 @@ Views/DialogWindow.cs                                                           
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    425
 Views/PlanHistoryTabContent.cs                                                          1529
-Views/RankerTabContent.cs                                                               3087
+Views/RankerTabContent.cs                                                               3145
 Views/Rendering/ClickSound.cs                                                           197
 Views/Rendering/CaretKeyButton.cs                                                       109
 Views/Rendering/CloseKeyButton.cs                                                       64
@@ -543,6 +543,7 @@ tests/TaimisToolbench.Tests/Services/PlanViewModelBuilderStepSectionsTests.cs   
 tests/TaimisToolbench.Tests/Services/PlanViewModelBuilderSublabelTests.cs               264
 tests/TaimisToolbench.Tests/Services/PlanViewModelBuilderSummaryTests.cs                1314
 tests/TaimisToolbench.Tests/Services/RankerCascadeIntegrationTests.cs                   358
+tests/TaimisToolbench.Tests/Services/RankerMaterialsCurrencyValueTests.cs               328
 tests/TaimisToolbench.Tests/Services/RankerPriorityCascadeTests.cs                      377
 tests/TaimisToolbench.Tests/Services/RankerPriorityOrderingTests.cs                     256
 tests/TaimisToolbench.Tests/Services/RankerRarityAdoptionTests.cs                       130

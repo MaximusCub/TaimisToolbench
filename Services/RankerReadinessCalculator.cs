@@ -13,9 +13,11 @@ namespace TaimisToolbench.Services
     ///
     /// The headline is a weighted mean of five gate completions, renormalised
     /// over the gates that apply to the item (see RankerReadinessWeights).
-    /// Nothing is ever converted into anything else: every ratio the model
-    /// computes carries the same unit above and below the line, which is what
-    /// keeps an unvalued currency from being silently priced at zero.
+    /// Every ratio carries the same unit above and below the line. The
+    /// materials gate's unit is copper, so a currency cost enters it at the
+    /// decision valuation and a currency with no valuation enters neither
+    /// half - it is reported in MaterialsUnpricedCurrencyIds and scored by
+    /// the currencies gate instead. Nothing else is converted at all.
     ///
     /// The property that matters most: an item with no time gate, no currency
     /// cost and no discipline requirement scores exactly what a coin-only
@@ -31,13 +33,20 @@ namespace TaimisToolbench.Services
         /// unconsumed availability, so every claimed set is empty and the
         /// contested/queued arithmetic below is naturally inert). Both under
         /// OwnMaterialsMode.Free.
+        /// <para>
+        /// currencyValuation is what the materials gate prices a currency
+        /// cost at. Pass the same instance the two solves were generated
+        /// with; null prices no currency at all and every currency the plan
+        /// spends lands in MaterialsUnpricedCurrencyIds.
+        /// </para>
         /// </summary>
         public static RankerRowMetrics Compute(
             CraftingPlanResult baseline,
             CraftingPlanResult owned,
             RankerSlotAvailability availability,
             int priorityIndex,
-            RankerMode mode = RankerMode.Cascade)
+            RankerMode mode = RankerMode.Cascade,
+            CurrencyValuation currencyValuation = null)
         {
             var metrics = new RankerRowMetrics
             {
@@ -46,6 +55,7 @@ namespace TaimisToolbench.Services
                 Gates = BuildInapplicableGates(),
                 CurrencyShortfalls = Array.Empty<RankerCurrencyShortfall>(),
                 VendorCappedItems = Array.Empty<TimegatedItem>(),
+                MaterialsUnpricedCurrencyIds = Array.Empty<int>(),
                 DisciplineGaps = Array.Empty<RankerDisciplineGap>(),
                 PriorityIndex = priorityIndex,
                 ComputedAtUtc = DateTime.UtcNow,
@@ -65,7 +75,7 @@ namespace TaimisToolbench.Services
 
             var gates = new List<RankerGateScore>(5)
             {
-                ScoreMaterials(baseline, owned),
+                ScoreMaterials(baseline, owned, currencyValuation, metrics),
                 ScoreCurrencies(baseline, owned, heldCurrency, metrics),
                 ScoreTimeGates(baseline, owned, claimedGated, metrics),
                 ScoreDisciplines(owned, metrics),
@@ -255,18 +265,81 @@ namespace TaimisToolbench.Services
 
         private static readonly IReadOnlyDictionary<int, int> EmptyIntMap = new Dictionary<int, int>();
 
-        private static RankerGateScore ScoreMaterials(CraftingPlanResult baseline, CraftingPlanResult owned)
+        /// <summary>
+        /// What the plan's whole bill costs, in copper, and how much of it
+        /// the account's own materials have already removed. Coin and valued
+        /// currency both count: a currency the plan pays is work the player
+        /// has to do, and leaving it out understated it.
+        /// </summary>
+        private static RankerGateScore ScoreMaterials(
+            CraftingPlanResult baseline,
+            CraftingPlanResult owned,
+            CurrencyValuation currencyValuation,
+            RankerRowMetrics metrics)
         {
             var gate = NewGate(RankerGate.Materials);
-            long baselineCoin = baseline.Plan.TotalCoinCost;
-            if (baselineCoin <= 0)
+
+            var unpriced = new SortedSet<int>();
+            double baselineTotal = baseline.Plan.TotalCoinCost
+                + ValuedCurrencyCopper(baseline.Plan.CurrencyCosts, currencyValuation, unpriced);
+            double ownedTotal = owned.Plan.TotalCoinCost
+                + ValuedCurrencyCopper(owned.Plan.CurrencyCosts, currencyValuation, unpriced);
+
+            metrics.MaterialsUnpricedCurrencyIds = unpriced.Count == 0
+                ? (IReadOnlyList<int>)Array.Empty<int>()
+                : new List<int>(unpriced);
+
+            if (baselineTotal <= 0)
             {
                 return gate;
             }
 
             gate.Applies = true;
-            gate.Completion = Clamp01(1.0 - (double)owned.Plan.TotalCoinCost / baselineCoin);
+            gate.Completion = Clamp01(1.0 - (ownedTotal / baselineTotal));
             return gate;
+        }
+
+        /// <summary>
+        /// The copper these currency costs are worth at the user's own or the
+        /// curated decision valuation (docs/ARCHITECTURE.md section 8.3).
+        /// A currency with no valuation adds nothing and is collected into
+        /// <paramref name="unpriced"/> instead: no rate exists to convert it,
+        /// and a zero would price a real barrier at free.
+        /// </summary>
+        private static double ValuedCurrencyCopper(
+            IReadOnlyList<CurrencyCost> costs,
+            CurrencyValuation valuation,
+            ISet<int> unpriced)
+        {
+            if (costs == null)
+            {
+                return 0;
+            }
+
+            double total = 0;
+            foreach (var cost in costs)
+            {
+                if (cost == null || cost.Amount <= 0)
+                {
+                    continue;
+                }
+
+                // Accumulated as a double because amount times
+                // copper-per-unit is a product of two longs; the ratio it
+                // feeds is a double anyway, so there is nothing to buy by
+                // risking the overflow.
+                if (valuation != null &&
+                    valuation.TryGetEffectiveCopperValue(cost.CurrencyId, out long copperPerUnit))
+                {
+                    total += (double)cost.Amount * copperPerUnit;
+                }
+                else
+                {
+                    unpriced.Add(cost.CurrencyId);
+                }
+            }
+
+            return total;
         }
 
         private static RankerGateScore ScoreCurrencies(
