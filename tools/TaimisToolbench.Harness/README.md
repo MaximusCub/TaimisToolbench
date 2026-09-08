@@ -77,3 +77,103 @@ executable, not under `ref/` or the repo root).
   updating a formal test.
 - With `--live` when validating against current, real GW2 API prices
   rather than the offline seed data.
+
+## Fetch Profiler (`--fetch-profile`)
+
+Measures how long an account snapshot takes to fetch, for several ways of
+fetching one, and what each way costs in requests and bytes. It answers the
+trade between request count and end-to-end time; it changes nothing in the
+module.
+
+```
+GW2_API_KEY=<key> dotnet run --project tools/TaimisToolbench.Harness/TaimisToolbench.Harness.csproj -- --fetch-profile
+```
+
+The key is read from `GW2_API_KEY` only. It is never written to the console,
+to the result file, or into a recorded URL. `--dry-run` prints the schedule
+and needs no key.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--fetch-profile` | - | Selects the profiler; every flag below needs it |
+| `--dry-run` | off | Print the schedule and the request budget, then exit |
+| `--per-minute <n>` | 55 | Requests allowed in any trailing 60 seconds |
+| `--max-requests <n>` | 750 | Hard stop for the whole experiment |
+| `--characters <n>` | 6 | Roster size `--dry-run` assumes; a real run probes it |
+| `--only <substring>` | all | Run just the configs whose name contains this |
+| `--out <dir>` | `%LOCALAPPDATA%\TaimisToolbench\fetch-profile` | Where raw per-run timings are written |
+
+Raw timings go to one JSON-lines file per invocation, outside the repo, so
+two runs can be compared.
+
+### What it varies
+
+- The narrow per-character endpoints the module uses today, at several
+  character fan-outs and several connection limits.
+- The same, without the barrier that makes the character phase wait for
+  every account-wide response.
+- `/v2/characters?ids=all`, one request for the whole roster.
+- `/v2/characters?page=N&page_size=N`, for a few page sizes.
+- A roster padded past the real one, to stand in for a larger account. A
+  padded entry re-requests a name already in the list, so those rows are a
+  simulation and are named as one.
+
+### Rate discipline
+
+The profiler holds itself under `--per-minute` by waiting between runs and
+never inside one, so a throttle is never charged to an approach as slowness.
+It stops at `--max-requests`. Both exist because the account it measures is
+somebody's, and Blish HUD may be refreshing the same account at the same
+time.
+
+### How close it is to the module's own path
+
+The point of the profiler is which approach is faster **through the module**,
+not which endpoint answers fastest, so the measured path is the module's
+wherever the module's code can be called outside Blish HUD.
+
+In the loop, and real:
+
+- Gw2Sharp 1.7.4, the version `packages.config` pins, with its middleware and
+  its Newtonsoft deserialization into the same `Gw2Sharp.WebApi.V2.Models`
+  types the module receives.
+- `MemoryCacheMethod`, the cache method Blish HUD builds its connection with.
+- `Services/Gw2ApiConnectionLimit.cs`, called where the module calls it.
+- `Services/CharacterSnapshotCollector.cs`, for both the fan-out and the fold
+  that decides when a harvest is incomplete.
+- `Services/BoundedConcurrency.cs`, for the character fan-out and for the
+  bulk-detail fan-out.
+- `Services/EquipmentLocationPolicy.cs` and `Services/AccountItemIndex.cs`,
+  so an equipped legendary is dropped from the item rows and counted as
+  armory-held exactly as the module drops and counts it.
+- The three resolve passes: `/v2/items` and `/v2/skins` in 200-id chunks four
+  in flight, and `/v2/currencies`. A run ends with a real
+  `Models/AccountSnapshot.cs` whose rows carry names, icons and rarities, so
+  the wall clock is time to a snapshot the module could render.
+
+Out of the loop, and why:
+
+- **`Services/Gw2AccountSnapshotService.cs` itself.** It takes a Blish HUD
+  `Gw2ApiManager`, which cannot be constructed outside a loaded module, so
+  its orchestration is repeated in `SnapshotFetchShapes.cs` rather than
+  called. Everything that orchestration calls is the real thing.
+- **Blish's token bucket.** Blish wraps its connection in
+  `TokenComplianceMiddleware(new TokenBucket(300, 5))`, shared across every
+  module and Blish's own traffic. A snapshot spends 13 to 55 requests against
+  a 300 burst, so a bucket that starts full does not throttle one; a bucket
+  already drawn down by other modules would, and equally for every approach.
+- **Retries.** `Gw2AccountSnapshotService` retries a failed call; the
+  profiler does not, so it reports a failure where the module would have
+  spent more time and recovered.
+- **A warm cache.** Every run builds its own `MemoryCacheMethod`, so every
+  run is a cold fetch. That is the case a timer refresh hits, and it is what
+  makes the request counts below real network traffic rather than cache
+  hits.
+
+### Reading the output
+
+`requests` is what reached the network, counted below Gw2Sharp's cache: a
+cached read never reaches the counter, so a run's count is proof of what it
+actually sent. `wire KB` is the compressed bytes the server sent, counted
+before decoding; `body KB` is the JSON after decoding, which is what the
+deserializer walks.
