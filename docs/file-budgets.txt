@@ -541,7 +541,7 @@ tests/TaimisToolbench.Tests/Services/PlanViewModelBuilderSellEconomicsTests.cs  
 tests/TaimisToolbench.Tests/Services/PlanViewModelBuilderShoppingListTests.cs           444
 tests/TaimisToolbench.Tests/Services/PlanViewModelBuilderStepSectionsTests.cs           784
 tests/TaimisToolbench.Tests/Services/PlanViewModelBuilderSublabelTests.cs               264
-tests/TaimisToolbench.Tests/Services/PlanViewModelBuilderSummaryTests.cs                1314
+tests/TaimisToolbench.Tests/Services/PlanViewModelBuilderSummaryTests.cs                1321
 tests/TaimisToolbench.Tests/Services/RankerCascadeIntegrationTests.cs                   358
 tests/TaimisToolbench.Tests/Services/RankerPriorityCascadeTests.cs                      377
 tests/TaimisToolbench.Tests/Services/RankerPriorityOrderingTests.cs                     256

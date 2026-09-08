@@ -412,14 +412,6 @@ namespace TaimisToolbench.Models
         // derived from this value.
         public int? CurrencyOwnedQuantity { get; set; }
 
-        // The currency's own /v2/currencies prose, for a CurrencyCost
-        // row's hover (CurrencyTooltipComposer). Resolved here rather than
-        // at the render site because the renderer holds no currency id -
-        // by design: a row carries no id at all, so its tooltip can never
-        // be keyed into the wrong id space. Null when the plan ran without
-        // currency metadata, which drops the paragraph.
-        public string CurrencyDescription { get; set; }
-
         // Still-to-acquire gap for a CurrencyCost row in the
         // currency table's "Needed" column - max(0, Quantity -
         // CurrencyOwnedQuantity). Null (not 0) whenever CurrencyOwnedQuantity
@@ -459,8 +451,6 @@ namespace TaimisToolbench.Models
         public int TradeUpCurrencyId { get; set; }
 
         public string TradeUpCurrencyName { get; set; }
-
-        public string TradeUpCurrencyIconUrl { get; set; }
 
         public int? TradeUpCurrencyHeld { get; set; }
 
