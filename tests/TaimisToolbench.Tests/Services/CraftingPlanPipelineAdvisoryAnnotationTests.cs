@@ -210,7 +210,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = SpiritShardCurrencyId, Count = 20 },
                         },
                         MerchantName = "Mystic Forge Attendant",
-                        Locations = new List<string>(),
                     },
                 });
 
@@ -320,7 +319,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = SpiritShardCurrencyId, Count = 20 },
                         },
                         MerchantName = "Mystic Forge Attendant",
-                        Locations = new List<string>(),
                     },
                 });
 

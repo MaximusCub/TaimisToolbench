@@ -119,7 +119,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Currency", Id = 3, Count = 1000 },
                 },
                 MerchantName = "Mixed Vendor",
-                Locations = new List<string>(),
             };
             var vendorOffers = new Dictionary<int, IReadOnlyList<VendorOffer>>
             {
@@ -159,7 +158,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Currency", Id = 3, Count = 1 },
                 },
                 MerchantName = "Mixed Vendor",
-                Locations = new List<string>(),
             };
             var vendorOffers = new Dictionary<int, IReadOnlyList<VendorOffer>>
             {
@@ -419,7 +417,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Currency", Id = 3, Count = 1000 },
                 },
                 MerchantName = "Mixed Vendor",
-                Locations = new List<string>(),
             };
             var vendorOffers = new Dictionary<int, IReadOnlyList<VendorOffer>>
             {

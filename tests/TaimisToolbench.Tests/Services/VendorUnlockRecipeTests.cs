@@ -64,7 +64,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Currency", Id = TokenCurrencyId, Count = 3 },
                 },
                 MerchantName = "Lyhr",
-                Locations = new List<string> { "Outer Ring" },
                 UnlockRecipeItemId = unlockItemId,
                 UnlockRecipeId = unlockRecipeId,
             };

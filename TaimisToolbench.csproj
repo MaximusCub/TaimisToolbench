@@ -399,6 +399,7 @@
     <Compile Include="Models\PlanStatus.cs" />
     <Compile Include="Services\PlanPhaseEvent.cs" />
     <Compile Include="Services\VendorOfferLoader.cs" />
+    <Compile Include="Services\VendorOfferLocations.cs" />
     <Compile Include="Services\VendorOfferStore.cs" />
     <Compile Include="Models\MaterialSourceAllocation.cs" />
     <Compile Include="Models\UsedMaterial.cs" />

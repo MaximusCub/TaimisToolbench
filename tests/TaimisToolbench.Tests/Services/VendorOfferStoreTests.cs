@@ -58,7 +58,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = coinCost },
                 },
                 MerchantName = "TestMerchant",
-                Locations = new List<string> { "TestLocation" },
             };
         }
 
@@ -257,7 +256,6 @@ namespace TaimisToolbench.Tests.Services
                         OutputItemId = 100,
                         OutputCount = 1,
                         CostLines = new List<CostLine>(),
-                        Locations = new List<string>(),
                     },
                     MakeOffer("valid", 200, 50),
                 },

@@ -53,7 +53,6 @@ namespace TaimisToolbench.Tests.Services
                             },
                         },
                         MerchantName = "Test NPC",
-                        Locations = new List<string>(),
                     },
                 });
 

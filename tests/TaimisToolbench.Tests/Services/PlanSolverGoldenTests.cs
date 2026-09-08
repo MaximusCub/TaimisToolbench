@@ -144,7 +144,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = 2, Count = 50 },
                         },
                         MerchantName = "Karma Vendor",
-                        Locations = new List<string>(),
                     },
                 });
 

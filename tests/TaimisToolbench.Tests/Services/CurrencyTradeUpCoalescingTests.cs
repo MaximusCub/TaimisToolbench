@@ -493,7 +493,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Item", Id = TradedUpItem, Count = 13 },
                         },
                         MerchantName = "Test NPC",
-                        Locations = new List<string>(),
                     },
                     new VendorOffer
                     {
@@ -505,7 +504,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = currencyId, Count = CurrencyPerUnit },
                         },
                         MerchantName = "Test Provisioner",
-                        Locations = new List<string>(),
                     },
                 });
 

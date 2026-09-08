@@ -54,7 +54,6 @@ namespace TaimisToolbench.Tests.Services
                 OutputCount = 1,
                 CostLines = costLines.ToList(),
                 MerchantName = "Lyhr",
-                Locations = new List<string>(),
             };
         }
 

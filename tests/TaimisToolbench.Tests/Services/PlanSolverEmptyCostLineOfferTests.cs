@@ -38,7 +38,6 @@ namespace TaimisToolbench.Tests.Services
                 OutputCount = 1,
                 CostLines = new List<CostLine>(),
                 MerchantName = "TestMerchant",
-                Locations = new List<string>(),
             };
         }
 

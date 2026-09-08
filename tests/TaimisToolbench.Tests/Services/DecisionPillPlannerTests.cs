@@ -510,7 +510,7 @@ namespace TaimisToolbench.Tests.Services
                         {
                             OfferId = "v1", OutputItemId = 1, OutputCount = 1,
                             CostLines = new List<CostLine> { new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = 200 } },
-                            MerchantName = "Test Vendor", Locations = new List<string>(),
+                            MerchantName = "Test Vendor",
                         },
                     }
                 },
@@ -545,7 +545,7 @@ namespace TaimisToolbench.Tests.Services
                         {
                             OfferId = "v1", OutputItemId = 1, OutputCount = 1,
                             CostLines = new List<CostLine> { new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = 50 } },
-                            MerchantName = "Test Vendor", Locations = new List<string>(),
+                            MerchantName = "Test Vendor",
                         },
                     }
                 },
@@ -586,7 +586,7 @@ namespace TaimisToolbench.Tests.Services
                         {
                             OfferId = "v1", OutputItemId = 1, OutputCount = 1,
                             CostLines = new List<CostLine> { new CostLine { Type = "Currency", Id = 23, Count = 500 } },
-                            MerchantName = "Test Vendor", Locations = new List<string>(),
+                            MerchantName = "Test Vendor",
                         },
                     }
                 },

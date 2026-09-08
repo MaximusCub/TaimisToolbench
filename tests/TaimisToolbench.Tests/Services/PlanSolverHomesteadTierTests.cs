@@ -30,7 +30,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Item", Id = 900 + homesteadTier, Count = inputCount },
                 },
                 MerchantName = merchantName,
-                Locations = new List<string> { "Hearth's Glow" },
                 WeeklyCap = weeklyCap,
                 HomesteadTier = homesteadTier,
             };
@@ -293,7 +292,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Item", Id = 900, Count = 1 },
                 },
                 MerchantName = "Homestead Refinement\u2014Metal Forge",
-                Locations = new List<string> { "Hearth's Glow" },
                 HomesteadTier = null,
             };
             var vendorOffers = new Dictionary<int, IReadOnlyList<VendorOffer>>

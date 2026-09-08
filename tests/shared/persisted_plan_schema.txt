@@ -253,7 +253,6 @@ UsedMaterial.Sources:List`1<MaterialSourceAllocation>
 VendorOffer.CostLines:List`1<CostLine>
 VendorOffer.DailyCap:Nullable`1<Int32>
 VendorOffer.HomesteadTier:Nullable`1<Int32>
-VendorOffer.Locations:List`1<String>
 VendorOffer.MerchantName:String
 VendorOffer.OfferId:String
 VendorOffer.OutputCount:Int32

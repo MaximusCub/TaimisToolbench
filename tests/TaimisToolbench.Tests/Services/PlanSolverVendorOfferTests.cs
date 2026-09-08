@@ -27,7 +27,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Currency", Id = 23, Count = 50 },
                 },
                 MerchantName = "Miyani",
-                Locations = new List<string>(),
             };
             var vendorOffers = new Dictionary<int, IReadOnlyList<VendorOffer>>
             {
@@ -88,7 +87,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Currency", Id = 23, Count = 10 },
                 },
                 MerchantName = "Miyani",
-                Locations = new List<string>(),
             };
             var vendorOffers = new Dictionary<int, IReadOnlyList<VendorOffer>>
             {
@@ -134,7 +132,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Currency", Id = 23, Count = nearMax },
                 },
                 MerchantName = "Miyani",
-                Locations = new List<string>(),
             };
             var vendorOffers = new Dictionary<int, IReadOnlyList<VendorOffer>>
             {
@@ -248,7 +245,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Currency", Id = 2, Count = 50 },
                 },
                 MerchantName = "Karma Vendor",
-                Locations = new List<string>(),
             };
             var vendorOffers = new Dictionary<int, IReadOnlyList<VendorOffer>>
             {
@@ -328,7 +324,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Item", Id = 42, Count = 5 },
                 },
                 MerchantName = "Barter Vendor",
-                Locations = new List<string>(),
             };
             var vendorOffers = new Dictionary<int, IReadOnlyList<VendorOffer>>
             {
@@ -375,7 +370,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "MysteryCostType", Id = 999, Count = 5 },
                 },
                 MerchantName = "Barter Vendor",
-                Locations = new List<string>(),
             };
             var vendorOffers = new Dictionary<int, IReadOnlyList<VendorOffer>>
             {

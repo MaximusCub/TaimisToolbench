@@ -361,7 +361,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Item", Id = 2, Count = 60 }, // 60x ecto
                 },
                 MerchantName = "Test Vendor",
-                Locations = new List<string>(),
             };
             var vendorOffers = new Dictionary<int, IReadOnlyList<VendorOffer>>
             {

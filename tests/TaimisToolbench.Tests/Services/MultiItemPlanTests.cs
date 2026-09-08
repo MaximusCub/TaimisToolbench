@@ -242,7 +242,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = 20 },
                         },
                         MerchantName = "Test NPC",
-                        Locations = new List<string>(),
                     },
                 });
 
@@ -1429,7 +1428,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = 20 },
                         },
                         MerchantName = "Test NPC",
-                        Locations = new List<string>(),
                     },
                 });
 

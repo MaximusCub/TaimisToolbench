@@ -25,7 +25,7 @@ namespace TaimisToolbench.Tests.Models
         [Fact]
         public void CurrentSchemaVersion_MatchesExpectedValue()
         {
-            Assert.Equal(3, PersistedPlan.CurrentSchemaVersion);
+            Assert.Equal(4, PersistedPlan.CurrentSchemaVersion);
         }
 
         [Fact]
