@@ -47,5 +47,99 @@ namespace TaimisToolbench.Tests.Services
             // every tab switch for as long as the skew lasts.
             Assert.False(SnapshotRefreshPolicy.ShouldRefreshOnTabOpen(Now.AddMinutes(5), Now));
         }
+
+        // ---- Generate Plan's own window ----
+        [Fact]
+        public void TheGenerateWindowIsOneMinute()
+        {
+            Assert.Equal(TimeSpan.FromSeconds(60), SnapshotRefreshPolicy.GenerateFreshness);
+        }
+
+        [Fact]
+        public void GenerateWithNoSnapshotAtAll_Refreshes()
+        {
+            Assert.True(SnapshotRefreshPolicy.ShouldRefreshOnGenerate(null, Now));
+        }
+
+        [Fact]
+        public void GenerateOnTheWindowBoundary_Refreshes()
+        {
+            var captured = Now - SnapshotRefreshPolicy.GenerateFreshness;
+            Assert.True(SnapshotRefreshPolicy.ShouldRefreshOnGenerate(captured, Now));
+        }
+
+        [Fact]
+        public void GenerateOverAFutureTimestamp_IsLeftAlone()
+        {
+            Assert.False(SnapshotRefreshPolicy.ShouldRefreshOnGenerate(Now.AddMinutes(5), Now));
+        }
+
+        /// <summary>
+        /// The sequence the guard exists for. A press over old data
+        /// refreshes, which restamps the snapshot; presses over that stamp
+        /// for the rest of the minute do not. Driven as the module drives
+        /// it - each decision reads the stamp the previous refresh left.
+        /// </summary>
+        [Fact]
+        public void FivePressesInsideOneMinute_RefreshOnce()
+        {
+            DateTime? captured = Now.AddMinutes(-10);
+            int refreshes = 0;
+
+            for (int press = 0; press < 5; press++)
+            {
+                var pressedAt = Now.AddSeconds(press * 10);
+                if (SnapshotRefreshPolicy.ShouldRefreshOnGenerate(captured, pressedAt))
+                {
+                    refreshes++;
+                    captured = pressedAt;
+                }
+            }
+
+            Assert.Equal(1, refreshes);
+        }
+
+        [Fact]
+        public void TwoPressesAMinuteApart_RefreshTwice()
+        {
+            DateTime? captured = Now.AddMinutes(-10);
+            int refreshes = 0;
+
+            foreach (var pressedAt in new[] { Now, Now.AddSeconds(60) })
+            {
+                if (SnapshotRefreshPolicy.ShouldRefreshOnGenerate(captured, pressedAt))
+                {
+                    refreshes++;
+                    captured = pressedAt;
+                }
+            }
+
+            Assert.Equal(2, refreshes);
+        }
+
+        /// <summary>
+        /// A press one second short of the window still uses what is
+        /// loaded, which is the half of the rule a boundary test alone
+        /// leaves open.
+        /// </summary>
+        [Fact]
+        public void GenerateOneSecondInsideTheWindow_IsLeftAlone()
+        {
+            var captured = Now - SnapshotRefreshPolicy.GenerateFreshness + TimeSpan.FromSeconds(1);
+            Assert.False(SnapshotRefreshPolicy.ShouldRefreshOnGenerate(captured, Now));
+        }
+
+        /// <summary>
+        /// The two triggers are separate rules and must not be collapsed
+        /// into one. Data 30 seconds old is stale to the Snapshot tab and
+        /// fresh to Generate Plan, which is the whole gap between them.
+        /// </summary>
+        [Fact]
+        public void ThirtySecondOldData_RefreshesTheTabButNotAPlan()
+        {
+            var captured = Now.AddSeconds(-30);
+            Assert.True(SnapshotRefreshPolicy.ShouldRefreshOnTabOpen(captured, Now));
+            Assert.False(SnapshotRefreshPolicy.ShouldRefreshOnGenerate(captured, Now));
+        }
     }
 }
