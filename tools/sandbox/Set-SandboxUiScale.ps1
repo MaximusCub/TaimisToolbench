@@ -11,12 +11,16 @@
 
     Blish exposes an override. The GraphicsConfiguration setting
     UIScalingMethod, of type Blish_HUD.Graphics.ManualUISize, replaces the
-    MumbleLink value when it is anything other than SyncWithGame. Setting it
-    to Large makes GetScaleRatio return exactly 1.0, so a 42 pixel row
-    measures 42 pixels on a screenshot.
+    MumbleLink value when it is anything other than SyncWithGame.
 
     This script writes that setting into a Blish settings.json. It edits only
     the one value and leaves the rest of the file byte for byte unchanged.
+
+    The default is Normal, which is the scale most players run. That makes a
+    sandbox screenshot look like what a player sees, and it makes a measured
+    pixel 0.897 of the constant in the code. Divide by 0.897 to recover the
+    written size, or pass -UiScale Large to pin the ratio to exactly 1.0
+    before taking a measurement. tools/sandbox/README.md has the arithmetic.
 
 .PARAMETER UiScale
     Game keeps Blish's default, which reads MumbleLink. Small, Normal, Large
@@ -27,12 +31,15 @@
     settings.json that Blish has written at least once.
 
 .EXAMPLE
+    powershell -ExecutionPolicy Bypass -File tools\sandbox\Set-SandboxUiScale.ps1
+
+.EXAMPLE
     powershell -ExecutionPolicy Bypass -File tools\sandbox\Set-SandboxUiScale.ps1 -UiScale Large
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [ValidateSet('Game', 'Small', 'Normal', 'Large', 'Larger')]
-    [string]$UiScale = 'Large',
+    [string]$UiScale = 'Normal',
 
     [string]$SettingsDir = 'C:\Dev\Blish\blish-preflight-settings'
 )
