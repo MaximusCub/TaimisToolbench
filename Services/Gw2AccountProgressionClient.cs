@@ -18,6 +18,9 @@ namespace TaimisToolbench.Services
     /// </summary>
     internal class Gw2AccountProgressionClient : IAccountProgressionClient
     {
+        private const Gw2Sharp.WebApi.V2.Models.TokenPermission Progression =
+            Gw2Sharp.WebApi.V2.Models.TokenPermission.Progression;
+
         private readonly Gw2ApiManager _apiManager;
 
         public Gw2AccountProgressionClient(Gw2ApiManager apiManager)
@@ -25,10 +28,30 @@ namespace TaimisToolbench.Services
             _apiManager = apiManager;
         }
 
-        public bool HasProgressionPermission()
+        /// <summary>
+        /// Blish HUD builds a module's subtoken from
+        /// ModuleState.UserEnabledPermissions alone, never from the
+        /// manifest (Blish HUD/GameServices/Modules/Managers/
+        /// Gw2ApiManager.cs, GetModuleInstance), and Gw2ApiManager.
+        /// Permissions is that consented list. So a permission the
+        /// manifest declares but the list omits was never requested, which
+        /// is a different fix for the player than a key that refused it.
+        /// </summary>
+        public AccountProgressionAccess ProgressionAccess()
         {
-            return _apiManager.HasPermissions(
-                new[] { Gw2Sharp.WebApi.V2.Models.TokenPermission.Progression });
+            if (_apiManager.HasPermission(Progression))
+            {
+                return AccountProgressionAccess.Granted;
+            }
+
+            if (!_apiManager.Permissions.Contains(Progression))
+            {
+                return AccountProgressionAccess.NotConsented;
+            }
+
+            return _apiManager.HasSubtoken
+                ? AccountProgressionAccess.KeyMissingScope
+                : AccountProgressionAccess.SubtokenNotReady;
         }
 
         public async Task<AccountProgression> GetProgressionAsync(CancellationToken ct)
@@ -38,7 +61,7 @@ namespace TaimisToolbench.Services
                 ExpansionAccess = await ReadExpansionAccessAsync(ct),
             };
 
-            if (!HasProgressionPermission())
+            if (ProgressionAccess() != AccountProgressionAccess.Granted)
             {
                 return progression;
             }

@@ -17,8 +17,7 @@ namespace TaimisToolbench.Services
     {
         public static bool IsCraftingStepsNotice(PlanRowType rowType)
         {
-            return rowType == PlanRowType.TimegatedNotice
-                || rowType == PlanRowType.VendorRequirementNotice;
+            return rowType == PlanRowType.TimegatedNotice;
         }
     }
 }

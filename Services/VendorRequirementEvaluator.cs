@@ -25,39 +25,75 @@ namespace TaimisToolbench.Services
         private const string PathOfFireAccess = "PathOfFire";
 
         public static VendorRequirementStatus Evaluate(
-            VendorRequirement requirement, AccountProgression progression)
+            VendorRequirement requirement, AccountProgression progression,
+            out VendorRequirementUnknownReason reason)
         {
-            if (requirement == null || progression == null)
+            var kind = KindOf(requirement);
+            if (kind == VendorRequirementKind.Unclassified)
             {
+                reason = VendorRequirementUnknownReason.RequirementNotUnderstood;
                 return VendorRequirementStatus.Unknown;
             }
 
-            if (requirement.AchievementId.HasValue)
+            if (progression == null)
+            {
+                reason = VendorRequirementUnknownReason.AccountDataUnavailable;
+                return VendorRequirementStatus.Unknown;
+            }
+
+            if (kind == VendorRequirementKind.Achievement)
             {
                 return Answer(
                     progression.CompletedAchievementIds != null,
                     progression.CompletedAchievementIds != null &&
                         progression.CompletedAchievementIds.Contains(
-                            requirement.AchievementId.Value));
+                            requirement.AchievementId.Value),
+                    out reason);
             }
 
-            if (requirement.MasteryId.HasValue && requirement.MasteryLevel.HasValue)
+            if (kind == VendorRequirementKind.Mastery)
             {
                 var levels = progression.MasteryLevelsByMasteryId;
                 return Answer(
                     levels != null,
                     levels != null &&
                         levels.TryGetValue(requirement.MasteryId.Value, out int level) &&
-                        level >= requirement.MasteryLevel.Value);
+                        level >= requirement.MasteryLevel.Value,
+                    out reason);
             }
 
-            if (!string.IsNullOrEmpty(requirement.Expansion))
+            var access = progression.ExpansionAccess;
+            return Answer(
+                access != null, access != null && HasExpansion(access, requirement.Expansion),
+                out reason);
+        }
+
+        /// <summary>
+        /// What the updater recognized this requirement as. Unclassified
+        /// covers both a null requirement and prose no GW2 API name
+        /// matched, which are the same thing to every caller: nothing to
+        /// check and nothing to name.
+        /// </summary>
+        public static VendorRequirementKind KindOf(VendorRequirement requirement)
+        {
+            if (requirement == null)
             {
-                var access = progression.ExpansionAccess;
-                return Answer(access != null, access != null && HasExpansion(access, requirement.Expansion));
+                return VendorRequirementKind.Unclassified;
             }
 
-            return VendorRequirementStatus.Unknown;
+            if (requirement.AchievementId.HasValue)
+            {
+                return VendorRequirementKind.Achievement;
+            }
+
+            if (requirement.MasteryId.HasValue && requirement.MasteryLevel.HasValue)
+            {
+                return VendorRequirementKind.Mastery;
+            }
+
+            return string.IsNullOrEmpty(requirement.Expansion)
+                ? VendorRequirementKind.Unclassified
+                : VendorRequirementKind.Expansion;
         }
 
         private static bool HasExpansion(
@@ -72,13 +108,16 @@ namespace TaimisToolbench.Services
                 && access.Contains(PathOfFireAccess);
         }
 
-        private static VendorRequirementStatus Answer(bool checkable, bool met)
+        private static VendorRequirementStatus Answer(
+            bool checkable, bool met, out VendorRequirementUnknownReason reason)
         {
             if (!checkable)
             {
+                reason = VendorRequirementUnknownReason.AccountDataUnavailable;
                 return VendorRequirementStatus.Unknown;
             }
 
+            reason = VendorRequirementUnknownReason.None;
             return met ? VendorRequirementStatus.Met : VendorRequirementStatus.NotMet;
         }
     }

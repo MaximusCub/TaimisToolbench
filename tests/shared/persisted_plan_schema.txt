@@ -28,6 +28,7 @@ CraftingPlan.TargetItemId:Int32
 CraftingPlan.TargetQuantity:Int32
 CraftingPlan.TimegatedItems:List`1<TimegatedItem>
 CraftingPlan.TotalCoinCost:Int64
+CraftingPlanResult.AccountProgressionAccess:AccountProgressionAccess
 CraftingPlanResult.AcquisitionHints:IReadOnlyDictionary`2<Int32,AcquisitionHint>
 CraftingPlanResult.CharacterDisciplines:IReadOnlyList`1<SnapshotCharacterDiscipline>
 CraftingPlanResult.CompetencyOpportunities:List`1<CompetencyOpportunity>
@@ -158,6 +159,7 @@ PlanRequestItem.Name:String
 PlanRequestItem.Quantity:Int32
 PlanSolveContext.AccountItems:IReadOnlyList`1<SnapshotItemEntry>
 PlanSolveContext.AccountProgression:AccountProgression
+PlanSolveContext.AccountProgressionAccess:AccountProgressionAccess
 PlanSolveContext.AcquisitionHints:IReadOnlyDictionary`2<Int32,AcquisitionHint>
 PlanSolveContext.ActiveCharacterName:String
 PlanSolveContext.CharacterDisciplines:IReadOnlyList`1<SnapshotCharacterDiscipline>
@@ -282,5 +284,7 @@ VendorRequirement.MasteryId:Nullable`1<Int32>
 VendorRequirement.MasteryLevel:Nullable`1<Int32>
 VendorRequirement.Text:String
 VendorRequirementNotice.ItemId:Int32
+VendorRequirementNotice.Kind:VendorRequirementKind
 VendorRequirementNotice.RequirementText:String
 VendorRequirementNotice.Status:VendorRequirementStatus
+VendorRequirementNotice.UnknownReason:VendorRequirementUnknownReason

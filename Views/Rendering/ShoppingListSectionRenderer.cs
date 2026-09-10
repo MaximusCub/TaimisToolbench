@@ -398,11 +398,16 @@ namespace TaimisToolbench.Views.Rendering
             // holdings and its acquisition hint, and the table already
             // prints both in its own columns, so the box restated them in
             // sentences and added nothing.
+            // The one prose line this box carries: the vendor requirement
+            // gating this purchase, which the table has no column for and
+            // which must travel with the row through a sort.
+            string hintLine = row.HintText;
             var nameHandle = IconNameRowHelpers.DrawIconAndName(
                 rowPanel, row.ItemId,
                 IconX, PlanContentHeightMath.IconRowIconY, fullName, font,
                 edges.SourceX, 0, NameToQtyGap, NameX, RowTextY,
-                ItemIconTier.BagSidebar, _getItemFacts);
+                ItemIconTier.BagSidebar, _getItemFacts,
+                () => string.IsNullOrEmpty(hintLine) ? null : new List<string> { hintLine });
             var nameLabel = nameHandle.NameLabel;
 
             string sourceTag = ShoppingSourceBadge.ForRow(row);

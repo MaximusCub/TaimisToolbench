@@ -215,6 +215,7 @@
     <Compile Include="Services\VendorBatchSolver.cs" />
     <Compile Include="Services\VendorCapNotices.cs" />
     <Compile Include="Services\VendorRequirementEvaluator.cs" />
+    <Compile Include="Services\VendorRequirementNoticeText.cs" />
     <Compile Include="Services\PlanRowKinds.cs" />
     <Compile Include="Services\VendorCostLineSubtrees.cs" />
     <Compile Include="Services\VendorOfferDomination.cs" />

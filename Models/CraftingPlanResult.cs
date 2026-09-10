@@ -217,6 +217,14 @@ namespace TaimisToolbench.Models
         public List<VendorRequirementNotice> VendorRequirementNotices { get; set; }
 
         /// <summary>
+        /// Whether the account's achievements and masteries were read for
+        /// those notices, and when they were not, why - see
+        /// Models/AccountProgression.cs. What turns an Unknown notice from
+        /// "not checked" into an action the player can take.
+        /// </summary>
+        public AccountProgressionAccess AccountProgressionAccess { get; set; }
+
+        /// <summary>
         /// See MissingRecipeSheetSourceCalculator.Apply, the sole
         /// producer. Cosmetic display data only; null until the calculator
         /// runs, empty (not null) when no missing recipe has a sheet any

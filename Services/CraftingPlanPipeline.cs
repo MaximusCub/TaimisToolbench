@@ -419,9 +419,15 @@ namespace TaimisToolbench.Services
                 progress, sw, timingLog, phaseTracker, suppliedLearnedRecipeIds, ct);
 
             sw.Restart();
-            AccountProgression accountProgression = PlanBuysFromAGatedVendor(plan)
-                ? await GetAccountProgressionAsync(ct)
-                : null;
+            AccountProgression accountProgression = null;
+            var progressionAccess = AccountProgressionAccess.NotNeeded;
+            if (PlanBuysFromAGatedVendor(plan))
+            {
+                var read = await GetAccountProgressionAsync(ct);
+                accountProgression = read.Progression;
+                progressionAccess = read.Access;
+            }
+
             sw.Stop();
             timingLog.Add($"Fetch account progression: {sw.ElapsedMilliseconds}ms");
 
@@ -437,6 +443,7 @@ namespace TaimisToolbench.Services
                 plan, treeUsedForSolve, metadata, usedMaterials, learnedRecipeIds,
                 effectiveCharacterDisciplines, _recipeSheetItemIdByRecipeId,
                 accountProgression);
+            result.AccountProgressionAccess = progressionAccess;
             result.CurrencyMetadata = currencyMetadata;
             result.AcquisitionHints = _acquisitionHints;
             result.DailyCooldownItems = _dailyCooldownItems;
@@ -495,6 +502,7 @@ namespace TaimisToolbench.Services
                 Metadata = metadata,
                 LearnedRecipeIds = learnedRecipeIds,
                 AccountProgression = accountProgression,
+                AccountProgressionAccess = progressionAccess,
                 UsedMaterials = usedMaterials,
                 PriceBasis = priceBasis,
                 CurrencyValuation = valuation,
@@ -764,6 +772,7 @@ namespace TaimisToolbench.Services
                 usedMaterials, context.LearnedRecipeIds,
                 context.CharacterDisciplines, _recipeSheetItemIdByRecipeId,
                 context.AccountProgression);
+            result.AccountProgressionAccess = context.AccountProgressionAccess;
             result.CurrencyMetadata = context.CurrencyMetadata;
             result.AcquisitionHints = context.AcquisitionHints;
             result.DailyCooldownItems = context.DailyCooldownItems;
@@ -1170,31 +1179,81 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// Reads what the account has unlocked, for the vendor-requirement
-        /// notices. Returns null when no client is wired up and on any
-        /// non-cancellation failure, which reads downstream as "not
-        /// checked" rather than "not met". Deliberately uncached, like the
-        /// learned-recipe fetch above: a cache of exactly this shape was
-        /// deleted once for telling a player they lacked something they had
-        /// just earned.
+        /// notices, and reports whether it could. Returns null when no
+        /// client is wired up and on any non-cancellation failure, which
+        /// reads downstream as "not checked" rather than "not met".
+        /// Deliberately uncached, like the learned-recipe fetch above: a
+        /// cache of exactly this shape was deleted once for telling a
+        /// player they lacked something they had just earned.
+        /// <para>
+        /// Every outcome is logged. A check the player is told did not
+        /// happen has to say why somewhere they can read it.
+        /// </para>
         /// </summary>
-        private async Task<AccountProgression> GetAccountProgressionAsync(CancellationToken ct)
+        private async Task<(AccountProgression Progression, AccountProgressionAccess Access)>
+            GetAccountProgressionAsync(CancellationToken ct)
         {
             if (_accountProgressionClient == null)
             {
-                return null;
+                LogProgressionAccess(
+                    AccountProgressionAccess.FetchFailed, "no progression client is wired up");
+                return (null, AccountProgressionAccess.FetchFailed);
             }
 
+            var access = _accountProgressionClient.ProgressionAccess();
             try
             {
-                return await _accountProgressionClient.GetProgressionAsync(ct);
+                var progression = await _accountProgressionClient.GetProgressionAsync(ct);
+                LogProgressionAccess(access, null);
+                return (progression, access);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 throw;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                return null;
+                LogProgressionAccess(
+                    AccountProgressionAccess.FetchFailed, $"{ex.GetType().Name} - {ex.Message}");
+                return (null, AccountProgressionAccess.FetchFailed);
+            }
+        }
+
+        private void LogProgressionAccess(AccountProgressionAccess access, string detail)
+        {
+            string suffix = string.IsNullOrEmpty(detail) ? string.Empty : $" ({detail})";
+            if (access == AccountProgressionAccess.Granted)
+            {
+                _moduleLog.Write(
+                    ModuleLogLevel.Info, "plan",
+                    "Account progression read for the vendor requirement checks" + suffix);
+                return;
+            }
+
+            _moduleLog.Write(
+                ModuleLogLevel.Warn, "plan",
+                "Account progression not read, so vendor requirements go unchecked: "
+                    + AccessLogText(access) + suffix);
+        }
+
+        /// <summary>
+        /// One line per <see cref="AccountProgressionAccess"/> case, in the
+        /// words that name the fix rather than the symptom.
+        /// </summary>
+        private static string AccessLogText(AccountProgressionAccess access)
+        {
+            switch (access)
+            {
+                case AccountProgressionAccess.NotConsented:
+                    return "the progression permission is not enabled for this module in Blish HUD";
+                case AccountProgressionAccess.KeyMissingScope:
+                    return "the account API key does not grant progression";
+                case AccountProgressionAccess.SubtokenNotReady:
+                    return "the module's API subtoken has not arrived yet";
+                case AccountProgressionAccess.FetchFailed:
+                    return "the request failed";
+                default:
+                    return "no requirement in this plan needed it";
             }
         }
 

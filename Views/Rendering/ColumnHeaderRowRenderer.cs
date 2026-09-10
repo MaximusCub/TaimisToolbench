@@ -12,24 +12,16 @@ namespace TaimisToolbench.Views.Rendering
     // calls this from inside its own Render(), the way
     // ShoppingListSectionRenderer owns CreateShoppingListHeaderRow.
     //
-    // Optional middleLabel/middleX so Required Disciplines
-    // can honestly label its per-character availability text with a
-    // "Characters" header once that text lines up on a fixed column (see
-    // DisciplinesSectionRenderer's own comment on Render() for why the
-    // column has to be fixed, not per-row). Defaulted to null/0 so the
-    // Required Recipes call site (still a plain left/right header) needs no
-    // change. Like leftLabel, middleLabel sits at a fixed X computed once
-    // by the caller before this row is built.
-    //
-    // middleXForWidth exists for the ONE caller whose middle column is not
-    // fixed: the Recipe Tree's "Source" header sits over the decision-pill
-    // column, whose x is derived from the panel width
-    // (PlanRelayoutMath.ComputeTreeColumnEdges), so a build-time constant
-    // would strand it the moment the window is dragged. Supplying it opts
-    // that label into the AddRelayout closure below; omitting it keeps the
-    // previous fixed-x behaviour for every other caller. Still
-    // position-only, per the interface's "position/width-only" contract -
-    // see ISectionRelayoutSink.AddRelayout's doc comment.
+    // middleHeaders are the columns between the left and right labels, in
+    // left-to-right order: Required Disciplines has one ("Characters"),
+    // Required Recipes has two ("Discipline" and "Sheet cost"), and a
+    // plain two-column table passes none. Each carries its own x-for-width
+    // closure because none of these columns sits at a build-time constant:
+    // every one of them is derived from the panel width, so a fixed x
+    // would strand the word the moment the window is dragged. The
+    // closures are position-only, per the interface's
+    // "position/width-only" contract - see
+    // ISectionRelayoutSink.AddRelayout's doc comment.
     //
     // rightXForWidth is the same escape hatch for the right label: the
     // Recipe Tree's "Cost" header sits over a column whose x is derived
@@ -73,9 +65,25 @@ namespace TaimisToolbench.Views.Rendering
     // resize would, so there is no second placement path to keep in step.
     internal static class ColumnHeaderRowRenderer
     {
+        /// <summary>
+        /// One header column between the left and right labels: the word,
+        /// and where it sits at a given panel width.
+        /// </summary>
+        internal readonly struct MiddleHeader
+        {
+            public readonly string Label;
+            public readonly Func<int, int> XForWidth;
+
+            internal MiddleHeader(string label, Func<int, int> xForWidth)
+            {
+                Label = label;
+                XForWidth = xForWidth;
+            }
+        }
+
         internal static Action<int> CreateColumnHeaderRow(
             FlowPanel parent, int panelWidth, string leftLabel, int leftX, string rightLabel, ISectionRelayoutSink sink,
-            string middleLabel = null, int middleX = 0, Func<int, int> middleXForWidth = null,
+            IReadOnlyList<MiddleHeader> middleHeaders = null,
             Func<int, int> rightXForWidth = null, Action onLeftClick = null, Action onRightClick = null,
             Func<int, int> leftColumnEndForWidth = null, Func<int, int> rightLabelXForWidth = null,
             TableSortDirection? leftSort = null, TableSortDirection? rightSort = null,
@@ -87,15 +95,15 @@ namespace TaimisToolbench.Views.Rendering
             var leftBlock = SortableHeaderBlock.Create(
                 rowPanel, font, HeaderBands.LabelColor, HeaderBands.LabelY, leftLabel, leftSort);
             leftBlock.MoveTo(leftX);
-            Label middleLabelControl = null;
-            if (!string.IsNullOrEmpty(middleLabel))
+            int middleCount = middleHeaders == null ? 0 : middleHeaders.Count;
+            var middleControls = new Label[middleCount];
+            for (int i = 0; i < middleCount; i++)
             {
-                middleLabelControl = LabelHelpers.WithDescenderClearance(new Label()
+                middleControls[i] = LabelHelpers.WithDescenderClearance(new Label()
                 {
-                    Text = middleLabel, Font = font, TextColor = HeaderBands.LabelColor,
+                    Text = middleHeaders[i].Label, Font = font, TextColor = HeaderBands.LabelColor,
                     AutoSizeWidth = true, AutoSizeHeight = true,
-                    Location = new Point(
-                        middleXForWidth != null ? middleXForWidth(panelWidth) : middleX, HeaderBands.LabelY),
+                    Location = new Point(middleHeaders[i].XForWidth(panelWidth), HeaderBands.LabelY),
                     Parent = rowPanel,
                 });
             }
@@ -122,12 +130,11 @@ namespace TaimisToolbench.Views.Rendering
             // Everything the split needs that does NOT move with the panel
             // width, resolved once, so the closure below neither measures
             // a string nor allocates.
-            var plan = new HeaderCellPlan(
-                middleLabelControl == null ? 2 : 3, new SortableHeaderCells(rowPanel));
+            var plan = new HeaderCellPlan(middleCount + 2, new SortableHeaderCells(rowPanel));
             plan.Set(0, leftBlock.Title, leftBlock.Width, onLeftClick, leftBlock.IndicatorLabel);
-            if (middleLabelControl != null)
+            for (int i = 0; i < middleCount; i++)
             {
-                plan.Set(1, middleLabelControl, Measure(font, middleLabel), null);
+                plan.Set(i + 1, middleControls[i], Measure(font, middleHeaders[i].Label), null);
             }
 
             plan.Set(
@@ -145,9 +152,10 @@ namespace TaimisToolbench.Views.Rendering
                 flowBand.Resize(w);
                 rightBlock.MoveTo(
                     RightLabelX(w, rightXForWidth, rightLabelXForWidth, rightBlock.Width));
-                if (middleLabelControl != null && middleXForWidth != null)
+                for (int i = 0; i < middleCount; i++)
                 {
-                    middleLabelControl.Location = new Point(middleXForWidth(w), HeaderBands.LabelY);
+                    middleControls[i].Location =
+                        new Point(middleHeaders[i].XForWidth(w), HeaderBands.LabelY);
                 }
 
                 // A right-pinned column's edge moves with the panel.
