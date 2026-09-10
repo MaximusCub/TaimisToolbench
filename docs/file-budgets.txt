@@ -108,7 +108,7 @@ Models/UsedMaterial.cs                                                          
 Models/VendorItemCostLine.cs                                                            42
 Models/VendorOffer.cs                                                                   86
 Models/VendorOfferDataset.cs                                                            15
-Module.cs                                                                               3356
+Module.cs                                                                               3440
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
@@ -292,7 +292,7 @@ Services/SortIndicatorLayout.cs                                                 
 Services/SourceFilterFlowLayout.cs                                                      85
 Services/StaticItemSearchProvider.cs                                                    42
 Services/StatusStore.cs                                                                 73
-Services/StatusText.cs                                                                  581
+Services/StatusText.cs                                                                  589
 Services/StatusUpdateGuard.cs                                                           38
 Services/StickyHeaderLayout.cs                                                          117
 Services/SummarySectionLayoutMath.cs                                                   1037

@@ -21,12 +21,14 @@ namespace TaimisToolbench.Services
     {
         private readonly SnapshotRefreshSlot _slot;
         private readonly ApiReadySignal _apiReady;
+        private readonly Func<bool> _inWorld;
         private readonly Func<bool> _inFailureBackoff;
         private readonly Func<CancellationToken, Task<AccountSnapshot>> _fetch;
 
         public PlanRefreshGate(
             SnapshotRefreshSlot slot,
             ApiReadySignal apiReady,
+            Func<bool> inWorld,
             Func<bool> inFailureBackoff,
             Func<CancellationToken, Task<AccountSnapshot>> fetch)
         {
@@ -38,6 +40,11 @@ namespace TaimisToolbench.Services
             if (apiReady == null)
             {
                 throw new ArgumentNullException("apiReady");
+            }
+
+            if (inWorld == null)
+            {
+                throw new ArgumentNullException("inWorld");
             }
 
             if (inFailureBackoff == null)
@@ -52,6 +59,7 @@ namespace TaimisToolbench.Services
 
             _slot = slot;
             _apiReady = apiReady;
+            _inWorld = inWorld;
             _inFailureBackoff = inFailureBackoff;
             _fetch = fetch;
         }
@@ -73,9 +81,21 @@ namespace TaimisToolbench.Services
                 return PlanRefreshOutcome.UsedLoadedData;
             }
 
-            if (!await _apiReady.WaitAsync(apiWaitBudget, ct))
+            if (!_apiReady.IsReady())
             {
-                return PlanRefreshOutcome.NoApiAccess;
+                // Blish renews a module's subtoken off a MumbleLink
+                // character-name change, and MumbleLink does not tick
+                // outside the world. Waiting out of world waits for
+                // something that cannot happen.
+                if (!_inWorld())
+                {
+                    return PlanRefreshOutcome.NotInWorld;
+                }
+
+                if (!await _apiReady.WaitAsync(apiWaitBudget, ct))
+                {
+                    return PlanRefreshOutcome.NoApiAccess;
+                }
             }
 
             // Two passes, not a spin. The second only runs when another

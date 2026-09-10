@@ -535,6 +535,14 @@ namespace TaimisToolbench.Services
         public const string NoApiAccess = "Not refreshed: no GW2 API access";
 
         /// <summary>
+        /// The account was not refreshed because no character is in the
+        /// world. Blish renews a module's subtoken off a MumbleLink
+        /// character-name change, so signing in is the one thing that
+        /// changes the outcome.
+        /// </summary>
+        public const string NotInWorld = "Not refreshed: sign in to a character";
+
+        /// <summary>
         /// Cause text for a failed Refresh Now (Views/MainView.cs), keyed
         /// by SnapshotFailureClassifier's classification - the fix,
         /// measured in game, for the "Refresh Failed" dead end (at CHARACTER

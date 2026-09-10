@@ -41,15 +41,46 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public async Task A_press_with_no_api_access_does_not_fetch()
+        public async Task A_press_in_world_with_no_api_access_does_not_fetch()
         {
             int fetches = 0;
-            var gate = Build(apiReady: false, fetches: () => fetches++);
+            var gate = Build(apiReady: false, inWorld: true, fetches: () => fetches++);
 
             var outcome = await gate.RunAsync(null, Now, TimeSpan.Zero, CancellationToken.None);
 
             Assert.Equal(PlanRefreshOutcome.NoApiAccess, outcome);
             Assert.Equal(0, fetches);
+        }
+
+        /// <summary>
+        /// Blish only renews a subtoken off a MumbleLink character-name
+        /// change, and MumbleLink does not tick outside the world. A press
+        /// at character select must not spend the handover budget waiting
+        /// for something that cannot arrive.
+        /// </summary>
+        [Fact]
+        public async Task A_press_out_of_world_reports_that_and_does_not_wait()
+        {
+            int fetches = 0;
+            var gate = Build(apiReady: false, inWorld: false, fetches: () => fetches++);
+
+            var press = gate.RunAsync(null, Now, TimeSpan.FromDays(1), CancellationToken.None);
+
+            Assert.True(press.IsCompleted);
+            Assert.Equal(PlanRefreshOutcome.NotInWorld, await press);
+            Assert.Equal(0, fetches);
+        }
+
+        [Fact]
+        public async Task A_press_out_of_world_still_fetches_once_the_subtoken_has_arrived()
+        {
+            int fetches = 0;
+            var gate = Build(apiReady: true, inWorld: false, fetches: () => fetches++);
+
+            var outcome = await gate.RunAsync(null, Now, TimeSpan.Zero, CancellationToken.None);
+
+            Assert.Equal(PlanRefreshOutcome.Refreshed, outcome);
+            Assert.Equal(1, fetches);
         }
 
         [Fact]
@@ -136,6 +167,7 @@ namespace TaimisToolbench.Tests.Services
             var gate = new PlanRefreshGate(
                 new SnapshotRefreshSlot(),
                 new ApiReadySignal(() => true),
+                () => true,
                 () => false,
                 ct => { throw new InvalidOperationException("the account read failed"); });
 
@@ -157,6 +189,7 @@ namespace TaimisToolbench.Tests.Services
             var gate = new PlanRefreshGate(
                 new SnapshotRefreshSlot(),
                 signal,
+                () => true,
                 () => false,
                 ct =>
                 {
@@ -188,12 +221,14 @@ namespace TaimisToolbench.Tests.Services
         private static PlanRefreshGate Build(
             SnapshotRefreshSlot slot = null,
             bool apiReady = true,
+            bool inWorld = true,
             bool inFailureBackoff = false,
             Action fetches = null)
         {
             return new PlanRefreshGate(
                 slot ?? new SnapshotRefreshSlot(),
                 new ApiReadySignal(() => apiReady),
+                () => inWorld,
                 () => inFailureBackoff,
                 ct =>
                 {

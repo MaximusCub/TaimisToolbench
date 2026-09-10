@@ -48,36 +48,25 @@ namespace TaimisToolbench.Services
         public static readonly TimeSpan GenerateFreshness = TimeSpan.FromSeconds(60);
 
         /// <summary>
-        /// How long after the module loads a Generate Plan press will wait
-        /// for Blish to grant the module API access before solving without
-        /// it.
+        /// How long a Generate Plan press waits for Blish to hand the
+        /// module its API subtoken before solving without it.
         /// <para>
-        /// Thirty seconds because the one session on record took 29 for the
-        /// subtoken to arrive (module log, 2026-09-10 03:02 UTC). It is a
-        /// window since load, not a per-press budget, so a press five
-        /// minutes into a session with no usable key waits for nothing.
-        /// After it, an absent subtoken is a setup state rather than a slow
-        /// start, and the module says so instead of waiting again.
+        /// Blish only renews a module's subtoken when MumbleLink reports a
+        /// character name change, and MumbleLink does not tick outside the
+        /// world. So the wait is for the handover itself, which was
+        /// measured at 1.16 and 2.36 seconds from the first in-world tick
+        /// across two sessions. Five seconds is roughly double the slower
+        /// of the two.
+        /// </para>
+        /// <para>
+        /// It is deliberately not measured from module load. A player
+        /// sitting on a loading screen or at character select can be there
+        /// for any length of time, and no amount of waiting produces a
+        /// subtoken until they are in the world. That case is answered by
+        /// not waiting at all - see PlanRefreshGate.
         /// </para>
         /// </summary>
-        public static readonly TimeSpan ApiReadyGrace = TimeSpan.FromSeconds(30);
-
-        /// <summary>
-        /// What is left of <see cref="ApiReadyGrace"/>, never negative. A
-        /// load stamp in the future yields the whole grace rather than a
-        /// wait longer than it.
-        /// </summary>
-        public static TimeSpan ApiWaitBudget(DateTime loadedAtUtc, DateTime utcNow)
-        {
-            var sinceLoad = utcNow - loadedAtUtc;
-            if (sinceLoad < TimeSpan.Zero)
-            {
-                return ApiReadyGrace;
-            }
-
-            var left = ApiReadyGrace - sinceLoad;
-            return left > TimeSpan.Zero ? left : TimeSpan.Zero;
-        }
+        public static readonly TimeSpan SubtokenHandover = TimeSpan.FromSeconds(5);
 
         /// <summary>
         /// Whether opening the tab should start a refresh. True when there

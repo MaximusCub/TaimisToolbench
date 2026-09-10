@@ -141,34 +141,5 @@ namespace TaimisToolbench.Tests.Services
             Assert.True(SnapshotRefreshPolicy.ShouldRefreshOnTabOpen(captured, Now));
             Assert.False(SnapshotRefreshPolicy.ShouldRefreshOnGenerate(captured, Now));
         }
-
-        [Fact]
-        public void The_api_wait_budget_is_what_is_left_of_the_grace_since_load()
-        {
-            var loaded = new DateTime(2026, 9, 10, 3, 2, 10, DateTimeKind.Utc);
-
-            Assert.Equal(
-                TimeSpan.FromSeconds(21),
-                SnapshotRefreshPolicy.ApiWaitBudget(loaded, loaded.AddSeconds(9)));
-        }
-
-        [Fact]
-        public void The_api_wait_budget_runs_out_and_stays_out()
-        {
-            var loaded = new DateTime(2026, 9, 10, 3, 2, 10, DateTimeKind.Utc);
-
-            Assert.Equal(TimeSpan.Zero, SnapshotRefreshPolicy.ApiWaitBudget(loaded, loaded.AddSeconds(30)));
-            Assert.Equal(TimeSpan.Zero, SnapshotRefreshPolicy.ApiWaitBudget(loaded, loaded.AddHours(5)));
-        }
-
-        [Fact]
-        public void A_load_stamp_in_the_future_yields_the_whole_grace_and_no_more()
-        {
-            var loaded = new DateTime(2026, 9, 10, 3, 2, 10, DateTimeKind.Utc);
-
-            Assert.Equal(
-                SnapshotRefreshPolicy.ApiReadyGrace,
-                SnapshotRefreshPolicy.ApiWaitBudget(loaded, loaded.AddMinutes(-5)));
-        }
     }
 }

@@ -264,10 +264,6 @@ namespace TaimisToolbench
         // notices it first - see ApiReadySignal.
         private ApiReadySignal _apiReady;
 
-        // When LoadAsync ran, in UTC. Bounds how long a Generate press
-        // waits for the subtoken - see SnapshotRefreshPolicy.ApiWaitBudget.
-        private DateTime _loadedAtUtc;
-
         // Cancels the background /v2/build lookup and the corpus probe
         // behind it - both retry/run across several seconds and hold
         // _httpClient, which Unload disposes.
@@ -479,6 +475,7 @@ namespace TaimisToolbench
             _planRefreshGate = new PlanRefreshGate(
                 _refreshSlot,
                 _apiReady,
+                IsPlayerInWorld,
                 IsInRefreshFailureBackoff,
                 FetchForPlanAsync);
             _lastStatus = _statusStore.Load();
@@ -1693,8 +1690,6 @@ namespace TaimisToolbench
 
         protected override async Task LoadAsync()
         {
-            _loadedAtUtc = DateTime.UtcNow;
-
             // A disk-restored snapshot routes through the same drain and
             // commit gate as a network refresh, so a Clear Cache racing
             // this load composes exactly like it does against a fetch.
@@ -2256,6 +2251,31 @@ namespace TaimisToolbench
         }
 
         /// <summary>
+        /// Whether MumbleLink reports a character, which is what decides
+        /// whether Blish can hand this module a subtoken at all - see
+        /// SnapshotRefreshPolicy.SubtokenHandover.
+        /// </summary>
+        private bool IsPlayerInWorld()
+        {
+            try
+            {
+                var mumble = GameService.Gw2Mumble;
+                return mumble != null &&
+                    mumble.PlayerCharacter != null &&
+                    !string.IsNullOrEmpty(mumble.PlayerCharacter.Name);
+            }
+            catch (Exception ex)
+            {
+                // Unknown reads as in world. The only cost is one press
+                // waiting out the handover budget for nothing, against
+                // telling a player who is already signed in to sign in.
+                ModuleLog.Shared.Write(ModuleLogLevel.Debug, "snapshot",
+                    $"Gw2Mumble unavailable, cannot tell whether a character is in the world: {ex.GetType().Name} - {ex.Message}");
+                return true;
+            }
+        }
+
+        /// <summary>
         /// The fetch <see cref="_planRefreshGate"/> runs when a Generate
         /// press is the caller that claimed the slot.
         /// </summary>
@@ -2303,19 +2323,27 @@ namespace TaimisToolbench
 
             try
             {
-                var utcNow = DateTime.UtcNow;
                 var outcome = await _planRefreshGate.RunAsync(
                     _currentSnapshot?.CapturedAt,
-                    utcNow,
-                    SnapshotRefreshPolicy.ApiWaitBudget(_loadedAtUtc, utcNow),
+                    DateTime.UtcNow,
+                    SnapshotRefreshPolicy.SubtokenHandover,
                     ct);
 
                 switch (outcome)
                 {
+                    case PlanRefreshOutcome.NotInWorld:
+                        // Blish cannot renew a subtoken until MumbleLink
+                        // ticks, which it does not do outside the world.
+                        // Nothing is wrong with the key, so the line names
+                        // the one thing that changes the outcome.
+                        SaveStatusThreadSafe(StatusText.Stamp(StatusText.NotInWorld, DateTime.Now));
+                        ModuleLog.Shared.Write(ModuleLogLevel.Info, "snapshot",
+                            "Plan solved without a refresh - no character in the world, so Blish has no subtoken to hand over");
+                        break;
                     case PlanRefreshOutcome.NoApiAccess:
-                        // The press already waited out the startup grace,
-                        // so this is a key the user has to add or widen in
-                        // Blish rather than one still on its way.
+                        // In the world, and the subtoken still did not
+                        // arrive, so this is a key the user has to add or
+                        // widen in Blish rather than one still on its way.
                         SaveStatusThreadSafe(StatusText.Stamp(StatusText.NoApiAccess, DateTime.Now));
                         ModuleLog.Shared.Write(ModuleLogLevel.Info, "snapshot",
                             "Plan solved without a refresh - no usable GW2 API access");
