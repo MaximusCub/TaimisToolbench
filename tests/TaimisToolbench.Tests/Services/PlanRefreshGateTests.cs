@@ -86,25 +86,48 @@ namespace TaimisToolbench.Tests.Services
 
         /// <summary>
         /// The window this suite exists for. A refresh has claimed the slot
-        /// and has not published its fetch yet, which is where every
-        /// claimant sits for the length of one method call. A press landing
-        /// there finds nothing to wait for and cannot claim, so it solves
-        /// against whatever snapshot is loaded and says nothing.
+        /// and has not started its fetch yet, which is where every claimant
+        /// sits for the length of one method call. A press landing there
+        /// used to find nothing to wait for and no slot to claim, so it
+        /// solved against whatever snapshot was loaded and said nothing.
         /// </summary>
         [Fact]
-        public async Task A_press_that_lands_between_a_claim_and_its_publication_neither_fetches_nor_waits()
+        public async Task A_press_that_lands_between_a_claim_and_its_fetch_waits_for_that_claim()
         {
             var slot = new SnapshotRefreshSlot();
             Assert.True(slot.TryClaim());
-            Assert.Null(slot.RunningFetch);
 
             int fetches = 0;
             var gate = Build(slot: slot, fetches: () => fetches++);
 
-            var outcome = await gate.RunAsync(null, Now);
+            var press = gate.RunAsync(null, Now);
+            Assert.False(press.IsCompleted);
 
-            Assert.Equal(PlanRefreshOutcome.LostTheClaim, outcome);
+            // What the winning claimant does next, one method call later.
+            var winning = new TaskCompletionSource<AccountSnapshot>();
+            slot.PublishFetch(winning.Task);
+            Assert.False(press.IsCompleted);
+
+            winning.SetResult(new AccountSnapshot { CapturedAt = Now });
+
+            Assert.Equal(PlanRefreshOutcome.JoinedRunningFetch, await press);
             Assert.Equal(0, fetches);
+        }
+
+        [Fact]
+        public async Task A_press_waiting_on_a_claim_that_fails_sees_the_failure()
+        {
+            var slot = new SnapshotRefreshSlot();
+            Assert.True(slot.TryClaim());
+            var gate = Build(slot: slot);
+
+            var press = gate.RunAsync(null, Now);
+
+            var winning = new TaskCompletionSource<AccountSnapshot>();
+            slot.PublishFetch(winning.Task);
+            winning.SetException(new InvalidOperationException("the account read failed"));
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => press);
         }
 
         [Fact]

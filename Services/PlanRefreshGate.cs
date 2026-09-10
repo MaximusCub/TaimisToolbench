@@ -73,32 +73,41 @@ namespace TaimisToolbench.Services
                 return PlanRefreshOutcome.UsedLoadedData;
             }
 
-            var running = _slot.RunningFetch;
-            if (running != null)
+            // Two passes, not a spin. The second only runs when another
+            // refresh claimed AND released the slot between this caller's
+            // read and its own claim, which leaves nothing to wait on and
+            // the slot free again. A third pass would need that to happen
+            // twice inside two field reads, and an unbounded loop on the
+            // Generate path is not worth the case it would cover.
+            for (int attempt = 0; attempt < 2; attempt++)
             {
-                await running;
-                return PlanRefreshOutcome.JoinedRunningFetch;
+                var running = _slot.RunningFetch;
+                if (running != null)
+                {
+                    await running;
+                    return PlanRefreshOutcome.JoinedRunningFetch;
+                }
+
+                if (_inFailureBackoff())
+                {
+                    return PlanRefreshOutcome.SkippedInBackoff;
+                }
+
+                if (_slot.TryClaim())
+                {
+                    try
+                    {
+                        await _fetch(_slot.BeginFetch());
+                        return PlanRefreshOutcome.Refreshed;
+                    }
+                    finally
+                    {
+                        _slot.Release();
+                    }
+                }
             }
 
-            if (_inFailureBackoff())
-            {
-                return PlanRefreshOutcome.SkippedInBackoff;
-            }
-
-            if (!_slot.TryClaim())
-            {
-                return PlanRefreshOutcome.LostTheClaim;
-            }
-
-            try
-            {
-                await _fetch(_slot.BeginFetch());
-                return PlanRefreshOutcome.Refreshed;
-            }
-            finally
-            {
-                _slot.Release();
-            }
+            return PlanRefreshOutcome.LostTheClaim;
         }
     }
 }

@@ -37,9 +37,9 @@ namespace TaimisToolbench.Services
         SkippedInBackoff,
 
         /// <summary>
-        /// Another caller claimed the refresh slot between this press
-        /// reading the published fetch and trying to claim it, and no
-        /// fetch had been published to wait for.
+        /// Two passes each found the slot taken by the time this press
+        /// tried to claim it and free by the time it looked for something
+        /// to wait on. Nothing was fetched and nothing was waited for.
         /// </summary>
         LostTheClaim,
     }

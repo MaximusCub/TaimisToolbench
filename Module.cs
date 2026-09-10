@@ -2231,20 +2231,15 @@ namespace TaimisToolbench
         {
             var fetch = FetchAndSaveSnapshotAsync(ct);
             _refreshSlot.PublishFetch(fetch);
-            try
-            {
-                var snapshot = await fetch;
-                if (snapshot != null)
-                {
-                    _refreshFailures.RecordSuccess();
-                }
 
-                return snapshot;
-            }
-            finally
+            var snapshot = await fetch;
+            if (snapshot != null)
             {
-                _refreshSlot.ClearFetch(fetch);
+                _refreshFailures.RecordSuccess();
+                Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
             }
+
+            return snapshot;
         }
 
         /// <summary>
@@ -2314,11 +2309,6 @@ namespace TaimisToolbench
                         // second stamp would date an attempt that did not
                         // happen.
                         MarkPlanRefreshFailed(refresh, null);
-                        break;
-                    case PlanRefreshOutcome.Refreshed:
-                    case PlanRefreshOutcome.JoinedRunningFetch:
-                    case PlanRefreshOutcome.LostTheClaim:
-                        Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
                         break;
                 }
             }
@@ -2420,7 +2410,6 @@ namespace TaimisToolbench
             try
             {
                 var snapshot = await TrackedFetchAsync(_refreshSlot.BeginFetch());
-                Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
                 if (snapshot != null)
                 {
                     var status = StatusText.Stamp("Updated", snapshot.CapturedAt.ToLocalTime());
