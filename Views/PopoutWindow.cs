@@ -101,7 +101,17 @@ namespace TaimisToolbench.Views
                 MainThreadMarshal.Run,
                 ResizeSettleDebounce.DefaultSettleMs,
                 ex => Logger.Warn(ex, "Popout re-ellipsis wait failed"));
+        }
 
+        /// <summary>
+        /// Builds the chrome and the first table. Separate from the
+        /// constructor so that a failure here leaves the caller holding the
+        /// window and able to dispose it. The constructor parents to the
+        /// sprite screen, so a throw inside one strands a half-built child
+        /// there that nothing references and nothing can reach.
+        /// </summary>
+        internal void Initialize()
+        {
             BuildChrome();
             ApplyOpacity(_opacityPercent());
             Rebuild();
