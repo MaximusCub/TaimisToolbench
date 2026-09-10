@@ -39,15 +39,17 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// Reads the probe and latches on the first reading that says yes.
+        /// Reads the probe, and releases anything waiting on the first
+        /// reading that says yes.
+        /// <para>
+        /// The probe is read every time rather than cached behind the
+        /// latch. A key removed or narrowed mid-session has to read as no
+        /// again, or every guard in Module that used to stop refreshing
+        /// would keep spending requests that cannot work.
+        /// </para>
         /// </summary>
         public bool IsReady()
         {
-            if (_latched.Task.IsCompleted)
-            {
-                return true;
-            }
-
             if (!_probe())
             {
                 return false;

@@ -15,8 +15,14 @@ namespace TaimisToolbench.Tests.Services
             Assert.False(signal.IsReady());
         }
 
+        /// <summary>
+        /// A key removed or narrowed mid-session has to read as no again.
+        /// Module's other guards stop refreshing on that reading, and
+        /// caching the first yes would have them spend requests that
+        /// cannot work.
+        /// </summary>
         [Fact]
-        public void The_first_yes_latches_so_a_later_no_cannot_take_it_back()
+        public void A_key_that_stops_working_reads_as_not_ready_again()
         {
             bool granted = true;
             var signal = new ApiReadySignal(() => granted);
@@ -24,7 +30,23 @@ namespace TaimisToolbench.Tests.Services
 
             granted = false;
 
-            Assert.True(signal.IsReady());
+            Assert.False(signal.IsReady());
+        }
+
+        [Fact]
+        public async Task A_wait_already_released_stays_released_when_the_key_stops_working()
+        {
+            bool granted = false;
+            var signal = new ApiReadySignal(() => granted);
+
+            var waited = signal.WaitAsync(TimeSpan.FromMinutes(1), CancellationToken.None);
+            granted = true;
+            signal.IsReady();
+            Assert.True(await waited);
+
+            granted = false;
+
+            Assert.True(await signal.WaitAsync(TimeSpan.FromMinutes(1), CancellationToken.None));
         }
 
         [Fact]
