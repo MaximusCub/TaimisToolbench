@@ -19,7 +19,7 @@ namespace TaimisToolbench.Services
     /// </para>
     /// <para>
     /// ShellExecuteEx BLOCKS the calling thread until the shell hands the URL
-    /// off, and both call sites are mouse-event handlers dispatched from the
+    /// off, and its one call site is a mouse-event handler dispatched from the
     /// game update loop, so the call is offloaded to Task.Run. The try/catch
     /// stays INSIDE the task - not around Task.Run itself - so a launch failure
     /// is still caught and logged. See docs/ARCHITECTURE.md, S2.10.

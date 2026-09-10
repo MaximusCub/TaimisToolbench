@@ -175,8 +175,12 @@ namespace TaimisToolbench.Views.Rendering
         /// <see cref="IconControls"/> to call as it builds one. Blish
         /// resolves a tooltip on the deepest control under the cursor and
         /// never bubbles, so the frame, its art square and the missing-icon
-        /// placeholder mark each need their own hover AND their own
-        /// right-click.
+        /// placeholder mark each need their own hover.
+        /// <para>
+        /// The right-click goes on the outermost control ALONE, because
+        /// click handlers accumulate up the tree where hovers do not. See
+        /// <see cref="IconWikiClick"/>.
+        /// </para>
         /// <para>
         /// SCOPE: the icon, and no further. The module used to stamp the
         /// row panel and every label on it, precisely BECAUSE Blish does
@@ -197,7 +201,7 @@ namespace TaimisToolbench.Views.Rendering
             // hover is deliberately silent still keeps whatever wiki page
             // its intent named, and a re-stamp has to be able to retarget
             // an icon whose subject was swapped underneath it.
-            IconWikiClick.ApplyToIconTree(iconTree, _wiki);
+            IconWikiClick.ApplyToIcon(iconTree, _wiki);
 
             // The icon's own note ("no icon available for this entry") is
             // already on the tree and is worth more than silence, so a
