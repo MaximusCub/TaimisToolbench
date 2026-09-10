@@ -237,10 +237,10 @@ namespace TaimisToolbench.Views.Rendering
 
             // The Item column flexes and its cells rule left, so its header
             // stays on that rule - at the icon its rows open with, not at
-            // the name beside it (Services/ColumnHeaderLabelMath). Every
-            // other header CENTRES over the INK its own cells cover,
-            // bounded by the columns either side of it and not by the band
-            // around that ink - see JustifiedColumnTracks.HeaderRoom. Every
+            // the name beside it (Services/ColumnHeaderLabelMath). Source
+            // and Amount CENTRE over the INK their own cells cover, bounded
+            // by the columns either side of them and not by the band around
+            // that ink - see JustifiedColumnTracks.HeaderRoom. Every
             // one of the five carries a persistent sort indicator, and the
             // block width that covers it is what the placement below is
             // handed, so a sort click moves no column.
@@ -310,9 +310,11 @@ namespace TaimisToolbench.Views.Rendering
         }
 
         /// <summary>
-        /// Seats the four data headers over the ink their own cells cover.
-        /// One method for the build and for every resize tick, so the two
-        /// cannot answer differently; position only, and no measurement.
+        /// Seats the four data headers on their own columns - Source and
+        /// Amount over the ink their cells cover, Each and Total on the
+        /// edge those cells rule against. One method for the build and for
+        /// every resize tick, so the two cannot answer differently;
+        /// position only, and no measurement.
         /// </summary>
         private static void PlaceDataHeaders(
             SortableHeaderBlock[] blocks, ColumnScan scan, ShoppingColumnMath.ColumnEdges edges,
@@ -322,10 +324,15 @@ namespace TaimisToolbench.Views.Rendering
             blocks[1].MoveTo(SourceHeaderX(edges, scan, sourceHeaderWidth, rooms.Source));
             blocks[2].MoveTo(JustifiedColumnTracks.CenteredOverContentRightAligned(
                 edges.QtyRightEdge, scan.QtyInk, amountHeaderWidth, rooms.Amount));
-            blocks[3].MoveTo(JustifiedColumnTracks.CenteredOverContentRightAligned(
-                edges.EachRightEdge, scan.MaxEachWidth, eachHeaderWidth, rooms.Each));
-            blocks[4].MoveTo(JustifiedColumnTracks.CenteredOverContentRightAligned(
-                edges.TotalRightEdge, scan.MaxTotalWidth, totalHeaderWidth, rooms.Total));
+
+            // Each and Total take their columns' own right edge rather than
+            // centring over the ink: both are money, both right-align their
+            // digits, and a centred word over a band wider than the widest
+            // value sat left of the figures it named.
+            blocks[3].MoveTo(JustifiedColumnTracks.RightAlignedOverContent(
+                edges.EachRightEdge, eachHeaderWidth, rooms.Each));
+            blocks[4].MoveTo(JustifiedColumnTracks.RightAlignedOverContent(
+                edges.TotalRightEdge, totalHeaderWidth, rooms.Total));
         }
 
         /// <summary>
