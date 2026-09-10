@@ -112,14 +112,16 @@ namespace TaimisToolbench.Views.Rendering
             {
                 ColumnHeaderRowRenderer.CreateColumnHeaderRow(
                     contentFlow, panelWidth, DisciplineHeaderText, 8, LevelHeaderText, _sink,
-                    middleLabel: CharactersHeaderText,
-                    middleXForWidth: w =>
+                    middleHeaders: new[]
                     {
-                        var e = edgesFor(w);
-                        DisciplinesColumnMath.HeaderRooms(
-                            e, maxNameInk, maxCharInk, maxLevelInk, out var charRoom, out _);
-                        return JustifiedColumnTracks.CenteredOverContent(
-                            e.CharX, maxCharInk, charHeaderWidth, charRoom);
+                        new ColumnHeaderRowRenderer.MiddleHeader(CharactersHeaderText, w =>
+                        {
+                            var e = edgesFor(w);
+                            DisciplinesColumnMath.HeaderRooms(
+                                e, maxNameInk, maxCharInk, maxLevelInk, out var charRoom, out _);
+                            return JustifiedColumnTracks.CenteredOverContent(
+                                e.CharX, maxCharInk, charHeaderWidth, charRoom);
+                        }),
                     },
                     rightLabelXForWidth: levelLabelX,
                     rowsHeight: rowsHeight);

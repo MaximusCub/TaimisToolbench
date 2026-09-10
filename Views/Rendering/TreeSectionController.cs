@@ -476,15 +476,17 @@ namespace TaimisToolbench.Views.Rendering
 
                 _treeHeaderRelayout = ColumnHeaderRowRenderer.CreateColumnHeaderRow(
                     treeFlow, panelWidth, "Item", PlanRelayoutMath.TableLeftHeaderX, CostHeaderText, _sink,
-                    middleLabel: SourceHeaderText,
-                    middleXForWidth: w =>
+                    middleHeaders: new[]
                     {
-                        var edges = headerEdgesFor(w);
-                        PlanRelayoutMath.ComputeTreeHeaderRooms(
-                            edges, _sourceHeaderInkWidth, headerCostWidths.WidestRowRunWidth,
-                            out var sourceRoom, out _);
-                        return TreePillRunLayout.HeaderX(
-                            edges.PillColX, _sourceHeaderInkWidth, sourceHeaderWidth, sourceRoom);
+                        new ColumnHeaderRowRenderer.MiddleHeader(SourceHeaderText, w =>
+                        {
+                            var edges = headerEdgesFor(w);
+                            PlanRelayoutMath.ComputeTreeHeaderRooms(
+                                edges, _sourceHeaderInkWidth, headerCostWidths.WidestRowRunWidth,
+                                out var sourceRoom, out _);
+                            return TreePillRunLayout.HeaderX(
+                                edges.PillColX, _sourceHeaderInkWidth, sourceHeaderWidth, sourceRoom);
+                        }),
                     },
                     rightXForWidth: w => headerEdgesFor(w).CostRightEdge,
                     rightLabelXForWidth: w =>

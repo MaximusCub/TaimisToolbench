@@ -395,6 +395,16 @@ namespace TaimisToolbench.Models
         // cost - KNOWN-ISSUES #16.
         public List<CurrencyAmountViewModel> CurrencyCosts { get; set; }
 
+        /// <summary>
+        /// Bartered ITEMS a Required Recipes row's sheet costs, as
+        /// "5x Charm of Skill", or "3x A + 2x B" for several. Null on every
+        /// other row and on a sheet bought for coin or currency alone,
+        /// which ride CoinValue and CurrencyCosts instead. Items have no
+        /// segment run to draw, so this half of the price is words - see
+        /// PlanViewModelBuilder.ApplySheetCost.
+        /// </summary>
+        public string SheetBarterText { get; set; }
+
         // Per-unit ("Each" column) counterpart of CurrencyCosts - integer-
         // divided by Quantity the same way UnitCoinValue divides CoinValue.
         // Null/empty under the same condition as CurrencyCosts.

@@ -1746,6 +1746,7 @@ namespace TaimisToolbench.Services
             };
 
             var planDiscNames = BuildPlanDiscNames(result);
+            var sheetSources = BuildSheetSourcesByRecipeId(result.MissingRecipeSheetSources);
 
             foreach (var recipe in result.RequiredRecipes)
             {
@@ -1818,7 +1819,7 @@ namespace TaimisToolbench.Services
                     wikiTarget = IconWikiTarget.Acquisition(craftedName);
                 }
 
-                section.Rows.Add(new PlanRowViewModel
+                var row = new PlanRowViewModel
                 {
                     RowType = PlanRowType.RecipeRow,
                     ItemId = subjectItemId,
@@ -1832,7 +1833,15 @@ namespace TaimisToolbench.Services
                     // all the reader sees and the crafted item it unlocks
                     // is the thing they were planning.
                     HintText = namesTheSheet ? $"Unlocks {craftedName}." : null,
-                });
+                };
+
+                MissingRecipeSheetSource sheetSource;
+                if (sheetSources != null && sheetSources.TryGetValue(recipe.RecipeId, out sheetSource))
+                {
+                    ApplySheetCost(row, sheetSource, result);
+                }
+
+                section.Rows.Add(row);
             }
 
             // Title reflects the count AFTER the Mystic-Forge filter, so
@@ -1842,6 +1851,87 @@ namespace TaimisToolbench.Services
             // filter-off baseline.
             section.Title = $"Required Recipes ({section.Rows.Count})";
             return section;
+        }
+
+        private static Dictionary<int, MissingRecipeSheetSource> BuildSheetSourcesByRecipeId(
+            List<MissingRecipeSheetSource> sources)
+        {
+            if (sources == null || sources.Count == 0)
+            {
+                return null;
+            }
+
+            var byRecipeId = new Dictionary<int, MissingRecipeSheetSource>(sources.Count);
+            foreach (var source in sources)
+            {
+                if (source != null)
+                {
+                    byRecipeId[source.RecipeId] = source;
+                }
+            }
+
+            return byRecipeId;
+        }
+
+        /// <summary>
+        /// Writes what the sheet for a missing recipe costs onto its
+        /// Required Recipes row: the coin part on CoinValue and the
+        /// currency part on CurrencyCosts, so the view draws both with
+        /// icons, and the bartered items as text on SheetBarterText.
+        /// <para>
+        /// Writes nothing at all when an item line's name is not in
+        /// metadata: an "Unknown Item" here would understate what the
+        /// player has to hand over, and half a price is a wrong price.
+        /// The merchant rides the row's hover rather than a column - the
+        /// row is one line tall and the name is what a reader needs at the
+        /// vendor, not while reading the plan.
+        /// </para>
+        /// </summary>
+        private static void ApplySheetCost(
+            PlanRowViewModel row, MissingRecipeSheetSource source, CraftingPlanResult result)
+        {
+            var currencyLines = new List<CostLine>();
+            var itemParts = new List<string>();
+            if (source.NonCoinCostLines != null)
+            {
+                foreach (var line in source.NonCoinCostLines)
+                {
+                    if (line == null)
+                    {
+                        return;
+                    }
+
+                    if (string.Equals(line.Type, "Currency", StringComparison.Ordinal))
+                    {
+                        currencyLines.Add(line);
+                        continue;
+                    }
+
+                    string itemName = ResolvedNameOrNull(line.Id, result.ItemMetadata);
+                    if (itemName == null)
+                    {
+                        return;
+                    }
+
+                    itemParts.Add($"{line.Count}x {itemName}");
+                }
+            }
+
+            if (!source.CoinCost.HasValue && currencyLines.Count == 0 && itemParts.Count == 0)
+            {
+                return;
+            }
+
+            row.CoinValue = source.CoinCost ?? 0;
+            row.CurrencyCosts = CurrencyDisplayResolver.ResolveAmounts(
+                currencyLines, result.CurrencyMetadata);
+            row.SheetBarterText = itemParts.Count > 0 ? string.Join(" + ", itemParts) : null;
+
+            string where = source.OtherMerchantCount > 0
+                ? $"{source.MerchantName} and {StatusText.Count(source.OtherMerchantCount, "other merchant")}"
+                : source.MerchantName;
+            string soldBy = $"Sold by {where}.";
+            row.HintText = string.IsNullOrEmpty(row.HintText) ? soldBy : row.HintText + " " + soldBy;
         }
 
         /// <summary>

@@ -82,7 +82,7 @@ Models/PlanRequestItem.cs                                                       
 Models/PlanSolveContext.cs                                                              221
 Models/PlanStatus.cs                                                                    11
 Models/PlanStep.cs                                                                      79
-Models/PlanViewModel.cs                                                                 520
+Models/PlanViewModel.cs                                                                 530
 Models/PriceBasis.cs                                                                    32
 Models/RankerRowMetrics.cs                                                              221
 Models/RankerSlotAvailability.cs                                                        59
@@ -223,7 +223,7 @@ Services/PlanStripStatusBoard.cs                                                
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     602
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        2070
+Services/PlanViewModelBuilder.cs                                                        2160
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
@@ -251,7 +251,7 @@ Services/Recipes/RecipeCacheSerializer.cs                                       
 Services/Recipes/RecipeCorpusRefresher.cs                                               434
 Services/Recipes/RecipeCorpusVerifier.cs                                                259
 Services/Recipes/SeededRecipeCacheStore.cs                                              232
-Services/RecipesColumnMath.cs                                                           101
+Services/RecipesColumnMath.cs                                                           283
 Services/RefreshFailureRun.cs                                                           101
 Services/RequestLabelFormatter.cs                                                       63
 Services/RequiredRecipesVisibility.cs                                                   202
@@ -376,7 +376,7 @@ Views/Rendering/PlanHeaderRenderer.cs                                           
 Views/Rendering/PressFeedback.cs                                                        118
 Views/Rendering/RankerReadinessColors.cs                                                99
 Views/Rendering/RarityColors.cs                                                         199
-Views/Rendering/RecipesSectionRenderer.cs                                               363
+Views/Rendering/RecipesSectionRenderer.cs                                               486
 Views/Rendering/RichTooltipSurface.cs                                                   738
 Views/Rendering/RowRelayoutHelpers.cs                                                   72
 Views/Rendering/RowActionKey.cs                                                         103
@@ -611,7 +611,7 @@ tests/TaimisToolbench.Tests/Services/Recipes/RecipeCacheSerializerTests.cs      
 tests/TaimisToolbench.Tests/Services/Recipes/RecipeCorpusRefresherTests.cs              659
 tests/TaimisToolbench.Tests/Services/Recipes/RecipeCorpusVerifierTests.cs               362
 tests/TaimisToolbench.Tests/Services/Recipes/SeedFinalizeIndexTests.cs                  112
-tests/TaimisToolbench.Tests/Services/RecipesColumnMathTests.cs                          119
+tests/TaimisToolbench.Tests/Services/RecipesColumnMathTests.cs                          280
 tests/TaimisToolbench.Tests/Services/RefreshFailureRunTests.cs                          122
 tests/TaimisToolbench.Tests/Services/RequestLabelFormatterTests.cs                      76
 tests/TaimisToolbench.Tests/Services/RequiredRecipesVisibilityTests.cs                  198

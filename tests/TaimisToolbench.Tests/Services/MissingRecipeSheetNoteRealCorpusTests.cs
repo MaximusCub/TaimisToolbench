@@ -94,7 +94,56 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(0, relicRow.CoinValue);
         }
 
-        private static async Task<CraftingPlanResult> PlanEndlessSummerAsync()
+        /// <summary>
+        /// The section the report was looking in. The price rides the row's
+        /// own CoinValue/CurrencyCosts so the view draws coin and currency
+        /// with icons; bartered ITEMS have no run to draw and are words.
+        /// </summary>
+        [Fact]
+        public async Task TheRequiredRecipesRowsCarryTheirSheetPriceAndMerchant()
+        {
+            var result = await PlanEndlessSummerAsync();
+            var vm = new PlanViewModelBuilder().Build(result);
+
+            var recipes = vm.Sections.Single(s => s.SectionType == PlanSectionType.RequiredRecipes);
+
+            var lightRow = recipes.Rows.Single(r => r.Label == "Recipe: Gift of Light");
+            Assert.Equal(RequiredRecipesVisibility.MissingStatusTag, lightRow.StatusTag);
+            Assert.Equal(100000, lightRow.CoinValue);
+            Assert.Null(lightRow.SheetBarterText);
+            Assert.Null(lightRow.CurrencyCosts);
+            Assert.Contains("Sold by Miyani and 1 other merchant.", lightRow.HintText);
+
+            var relicRow = recipes.Rows.Single(r => r.Label == "Recipe: Relic of the Sunless");
+            Assert.Equal(RequiredRecipesVisibility.MissingStatusTag, relicRow.StatusTag);
+            Assert.Equal(0, relicRow.CoinValue);
+            Assert.Equal("5x Charm of Skill", relicRow.SheetBarterText);
+            Assert.Null(relicRow.CurrencyCosts);
+            Assert.Contains("Sold by Abram and 74 other merchants.", relicRow.HintText);
+        }
+
+        /// <summary>
+        /// A recipe the account already has must not carry a price: the
+        /// column exists to answer "what does it cost to stop being
+        /// missing this", and a Learned row is not missing anything.
+        /// </summary>
+        [Fact]
+        public async Task ALearnedRecipeRowCarriesNoSheetPrice()
+        {
+            var result = await PlanEndlessSummerAsync(
+                learnedRecipeIds: new HashSet<int> { GiftOfLightRecipeId });
+            var vm = new PlanViewModelBuilder().Build(result);
+
+            var recipes = vm.Sections.Single(s => s.SectionType == PlanSectionType.RequiredRecipes);
+            var lightRow = recipes.Rows.Single(r => r.Label == "Recipe: Gift of Light");
+
+            Assert.Equal(RequiredRecipesVisibility.LearnedStatusTag, lightRow.StatusTag);
+            Assert.Equal(0, lightRow.CoinValue);
+            Assert.Null(lightRow.SheetBarterText);
+        }
+
+        private static async Task<CraftingPlanResult> PlanEndlessSummerAsync(
+            ISet<int> learnedRecipeIds = null)
         {
             var corpus = RealCorpusFixture.Load();
             using (var tmp = new TempDirectory())
@@ -133,7 +182,7 @@ namespace TaimisToolbench.Tests.Services
                 return await pipeline.GenerateStructuredAsync(
                     EndlessSummer, 1, null, CancellationToken.None,
                     priceBasis: PriceBasis.InstantBuy,
-                    learnedRecipeIds: new HashSet<int>());
+                    learnedRecipeIds: learnedRecipeIds ?? new HashSet<int>());
             }
         }
 
