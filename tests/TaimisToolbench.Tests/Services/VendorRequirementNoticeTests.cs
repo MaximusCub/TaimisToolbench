@@ -84,9 +84,18 @@ namespace TaimisToolbench.Tests.Services
         /// </summary>
         private static string NoticeLabel(CraftingPlanResult result)
         {
+            return NoticeRow(result).Label;
+        }
+
+        /// <summary>
+        /// The note row itself. The item's icon and name lead the row, so
+        /// the sentence names neither - see the subject assertions below.
+        /// </summary>
+        private static PlanRowViewModel NoticeRow(CraftingPlanResult result)
+        {
             var vm = new PlanViewModelBuilder().Build(result);
             var section = vm.Sections.Single(s => s.SectionType == PlanSectionType.Notes);
-            return Assert.Single(section.Rows).Label;
+            return Assert.Single(section.Rows);
         }
 
         /// <summary>
@@ -115,9 +124,30 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(VendorRequirementKind.Achievement, notice.Kind);
 
             Assert.Equal(
-                "Exalted Helm: this vendor requires the Supply Line Management achievement. "
+                "The vendor who sells this item requires the Supply Line Management achievement. "
                 + "Your account does not have it.",
                 NoticeLabel(result));
+
+            // The icon and the name lead the row, so the sentence does
+            // not repeat them.
+            var row = NoticeRow(result);
+            Assert.Equal(GatedItemId, row.ItemId);
+            Assert.Equal("Exalted Helm", row.NoteSubject);
+
+            // The achievement's own NAME is the link, and the kind word
+            // beside it is not.
+            Assert.Equal(3, row.NoteSegments.Count);
+            Assert.False(row.NoteSegments[0].IsLink);
+            Assert.Equal(
+                "The vendor who sells this item requires the ", row.NoteSegments[0].Text);
+            Assert.True(row.NoteSegments[1].IsLink);
+            Assert.Equal("Supply Line Management", row.NoteSegments[1].Text);
+            Assert.Equal(
+                "https://wiki.guildwars2.com/wiki/Supply_Line_Management",
+                row.NoteSegments[1].Link.BuildUrl());
+            Assert.False(row.NoteSegments[2].IsLink);
+            Assert.Equal(
+                " achievement. Your account does not have it.", row.NoteSegments[2].Text);
 
             // The row already names the item, and the source badge's own
             // hover reads "Buy from a vendor - " in front of this.
@@ -140,7 +170,7 @@ namespace TaimisToolbench.Tests.Services
             var vm = new PlanViewModelBuilder().Build(result);
             Assert.DoesNotContain(
                 vm.Sections.SelectMany(s => s.Rows),
-                r => r.Label != null && r.Label.Contains("this vendor requires"));
+                r => r.Label != null && r.Label.Contains("The vendor who sells this item"));
             Assert.Null(ShoppingRowHint(result));
         }
 
@@ -156,7 +186,7 @@ namespace TaimisToolbench.Tests.Services
                 VendorRequirementUnknownReason.AccountDataUnavailable, notice.UnknownReason);
             Assert.Equal(AccountProgressionAccess.FetchFailed, result.AccountProgressionAccess);
             Assert.Equal(
-                "Exalted Helm: this vendor requires the Supply Line Management achievement. "
+                "The vendor who sells this item requires the Supply Line Management achievement. "
                 + "The check failed. Generate the plan again.",
                 NoticeLabel(result));
         }
@@ -200,7 +230,7 @@ namespace TaimisToolbench.Tests.Services
                 VendorRequirementUnknownReason.AccountDataUnavailable, notice.UnknownReason);
             Assert.Equal(AccountProgressionAccess.NotConsented, result.AccountProgressionAccess);
             Assert.Equal(
-                "Exalted Helm: this vendor requires the Supply Line Management achievement. "
+                "The vendor who sells this item requires the Supply Line Management achievement. "
                 + "To check it, disable this module in Blish HUD, tick its progression "
                 + "permission, then enable it again.",
                 NoticeLabel(result));
@@ -217,7 +247,7 @@ namespace TaimisToolbench.Tests.Services
 
             Assert.Equal(AccountProgressionAccess.KeyMissingScope, result.AccountProgressionAccess);
             Assert.Equal(
-                "Exalted Helm: this vendor requires the Supply Line Management achievement. "
+                "The vendor who sells this item requires the Supply Line Management achievement. "
                 + "Your Guild Wars 2 API key does not grant progression. "
                 + "Make a new key with that permission.",
                 NoticeLabel(result));
@@ -233,7 +263,7 @@ namespace TaimisToolbench.Tests.Services
                     AccountProgressionAccess.SubtokenNotReady));
 
             Assert.Equal(
-                "Exalted Helm: this vendor requires the Supply Line Management achievement. "
+                "The vendor who sells this item requires the Supply Line Management achievement. "
                 + "Your API key had not reached the module yet. Generate the plan again.",
                 NoticeLabel(result));
         }
@@ -259,9 +289,11 @@ namespace TaimisToolbench.Tests.Services
 
             // No kind word in front of it, because the module has not
             // established one, and no advice, because there is nothing the
-            // player can do about it.
+            // player can do about it. Nothing is a link either: raw vendor
+            // text names no subject with a wiki page.
+            Assert.DoesNotContain(NoticeRow(result).NoteSegments, seg => seg.IsLink);
             Assert.Equal(
-                "Exalted Helm: this vendor requires the respective item not already "
+                "The vendor who sells this item requires the respective item not already "
                 + "unlocked in the wardrobe. This module cannot check that one.",
                 NoticeLabel(result));
         }
@@ -286,7 +318,7 @@ namespace TaimisToolbench.Tests.Services
                 }));
 
             Assert.Equal(
-                "Exalted Helm: this vendor requires the Return to Gyala Delve mastery. "
+                "The vendor who sells this item requires the Return to Gyala Delve mastery. "
                 + "Your account does not have it.",
                 NoticeLabel(result));
         }
@@ -306,7 +338,7 @@ namespace TaimisToolbench.Tests.Services
                 }));
 
             Assert.Equal(
-                "Exalted Helm: this vendor requires the Heart of Thorns expansion. "
+                "The vendor who sells this item requires the Heart of Thorns expansion. "
                 + "Your account does not have it.",
                 NoticeLabel(result));
         }

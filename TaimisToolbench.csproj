@@ -189,6 +189,8 @@
     <Compile Include="Services\GlyphFontDescriptor.cs" />
     <Compile Include="Services\PlanTableSorter.cs" />
     <Compile Include="Services\CoinSegmentMath.cs" />
+    <Compile Include="Services\MissingRecipeNoteText.cs" />
+    <Compile Include="Services\PlanNoteSegment.cs" />
     <Compile Include="Services\DialogLayoutMath.cs" />
     <Compile Include="Services\ClickSoundVolume.cs" />
     <Compile Include="Services\PlanContentHeightMath.cs" />
@@ -202,6 +204,7 @@
     <Compile Include="Services\TextWrapMath.cs" />
     <Compile Include="Services\MultiItemHeaderLayout.cs" />
     <Compile Include="Services\MultiItemHeaderTooltipComposer.cs" />
+    <Compile Include="Services\NoteSegmentWrap.cs" />
     <Compile Include="Services\NotesSectionLayoutMath.cs" />
     <Compile Include="Services\ItemRowRequestBuilder.cs" />
     <Compile Include="Services\ItemRowSelection.cs" />

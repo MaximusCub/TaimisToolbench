@@ -1480,11 +1480,15 @@ namespace TaimisToolbench.Services
                 foreach (var requirement in result.VendorRequirementNotices)
                 {
                     string itemName = ResolveName(requirement.ItemId, result.ItemMetadata);
+                    var segments = VendorRequirementNoticeText.Segments(
+                        requirement, result.AccountProgressionAccess);
                     requirementRows.Add((itemName, new PlanRowViewModel
                     {
                         RowType = PlanRowType.NoteLine,
-                        Label = VendorRequirementNoticeText.For(
-                            itemName, requirement, result.AccountProgressionAccess),
+                        ItemId = requirement.ItemId,
+                        NoteSubject = itemName,
+                        NoteSegments = segments,
+                        Label = PlanNoteSegment.Join(segments),
                     }));
                     noteEntryCount++;
                 }
@@ -1653,8 +1657,9 @@ namespace TaimisToolbench.Services
 
             // 3b. Where to buy the sheet for a recipe the plan needs and
             // the account has not learned, alphabetical by sheet name. One
-            // row each: the coin part rides CoinValue so the view draws
-            // icons, and everything else is named in the label.
+            // row each: the sheet's own icon and name, then where to buy
+            // it. What it costs is NOT here - it is the Cost cell on that
+            // recipe's own Required Recipes row.
             if (result.MissingRecipeSheetSources != null && result.MissingRecipeSheetSources.Count > 0)
             {
                 var sourceRows = new List<(string Name, PlanRowViewModel Row)>(
@@ -1667,43 +1672,22 @@ namespace TaimisToolbench.Services
                         continue;
                     }
 
-                    bool hasNonCoin = source.NonCoinCostLines != null &&
-                        source.NonCoinCostLines.Count > 0;
-                    if (!hasNonCoin && !source.CoinCost.HasValue)
+                    var segments = MissingRecipeNoteText.Segments(
+                        source, IconWikiTarget.SheetPageAcquisition(sheetName));
+                    if (segments == null)
                     {
-                        // A restored plan can carry a row with neither half
-                        // of a price. The note's whole content is the price.
+                        // No merchant to name, so the note has nothing to
+                        // say that the recipe's own row does not.
                         continue;
-                    }
-
-                    string costText = hasNonCoin
-                        ? BuildSheetBarterDescription(
-                            source.NonCoinCostLines, result.ItemMetadata, result.CurrencyMetadata)
-                        : null;
-                    if (hasNonCoin && costText == null)
-                    {
-                        continue;
-                    }
-
-                    string where = source.OtherMerchantCount > 0
-                        ? $"{source.MerchantName} and {StatusText.Count(source.OtherMerchantCount, "other merchant")}"
-                        : source.MerchantName;
-
-                    string label = $"Missing recipe - buy {sheetName} from {where} for";
-                    if (costText != null)
-                    {
-                        label += " " + costText;
-                        if (source.CoinCost.HasValue)
-                        {
-                            label += " plus";
-                        }
                     }
 
                     sourceRows.Add((sheetName, new PlanRowViewModel
                     {
                         RowType = PlanRowType.NoteLine,
-                        Label = label,
-                        CoinValue = source.CoinCost ?? 0,
+                        ItemId = source.SheetItemId,
+                        NoteSubject = sheetName,
+                        NoteSegments = segments,
+                        Label = PlanNoteSegment.Join(segments),
                     }));
                     noteEntryCount++;
                 }
@@ -1900,7 +1884,17 @@ namespace TaimisToolbench.Services
                 MissingRecipeSheetSource sheetSource;
                 if (sheetSources != null && sheetSources.TryGetValue(recipe.RecipeId, out sheetSource))
                 {
-                    ApplySheetCost(row, sheetSource, result);
+                    // The Sold By cell opens the row's own subject at the
+                    // Acquisition section, because that is where the wiki
+                    // lists every merchant rather than the one this row
+                    // names.
+                    ApplySheetCost(
+                        row,
+                        sheetSource,
+                        result,
+                        namesTheSheet
+                            ? IconWikiTarget.SheetPageAcquisition(sheetName)
+                            : IconWikiTarget.Acquisition(craftedName));
                 }
 
                 section.Rows.Add(row);
@@ -1937,23 +1931,24 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// Writes what the sheet for a missing recipe costs onto its
-        /// Required Recipes row: the coin part on CoinValue and the
-        /// currency part on CurrencyCosts, so the view draws both with
-        /// icons, and the bartered items as text on SheetBarterText.
+        /// Required Recipes row, and who sells it. The coin part rides
+        /// CoinValue, the currency part CurrencyCosts and the bartered
+        /// items SheetBarterItems, so every part of the price draws as a
+        /// number followed by its own icon. The merchant phrase rides
+        /// SoldByText, which is the table's own Sold By column.
         /// <para>
         /// Writes nothing at all when an item line's name is not in
-        /// metadata: an "Unknown Item" here would understate what the
-        /// player has to hand over, and half a price is a wrong price.
-        /// The merchant rides the row's hover rather than a column - the
-        /// row is one line tall and the name is what a reader needs at the
-        /// vendor, not while reading the plan.
+        /// metadata: the module has no picture and no name for that item,
+        /// so the cell would understate what the player has to hand over,
+        /// and half a price is a wrong price.
         /// </para>
         /// </summary>
         private static void ApplySheetCost(
-            PlanRowViewModel row, MissingRecipeSheetSource source, CraftingPlanResult result)
+            PlanRowViewModel row, MissingRecipeSheetSource source, CraftingPlanResult result,
+            IconWikiTarget soldByWiki)
         {
             var currencyLines = new List<CostLine>();
-            var itemParts = new List<string>();
+            var barterItems = new List<BarterAmountViewModel>();
             if (source.NonCoinCostLines != null)
             {
                 foreach (var line in source.NonCoinCostLines)
@@ -1969,17 +1964,20 @@ namespace TaimisToolbench.Services
                         continue;
                     }
 
-                    string itemName = ResolvedNameOrNull(line.Id, result.ItemMetadata);
-                    if (itemName == null)
+                    if (ResolvedNameOrNull(line.Id, result.ItemMetadata) == null)
                     {
                         return;
                     }
 
-                    itemParts.Add($"{line.Count}x {itemName}");
+                    barterItems.Add(new BarterAmountViewModel
+                    {
+                        ItemId = line.Id,
+                        Amount = line.Count,
+                    });
                 }
             }
 
-            if (!source.CoinCost.HasValue && currencyLines.Count == 0 && itemParts.Count == 0)
+            if (!source.CoinCost.HasValue && currencyLines.Count == 0 && barterItems.Count == 0)
             {
                 return;
             }
@@ -1987,13 +1985,9 @@ namespace TaimisToolbench.Services
             row.CoinValue = source.CoinCost ?? 0;
             row.CurrencyCosts = CurrencyDisplayResolver.ResolveAmounts(
                 currencyLines, result.CurrencyMetadata);
-            row.SheetBarterText = itemParts.Count > 0 ? string.Join(" + ", itemParts) : null;
-
-            string where = source.OtherMerchantCount > 0
-                ? $"{source.MerchantName} and {StatusText.Count(source.OtherMerchantCount, "other merchant")}"
-                : source.MerchantName;
-            string soldBy = $"Sold by {where}.";
-            row.HintText = string.IsNullOrEmpty(row.HintText) ? soldBy : row.HintText + " " + soldBy;
+            row.SheetBarterItems = barterItems.Count > 0 ? barterItems : null;
+            row.SoldByText = MissingRecipeNoteText.Merchants(source);
+            row.SoldByWikiTarget = soldByWiki;
         }
 
         /// <summary>
@@ -2020,55 +2014,6 @@ namespace TaimisToolbench.Services
                 }
 
                 parts.Add($"{line.Count}x {ResolveName(line.Id, metadata)}");
-            }
-
-            return string.Join(" + ", parts);
-        }
-
-        /// <summary>
-        /// The non-coin half of a recipe sheet's price as text: "5x Charm
-        /// of Skill", "350 Karma", or both joined by " + ". Null for a
-        /// null or empty list, and null when any item line's name is not
-        /// in metadata - an "Unknown Item" here would understate what the
-        /// player has to hand over, so the caller drops the note instead.
-        /// </summary>
-        private static string BuildSheetBarterDescription(
-            IReadOnlyList<CostLine> costLines,
-            IReadOnlyDictionary<int, ItemMetadata> metadata,
-            IReadOnlyDictionary<int, CurrencyMetadata> currencyMetadata)
-        {
-            if (costLines == null || costLines.Count == 0)
-            {
-                return null;
-            }
-
-            var parts = new List<string>(costLines.Count);
-            foreach (var line in costLines)
-            {
-                if (line == null)
-                {
-                    return null;
-                }
-
-                if (string.Equals(line.Type, "Item", StringComparison.Ordinal))
-                {
-                    string name = ResolvedNameOrNull(line.Id, metadata);
-                    if (name == null)
-                    {
-                        return null;
-                    }
-
-                    parts.Add($"{line.Count}x {name}");
-                }
-                else if (string.Equals(line.Type, "Currency", StringComparison.Ordinal))
-                {
-                    parts.Add(
-                        $"{line.Count} {CurrencyDisplayResolver.ResolveName(line.Id, currencyMetadata)}");
-                }
-                else
-                {
-                    return null;
-                }
             }
 
             return string.Join(" + ", parts);

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TaimisToolbench.Models;
 
 namespace TaimisToolbench.Services
@@ -14,19 +15,43 @@ namespace TaimisToolbench.Services
     /// </summary>
     internal static class VendorRequirementNoticeText
     {
+        private const string NoteLeadIn = "The vendor who sells this item requires ";
+
         /// <summary>
-        /// The Plan Notes line, which names the item because nothing
-        /// around it does.
+        /// The Plan Notes line, split at the link. The requirement's own
+        /// NAME is the link and the kind noun beside it is not, so
+        /// "the Return to Gates of Maguuma achievement" underlines only the
+        /// achievement. The row draws the item's icon and name ahead of
+        /// this, which is why the sentence names neither.
         /// </summary>
-        public static string For(
-            string itemName, VendorRequirementNotice notice, AccountProgressionAccess access)
+        public static List<PlanNoteSegment> Segments(
+            VendorRequirementNotice notice, AccountProgressionAccess access)
         {
             if (notice == null)
             {
                 return null;
             }
 
-            return $"{itemName}: this vendor requires {Subject(notice)}. {Outcome(notice, access)}";
+            string tail = ". " + Outcome(notice, access);
+            string noun = KindNoun(notice.Kind);
+            if (noun == null)
+            {
+                // A requirement the module did not recognise is raw vendor
+                // text, not a subject with a wiki page.
+                return new List<PlanNoteSegment>(2)
+                {
+                    PlanNoteSegment.Plain(NoteLeadIn),
+                    PlanNoteSegment.Plain(notice.RequirementText + tail),
+                };
+            }
+
+            return new List<PlanNoteSegment>(3)
+            {
+                PlanNoteSegment.Plain(NoteLeadIn + "the "),
+                PlanNoteSegment.Linked(
+                    notice.RequirementText, IconWikiTarget.ItemPage(notice.RequirementText)),
+                PlanNoteSegment.Plain(" " + noun + tail),
+            };
         }
 
         /// <summary>
@@ -49,16 +74,23 @@ namespace TaimisToolbench.Services
         private static string Subject(VendorRequirementNotice notice)
         {
             string text = notice.RequirementText;
-            switch (notice.Kind)
+            string noun = KindNoun(notice.Kind);
+            return noun == null ? text : "the " + text + " " + noun;
+        }
+
+        /// <summary>
+        /// What kind of thing the requirement names, as the word that
+        /// follows it. Null for a requirement the module did not
+        /// recognise, whose text is the vendor's own and names no subject.
+        /// </summary>
+        private static string KindNoun(VendorRequirementKind kind)
+        {
+            switch (kind)
             {
-                case VendorRequirementKind.Achievement:
-                    return $"the {text} achievement";
-                case VendorRequirementKind.Mastery:
-                    return $"the {text} mastery";
-                case VendorRequirementKind.Expansion:
-                    return $"the {text} expansion";
-                default:
-                    return text;
+                case VendorRequirementKind.Achievement: return "achievement";
+                case VendorRequirementKind.Mastery: return "mastery";
+                case VendorRequirementKind.Expansion: return "expansion";
+                default: return null;
             }
         }
 

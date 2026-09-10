@@ -262,6 +262,37 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// One bartered ITEM in an inline price run - the number of units
+        /// handed over, marked by that item's own icon. Same shape and same
+        /// advance as <see cref="CurrencySegmentSpec"/>, in a separate type
+        /// because the id is an ITEM id: one numeric slot shared by two id
+        /// spaces is how id 24 came to open an unrelated item's tooltip on
+        /// a currency row (see PlanRowViewModel.ItemId).
+        /// </summary>
+        public struct BarterSegmentSpec
+        {
+            public int ItemId;
+            public string Text;
+            public int TextWidth;
+        }
+
+        /// <summary>
+        /// Width of a whole barter run. Same formula as
+        /// <see cref="TotalCurrencySegmentsWidth"/>, because the two runs
+        /// draw at the same icon size and the same gaps.
+        /// </summary>
+        public static int TotalBarterSegmentsWidth(List<BarterSegmentSpec> segments)
+        {
+            var widths = new List<int>(segments.Count);
+            foreach (var seg in segments)
+            {
+                widths.Add(seg.TextWidth);
+            }
+
+            return ShoppingColumnMath.SegmentRunWidth(widths, CoinIconSize, CoinLabelIconGap, CoinSegmentGap);
+        }
+
+        /// <summary>
         /// Width of a whole coin run. iconSize defaults to CoinIconSize, the
         /// bar tier every plan table draws inline runs at; the rich tooltip
         /// passes its own line-height-derived size (gap G22) and must measure

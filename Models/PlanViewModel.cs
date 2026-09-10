@@ -238,6 +238,21 @@ namespace TaimisToolbench.Models
     }
 
     /// <summary>
+    /// A count of one bartered ITEM in an inline price run. Separate from
+    /// <see cref="CurrencyAmountViewModel"/> because the id is an item id,
+    /// and the two id spaces share numbers: id 24 is a real item AND the
+    /// currency "Pristine Fractal Relics". Carries the id alone, no name
+    /// and no icon url, because the icon component resolves all of that
+    /// from the id (Views/Rendering/IconControls.DrawItemIcon).
+    /// </summary>
+    internal class BarterAmountViewModel
+    {
+        public int ItemId { get; set; }
+
+        public long Amount { get; set; }
+    }
+
+    /// <summary>
     /// A single non-coin amount, already resolved to display-ready
     /// name/icon (never a raw id - see CurrencyDisplayResolver). Used for
     /// BuyFromVendor rows/nodes priced wholly or partly in something other
@@ -395,14 +410,48 @@ namespace TaimisToolbench.Models
         public List<CurrencyAmountViewModel> CurrencyCosts { get; set; }
 
         /// <summary>
-        /// Bartered ITEMS a Required Recipes row's sheet costs, as
-        /// "5x Charm of Skill", or "3x A + 2x B" for several. Null on every
-        /// other row and on a sheet bought for coin or currency alone,
-        /// which ride CoinValue and CurrencyCosts instead. Items have no
-        /// segment run to draw, so this half of the price is words - see
+        /// Bartered ITEMS a Required Recipes row's sheet costs - five
+        /// Charms of Skill, three of one thing and two of another. Null on
+        /// every other row and on a sheet bought for coin or currency
+        /// alone, which ride CoinValue and CurrencyCosts instead. Each
+        /// amount draws as its number followed by the item's own icon, the
+        /// shape a wallet currency already draws in - see
         /// PlanViewModelBuilder.ApplySheetCost.
         /// </summary>
-        public string SheetBarterText { get; set; }
+        public List<BarterAmountViewModel> SheetBarterItems { get; set; }
+
+        /// <summary>
+        /// The item a Plan Notes line is about, whose name the row draws
+        /// after its icon and before the note itself. Null on a note with
+        /// no single item subject, which draws as plain text at the
+        /// section's own left rule. ItemId carries the icon.
+        /// </summary>
+        public string NoteSubject { get; set; }
+
+        /// <summary>
+        /// A Plan Notes line's sentence, split where a link starts and
+        /// ends (see PlanNoteSegment). Null on a note that is one plain
+        /// run, which the view wraps from Label instead. Label always
+        /// carries the same words as one string, so the row's full-text
+        /// hover reads the same sentence the row draws.
+        /// </summary>
+        public List<PlanNoteSegment> NoteSegments { get; set; }
+
+        /// <summary>
+        /// Who sells the sheet for a missing recipe, as the Required
+        /// Recipes table's Sold By cell reads it: one merchant's name, or
+        /// that name and how many others charge the same. Null on every
+        /// row whose sheet the module found no vendor for.
+        /// </summary>
+        public string SoldByText { get; set; }
+
+        /// <summary>
+        /// The wiki page the Sold By cell's right-click opens, and the
+        /// affordance line it hovers with. The sheet's own page at its
+        /// Acquisition section, where the full merchant list lives. Opens
+        /// nothing when <see cref="SoldByText"/> is null.
+        /// </summary>
+        public IconWikiTarget SoldByWikiTarget { get; set; }
 
         // Per-unit ("Each" column) counterpart of CurrencyCosts - integer-
         // divided by Quantity the same way UnitCoinValue divides CoinValue.
