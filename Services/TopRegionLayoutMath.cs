@@ -53,9 +53,11 @@ namespace TaimisToolbench.Services
         public const int TreeToolbarRowHeight = 30;
 
         /// <summary>
-        /// Width the status label may fill before it ellipsizes. The status
-        /// row carries nothing but the label and the spinner that trails
-        /// it, so the band is the strip's own right edge less the two.
+        /// Width the status line has to fit. The status row carries nothing
+        /// but the label and the spinner that trails it, so the band is the
+        /// strip's own right edge less the two. It is what
+        /// StatusText.PlanStatusBudgetChars is derived from, and the plan
+        /// line is written short enough to sit inside it.
         /// <para>
         /// MEASURED at the 1378px window floor, from the shipped constants
         /// rather than by eye: WindowSizing.TabPanelWidthFor leaves the
