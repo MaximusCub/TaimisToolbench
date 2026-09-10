@@ -718,7 +718,7 @@ namespace TaimisToolbench.Views
         private const string CurrenciesToggleText = "Show Currencies";
 
         private const string CategoriesTooltip =
-            "Show the six categories under each row - materials, currencies, time gates, disciplines, recipes and barter items - as the bars the Ready figure is blended from, along with the notes that explain them. Off by default so more rows fit on screen.";
+            "Show the five categories under each row - materials, currencies, time gates, disciplines and recipes - as the bars the Ready figure is blended from, along with the notes that explain them. Off by default so more rows fit on screen.";
 
         private const string CurrenciesTooltip =
             "List the currencies each row is still short of, and by how much. The Currencies category says how close you are; this says which currency.";
@@ -794,7 +794,7 @@ namespace TaimisToolbench.Views
             null,
             "The item you are working toward, and how many of it - hover for its full details.",
             "Whether you can afford everything this item still needs right now, or how much coin you are short of it.",
-            "How close this item is to finished: the barriers under the row, blended into one figure.",
+            "How close this item is to finished: the five barriers under the row, blended into one figure.",
             "The shortest possible wait in days, set by once-per-day crafts that no amount of coin can shorten.",
             // Names the price basis because this tab always solves on buy
             // orders with own materials free, whatever the plan tab is set
@@ -950,7 +950,7 @@ namespace TaimisToolbench.Views
         private static readonly string[] Captions =
         {
             "In priority order, each item is measured against what the items above it leave behind - higher rows have first claim on your materials, currencies, coin and daily crafts. Each on its own measures every item against your full account, ignoring the other rows, and sorts the closest-to-done to the top.",
-            "Ready blends six separate barriers - the coin and currency bill at buy-order prices, the currencies your wallet is short, time-gated daily crafts, crafting disciplines, recipe unlocks and the items a vendor takes instead of coin - and counts only the ones this item actually has. Hover it for the breakdown.",
+            "Ready blends five separate barriers - the coin and currency bill at buy-order prices, the currencies your wallet is short, time-gated daily crafts, crafting disciplines and recipe unlocks - and counts only the ones this item actually has. Hover it for the breakdown.",
         };
 
         private int MeasureCaptionsHeight(int barWidth)
@@ -1249,7 +1249,7 @@ namespace TaimisToolbench.Views
             "",
             "Add the items you are working toward, in the order you want to finish them. The Ranker then answers a question the Crafting Plan tab cannot: given that everything above it already has first claim on your materials, your currencies and your daily crafts, how close is each one really?",
             "",
-            "Every row scores six separate barriers - materials, account currencies, time-gated daily crafts, crafting disciplines, recipe unlocks and the items a vendor takes instead of coin - and combines only the ones that item actually has into one Ready percentage you can rank by.",
+            "Every row scores five separate barriers - materials, account currencies, time-gated daily crafts, crafting disciplines and recipe unlocks - and combines only the ones that item actually has into one Ready percentage you can rank by.",
             "",
             "Search above to add your first item, then press Analyze.",
         };
@@ -1768,7 +1768,7 @@ namespace TaimisToolbench.Views
         /// toggle away, and the headline itself still hovers with the
         /// breakdown. The NOTES travel with the category strip because that
         /// is what they explain: a discipline gap, a contested claim, a
-        /// vendor cap on one of the categories.
+        /// vendor cap on one of the five categories.
         /// </para>
         /// </summary>
         private RankerRowLayout.SubLineBlock RenderSubLines(
@@ -1791,7 +1791,7 @@ namespace TaimisToolbench.Views
             var block = RankerRowLayout.SubLines(hasGates, currencyLines, notes.Count);
 
             // The gate breakdown, justified across the full sub-line band so
-            // the barriers read as one strip rather than a left-packed
+            // the five barriers read as one strip rather than a left-packed
             // sentence with dead space to its right.
             int gateY = block.GateY;
             int gateCount = hasGates ? metrics.Gates.Count : 0;
@@ -1813,12 +1813,12 @@ namespace TaimisToolbench.Views
 
                 RankerRowLayout.GateBar(bands, i, labelBand, out int barX, out int barWidth);
 
-                // Only a SCORED gate paints any fill. A full bar is a
-                // completion claim, and the two other statuses have no
-                // measurement to make one from - see
-                // RankerReadinessCalculator.GateBarFraction, which is also
-                // where the text that has to agree with it lives.
-                double fraction = RankerReadinessCalculator.GateBarFraction(gate);
+                // A gate this item does not have draws a FULL bar: there is
+                // nothing outstanding behind a barrier that is not there, so
+                // it reads 100% like any other finished gate
+                // (RankerReadinessCalculator.FormatGate, which is also where
+                // the caveat about the headline lives).
+                double fraction = gate.Applies ? gate.Completion : 1.0;
                 row.GateFractions.Add(fraction);
                 Panel fill;
                 Panel track = CreateBar(
@@ -1850,7 +1850,7 @@ namespace TaimisToolbench.Views
                 // would answer nothing if only its plate were stamped. The
                 // dead space between cells still answers nothing, which is
                 // the rule the row panel's own stamping was removed for.
-                string cellTooltip = GateCellTooltip(gate, metrics);
+                string cellTooltip = GateBlendLine(gate) + ".";
                 TooltipFacility.ApplyPlain(gateName, cellTooltip);
                 TooltipFacility.ApplyPlain(track, cellTooltip);
                 TooltipFacility.ApplyPlain(fill, cellTooltip);
@@ -1949,10 +1949,10 @@ namespace TaimisToolbench.Views
 
         /// <summary>
         /// Width reserved for a gate's NAME inside its cell - the widest of
-        /// them all, so every bar in the strip starts at the same offset in
-        /// its own cell and the cells read as one rack of gauges. Measured
-        /// once: the labels are fixed strings and the face does not change
-        /// while the module is loaded.
+        /// the five, so every bar in the strip starts at the same offset in
+        /// its own cell and the five read as one rack of gauges. Measured
+        /// once: the five labels are fixed strings and the face does not
+        /// change while the module is loaded.
         /// </summary>
         private static int GateLabelBandWidth()
         {
@@ -2448,14 +2448,14 @@ namespace TaimisToolbench.Views
                 return "Not yet calculated - press Analyze.";
             }
 
-            // A row with no scored gate is one of two different statements,
-            // so the reason list is what the reader gets rather than one
-            // sentence that would have to cover both.
+            if (metrics.Kind != RankerReadinessKind.Measured)
+            {
+                return "This item has no measurable barrier left that the Ranker can score. Read the lines under the row for what is actually outstanding.";
+            }
+
             var lines = new List<string>
             {
-                metrics.Kind == RankerReadinessKind.Measured
-                    ? "Ready blends the barriers this item actually has. Materials is the whole bill in coin, counting each currency this plan pays at its value in Settings. Every other barrier is measured only against itself."
-                    : "The Ranker scored none of this item's barriers. Each line below says why, and the lines under the row say what is outstanding.",
+                "Ready blends the barriers this item actually has. Materials is the whole bill in coin, counting each currency this plan pays at its value in Settings. Every other barrier is measured only against itself.",
                 "",
             };
             foreach (var gate in metrics.Gates)
@@ -2470,63 +2470,23 @@ namespace TaimisToolbench.Views
                 lines.Add(unpriced);
             }
 
-            if (metrics.Kind == RankerReadinessKind.Measured)
-            {
-                lines.Add("");
-                lines.Add("Weights are renormalised over the barriers that apply, so an item with only materials scores exactly its materials figure.");
-            }
-
+            lines.Add("");
+            lines.Add("Weights are renormalised over the barriers that apply, so an item with only materials scores exactly its materials figure.");
             return string.Join("\n", lines);
         }
 
         /// <summary>
-        /// One gate's line in the Ready hover: its figure and weight when it
-        /// was blended, otherwise the reason it was not. Only the gates
-        /// carrying a figure here are the ones the headline came from.
+        /// One gate's line in the Ready hover and in that cell's own hover:
+        /// its figure and weight when the headline blended it, otherwise the
+        /// note that the item has no such barrier.
         /// </summary>
         private static string GateBlendLine(RankerGateScore gate)
         {
             string label = RankerReadinessCalculator.GateLabel(gate.Gate);
-            string reason = RankerReadinessCalculator.GateExclusionReason(gate);
-            return reason == null
+            return gate.Applies
                 ? label + ": " + RankerReadinessCalculator.FormatPercent(gate.Completion) +
                   " at weight " + gate.Weight.ToString("0.00", CultureInfo.InvariantCulture)
-                : label + ": " + reason;
-        }
-
-        /// <summary>
-        /// One gate cell's own hover. The cell prints a percentage only when
-        /// the headline counted it, and this is where a cell that prints
-        /// "n/a" or a dash says which of the two it is.
-        /// </summary>
-        private static string GateCellTooltip(RankerGateScore gate, RankerRowMetrics metrics)
-        {
-            return GateBlendLine(gate) + "." + GateCellSuffix(gate, metrics);
-        }
-
-        private static string GateCellSuffix(RankerGateScore gate, RankerRowMetrics metrics)
-        {
-            if (gate == null || gate.Gate != RankerGate.BarterItems || !gate.Applies)
-            {
-                return "";
-            }
-
-            var shortfalls = metrics?.BarterItemShortfalls;
-            int owed = shortfalls?.Count ?? 0;
-            int outstanding = 0;
-            if (shortfalls != null)
-            {
-                foreach (var shortfall in shortfalls)
-                {
-                    if (shortfall.Short > 0)
-                    {
-                        outstanding++;
-                    }
-                }
-            }
-
-            return " Barter counts the account-bound items a vendor takes instead of coin, each measured in its own units: " +
-                StatusText.Count(owed, "item") + " on this plan, " + outstanding + " still short.";
+                : label + ": this item has none, so it is not part of the blend";
         }
 
         /// <summary>

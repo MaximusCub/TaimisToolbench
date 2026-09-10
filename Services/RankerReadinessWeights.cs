@@ -3,7 +3,7 @@ using TaimisToolbench.Models;
 namespace TaimisToolbench.Services
 {
     /// <summary>
-    /// The Crafting Ranker's headline is a weighted mean of six gate
+    /// The Crafting Ranker's headline is a weighted mean of five gate
     /// completions, renormalised over the gates that apply to the item. These
     /// are the weights, kept as named constants rather than buried in the
     /// formula so they can be argued with.
@@ -29,19 +29,6 @@ namespace TaimisToolbench.Services
         public const double Disciplines = 0.10;
         public const double Recipes = 0.10;
 
-        /// <summary>
-        /// The same share as <see cref="Currencies"/>, on the same
-        /// substitutability argument: a barter item is an account-bound
-        /// token a vendor takes in place of coin, so like a wallet currency
-        /// it cannot be bought and can only be accumulated. The two gates
-        /// are one barrier class split across two id spaces
-        /// (Models/BarterItemCost.cs), and a plan that pays both therefore
-        /// weights that class at 0.40 against the 0.35 its coin bill
-        /// carries. Deliberate: a bill nothing can be substituted into is
-        /// the harder half of such a plan.
-        /// </summary>
-        public const double BarterItems = 0.20;
-
         public static double For(RankerGate gate)
         {
             switch (gate)
@@ -51,7 +38,6 @@ namespace TaimisToolbench.Services
                 case RankerGate.Currencies: return Currencies;
                 case RankerGate.Disciplines: return Disciplines;
                 case RankerGate.Recipes: return Recipes;
-                case RankerGate.BarterItems: return BarterItems;
                 default: return 0;
             }
         }

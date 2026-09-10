@@ -171,10 +171,7 @@ namespace TaimisToolbench.Tests.Services
             var second = await SolveAsync(pipeline, secondAvailability.Snapshot);
             var secondMetrics = RankerReadinessCalculator.Compute(baseline, second, secondAvailability, 1);
 
-            // 99, not 100: these snapshots carry no character disciplines
-            // and the recipe declares one, so that gate is Unmeasured and a
-            // row with an unknown barrier may not certify itself finished.
-            Assert.Equal("99%", RankerReadinessCalculator.FormatReadiness(firstMetrics));
+            Assert.Equal("100%", RankerReadinessCalculator.FormatReadiness(firstMetrics));
             Assert.Equal("0%", RankerReadinessCalculator.FormatReadiness(secondMetrics));
 
             // Without the cascade both rows would read 100%, which is the bug
@@ -332,7 +329,7 @@ namespace TaimisToolbench.Tests.Services
                 baseline, independentSecond, untouched, 1, RankerMode.Independent);
 
             Assert.Equal("0%", RankerReadinessCalculator.FormatReadiness(cascadeMetrics));
-            Assert.Equal("99%", RankerReadinessCalculator.FormatReadiness(independentMetrics));
+            Assert.Equal("100%", RankerReadinessCalculator.FormatReadiness(independentMetrics));
             Assert.True(independentMetrics.Readiness > cascadeMetrics.Readiness);
 
             // No prior rows means nothing can be contested and no queued

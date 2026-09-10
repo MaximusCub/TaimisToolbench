@@ -16,17 +16,10 @@ namespace TaimisToolbench.Models
     }
 
     /// <summary>
-    /// The six independent barriers between the player and a finished item.
+    /// The five independent barriers between the player and a finished item.
     /// Each is measured only against itself, in its own units - the model
     /// never converts one into another, because the GW2 API publishes no rate
-    /// between days, currencies, tokens and coin and the repo forbids
-    /// inventing one.
-    /// <para>
-    /// BarterItems is the item-id twin of Currencies, split for the reason
-    /// Models/BarterItemCost.cs gives: an item id and a currency id are
-    /// different id spaces that collide numerically. Without it a vendor
-    /// bill paid in account-bound tokens was scored by no gate at all.
-    /// </para>
+    /// between days, currencies and coin and the repo forbids inventing one.
     /// </summary>
     public enum RankerGate
     {
@@ -35,76 +28,25 @@ namespace TaimisToolbench.Models
         TimeGates,
         Disciplines,
         Recipes,
-        BarterItems,
-    }
-
-    /// <summary>
-    /// Why a gate is or is not a term of the headline. The distinction the
-    /// bool it replaced could not draw: an item with no such barrier and an
-    /// item whose barrier the module could not look at are both excluded
-    /// from the blend, and only the first of them is finished.
-    /// </summary>
-    internal enum RankerGateStatus
-    {
-        /// <summary>Scored from real data. The only status that joins the blend.</summary>
-        Scored,
-
-        /// <summary>This item has no such barrier, so nothing is outstanding behind it.</summary>
-        NoBarrier,
-
-        /// <summary>
-        /// The barrier exists and the ACCOUNT data needed to score it does
-        /// not - an API key without the recipes permission, a snapshot that
-        /// captured no character disciplines. A shipped seed that is not
-        /// wired is NOT this: that is NoBarrier, matching
-        /// PlanViewModelBuilder's own treatment of a missing cooldown seed.
-        /// </summary>
-        Unmeasured,
     }
 
     internal class RankerGateScore
     {
         public RankerGate Gate { get; set; }
 
-        public RankerGateStatus Status { get; set; }
-
         /// <summary>
-        /// True only for <see cref="RankerGateStatus.Scored"/>. A gate that
-        /// is not scored is excluded from the headline (the weights
-        /// renormalise over the ones that are) rather than entered at 1.0,
-        /// which would hand simple items free credit.
+        /// False when this item has no such barrier at all. A gate that does
+        /// not apply is excluded from the headline (the weights renormalise
+        /// over the ones that do) rather than scored 1.0, which would hand
+        /// simple items free credit.
         /// </summary>
-        public bool Applies
-        {
-            get { return Status == RankerGateStatus.Scored; }
-        }
+        public bool Applies { get; set; }
 
         /// <summary>0..1, meaningful only when Applies.</summary>
         public double Completion { get; set; }
 
         /// <summary>The fixed weight from RankerReadinessWeights, for the tooltip.</summary>
         public double Weight { get; set; }
-    }
-
-    /// <summary>
-    /// One barter item this plan still owes, and how much of it the account
-    /// holds. The item-id twin of <see cref="RankerCurrencyShortfall"/>.
-    /// </summary>
-    internal class RankerBarterItemShortfall
-    {
-        public int ItemId { get; set; }
-
-        /// <summary>What the plan still needs, gross - holdings are never netted into the cost.</summary>
-        public long Needed { get; set; }
-
-        /// <summary>Account-wide holding, from CraftingPlanResult.OwnedVendorItemAmounts.</summary>
-        public long Held { get; set; }
-
-        /// <summary>max(0, Needed - Held).</summary>
-        public long Short { get; set; }
-
-        /// <summary>The from-scratch need, the denominator of this item's completion.</summary>
-        public long BaselineNeeded { get; set; }
     }
 
     internal class RankerCurrencyShortfall
@@ -149,7 +91,7 @@ namespace TaimisToolbench.Models
         /// <summary>The headline, 0..1. Meaningful only when Kind is Measured.</summary>
         public double Readiness { get; set; }
 
-        /// <summary>One entry per gate, always all six, in enum order. Never null.</summary>
+        /// <summary>One entry per gate, always all five, in enum order. Never null.</summary>
         public IReadOnlyList<RankerGateScore> Gates { get; set; }
 
         public long RemainingCoinCost { get; set; }
@@ -158,9 +100,6 @@ namespace TaimisToolbench.Models
 
         /// <summary>Empty, never null.</summary>
         public IReadOnlyList<RankerCurrencyShortfall> CurrencyShortfalls { get; set; }
-
-        /// <summary>Empty, never null. Descending by Short, like the currency list.</summary>
-        public IReadOnlyList<RankerBarterItemShortfall> BarterItemShortfalls { get; set; }
 
         /// <summary>Vendor purchase caps - informational only, never scored. Empty, never null.</summary>
         public IReadOnlyList<TimegatedItem> VendorCappedItems { get; set; }

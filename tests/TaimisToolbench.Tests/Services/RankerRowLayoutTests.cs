@@ -87,12 +87,12 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void TheGateStripCarriesOneCellPerGate()
+        public void TheGateStripCarriesAllFiveGates()
         {
-            // The cell count is what the view's render loop truncates
-            // against, so a gate the model scores and the strip cannot draw
-            // would be invisible - which is how the Barter cell had to be
-            // added here as well as to the enum.
+            // Field issue 7: the strip gained a Recipes cell; the cell count
+            // is what the view's render loop truncates against, so a gate the
+            // model scores and the strip cannot draw would be invisible.
+            Assert.Equal(5, RankerRowLayout.GateCellCount);
             Assert.Equal(
                 RankerRowLayout.GateCellCount,
                 Enum.GetValues(typeof(RankerGate)).Length);
