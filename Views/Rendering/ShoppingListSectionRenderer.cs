@@ -394,13 +394,12 @@ namespace TaimisToolbench.Views.Rendering
             // matching note): a stat block that lands after this render
             // (Q13) is picked up on the next hover, and the compose work
             // stays off the render path.
-            // ONE box, not two. The second box carried this row's currency
-            // holdings and its acquisition hint, and the table already
-            // prints both in its own columns, so the box restated them in
-            // sentences and added nothing.
-            // The one prose line this box carries: the vendor requirement
-            // gating this purchase, which the table has no column for and
-            // which must travel with the row through a sort.
+            // ONE box, not two. The second box restated this row's currency
+            // holdings in sentences, which the table already prints as a
+            // column. Its one surviving line is HintText - the vendor
+            // requirement gating the purchase, or the acquisition hint for
+            // an unsourced row, never both. The table has no column for
+            // either, and both must travel with the row through a sort.
             string hintLine = row.HintText;
             var nameHandle = IconNameRowHelpers.DrawIconAndName(
                 rowPanel, row.ItemId,
