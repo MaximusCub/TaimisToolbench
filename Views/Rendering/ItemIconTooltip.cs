@@ -8,7 +8,7 @@ namespace TaimisToolbench.Views.Rendering
 {
     /// <summary>
     /// What an item icon says on hover and which wiki page it opens - the
-    /// parameter <see cref="IconControls.CreateItemIcon"/> takes instead of
+    /// parameter <see cref="IconControls.DrawItemIcon"/> takes instead of
     /// an optional trailing tooltip string. The call site has to say which
     /// it means, and a factory name is what a diff shows.
     /// <para>
@@ -16,7 +16,7 @@ namespace TaimisToolbench.Views.Rendering
     /// enforced: the hover belongs to the item's ICON and to nothing else.
     /// There is no seam that takes a Label or a row Panel, so the only
     /// control that can carry an item tooltip is the one
-    /// <see cref="IconControls.CreateItemIcon"/> builds - see StampOnIconTree.
+    /// <see cref="IconControls.DrawItemIcon"/> builds - see StampOnIconTree.
     /// </para>
     /// <para>
     /// The rich half is always DEFERRED: a stat block can land after the row
@@ -54,14 +54,13 @@ namespace TaimisToolbench.Views.Rendering
         /// happens to hold one, headed either way by the icon+name row the
         /// game's own tooltip opens with, and a second box carrying the
         /// right-click affordance.
-        /// <paramref name="getStatBlock"/> may be null on a surface with no
-        /// session stat cache to read - the header still renders, because
-        /// it comes from the identity the row already had.
+        /// The facts come from the id, so the header renders whether or
+        /// not this session has fetched the item's stat block.
         /// </summary>
         internal static ItemIconTooltip ForItem(
-            ItemTooltipIdentity identity, Func<ItemStatBlock> getStatBlock, IconWikiTarget wiki)
+            string name, Func<ItemTooltipFacts> getFacts, IconWikiTarget wiki)
         {
-            return ForItem(identity, getStatBlock, null, wiki);
+            return ForItem(name, getFacts, (Func<TooltipContent>)null, wiki);
         }
 
         /// <summary>
@@ -72,18 +71,47 @@ namespace TaimisToolbench.Views.Rendering
         /// The tips lead the second box; the wiki line still ends it.
         /// </summary>
         internal static ItemIconTooltip ForItem(
-            ItemTooltipIdentity identity,
-            Func<ItemStatBlock> getStatBlock,
+            string name,
+            Func<ItemTooltipFacts> getFacts,
             Func<IReadOnlyList<string>> tips,
             IconWikiTarget wiki)
         {
+            return ForItem(
+                name,
+                getFacts,
+                tips == null
+                    ? (Func<TooltipContent>)null
+                    : () => SecondTooltipBox.Compose(tips(), null),
+                wiki);
+        }
+
+        /// <summary>
+        /// The same item hover for a surface whose tips are CONTENT rather
+        /// than prose - a Recipe Tree row, whose unit price has to keep its
+        /// coin span instead of being spelled out as "1s 0c".
+        /// </summary>
+        internal static ItemIconTooltip ForItem(
+            string name,
+            Func<ItemTooltipFacts> getFacts,
+            Func<TooltipContent> tips,
+            IconWikiTarget wiki)
+        {
+            if (getFacts == null)
+            {
+                throw new ArgumentNullException(nameof(getFacts));
+            }
+
             return new ItemIconTooltip(
-                () => ItemRowTooltipComposer.BuildRowContent(
-                    ItemStatTooltipComposer.BuildContent(
-                        getStatBlock == null ? null : getStatBlock()),
-                    identity,
-                    SecondTooltipBox.Compose(tips == null ? null : tips(), wiki.Hint)),
-                identity.Name,
+                () =>
+                {
+                    var facts = getFacts();
+                    return ItemRowTooltipComposer.BuildRowContent(
+                        ItemStatTooltipComposer.BuildContent(
+                            facts.Stats, facts.Sockets, facts.Skin),
+                        facts.Identity,
+                        SecondTooltipBox.Compose(tips == null ? null : tips(), wiki.Hint));
+                },
+                name,
                 wiki);
         }
 
@@ -133,6 +161,20 @@ namespace TaimisToolbench.Views.Rendering
         internal static ItemIconTooltip ForCurrency(
             string name, Func<CurrencyTooltipFacts> getFacts, IconWikiTarget wiki)
         {
+            return ForCurrency(name, getFacts, null, wiki);
+        }
+
+        /// <summary>
+        /// The same currency hover plus this surface's own tips - a unit
+        /// price on a Recipe Tree row. They lead the second box; the wiki
+        /// line still ends it.
+        /// </summary>
+        internal static ItemIconTooltip ForCurrency(
+            string name,
+            Func<CurrencyTooltipFacts> getFacts,
+            Func<TooltipContent> tips,
+            IconWikiTarget wiki)
+        {
             if (getFacts == null)
             {
                 throw new ArgumentNullException(nameof(getFacts));
@@ -141,7 +183,7 @@ namespace TaimisToolbench.Views.Rendering
             return new ItemIconTooltip(
                 () => SecondTooltipBox.Attach(
                     CurrencyTooltipComposer.BuildContent(getFacts()),
-                    SecondTooltipBox.Compose((TooltipContent)null, wiki.Hint)),
+                    SecondTooltipBox.Compose(tips == null ? null : tips(), wiki.Hint)),
                 name,
                 wiki);
         }

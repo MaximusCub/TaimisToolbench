@@ -9,55 +9,53 @@ using Xunit;
 namespace TaimisToolbench.Tests.Services
 {
     /// <summary>
-    /// Every icon site in the module, audited against the hover standard.
-    /// The renderers that build icons take Blish controls and tests
-    /// reference no UI code (repo invariant), so no test can call one; this
-    /// reads the sources instead and fails when a site does not go through
-    /// the facility. It proves nothing about what a control draws - the
-    /// behaviour tests for that are SecondTooltipBoxTests and
-    /// IconWikiTargetTests - only that no call site is left outside.
+    /// Every icon site in the module, audited against the one entry point.
+    /// A caller passes an id and a size bucket. It cannot pass a name, an
+    /// icon url, a rarity, a border or a hover.
     /// <para>
-    /// The compiler already stops the arguments being omitted. What is left
-    /// is the laundering: a `default` slid into the slot, or a file that
-    /// names no source for the value it passes.
+    /// The renderers take Blish controls and tests reference no UI code, so
+    /// no test can call one. This reads the sources instead. It proves
+    /// nothing about what a control draws - CurrencyTooltipStandardTests
+    /// and ItemTooltipStandardTests are the behaviour half - only that no
+    /// call site is left outside.
     /// </para>
     /// </summary>
     public class IconStandardCallSiteTests
     {
-        // Every entry point that builds an icon a reader can hover.
-        private static readonly string[] IconCalls =
+        // The entry points that take an id and a bucket.
+        private static readonly string[] ByIdCalls =
         {
-            "IconControls.CreateItemIcon(",
-            "IconControls.CreateItemIconDeferredArt(",
+            "IconControls.DrawItemIcon(",
+            "IconControls.DrawItemIconDeferredArt(",
             "IconControls.CreateCurrencyIcon(",
-            "IconNameRowHelpers.CreateIconAndEllipsizedName(",
+            "IconControls.CreateCurrencyIconDeferredArt(",
+            "IconNameRowHelpers.DrawIconAndName(",
         };
 
-        // The factories that produce a hover. None() is deliberately absent:
-        // it names its own silence and carries no page.
-        private static readonly string[] HoveringFactories =
+        // The one seam that still takes a hover the caller composed, for a
+        // subject no id can answer for. Every entry names why.
+        private static readonly string[] FromCaptureCalls =
         {
-            "ItemIconTooltip.ForItem(",
-            "ItemIconTooltip.Composed(",
-            "ItemIconTooltip.ForCurrency(",
+            "IconControls.CreateItemIconFromCapture(",
+            "IconControls.CreateItemIconDeferredArtFromCapture(",
         };
 
-        // The one file that may pass an intent it did not name: the shared
-        // row builder, which forwards the one its own caller was required
-        // to name.
-        private static readonly string[] Forwarders =
-        {
-            "Views/Rendering/IconNameRowHelpers.cs",
-        };
-
-        // The files that still call a pre-tier overload, each owned by the
-        // branch that will migrate it. Removing an entry is the act of the
-        // commit that migrates its call.
-        private static readonly string[] PreTier =
-        {
-            "Views/RankerTabContent.cs",
-            "Views/Rendering/IconNameRowHelpers.cs",
-        };
+        private static readonly Dictionary<string, string> CaptureCallers =
+            new Dictionary<string, string>
+            {
+                {
+                    "Views/Rendering/RichTooltipSurface.cs",
+                    "draws inside a tooltip box, which has no id and takes no clicks"
+                },
+                {
+                    "Views/SuggestionPanel.cs",
+                    "draws a search result before the item store has ever seen the id"
+                },
+                {
+                    "Views/Rendering/TreeSectionController.cs",
+                    "draws a dimmed reference branch and synthesized rows the item store never held"
+                },
+            };
 
         private static string RepoRoot()
         {
@@ -84,7 +82,6 @@ namespace TaimisToolbench.Tests.Services
                 }
             }
 
-            // The sweep is only evidence if it found the tree.
             Assert.True(files.Count > 100, "Found only " + files.Count + " module sources.");
             return files;
         }
@@ -119,30 +116,6 @@ namespace TaimisToolbench.Tests.Services
             return null;
         }
 
-        private static string LastArgument(string arguments)
-        {
-            int depth = 0;
-            int start = 0;
-            for (int i = 0; i < arguments.Length; i++)
-            {
-                char c = arguments[i];
-                if (c == '(' || c == '[' || c == '{')
-                {
-                    depth++;
-                }
-                else if (c == ')' || c == ']' || c == '}')
-                {
-                    depth--;
-                }
-                else if (c == ',' && depth == 0)
-                {
-                    start = i + 1;
-                }
-            }
-
-            return arguments.Substring(start).Trim();
-        }
-
         private static IEnumerable<Tuple<string, int, string>> CallsTo(
             IReadOnlyList<string> files, IEnumerable<string> markers)
         {
@@ -170,25 +143,20 @@ namespace TaimisToolbench.Tests.Services
         }
 
         /// <summary>
-        /// The standard is not a rule to remember, it is the only way
-        /// through. Every icon in the module is built by one of four
-        /// calls, each takes an intent the compiler will not let a caller
-        /// drop, and each renders at a named tier.
-        /// <para>
-        /// The workflow's own "Every item icon names its tier and what it
-        /// shows on hover" step audits the first three calls the same way.
-        /// CreateCurrencyIcon is gated here only, because the branch that
-        /// gave it an intent could not edit the workflow file.
-        /// </para>
+        /// Every icon in the module is drawn by one of five calls, each of
+        /// which takes an id and a named bucket. None of them may be handed
+        /// a composed hover or hand-built facts: that is what let the
+        /// Settings tab show a currency's prose while the Recipe Tree
+        /// showed a bare name.
         /// </summary>
         [Fact]
-        public void EveryIconSiteNamesTheIntentItPasses()
+        public void EveryIconSiteNamesOnlyAnIdAndABucket()
         {
             var files = ModuleSources();
             var offenders = new List<string>();
             int sites = 0;
 
-            foreach (var call in CallsTo(files, IconCalls))
+            foreach (var call in CallsTo(files, ByIdCalls))
             {
                 sites++;
                 if (call.Item3 == null)
@@ -197,28 +165,29 @@ namespace TaimisToolbench.Tests.Services
                     continue;
                 }
 
-                if (Forwarders.Contains(call.Item1))
+                // The facility's own overloads forward to each other.
+                if (call.Item1 == "Views/Rendering/IconControls.cs"
+                    || call.Item1 == "Views/Rendering/IconNameRowHelpers.cs")
                 {
                     continue;
                 }
 
-                string tail = LastArgument(call.Item3);
-                if (tail.StartsWith("default", StringComparison.Ordinal))
-                {
-                    offenders.Add(call.Item1 + ":" + call.Item2 + " - passes default");
-                }
-
-                if (!Read(call.Item1).Contains("ItemIconTooltip."))
-                {
-                    offenders.Add(call.Item1 + ":" + call.Item2 + " - names no ItemIconTooltip factory");
-                }
-
-                // A pixel size the call site chose is how eleven icons came
-                // to draw at eleven sizes. Only the two pre-tier overloads
-                // still take one, and only their one allow-listed caller.
-                if (!call.Item3.Contains("ItemIconTier.") && !PreTier.Contains(call.Item1))
+                if (!call.Item3.Contains("ItemIconTier."))
                 {
                     offenders.Add(call.Item1 + ":" + call.Item2 + " - names no ItemIconTier");
+                }
+
+                foreach (var banned in new[]
+                {
+                    "ItemIconTooltip.", "ItemIconFrame.", "IconWikiTarget.",
+                    "CurrencyTooltipFacts.For", "ItemTooltipIdentity.",
+                })
+                {
+                    if (call.Item3.Contains(banned))
+                    {
+                        offenders.Add(
+                            call.Item1 + ":" + call.Item2 + " - passes " + banned);
+                    }
                 }
             }
 
@@ -227,53 +196,27 @@ namespace TaimisToolbench.Tests.Services
         }
 
         /// <summary>
-        /// The half that used to be missing entirely. Every hover names the
-        /// wiki page its icon opens, from a source in its own file - either
-        /// an IconWikiTarget factory or the row's own WikiTarget.
+        /// The capture seam is the one way to draw an icon for a subject no
+        /// id can answer for. Its caller list is pinned, so a new one is a
+        /// visible diff here rather than a quiet way back out.
         /// </summary>
         [Fact]
-        public void EveryHoverNamesTheWikiPageItsIconOpens()
+        public void OnlyThePinnedSurfacesDrawFromACapture()
         {
             var files = ModuleSources();
-            var offenders = new List<string>();
-            int hovers = 0;
+            var callers = new SortedSet<string>();
 
-            foreach (var call in CallsTo(files, HoveringFactories))
+            foreach (var call in CallsTo(files, FromCaptureCalls))
             {
-                hovers++;
-                if (call.Item3 == null)
-                {
-                    offenders.Add(call.Item1 + ":" + call.Item2 + " - unbalanced call");
-                    continue;
-                }
-
-                // The factory itself declares the parameter; only calls are
-                // audited.
-                if (call.Item1 == "Views/Rendering/ItemIconTooltip.cs")
+                if (call.Item1 == "Views/Rendering/IconControls.cs")
                 {
                     continue;
                 }
 
-                string tail = LastArgument(call.Item3);
-                if (tail.StartsWith("default", StringComparison.Ordinal))
-                {
-                    offenders.Add(call.Item1 + ":" + call.Item2 + " - passes default");
-                    continue;
-                }
-
-                // The value may reach the call through a local, so the
-                // file rather than the argument is what has to show where
-                // it came from - an IconWikiTarget factory, a row's own
-                // WikiTarget, or WikiTargetFor on a tree node.
-                if (!Read(call.Item1).Contains("WikiTarget"))
-                {
-                    offenders.Add(
-                        call.Item1 + ":" + call.Item2 + " - names no wiki target source");
-                }
+                callers.Add(call.Item1);
             }
 
-            Assert.True(hovers >= 12, "Found only " + hovers + " hovering factory calls.");
-            Assert.Equal(new string[0], offenders.ToArray());
+            Assert.Equal(CaptureCallers.Keys.OrderBy(k => k).ToArray(), callers.ToArray());
         }
 
         /// <summary>
@@ -295,8 +238,7 @@ namespace TaimisToolbench.Tests.Services
 
         /// <summary>
         /// One place hangs a second box off a first, so the blank-line rule
-        /// and the last-line rule are decided once. TooltipContent declares
-        /// WithExtra; SecondTooltipBox is its only caller.
+        /// and the last-line rule are decided once.
         /// </summary>
         [Fact]
         public void OnlySecondTooltipBoxAttachesASecondBox()
@@ -311,9 +253,8 @@ namespace TaimisToolbench.Tests.Services
         }
 
         /// <summary>
-        /// A new factory is a new thing an icon is allowed to say, or a new
-        /// page it is allowed to open. Both sets are pinned so widening one
-        /// is a visible diff here.
+        /// A new factory is a new thing an icon may say, or a new page it
+        /// may open. Both sets are pinned.
         /// </summary>
         [Fact]
         public void TheFactorySetsStayPinned()
@@ -340,32 +281,65 @@ namespace TaimisToolbench.Tests.Services
         }
 
         /// <summary>
-        /// Every factory that shows a hover takes a page as well, so the
-        /// two halves of the standard cannot be separated. Only the named
-        /// silence is exempt, and it derives its own.
+        /// A size bucket is the only way to ask for an icon size. Both
+        /// overloads that took a raw pixel number are gone, so a call site
+        /// cannot pick one at all.
         /// </summary>
         [Fact]
-        public void EveryHoveringFactoryTakesAWikiTarget()
+        public void NoIconEntryPointTakesARawPixelSize()
         {
-            string source = Read("Views/Rendering/ItemIconTooltip.cs");
             var offenders = new List<string>();
-
-            foreach (Match m in Regex.Matches(source, @"internal static ItemIconTooltip (\w+)\("))
+            foreach (var file in new[]
             {
-                string name = m.Groups[1].Value;
-                if (name == "None")
+                "Views/Rendering/IconControls.cs",
+                "Views/Rendering/IconNameRowHelpers.cs",
+            })
+            {
+                string text = Read(file);
+                foreach (Match m in Regex.Matches(text, @"internal static [^\n]*\("))
                 {
-                    continue;
-                }
-
-                string args = Arguments(source, m.Index + m.Length - 1);
-                if (args == null || !args.Contains("IconWikiTarget wiki"))
-                {
-                    offenders.Add(name);
+                    string args = Arguments(text, m.Index + m.Length - 1);
+                    if (args != null && args.Contains("int iconSize"))
+                    {
+                        offenders.Add(file + ": " + m.Value.Trim());
+                    }
                 }
             }
 
             Assert.Equal(new string[0], offenders.ToArray());
+        }
+
+        /// <summary>
+        /// No renderer carries a stat-block accessor any more. They take a
+        /// facts resolver, which answers the whole tooltip rather than one
+        /// field of it.
+        /// </summary>
+        [Fact]
+        public void NoRendererTakesABareStatBlockAccessor()
+        {
+            // MainView and the Ranker still hold one: it is the session
+            // store's own accessor, and it is what their facts resolvers
+            // read. Nothing hands it to an icon.
+            var allowed = new[]
+            {
+                "Views/MainView.cs",
+                "Views/RankerTabContent.cs",
+                "Views/SettingsTabContent.cs",
+                "Views/PlanHistoryTabContent.cs",
+                "Views/CraftingPlanView.cs",
+                "Views/Rendering/TreeSectionController.cs",
+                "Services/SocketedUpgradeView.cs",
+                "Services/TreeRowTooltipComposer.cs",
+                "Services/ItemStatWarmer.cs",
+            };
+
+            var offenders = ModuleSources()
+                .Where(f => f.StartsWith("Views/Rendering/", StringComparison.Ordinal))
+                .Where(f => !allowed.Contains(f))
+                .Where(f => Read(f).Contains("Func<int, ItemStatBlock>"))
+                .ToArray();
+
+            Assert.Equal(new string[0], offenders);
         }
     }
 }

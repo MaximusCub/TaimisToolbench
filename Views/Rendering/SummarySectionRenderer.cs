@@ -21,7 +21,8 @@ namespace TaimisToolbench.Views.Rendering
     internal sealed class SummarySectionRenderer
     {
         private readonly ISectionRelayoutSink _sink;
-        private readonly Func<int, ItemStatBlock> _getItemStatBlock;
+        private readonly Func<int, ItemTooltipFacts> _getItemFacts;
+        private readonly Func<int, CurrencyTooltipFacts> _getCurrencyFacts;
 
         // Registers one control as a scroll anchor under a stable key
         // (Services/ScrollAnchorMath). Optional - a null one simply leaves
@@ -29,11 +30,15 @@ namespace TaimisToolbench.Views.Rendering
         private readonly Action<string, Control> _registerScrollAnchor;
 
         internal SummarySectionRenderer(
-            ISectionRelayoutSink sink, Func<int, ItemStatBlock> getItemStatBlock = null,
+            ISectionRelayoutSink sink,
+            Func<int, CurrencyTooltipFacts> getCurrencyFacts,
+            Func<int, ItemTooltipFacts> getItemFacts,
             Action<string, Control> registerScrollAnchor = null)
         {
             _sink = sink ?? throw new ArgumentNullException(nameof(sink));
-            _getItemStatBlock = getItemStatBlock;
+            _getItemFacts = getItemFacts ?? throw new ArgumentNullException(nameof(getItemFacts));
+            _getCurrencyFacts = getCurrencyFacts
+                ?? throw new ArgumentNullException(nameof(getCurrencyFacts));
             _registerScrollAnchor = registerScrollAnchor;
         }
 
@@ -641,10 +646,16 @@ namespace TaimisToolbench.Views.Rendering
                     SummarySectionLayoutMath.NonCoinGroupAnchorKey(groups[g].IsInventoryGroup),
                     headingRow);
 
+                // A rule between rows and none under the table's last
+                // one. A group heading gets none: the band it already
+                // carries is what separates it (HeaderBands).
+                bool lastGroup = g == groups.Count - 1;
                 var groupRows = groups[g].Rows;
                 for (int i = 0; i < groupRows.Count; i++)
                 {
-                    var costRow = CreateCurrencyTableRow(groupRows[i], parent, panelWidth, scan);
+                    bool isLast = lastGroup && i == groupRows.Count - 1;
+                    var costRow = CreateCurrencyTableRow(
+                        groupRows[i], parent, panelWidth, scan, isLast);
                     RegisterScrollAnchor(
                         SummarySectionLayoutMath.NonCoinRowAnchorKey(groupRows[i]), costRow);
                 }
@@ -1052,7 +1063,8 @@ namespace TaimisToolbench.Views.Rendering
         }
 
         private Panel CreateCurrencyTableRow(
-            PlanRowViewModel row, FlowPanel parent, int panelWidth, CurrencyColumnScan scan)
+            PlanRowViewModel row, FlowPanel parent, int panelWidth, CurrencyColumnScan scan,
+            bool isLast)
         {
             const int rowHeight = CurrencyRowHeight;
             var rowPanel = CreateCurrencyRowPanel(
@@ -1069,29 +1081,25 @@ namespace TaimisToolbench.Views.Rendering
                 // they actually belong to - a barter row's id is an ITEM
                 // id, which the wallet and /v2/currencies know nothing
                 // about (see PlanRowViewModel.IsBarterItemCost).
-                IconControls.CreateItemIcon(
-                    rowPanel, row.IconUrl,
-                    row.IsBarterItemCost
-                        ? ItemIconFrame.ForRarity(row.Rarity)
-                        : ItemIconFrame.Currency(),
-                    SummarySectionLayoutMath.CurrencyIconX, iconY,
-                    ItemIconTier.CurrencyListRow,
-                    row.IsBarterItemCost
-                        ? ItemIconTooltip.ForItem(
-                            ItemTooltipIdentity.ForItem(row.Label ?? "", row.IconUrl, row.Rarity),
-                            _getItemStatBlock == null || row.ItemId <= 0
-                                ? (Func<ItemStatBlock>)null
-                                : () => _getItemStatBlock(row.ItemId),
-                            IconWikiTarget.ItemPage(row.Label))
-                        // CurrencyOwnedQuantity is already the raw
-                        // unclamped wallet holding the game's tooltip
-                        // states.
-                        : ItemIconTooltip.ForCurrency(
-                            row.Label,
-                            () => CurrencyTooltipFacts.For(
-                                row.Label, row.IconUrl, row.CurrencyDescription,
-                                row.CurrencyOwnedQuantity),
-                            IconWikiTarget.ItemPage(row.Label)));
+                // The two row kinds this table carries go to the two
+                // icon entry points by the id space they belong to. A
+                // barter row's id is an ITEM id, which the wallet and
+                // /v2/currencies know nothing about (see
+                // PlanRowViewModel.IsBarterItemCost).
+                if (row.IsBarterItemCost)
+                {
+                    IconControls.DrawItemIcon(
+                        rowPanel, row.ItemId,
+                        SummarySectionLayoutMath.CurrencyIconX, iconY,
+                        ItemIconTier.CurrencyListRow, _getItemFacts);
+                }
+                else
+                {
+                    IconControls.CreateCurrencyIcon(
+                        rowPanel, row.CurrencyId,
+                        SummarySectionLayoutMath.CurrencyIconX, iconY,
+                        ItemIconTier.CurrencyListRow, _getCurrencyFacts);
+                }
             }
 
             const int nameX = SummarySectionLayoutMath.CurrencyNameX;
@@ -1141,20 +1149,25 @@ namespace TaimisToolbench.Views.Rendering
             // background already delineates the table - introducing a
             // divider at an unproven row height risks resurrecting that
             // defect for a visual element nothing asked for.
-            _sink.AddRelayout(w =>
-            {
-                rowPanel.Size = new Point(w, rowHeight);
-                var e = scan.EdgesFor(w);
-                requiredLabel.Location = new Point(PlanRelayoutMath.RightAlignedX(e.RequiredRightEdge, requiredLabel.Width), SummarySectionLayoutMath.CurrencyRowTextY);
-                haveLabel.Location = new Point(PlanRelayoutMath.RightAlignedX(e.HaveRightEdge, haveLabel.Width), SummarySectionLayoutMath.CurrencyRowTextY);
-                neededLabel.Location = new Point(PlanRelayoutMath.RightAlignedX(e.NeededRightEdge, neededLabel.Width), SummarySectionLayoutMath.CurrencyRowTextY);
-                note.MoveTo(e.NoteX);
-                if (marker != null)
+            // The 42px row already absorbs the clearance pixel: the icon
+            // is centred with 5px above and below, and the 2px rule lands
+            // in the lower gap, so no height math moves.
+            RowRelayoutHelpers.FinishRow(
+                rowPanel, panelWidth, rowHeight, isLast,
+                PlanContentHeightMath.IconRowDividerClearance, _sink,
+                w =>
                 {
-                    marker.Location = new Point(
-                        e.MarkerX, (rowHeight - LabelHelpers.SmallTagHeight) / 2);
-                }
-            });
+                    var e = scan.EdgesFor(w);
+                    requiredLabel.Location = new Point(PlanRelayoutMath.RightAlignedX(e.RequiredRightEdge, requiredLabel.Width), SummarySectionLayoutMath.CurrencyRowTextY);
+                    haveLabel.Location = new Point(PlanRelayoutMath.RightAlignedX(e.HaveRightEdge, haveLabel.Width), SummarySectionLayoutMath.CurrencyRowTextY);
+                    neededLabel.Location = new Point(PlanRelayoutMath.RightAlignedX(e.NeededRightEdge, neededLabel.Width), SummarySectionLayoutMath.CurrencyRowTextY);
+                    note.MoveTo(e.NoteX);
+                    if (marker != null)
+                    {
+                        marker.Location = new Point(
+                            e.MarkerX, (rowHeight - LabelHelpers.SmallTagHeight) / 2);
+                    }
+                });
             _sink.AddReellipsis(w =>
             {
                 var e = scan.EdgesFor(w);
@@ -1178,7 +1191,7 @@ namespace TaimisToolbench.Views.Rendering
         /// only thing that names the currency, so it is never drawn
         /// without one.
         /// </summary>
-        private static TradeUpNoteHandle CreateTradeUpNote(
+        private TradeUpNoteHandle CreateTradeUpNote(
             PlanRowViewModel row, Panel rowPanel,
             SummarySectionLayoutMath.CurrencyColumnEdges edges, BitmapFont font,
             int heldBandWidth)
@@ -1205,19 +1218,12 @@ namespace TaimisToolbench.Views.Rendering
                 Parent = rowPanel,
             });
 
-            string tradeUpName = row.TradeUpCurrencyName;
-            string tradeUpIconUrl = row.TradeUpCurrencyIconUrl;
-            int? tradeUpHeld = row.TradeUpCurrencyHeld;
             var icon = IconControls.CreateCurrencyIcon(
-                rowPanel, tradeUpIconUrl,
+                rowPanel, row.TradeUpCurrencyId,
                 SummarySectionLayoutMath.TradeUpNoteIconX(edges.NoteX, heldBandWidth, heldWidth),
                 iconY,
                 ItemIconTier.CurrencyBarRun,
-                ItemIconTooltip.ForCurrency(
-                    tradeUpName,
-                    () => CurrencyTooltipFacts.For(
-                        tradeUpName, tradeUpIconUrl, null, tradeUpHeld),
-                    IconWikiTarget.ItemPage(tradeUpName)));
+                _getCurrencyFacts);
 
             var buysLabel = LabelHelpers.WithDescenderClearance(new Label()
             {

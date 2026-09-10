@@ -2296,25 +2296,15 @@ namespace TaimisToolbench.Views
                     return;
                 }
 
-                // These rows ARE items, unlike their currency neighbours,
-                // and the rarity came from the same /v2/items entry as the
-                // icon beside it. Resolved once and fed to the frame and
-                // the hover header alike - see ItemTooltipIdentity.ForItem.
-                string rarity = ItemRarityResolution.Normalize(item.Rarity);
-                int itemId = row.Id;
-                row.Icon = IconControls.CreateItemIcon(
+                // These rows ARE items, unlike their currency
+                // neighbours, so they go to the item entry point.
+                row.Icon = IconControls.DrawItemIcon(
                     row.Cell,
-                    item.IconUrl,
-                    ItemIconFrame.ForRarity(rarity),
+                    row.Id,
                     SettingsCurrencyGridLayout.CellIconX,
                     SettingsCurrencyGridLayout.CellIconY,
                     ItemIconTier.CurrencyListRow,
-                    ItemIconTooltip.ForItem(
-                        ItemTooltipIdentity.ForItem(row.Name, item.IconUrl, rarity),
-                        _getItemStatBlock == null || itemId <= 0
-                            ? (Func<ItemStatBlock>)null
-                            : () => _getItemStatBlock(itemId),
-                        IconWikiTarget.ItemPage(row.Name)));
+                    ItemFactsFor);
                 return;
             }
 
@@ -2323,29 +2313,39 @@ namespace TaimisToolbench.Views
                 return;
             }
 
-            int currencyId = row.Id;
-            string currencyName = row.Name;
-            row.Icon = IconControls.CreateItemIcon(
+            row.Icon = IconControls.CreateCurrencyIcon(
                 row.Cell,
-                CurrencyDisplayResolver.ResolveIconUrl(currencyId, _currencyMetadata),
-                // A currency has no rarity to resolve: neutral by intent,
-                // the same call ItemIconFrame.Currency() records at the
-                // Snapshot tab's wallet rows.
-                ItemIconFrame.Currency(),
+                row.Id,
                 SettingsCurrencyGridLayout.CellIconX,
                 SettingsCurrencyGridLayout.CellIconY,
                 ItemIconTier.CurrencyListRow,
-                ItemIconTooltip.ForCurrency(
-                    currencyName,
-                    // No balance: this tab reads no wallet snapshot, and
-                    // null is "not known", which drops the line rather than
-                    // claiming the player holds none.
-                    () => CurrencyTooltipFacts.For(
-                        currencyName,
-                        CurrencyDisplayResolver.ResolveIconUrl(currencyId, _currencyMetadata),
-                        CurrencyDisplayResolver.ResolveDescription(currencyId, _currencyMetadata),
-                        null),
-                    IconWikiTarget.ItemPage(currencyName)));
+                CurrencyFactsFor);
+        }
+
+        /// <summary>Everything one barter item's icon draws and its
+        /// tooltip shows. The tab's own /v2/items entry leads, and the
+        /// session stat cache fills the body.</summary>
+        private ItemTooltipFacts ItemFactsFor(int itemId)
+        {
+            ItemMetadata item = null;
+            if (_barterItemMetadata != null)
+            {
+                _barterItemMetadata.TryGetValue(itemId, out item);
+            }
+
+            return ItemTooltipFacts.ForItemId(
+                itemId,
+                item,
+                _getItemStatBlock == null || itemId <= 0 ? null : _getItemStatBlock(itemId));
+        }
+
+        /// <summary>No balance: this tab reads no wallet snapshot, and
+        /// null is "not known", which drops the line rather than claiming
+        /// the player holds none.</summary>
+        private CurrencyTooltipFacts CurrencyFactsFor(int currencyId)
+        {
+            return CurrencyTooltipFacts.ForCurrencyId(
+                currencyId, _currencyMetadata, (int?)null);
         }
 
         /// <summary>

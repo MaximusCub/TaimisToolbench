@@ -259,6 +259,11 @@ namespace TaimisToolbench.Models
     {
         public long Amount { get; set; }
 
+        // The wallet currency this amount is of. Set by
+        // CurrencyDisplayResolver alongside Name and IconUrl, so an icon
+        // drawn from this view model can resolve its whole tooltip.
+        public int CurrencyId { get; set; }
+
         public string Name { get; set; }
 
         public string IconUrl { get; set; }
@@ -413,14 +418,6 @@ namespace TaimisToolbench.Models
         // derived from this value.
         public int? CurrencyOwnedQuantity { get; set; }
 
-        // The currency's own /v2/currencies prose, for a CurrencyCost
-        // row's hover (CurrencyTooltipComposer). Resolved here rather than
-        // at the render site because the renderer holds no currency id -
-        // by design: a row carries no id at all, so its tooltip can never
-        // be keyed into the wrong id space. Null when the plan ran without
-        // currency metadata, which drops the paragraph.
-        public string CurrencyDescription { get; set; }
-
         // Still-to-acquire gap for a CurrencyCost row in the
         // currency table's "Needed" column - max(0, Quantity -
         // CurrencyOwnedQuantity). Null (not 0) whenever CurrencyOwnedQuantity
@@ -457,13 +454,19 @@ namespace TaimisToolbench.Models
         // is capped at what the row still needs, so it never claims a
         // holding covers more than the plan asks for. Null/0 everywhere
         // else, which is what suppresses the table's Note column.
-        public string TradeUpCurrencyName { get; set; }
+        public int TradeUpCurrencyId { get; set; }
 
-        public string TradeUpCurrencyIconUrl { get; set; }
+        public string TradeUpCurrencyName { get; set; }
 
         public int? TradeUpCurrencyHeld { get; set; }
 
         public int TradeUpBuysQuantity { get; set; }
+
+        // The wallet currency this row is about, on a CurrencyCost row
+        // that is not a barter item. Zero elsewhere. The row's icon
+        // resolves its whole tooltip from this id, so the table and the
+        // Recipe Tree cannot show different boxes for the same currency.
+        public int CurrencyId { get; set; }
 
         // Identity of one CurrencyCost row, stable across a re-solve: the
         // row's id with the id space it came from written into the string.

@@ -26,14 +26,10 @@ namespace TaimisToolbench.Views.Rendering
     // as before, unedited; this only wraps the
     // surrounding boilerplate, not the divider's own arithmetic.
     //
-    // Not adopted by SummarySectionRenderer.CreateCostTileRow/
-    // CreateCurrencyRow: neither builds a LabelHelpers.CreateRowDivider at
-    // all (the Summary section has no list-style rows, just the cost-tile
-    // band and standalone currency/note lines - see that class's doc
-    // comment), so there is no divider half of this shape to share; forcing
-    // an isLast-always-true call through this helper just to reuse the
-    // relayout-wrapping half would be exactly the kind of contortion this
-    // package's brief warns against, for zero real duplication removed.
+    // SummarySectionRenderer.CreateCurrencyTableRow adopted this when the
+    // Total Cost table gained the rules its neighbours already drew. Its
+    // cost-tile band still does not: a tile is not a list row and has no
+    // rule between tiles.
     internal static class RowRelayoutHelpers
     {
         /// <summary>

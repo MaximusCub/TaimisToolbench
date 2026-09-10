@@ -53,7 +53,7 @@ namespace TaimisToolbench.Services
 
         /// <summary>Rarity-frame border of a plan-tab row icon - the
         /// borderThickness the row builders pass to
-        /// IconControls.CreateItemIcon.</summary>
+        /// IconControls.DrawItemIcon.</summary>
         public const int RowIconBorder = 1;
 
         /// <summary>Overall edge of a plan-tab row's rarity-framed icon:

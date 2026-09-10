@@ -119,6 +119,7 @@ namespace TaimisToolbench.Services
                 result.Add(new CurrencyAmountViewModel
                 {
                     Amount = line.Count,
+                    CurrencyId = line.Id,
                     Name = ResolveName(line.Id, currencyMetadata),
                     IconUrl = ResolveIconUrl(line.Id, currencyMetadata),
                     OwnedQuantity = owned,
@@ -209,6 +210,7 @@ namespace TaimisToolbench.Services
                     Amount = evenly ? line.Count / divisor : 0,
                     BundleLabel = evenly ? null : $"{line.Count} for {divisor}",
                     UnitRate = (double)line.Count / divisor,
+                    CurrencyId = line.Id,
                     Name = ResolveName(line.Id, currencyMetadata),
                     IconUrl = ResolveIconUrl(line.Id, currencyMetadata),
                 });

@@ -1,4 +1,5 @@
 using System.Linq;
+using TaimisToolbench.Models;
 using TaimisToolbench.Services;
 using TaimisToolbench.Tests.Helpers;
 using Xunit;
@@ -7,12 +8,21 @@ namespace TaimisToolbench.Tests.Services
 {
     public class CurrencyTooltipComposerTests
     {
+        // The composer never reads the id; it is the key the
+        // facts are resolved by.
+        private const int TestCurrencyId = 23;
+
         private static CurrencyTooltipFacts SpiritShards(int? wallet = 412)
         {
-            return CurrencyTooltipFacts.For(
-                "Spirit Shards",
-                "https://render.guildwars2.com/file/spirit_shard.png",
-                "Gained after reaching level 80 and by completing map events.",
+            return CurrencyTooltipFacts.ForCurrencyEntry(
+                TestCurrencyId,
+                new CurrencyMetadata
+                {
+                    CurrencyId = TestCurrencyId,
+                    Name = "Spirit Shards",
+                    IconUrl = "https://render.guildwars2.com/file/spirit_shard.png",
+                    Description = "Gained after reaching level 80 and by completing map events.",
+                },
                 wallet);
         }
 
@@ -59,7 +69,16 @@ namespace TaimisToolbench.Tests.Services
             // Wallet holdings run to seven figures where an item count does
             // not - the reason this is not a bare ToString().
             var content = CurrencyTooltipComposer.BuildContent(
-                CurrencyTooltipFacts.For("Karma", "k.png", null, 1234567));
+                CurrencyTooltipFacts.ForCurrencyEntry(
+                TestCurrencyId,
+                new CurrencyMetadata
+                {
+                    CurrencyId = TestCurrencyId,
+                    Name = "Karma",
+                    IconUrl = "k.png",
+                    Description = null,
+                },
+                1234567));
 
             Assert.Contains("1,234,567 in Wallet", content.ToPlainText());
         }
@@ -96,7 +115,16 @@ namespace TaimisToolbench.Tests.Services
             // /v2/currencies has not landed for this session yet. Inventing
             // prose here would violate the no-invented-data invariant.
             var content = CurrencyTooltipComposer.BuildContent(
-                CurrencyTooltipFacts.For("Karma", "k.png", null, 900));
+                CurrencyTooltipFacts.ForCurrencyEntry(
+                TestCurrencyId,
+                new CurrencyMetadata
+                {
+                    CurrencyId = TestCurrencyId,
+                    Name = "Karma",
+                    IconUrl = "k.png",
+                    Description = null,
+                },
+                900));
 
             Assert.Equal(
                 new[] { "Karma", "900 in Wallet", "Currency" },
@@ -107,8 +135,16 @@ namespace TaimisToolbench.Tests.Services
         public void BuildContent_DescriptionMarkup_KeepsItsRoles_AndIsNeverShownRaw()
         {
             var content = CurrencyTooltipComposer.BuildContent(
-                CurrencyTooltipFacts.For(
-                    "Karma", "k.png", "Spend it at karma merchants. <c=@flavor>A warm glow.</c>", 5));
+                CurrencyTooltipFacts.ForCurrencyEntry(
+                TestCurrencyId,
+                new CurrencyMetadata
+                {
+                    CurrencyId = TestCurrencyId,
+                    Name = "Karma",
+                    IconUrl = "k.png",
+                    Description = "Spend it at karma merchants. <c=@flavor>A warm glow.</c>",
+                },
+                5));
 
             Assert.DoesNotContain("<c=", content.ToPlainText());
 
@@ -123,7 +159,16 @@ namespace TaimisToolbench.Tests.Services
         public void BuildContent_MultiParagraphDescription_BreaksOnItsOwnHardBreaks()
         {
             var content = CurrencyTooltipComposer.BuildContent(
-                CurrencyTooltipFacts.For("Karma", "k.png", "First line.\nSecond line.", null));
+                CurrencyTooltipFacts.ForCurrencyEntry(
+                TestCurrencyId,
+                new CurrencyMetadata
+                {
+                    CurrencyId = TestCurrencyId,
+                    Name = "Karma",
+                    IconUrl = "k.png",
+                    Description = "First line.\nSecond line.",
+                },
+                null));
 
             Assert.Equal(
                 new[] { "Karma", "First line.", "Second line.", "Currency" },
@@ -131,16 +176,16 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void BuildContent_NamelessSubject_ComposesNothingAtAll()
+        public void BuildContent_AnUnknownCurrencyIsStillNamed()
         {
-            // A body under an empty header is prose about nothing; the
-            // facility falls back to whatever plain note the control had.
-            Assert.True(
-                CurrencyTooltipComposer.BuildContent(
-                    CurrencyTooltipFacts.For(null, "k.png", "prose", 5)).IsEmpty);
-            Assert.True(
-                CurrencyTooltipComposer.BuildContent(
-                    CurrencyTooltipFacts.For("", "k.png", "prose", 5)).IsEmpty);
+            // Facts are resolved from an id, and the name falls back to the
+            // module's own id table, so a /v2/currencies reply that never
+            // arrived leaves a named header rather than an empty box.
+            var content = CurrencyTooltipComposer.BuildContent(
+                CurrencyTooltipFacts.ForCurrencyEntry(TestCurrencyId, null, null));
+
+            Assert.False(content.IsEmpty);
+            Assert.NotEmpty(content.ToPlainLines()[0]);
         }
 
         [Fact]
@@ -150,7 +195,16 @@ namespace TaimisToolbench.Tests.Services
             // the neutral empty-slot square and the name stays in the
             // column every other tooltip's name sits in.
             var header = CurrencyTooltipComposer.BuildContent(
-                CurrencyTooltipFacts.For("Karma", null, null, null)).Lines[0];
+                CurrencyTooltipFacts.ForCurrencyEntry(
+                TestCurrencyId,
+                new CurrencyMetadata
+                {
+                    CurrencyId = TestCurrencyId,
+                    Name = "Karma",
+                    IconUrl = null,
+                    Description = null,
+                },
+                null)).Lines[0];
 
             Assert.Equal(TooltipLineKind.Header, header.Kind);
             Assert.Equal("", header.IconUrl);

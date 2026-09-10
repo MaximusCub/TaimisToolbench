@@ -56,9 +56,17 @@ namespace TaimisToolbench.Views.Rendering
     {
         private readonly ISectionRelayoutSink _sink;
 
-        internal NotesSectionRenderer(ISectionRelayoutSink sink)
+        /// <summary>Everything one currency's tooltip shows, from its id.
+        /// Required, not defaulted: an optional resolver is how one
+        /// surface came to hand its currency icons less than another.</summary>
+        private readonly Func<int, CurrencyTooltipFacts> _getCurrencyFacts;
+
+        internal NotesSectionRenderer(
+            ISectionRelayoutSink sink, Func<int, CurrencyTooltipFacts> getCurrencyFacts)
         {
             _sink = sink ?? throw new ArgumentNullException(nameof(sink));
+            _getCurrencyFacts = getCurrencyFacts
+                ?? throw new ArgumentNullException(nameof(getCurrencyFacts));
         }
 
         /// <summary>
@@ -124,7 +132,8 @@ namespace TaimisToolbench.Views.Rendering
                 if (i == 0 && hasCoin)
                 {
                     coinHandle = CoinCurrencyRenderer.RenderValueCellRightAligned(
-                        linePanel, row.CoinValue, null, panelWidth - NotesSectionLayoutMath.RightPadding, 4, font);
+                        linePanel, row.CoinValue, null,
+                        panelWidth - NotesSectionLayoutMath.RightPadding, 4, font, _getCurrencyFacts);
                 }
 
                 linePanels.Add(linePanel);

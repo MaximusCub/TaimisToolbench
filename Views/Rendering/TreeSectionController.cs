@@ -1046,15 +1046,46 @@ namespace TaimisToolbench.Views.Rendering
             // panels have no tint/filter property, so a translucent black
             // overlay approximates gw2e's grayscale+opacity filter).
             int iconX = shape.IconX;
-            ItemIconFrame frame = dimmed
-                ? ItemIconFrame.Explicit(new Color(60, 60, 60))
-                : TreeRowTooltipComposer.RowSubjectIsACurrency(node)
-                    ? ItemIconFrame.Currency()
-                    : ItemIconFrame.ForRarity(node.Rarity);
+
+            // A currency row goes to the currency entry point, which
+            // resolves its whole tooltip from the id. It used to draw
+            // through the item path, so the Recipe Tree showed a bare name
+            // where the Settings grid showed the game's full box.
+            Panel iconFrame;
             var hover = TreeRowHover(node, captionText);
-            var iconFrame = IconControls.CreateItemIcon(
-                rowPanel, node.IconUrl, frame, iconX, PlanContentHeightMath.TreeRowIconPad,
-                ItemIconTier.BagSidebar, hover);
+            if (TreeRowTooltipComposer.RowSubjectIsACurrency(node))
+            {
+                var currencyTips = TreeRowTooltipComposer.BuildExtraTooltipContent(
+                    node, captionText, _host.CurrentPlan);
+                iconFrame = IconControls.CreateCurrencyIcon(
+                    rowPanel, node.ItemId, iconX, PlanContentHeightMath.TreeRowIconPad,
+                    ItemIconTier.BagSidebar, _host.CurrencyFactsFor, () => currencyTips);
+            }
+            else if (dimmed || !TreeRowTooltipComposer.RowIdIsAnItemId(node))
+            {
+                // Two rows the id cannot answer for. A dimmed reference
+                // branch takes a frame the rarity palette has no colour
+                // for. A synthesized row - a guild upgrade, an
+                // unrecognized ingredient - has a name the item store
+                // never held, so only the node knows it.
+                iconFrame = IconControls.CreateItemIconFromCapture(
+                    rowPanel, node.IconUrl,
+                    dimmed
+                        ? ItemIconFrame.Explicit(new Color(60, 60, 60))
+                        : ItemIconFrame.ForRarity(node.Rarity),
+                    iconX, PlanContentHeightMath.TreeRowIconPad,
+                    ItemIconTier.BagSidebar, hover);
+            }
+            else
+            {
+                var itemTips = TreeRowTooltipComposer.BuildExtraTooltipContent(
+                    node, captionText, _host.CurrentPlan);
+                iconFrame = IconControls.DrawItemIcon(
+                    rowPanel, node.ItemId, iconX, PlanContentHeightMath.TreeRowIconPad,
+                    ItemIconTier.BagSidebar, _host.ItemFactsFor,
+                    () => itemTips);
+            }
+
             Panel iconScrim = null;
             if (dimmed)
             {
@@ -1508,7 +1539,7 @@ namespace TaimisToolbench.Views.Rendering
                 handle.RowPanel, node.SubtreeCost.Value, currencyAmounts,
                 TreeCostColumnMath.ComputeRowEdges(
                     costRightEdge, handle.ColumnWidths, handle.RowDrawsCurrency),
-                TreeRowTextY, UiFonts.Body, dimmed ? 0.35f : 1f);
+                TreeRowTextY, UiFonts.Body, _host.CurrencyFactsFor, dimmed ? 0.35f : 1f);
         }
 
         /// <summary>
@@ -1787,12 +1818,20 @@ namespace TaimisToolbench.Views.Rendering
             var extraContent = TreeRowTooltipComposer.BuildExtraTooltipContent(
                 node, captionText, _host.CurrentPlan);
 
-            // The id space the row drew its icon from decides the header's
-            // frame: a currency row headed as an item drew a filled plate
-            // behind transparent art, which reads as a grey background.
-            var identity = TreeRowTooltipComposer.RowSubjectIsACurrency(node)
-                ? ItemTooltipIdentity.ForCurrency(node.Name ?? "", node.IconUrl)
-                : ItemTooltipIdentity.ForItem(node.Name ?? "", node.IconUrl, node.Rarity);
+            if (TreeRowTooltipComposer.RowSubjectIsACurrency(node))
+            {
+                // Resolved from the currency id, so this row shows the same
+                // box the Settings grid and the Total Cost table show.
+                int currencyId = node.ItemId;
+                System.Func<int, CurrencyTooltipFacts> facts = _host.CurrencyFactsFor;
+                return ItemIconTooltip.ForCurrency(
+                    node.Name ?? "",
+                    () => facts(currencyId),
+                    () => extraContent,
+                    TreeRowTooltipComposer.WikiTargetFor(node));
+            }
+
+            var identity = ItemTooltipIdentity.ForItem(node.Name ?? "", node.IconUrl, node.Rarity);
             var getStatBlock = _getItemStatBlock;
 
             // Composed at HOVER time, not here: a plan restored from disk
@@ -2411,7 +2450,7 @@ namespace TaimisToolbench.Views.Rendering
         /// trailing "+N" pill so the two can never disagree about pill
         /// chrome. Border simulated as an outer colored panel with a
         /// 1px-inset fill panel, the same nesting technique
-        /// IconControls.CreateItemIcon uses.
+        /// IconControls.DrawItemIcon uses.
         /// </summary>
         private static Panel CreatePillPanel(
             Panel rowPanel, string text, BitmapFont font, int pillWidth, int textWidth,

@@ -1449,13 +1449,11 @@ namespace TaimisToolbench.Views
             // column: it runs to the Status column's own left edge.
             // ONE resolved rarity feeds the frame, the name colour and the
             // hover header - resolving it three times is how they drift.
-            string rarity = ItemRarityResolution.Resolve(entry.Rarity, StatRarityFor(entry.ItemId));
-            var hover = ItemHover(row, entry, rarity);
-            row.IconName = IconNameRowHelpers.CreateIconAndEllipsizedName(
-                row.Panel, entry.IconUrl, rarity,
+            row.IconName = IconNameRowHelpers.DrawIconAndName(
+                row.Panel, entry.ItemId,
                 bands.IconX, MainLineIconY, row.FullName, UiFonts.Status,
                 bands.NameX + bands.NameWidth, 0, 0, bands.NameX, MainLineNameY,
-                hover, iconSize: RankerRowLayout.IconSize);
+                ItemIconTier.BagSlot, ItemFactsFor(entry));
 
             // Chip and placeholder are both exactly StatusCellWidth wide
             // (MeasureRowCells measures whichever of the two this row has),
@@ -1526,7 +1524,8 @@ namespace TaimisToolbench.Views
             {
                 row.RemainingCell = CoinCurrencyRenderer.RenderValueCellRightAligned(
                     row.Panel, metrics.RemainingCoinCost, null,
-                    RemainingCellRightEdge(bands, row), MainLineTextY, UiFonts.Body);
+                    RemainingCellRightEdge(bands, row), MainLineTextY, UiFonts.Body,
+                    CurrencyFactsFor);
             }
 
             row.Up = null;
@@ -1873,10 +1872,9 @@ namespace TaimisToolbench.Views
 
                 string fullName = CurrencyName(shortfall);
                 row.CurrencyNameFulls.Add(fullName);
-                row.CurrencyIconFrames.Add(IconControls.CreateItemIcon(
-                    row.Panel, CurrencyIconUrl(shortfall), ItemIconFrame.Currency(),
-                    0, y, ItemIconTier.CurrencyListRow,
-                    CurrencyHover(shortfall.CurrencyId, fullName)));
+                row.CurrencyIconFrames.Add(IconControls.CreateCurrencyIcon(
+                    row.Panel, shortfall.CurrencyId, 0, y,
+                    ItemIconTier.CurrencyListRow, CurrencyFactsFor));
                 row.CurrencyNameLabels.Add(new Label
                 {
                     Font = UiFonts.Caption,
@@ -2190,26 +2188,20 @@ namespace TaimisToolbench.Views
             PillColors.GetPillColors(PillKind.Locked, false, out border, out fill);
         }
 
-        /// <summary>
-        /// The standard rich item hover for one watchlist row: the item's
-        /// icon+name header either way, plus the session stat block when it
-        /// has one.
-        /// <para>
-        /// Its caller stamps it on the row PANEL and the rank as well,
-        /// because Blish resolves a tooltip on the deepest control under
-        /// the cursor and never bubbles to the parent (KNOWN-ISSUES #57):
-        /// every control the cursor can land on is its own hover, and the
-        /// panel is what it lands on between them.
-        /// </para>
-        /// </summary>
-        private ItemIconTooltip ItemHover(RenderedRow row, RankerWatchlistEntry entry, string rarity)
+        /// <summary>Everything one watchlist row's icon draws and its
+        /// tooltip shows. The entry is the tab's own capture; the stat
+        /// block comes from the session store.</summary>
+        private Func<int, ItemTooltipFacts> ItemFactsFor(RankerWatchlistEntry entry)
         {
-            int itemId = entry.ItemId;
-            return ItemIconTooltip.ForItem(
-                ItemTooltipIdentity.ForItem(row.FullName, entry.IconUrl, rarity),
-                _getItemStatBlock == null || itemId <= 0 ? (Func<ItemStatBlock>)null
-                    : () => _getItemStatBlock(itemId),
-                IconWikiTarget.ItemPage(row.FullName));
+            string capturedName = entry.Name;
+            string capturedIcon = entry.IconUrl;
+            string capturedRarity = entry.Rarity;
+
+            return id => ItemTooltipFacts.ForCapturedItem(
+                capturedName,
+                capturedIcon,
+                ItemRarityResolution.Resolve(capturedRarity, StatRarityFor(id)),
+                _getItemStatBlock == null || id <= 0 ? null : _getItemStatBlock(id));
         }
 
         /// <summary>The rarity the session stat cache knows for an item, or
@@ -2283,20 +2275,10 @@ namespace TaimisToolbench.Views
         /// drops the line rather than guessing at it.
         /// </para>
         /// </summary>
-        private ItemIconTooltip CurrencyHover(int currencyId, string fullName)
+        private CurrencyTooltipFacts CurrencyFactsFor(int currencyId)
         {
-            return ItemIconTooltip.ForCurrency(
-                fullName,
-                () =>
-                {
-                    var metadata = CurrencyMetadataFor(currencyId);
-                    return CurrencyTooltipFacts.For(
-                        fullName,
-                        CurrencyDisplayResolver.ResolveIconUrl(currencyId, metadata),
-                        CurrencyDisplayResolver.ResolveDescription(currencyId, metadata),
-                        null);
-                },
-                IconWikiTarget.ItemPage(fullName));
+            return CurrencyTooltipFacts.ForCurrencyId(
+                currencyId, CurrencyMetadataFor(currencyId), (int?)null);
         }
 
         private string CurrencyIconUrl(RankerCurrencyShortfall shortfall)

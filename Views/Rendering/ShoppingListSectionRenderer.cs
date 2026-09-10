@@ -50,16 +50,24 @@ namespace TaimisToolbench.Views.Rendering
         // See the identical field on UsedMaterialsSectionRenderer: the
         // session item-stat lookup, optional, degrading to the row's
         // pre-stats tooltip when it has nothing for this item.
-        private readonly Func<int, ItemStatBlock> _getItemStatBlock;
+        private readonly Func<int, ItemTooltipFacts> _getItemFacts;
+
+        /// <summary>Everything one currency's tooltip shows, from its id.
+        /// Required, not defaulted: an optional resolver is how one
+        /// surface came to hand its currency icons less than another.</summary>
+        private readonly Func<int, CurrencyTooltipFacts> _getCurrencyFacts;
 
         internal ShoppingListSectionRenderer(
             ISectionRelayoutSink sink, TableSortState<PlanTableColumn> sortState, Action onSortChanged,
-            Func<int, ItemStatBlock> getItemStatBlock = null)
+            Func<int, CurrencyTooltipFacts> getCurrencyFacts,
+            Func<int, ItemTooltipFacts> getItemFacts)
         {
             _sink = sink ?? throw new ArgumentNullException(nameof(sink));
             _sortState = sortState ?? throw new ArgumentNullException(nameof(sortState));
             _onSortChanged = onSortChanged ?? throw new ArgumentNullException(nameof(onSortChanged));
-            _getItemStatBlock = getItemStatBlock;
+            _getCurrencyFacts = getCurrencyFacts
+                ?? throw new ArgumentNullException(nameof(getCurrencyFacts));
+            _getItemFacts = getItemFacts ?? throw new ArgumentNullException(nameof(getItemFacts));
         }
 
         private void SortBy(PlanTableColumn column)
@@ -390,18 +398,11 @@ namespace TaimisToolbench.Views.Rendering
             // holdings and its acquisition hint, and the table already
             // prints both in its own columns, so the box restated them in
             // sentences and added nothing.
-            int itemId = row.ItemId;
-            var hover = ItemIconTooltip.ForItem(
-                ItemTooltipIdentity.ForItem(fullName, row.IconUrl, row.Rarity),
-                _getItemStatBlock == null || itemId <= 0 ? (Func<ItemStatBlock>)null
-                    : () => _getItemStatBlock(itemId),
-                IconWikiTarget.ItemPage(fullName));
-
-            var nameHandle = IconNameRowHelpers.CreateIconAndEllipsizedName(
-                rowPanel, row.IconUrl, row.Rarity,
+            var nameHandle = IconNameRowHelpers.DrawIconAndName(
+                rowPanel, row.ItemId,
                 IconX, PlanContentHeightMath.IconRowIconY, fullName, font,
                 edges.SourceX, 0, NameToQtyGap, NameX, RowTextY,
-                ItemIconTier.BagSidebar, hover);
+                ItemIconTier.BagSidebar, _getItemFacts);
             var nameLabel = nameHandle.NameLabel;
 
             string sourceTag = ShoppingSourceBadge.ForRow(row);
@@ -433,8 +434,10 @@ namespace TaimisToolbench.Views.Rendering
             // never a blank cell.
             var eachCell = CoinCurrencyRenderer.RenderValueCellRightAligned(
                 rowPanel, row.UnitCoinValue, row.UnitCurrencyCosts, edges.EachRightEdge, RowTextY, font,
-                coinBundleQuantity: row.UnitCoinBundleQuantity);
-            var totalCell = CoinCurrencyRenderer.RenderValueCellRightAligned(rowPanel, row.CoinValue, row.CurrencyCosts, edges.TotalRightEdge, RowTextY, font);
+                _getCurrencyFacts, coinBundleQuantity: row.UnitCoinBundleQuantity);
+            var totalCell = CoinCurrencyRenderer.RenderValueCellRightAligned(
+                rowPanel, row.CoinValue, row.CurrencyCosts, edges.TotalRightEdge, RowTextY, font,
+                _getCurrencyFacts);
 
             // An UNKNOWN row's dash takes the badge's own red, so "no
             // source" and "no price" read as one statement about the row

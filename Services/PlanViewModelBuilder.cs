@@ -651,9 +651,8 @@ namespace TaimisToolbench.Services
                     Label = currencyName,
                     Quantity = required,
                     IconUrl = iconUrl,
+                    CurrencyId = cc.CurrencyId,
                     NonCoinCostKey = SummarySectionLayoutMath.WalletCurrencyCostKey(cc.CurrencyId),
-                    CurrencyDescription = CurrencyDisplayResolver.ResolveDescription(
-                        cc.CurrencyId, result.CurrencyMetadata),
                 };
                 ApplyOwnedSplit(row, LookupOwned(result.OwnedCurrencyAmounts, cc.CurrencyId));
                 currencyRows.Add(row);
@@ -786,9 +785,8 @@ namespace TaimisToolbench.Services
             int buys = CurrencyTradeUpCoalescing.BuysNow(
                 heldCurrency.Value, cost.TradeUpCurrencyPerUnit.Value, outstanding);
 
+            row.TradeUpCurrencyId = currencyId;
             row.TradeUpCurrencyName = CurrencyDisplayResolver.ResolveName(currencyId, result.CurrencyMetadata);
-            row.TradeUpCurrencyIconUrl =
-                CurrencyDisplayResolver.ResolveIconUrl(currencyId, result.CurrencyMetadata);
             row.TradeUpCurrencyHeld = heldCurrency.Value;
             row.TradeUpBuysQuantity = buys;
             return buys;

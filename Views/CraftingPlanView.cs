@@ -521,6 +521,48 @@ namespace TaimisToolbench.Views
             set => _currentPlan = value;
         }
 
+        /// <summary>
+        /// Everything one item's icon draws and its tooltip shows, from its
+        /// id. Every item icon this tab draws reads it, so no two of its
+        /// tables can show different boxes for the same item.
+        /// <para>
+        /// Merges the plan's own captured metadata with the session stat
+        /// cache. That merge happens here and nowhere else.
+        /// </para>
+        /// </summary>
+        public ItemTooltipFacts ItemFactsFor(int itemId)
+        {
+            var plan = _currentPlan;
+            ItemMetadata meta = null;
+            if (itemId > 0 && plan?.ItemMetadata != null)
+            {
+                plan.ItemMetadata.TryGetValue(itemId, out meta);
+            }
+
+            return ItemTooltipFacts.ForItemId(
+                itemId,
+                meta,
+                _getItemStatBlock == null || itemId <= 0 ? null : _getItemStatBlock(itemId));
+        }
+
+        /// <summary>
+        /// The whole content of one currency's tooltip, from its id. Every
+        /// currency icon this tab draws reads it, so the Total Cost table,
+        /// the Recipe Tree and the inline symbols in a value cell cannot
+        /// show different boxes for the same currency.
+        /// <para>
+        /// Reads <c>_currentPlan</c> per call rather than capturing its
+        /// dictionaries, so a re-solve's wallet figures reach the next
+        /// hover.
+        /// </para>
+        /// </summary>
+        public CurrencyTooltipFacts CurrencyFactsFor(int currencyId)
+        {
+            var plan = _currentPlan;
+            return CurrencyTooltipFacts.ForCurrencyId(
+                currencyId, plan?.CurrencyMetadata, plan?.OwnedCurrencyAmounts);
+        }
+
         int ITreePlanHost.PanelWidth => GetCurrentPanelWidth();
 
         void ITreePlanHost.SetLastDebugLog(IReadOnlyList<string> log) => _lastDebugLog = log;
@@ -4854,7 +4896,7 @@ namespace TaimisToolbench.Views
 
             int panelWidth = _contentPanel.Width - RightEdgePadding;
 
-            new PlanHeaderRenderer(this, _getItemStatBlock).Render(vm, _contentPanel, panelWidth);
+            new PlanHeaderRenderer(this, ItemFactsFor).Render(vm, _contentPanel, panelWidth);
 
             // Separator under header
             var headerSeparator = new ClippedPanel()
@@ -5264,28 +5306,30 @@ namespace TaimisToolbench.Views
                     // Row rendering (the cost-tile row, the
                     // MultiItemNote banner, and the per-currency rows) moved
                     // to Views/Rendering/SummarySectionRenderer.
-                    new SummarySectionRenderer(this, _getItemStatBlock, RegisterScrollAnchor)
+                    new SummarySectionRenderer(
+                        this, CurrencyFactsFor, ItemFactsFor, RegisterScrollAnchor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 case PlanSectionType.UsedMaterials:
                     // Row rendering moved to
                     // Views/Rendering/UsedMaterialsSectionRenderer.
                     new UsedMaterialsSectionRenderer(
-                        this, _usedMaterialsSort, RerenderForSortChange, _getItemStatBlock)
+                        this, _usedMaterialsSort, RerenderForSortChange, ItemFactsFor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 case PlanSectionType.ShoppingList:
                     // Row rendering moved to
                     // Views/Rendering/ShoppingListSectionRenderer.
                     new ShoppingListSectionRenderer(
-                        this, _shoppingListSort, RerenderForSortChange, _getItemStatBlock)
+                        this, _shoppingListSort, RerenderForSortChange,
+                        CurrencyFactsFor, ItemFactsFor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 case PlanSectionType.CraftingSteps:
                     // Row rendering (including the TimegatedNotice
                     // informational rows) moved to
                     // Views/Rendering/CraftStepsSectionRenderer.
-                    new CraftStepsSectionRenderer(this, _getItemStatBlock)
+                    new CraftStepsSectionRenderer(this, ItemFactsFor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 case PlanSectionType.RequiredDisciplines:
@@ -5300,7 +5344,7 @@ namespace TaimisToolbench.Views
                     // needs its own case rather than the default fallback
                     // below, since CreateTextRow never draws a coin value
                     // and this section's excess/reclaim lines carry one.
-                    notesBodyHeight = new NotesSectionRenderer(this)
+                    notesBodyHeight = new NotesSectionRenderer(this, CurrencyFactsFor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 // PlanSectionType.RequiredRecipes is handled entirely by
@@ -5461,7 +5505,7 @@ namespace TaimisToolbench.Views
                     Rows = visibleRows,
                     IsDefaultExpanded = section.IsDefaultExpanded,
                 };
-                new RecipesSectionRenderer(this, _getItemStatBlock)
+                new RecipesSectionRenderer(this, ItemFactsFor)
                     .Render(filteredSection, contentFlow, panelWidth);
             }
 

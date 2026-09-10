@@ -23,13 +23,13 @@ namespace TaimisToolbench.Views.Rendering
     internal sealed class CraftStepsSectionRenderer
     {
         private readonly ISectionRelayoutSink _sink;
-        private readonly Func<int, ItemStatBlock> _getItemStatBlock;
+        private readonly Func<int, ItemTooltipFacts> _getItemFacts;
 
         internal CraftStepsSectionRenderer(
-            ISectionRelayoutSink sink, Func<int, ItemStatBlock> getItemStatBlock = null)
+            ISectionRelayoutSink sink, Func<int, ItemTooltipFacts> getItemFacts)
         {
             _sink = sink ?? throw new ArgumentNullException(nameof(sink));
-            _getItemStatBlock = getItemStatBlock;
+            _getItemFacts = getItemFacts ?? throw new ArgumentNullException(nameof(getItemFacts));
         }
 
         /// <summary>
@@ -159,17 +159,9 @@ namespace TaimisToolbench.Views.Rendering
                 Parent = rowPanel,
             };
 
-            int itemId = row.ItemId;
-            string fullLabel = row.Label ?? "";
-            var hover = ItemIconTooltip.ForItem(
-                ItemTooltipIdentity.ForItem(fullLabel, row.IconUrl, row.Rarity),
-                _getItemStatBlock == null || itemId <= 0 ? (Func<ItemStatBlock>)null
-                    : () => _getItemStatBlock(itemId),
-                IconWikiTarget.ItemPage(fullLabel));
-
-            IconControls.CreateItemIcon(
-                rowPanel, row.IconUrl, ItemIconFrame.ForRarity(row.Rarity),
-                IconX, PlanContentHeightMath.IconRowIconY, ItemIconTier.BagSidebar, hover);
+            IconControls.DrawItemIcon(
+                rowPanel, row.ItemId, IconX, PlanContentHeightMath.IconRowIconY,
+                ItemIconTier.BagSidebar, _getItemFacts);
 
             var textFont = UiFonts.Body;
             var greyColor = new Color(170, 170, 170);

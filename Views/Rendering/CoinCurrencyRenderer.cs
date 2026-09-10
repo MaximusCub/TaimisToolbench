@@ -362,6 +362,7 @@ namespace TaimisToolbench.Views.Rendering
                     Text = text,
                     TextWidth = width,
                     Name = amount.Name,
+                    CurrencyId = amount.CurrencyId,
                 });
             }
 
@@ -382,7 +383,8 @@ namespace TaimisToolbench.Views.Rendering
         }
 
         internal static SegmentLayoutHandle LayoutCurrencySegments(
-            Panel parent, List<CoinSegmentMath.CurrencySegmentSpec> segments, int startX, int y, BitmapFont font, float alphaScale = 1f)
+            Panel parent, List<CoinSegmentMath.CurrencySegmentSpec> segments, int startX, int y,
+            BitmapFont font, Func<int, CurrencyTooltipFacts> getCurrencyFacts, float alphaScale = 1f)
         {
             var controls = new (Label, Panel)[segments.Count];
             var widths = new int[segments.Count];
@@ -418,15 +420,9 @@ namespace TaimisToolbench.Views.Rendering
                 // It still occupies the whole measured bar-tier window, so
                 // this segment's advance below is unchanged by the border
                 // coming off.
-                string segName = seg.Name;
-                string segIconUrl = seg.IconUrl;
                 var icon = IconControls.CreateCurrencyIcon(
-                    parent, segIconUrl, x + seg.TextWidth + CoinSegmentMath.CoinLabelIconGap,
-                    y + iconYOffset, ItemIconTier.CurrencyBarRun,
-                    ItemIconTooltip.ForCurrency(
-                        segName,
-                        () => CurrencyTooltipFacts.For(segName, segIconUrl, null, null),
-                        IconWikiTarget.ItemPage(segName)));
+                    parent, seg.CurrencyId, x + seg.TextWidth + CoinSegmentMath.CoinLabelIconGap,
+                    y + iconYOffset, ItemIconTier.CurrencyBarRun, getCurrencyFacts);
 
                 controls[i] = (label, icon);
                 widths[i] = seg.TextWidth;
@@ -513,7 +509,8 @@ namespace TaimisToolbench.Views.Rendering
         /// </summary>
         internal static ValueCellHandle LayoutValueSegmentsRightAligned(
             Panel parent, long copper, IReadOnlyList<CurrencyAmountViewModel> currencyAmounts,
-            int rightEdgeX, int y, BitmapFont font, float alphaScale = 1f,
+            int rightEdgeX, int y, BitmapFont font,
+            Func<int, CurrencyTooltipFacts> getCurrencyFacts, float alphaScale = 1f,
             int coinBundleQuantity = 0)
         {
             var coinSegments = copper > 0 ? BuildCoinSegments(copper, font) : new List<CoinSegmentMath.CoinSegmentSpec>();
@@ -538,7 +535,8 @@ namespace TaimisToolbench.Views.Rendering
             }
 
             var currencyHandle = LayoutCurrencySegments(
-                parent, currencySegments, startX + coinWidth + suffixWidth + gap, y, font, alphaScale);
+                parent, currencySegments, startX + coinWidth + suffixWidth + gap, y, font,
+                getCurrencyFacts, alphaScale);
 
             return new ValueCellHandle
             {
@@ -560,7 +558,8 @@ namespace TaimisToolbench.Views.Rendering
         /// </summary>
         internal static ValueCellHandle RenderValueCellRightAligned(
             Panel parent, long copper, IReadOnlyList<CurrencyAmountViewModel> currencyAmounts,
-            int rightEdgeX, int y, BitmapFont font, float alphaScale = 1f,
+            int rightEdgeX, int y, BitmapFont font,
+            Func<int, CurrencyTooltipFacts> getCurrencyFacts, float alphaScale = 1f,
             int coinBundleQuantity = 0)
         {
             bool hasCoin = copper > 0;
@@ -579,7 +578,8 @@ namespace TaimisToolbench.Views.Rendering
             }
 
             return LayoutValueSegmentsRightAligned(
-                parent, copper, currencyAmounts, rightEdgeX, y, font, alphaScale, coinBundleQuantity);
+                parent, copper, currencyAmounts, rightEdgeX, y, font,
+                getCurrencyFacts, alphaScale, coinBundleQuantity);
         }
 
         /// <summary>
@@ -653,7 +653,8 @@ namespace TaimisToolbench.Views.Rendering
         /// </summary>
         internal static ValueCellHandle RenderValueCellInSubColumns(
             Panel parent, long copper, IReadOnlyList<CurrencyAmountViewModel> currencyAmounts,
-            TreeCostColumnMath.CostSubColumnEdges edges, int y, BitmapFont font, float alphaScale = 1f)
+            TreeCostColumnMath.CostSubColumnEdges edges, int y, BitmapFont font,
+            Func<int, CurrencyTooltipFacts> getCurrencyFacts, float alphaScale = 1f)
         {
             bool hasCoin = copper > 0;
             bool hasCurrency = currencyAmounts != null && currencyAmounts.Count > 0;
@@ -701,7 +702,8 @@ namespace TaimisToolbench.Views.Rendering
             var currencySegments = BuildCurrencySegments(currencyAmounts, font);
             int currencyRunWidth = TotalCurrencySegmentsWidth(currencySegments);
             var currencyHandle = LayoutCurrencySegments(
-                parent, currencySegments, edges.CurrencyRightEdge - currencyRunWidth, y, font, alphaScale);
+                parent, currencySegments, edges.CurrencyRightEdge - currencyRunWidth, y, font,
+                getCurrencyFacts, alphaScale);
 
             return new ValueCellHandle { CoinSegments = coinHandle, CurrencySegments = currencyHandle };
         }

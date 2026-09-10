@@ -602,20 +602,22 @@ namespace TaimisToolbench.Views
 
             var firstSummary = FirstSummary(entry);
             string firstRarity = ResolvedRarity(firstSummary);
-            var hover = RowHover(entry, firstSummary, firstRarity);
+            var rowTips = RowChipLines(entry);
 
             bool expanded = string.Equals(_expandedEntryId, entry.EntryId, StringComparison.Ordinal);
             CreateCaret(row, expanded, bands);
 
-            row.IconName = IconNameRowHelpers.CreateIconAndEllipsizedName(
-                row.Panel, firstSummary?.IconUrl, firstRarity,
+            row.IconName = IconNameRowHelpers.DrawIconAndName(
+                row.Panel, PlanHistoryLabels.SingleItemId(entry),
                 bands.IconX, PlanHistoryRowLayout.IconY, row.FullLabel, UiFonts.Body,
                 bands.NameX + bands.NameWidth, 0, 0, bands.NameX, PlanHistoryRowLayout.MainLineTextY,
-                ItemIconTier.BagSlot, hover);
+                ItemIconTier.BagSlot,
+                RowItemFactsFor(entry, firstSummary, firstRarity),
+                () => rowTips);
 
             row.CostCell = CoinCurrencyRenderer.RenderValueCellRightAligned(
                 row.Panel, entry.TotalCoinCostAtGeneration, null, bands.CostRightEdge,
-                PlanHistoryRowLayout.MainLineTextY, UiFonts.Body);
+                PlanHistoryRowLayout.MainLineTextY, UiFonts.Body, CurrencyFactsFor);
 
             row.WhenLabel = LabelHelpers.CreateRightAlignedLabel(
                 row.Panel, WhenText(entry), UiFonts.Body, StatusColor,
@@ -690,6 +692,31 @@ namespace TaimisToolbench.Views
             return null;
         }
 
+        /// <summary>The lines this row's hover adds above the wiki line:
+        /// the entry's other items, then its override and ignore counts.
+        /// Every one of them is the module's own note, not the item's.</summary>
+        private static IReadOnlyList<string> RowChipLines(PlanHistoryEntry entry)
+        {
+            var itemLines = PlanHistoryLabels.ItemLineTexts(entry);
+            var lines = new List<string>();
+            for (int i = 1; i < itemLines.Count; i++)
+            {
+                lines.Add(itemLines[i]);
+            }
+
+            if (entry.OverrideCountAtGeneration > 0)
+            {
+                lines.Add(StatusText.ForOverridesChip(entry.OverrideCountAtGeneration));
+            }
+
+            if (entry.IgnoredCountAtGeneration > 0)
+            {
+                lines.Add(StatusText.ForIgnoredChip(entry.IgnoredCountAtGeneration));
+            }
+
+            return lines;
+        }
+
         /// <summary>
         /// One history row's hover: the icon+name header the row already
         /// draws - which is the FIRST item's, quantity and all - then the
@@ -701,44 +728,43 @@ namespace TaimisToolbench.Views
         /// does not tell.
         /// </para>
         /// </summary>
-        private ItemIconTooltip RowHover(
+        private Func<int, ItemTooltipFacts> RowItemFactsFor(
             PlanHistoryEntry entry, PlanHistoryItemSummary firstSummary, string firstRarity)
         {
             var itemLines = PlanHistoryLabels.ItemLineTexts(entry);
-            var extras = new List<string>();
-            for (int i = 1; i < itemLines.Count; i++)
-            {
-                extras.Add(itemLines[i]);
-            }
-
-            if (entry.OverrideCountAtGeneration > 0)
-            {
-                extras.Add(StatusText.ForOverridesChip(entry.OverrideCountAtGeneration));
-            }
-
-            if (entry.IgnoredCountAtGeneration > 0)
-            {
-                extras.Add(StatusText.ForIgnoredChip(entry.IgnoredCountAtGeneration));
-            }
 
             // An entry whose summaries were never captured heads nothing
             // rather than inventing a subject: there is no item to name and
             // no icon to show, and the chips below are the whole hover.
-            var identity = itemLines.Count > 0
-                ? ItemTooltipIdentity.ForItem(itemLines[0], firstSummary?.IconUrl, firstRarity)
-                : ItemTooltipIdentity.Unnamed();
+            string headName = itemLines.Count > 0 ? itemLines[0] : null;
+            string headIcon = firstSummary?.IconUrl;
 
-            // Without this a one-item entry composed to the header alone:
-            // no stats, and no extras either, because its one item IS the
-            // header and most entries carry no chips.
+            // A multi-item entry carries no single stat block: one item's
+            // stats for a three-item request would be a lie the icon does
+            // not tell. SingleItemId answers 0 for those.
             int singleItemId = PlanHistoryLabels.SingleItemId(entry);
-            Func<ItemStatBlock> stats = _getItemStatBlock == null || singleItemId <= 0
-                ? (Func<ItemStatBlock>)null
-                : () => _getItemStatBlock(singleItemId);
 
-            return ItemIconTooltip.ForItem(
-                identity, stats, () => extras,
-                IconWikiTarget.ItemPage(itemLines.Count > 0 ? itemLines[0] : null));
+            return id => headName == null
+                ? ItemTooltipFacts.Unnamed()
+                : ItemTooltipFacts.ForCapturedItem(
+                    headName,
+                    headIcon,
+                    firstRarity,
+                    _getItemStatBlock == null || singleItemId <= 0
+                        ? null
+                        : _getItemStatBlock(singleItemId));
+        }
+
+        /// <summary>
+        /// This tab stores a plan's coin total and nothing about
+        /// currencies, so a currency here is named from the module's own
+        /// id table and carries no prose and no holding. The cells above
+        /// pass no currency amounts, so nothing calls this today; it exists
+        /// because the resolver is required rather than defaulted.
+        /// </summary>
+        private static CurrencyTooltipFacts CurrencyFactsFor(int currencyId)
+        {
+            return CurrencyTooltipFacts.ForCurrencyEntry(currencyId, null, null);
         }
 
         /// <summary>
@@ -923,15 +949,17 @@ namespace TaimisToolbench.Views
                 // A detail line IS one item, so it gets the standard item
                 // hover in full - the icon+name header either way, and this
                 // session's stat block underneath it when there is one.
-                var lineHover = ItemIconTooltip.ForItem(
-                    ItemTooltipIdentity.ForItem(full, summary.IconUrl, rarity),
-                    _getItemStatBlock == null || summaryItemId <= 0 ? (Func<ItemStatBlock>)null
-                        : () => _getItemStatBlock(summaryItemId),
-                    IconWikiTarget.ItemPage(full));
-
-                IconControls.CreateItemIcon(
-                    panel, summary.IconUrl, ItemIconFrame.ForRarity(rarity),
-                    x, y + PlanHistoryRowLayout.IconPad, ItemIconTier.BagSidebar, lineHover);
+                string lineName = full;
+                string lineIcon = summary.IconUrl;
+                string lineRarity = rarity;
+                IconControls.DrawItemIcon(
+                    panel, summaryItemId,
+                    x, y + PlanHistoryRowLayout.IconPad, ItemIconTier.BagSidebar,
+                    id => ItemTooltipFacts.ForCapturedItem(
+                        lineName,
+                        lineIcon,
+                        lineRarity,
+                        _getItemStatBlock == null || id <= 0 ? null : _getItemStatBlock(id)));
 
                 int textX = x + PlanHistoryRowLayout.DetailIconTotal + PlanHistoryRowLayout.IconGap;
 

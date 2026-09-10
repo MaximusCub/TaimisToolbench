@@ -36,13 +36,13 @@ namespace TaimisToolbench.Views.Rendering
     internal sealed class RecipesSectionRenderer
     {
         private readonly ISectionRelayoutSink _sink;
-        private readonly Func<int, ItemStatBlock> _getItemStatBlock;
+        private readonly Func<int, ItemTooltipFacts> _getItemFacts;
 
         internal RecipesSectionRenderer(
-            ISectionRelayoutSink sink, Func<int, ItemStatBlock> getItemStatBlock = null)
+            ISectionRelayoutSink sink, Func<int, ItemTooltipFacts> getItemFacts)
         {
             _sink = sink ?? throw new ArgumentNullException(nameof(sink));
-            _getItemStatBlock = getItemStatBlock;
+            _getItemFacts = getItemFacts ?? throw new ArgumentNullException(nameof(getItemFacts));
         }
 
         // Left x of the name column (past the row's tier-2 framed icon at
@@ -254,18 +254,11 @@ namespace TaimisToolbench.Views.Rendering
                 };
             }
 
-            int itemId = row.ItemId;
             string hintLine = row.HintText;
-            var hover = ItemIconTooltip.ForItem(
-                ItemTooltipIdentity.ForItem(row.Label ?? "", row.IconUrl, row.Rarity),
-                _getItemStatBlock == null || itemId <= 0 ? (Func<ItemStatBlock>)null
-                    : () => _getItemStatBlock(itemId),
-                () => string.IsNullOrEmpty(hintLine) ? null : new List<string> { hintLine },
-                wikiTarget);
-
-            IconControls.CreateItemIcon(
-                rowPanel, row.IconUrl, ItemIconFrame.ForRarity(row.Rarity),
-                IconX, PlanContentHeightMath.IconRowIconY, ItemIconTier.BagSidebar, hover);
+            IconControls.DrawItemIcon(
+                rowPanel, row.ItemId, IconX, PlanContentHeightMath.IconRowIconY,
+                ItemIconTier.BagSidebar, _getItemFacts,
+                () => string.IsNullOrEmpty(hintLine) ? null : new List<string> { hintLine });
 
             var font = UiFonts.Body;
             string fullName = row.Label ?? "";

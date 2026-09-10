@@ -568,7 +568,7 @@ namespace TaimisToolbench.Views.Rendering
                 ItemIconFrame frame = row.HeaderSubject.IsCurrency
                     ? ItemIconFrame.ExplicitOutline(HeaderIconFrameColor)
                     : ItemIconFrame.Explicit(HeaderIconFrameColor);
-                IconControls.CreateItemIcon(
+                IconControls.CreateItemIconFromCapture(
                     _contentPanel, row.IconUrl, frame,
                     0, rowY, ItemIconTier.TooltipHeader,
                     ItemIconTooltip.None(ItemIconSilence.DrawnInsideATooltip));
