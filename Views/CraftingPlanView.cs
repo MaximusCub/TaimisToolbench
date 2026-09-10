@@ -145,6 +145,10 @@ namespace TaimisToolbench.Views
         private readonly ModuleSettings _settings;
         private readonly PlanViewModelBuilder _vmBuilder = new PlanViewModelBuilder();
 
+        private readonly Action<PlanViewModel> _onPlanRendered;
+
+        private readonly Action<PlanSectionType> _onPopOutSection;
+
         private PlanViewModel _currentPlan;
 
         private DateTime _planGeneratedAt;
@@ -877,9 +881,18 @@ namespace TaimisToolbench.Views
             // same snapshot, so the finished plan can say how old the owned
             // materials it subtracted were. Optional; without it the plan
             // status line carries no account-data clause.
-            Func<AccountSnapshot> getSnapshot = null)
+            Func<AccountSnapshot> getSnapshot = null,
+            // The popout windows (Views/PopoutWindowHost) are owned by
+            // Module, not by this view: they are sprite-screen children and
+            // have to survive the module window closing. These two are the
+            // whole of this tab's reach into them - tell the host which
+            // plan is on screen, and ask it to open one section.
+            Action<PlanViewModel> onPlanRendered = null,
+            Action<PlanSectionType> onPopOutSection = null)
         {
             _getSnapshot = getSnapshot;
+            _onPlanRendered = onPlanRendered;
+            _onPopOutSection = onPopOutSection;
             _generateAsync = generateAsync;
             _modalDialog = modalDialog;
             _itemSearchProvider = itemSearchProvider;
@@ -4839,6 +4852,12 @@ namespace TaimisToolbench.Views
                 return;
             }
 
+            // Before the rebuild, not after: an open popout reads its rows
+            // from the host, and the host drops a popout's ticks only when
+            // the plan INSTANCE changes, so a sort click or a pill override
+            // passes the same instance through here and changes nothing.
+            _onPlanRendered?.Invoke(vm);
+
             ResetContentPanelToEmpty(preserveTree);
 
             int panelWidth = _contentPanel.Width - RightEdgePadding;
@@ -5227,8 +5246,25 @@ namespace TaimisToolbench.Views
                 return;
             }
 
-            var header = CreateSectionHeader(section.Title, section.SectionType, panelWidth, section.IsDefaultExpanded);
+            // The button is built after the header it parents to, so both
+            // predicates resolve it lazily - the same order, and for the
+            // same reason, as Required Recipes' own header checkbox.
+            FeedbackButton popOutButton = null;
+            bool pressStartedOnPopOut = false;
+            var header = CreateSectionHeader(
+                section.Title, section.SectionType, panelWidth, section.IsDefaultExpanded,
+                () => pressStartedOnPopOut,
+                () => CursorOverHeaderControl(popOutButton));
             var contentFlow = header.ContentFlow;
+
+            popOutButton = CreatePopOutButton(header.HeaderPanel, section.SectionType, panelWidth);
+            if (popOutButton != null)
+            {
+                header.HeaderPanel.LeftMouseButtonPressed += (_, __) =>
+                {
+                    pressStartedOnPopOut = CursorOverHeaderControl(popOutButton);
+                };
+            }
 
 #if DEBUG
             // A section type added without registering its own width
@@ -5340,24 +5376,71 @@ namespace TaimisToolbench.Views
         }
 
         /// <summary>
-        /// Whether the cursor is over the section header's checkbox, from
-        /// the checkbox's own live rectangle rather than
+        /// The header-row button that opens this section on its own window,
+        /// on the two sections that have one. Null everywhere else, and null
+        /// when the module did not hand this view a popout host at all.
+        /// </summary>
+        private FeedbackButton CreatePopOutButton(
+            Panel headerPanel, PlanSectionType sectionType, int panelWidth)
+        {
+            if (_onPopOutSection == null || !PopoutWindowHost.Supports(sectionType))
+            {
+                return null;
+            }
+
+            var button = new FeedbackButton()
+            {
+                Text = "Pop Out",
+                Size = new Point(PopOutButtonWidth, UiMetrics.ButtonHeight),
+                Location = new Point(PopOutButtonX(panelWidth), PopOutButtonY),
+                Parent = headerPanel,
+            };
+            TooltipFacility.ApplyPlain(
+                button,
+                "Opens this list in its own window. It stays on screen with the module closed.");
+            button.Click += (_, __) => _onPopOutSection(sectionType);
+            _relayoutActions.Add(
+                w => button.Location = new Point(PopOutButtonX(w), PopOutButtonY));
+            return button;
+        }
+
+        private const int PopOutButtonWidth = 84;
+
+        /// <summary>
+        /// Level with Required Recipes' own header control, so the two
+        /// sections' header rows read as one row wherever both are open.
+        /// </summary>
+        private const int PopOutButtonY = 3;
+
+        /// <summary>
+        /// Right-ruled on the same pinned edge every table under it ends at,
+        /// so the button lines up with the Total column rather than with the
+        /// scrollbar.
+        /// </summary>
+        private static int PopOutButtonX(int panelWidth)
+        {
+            return PlanRelayoutMath.PinnedRightEdge(panelWidth) - PopOutButtonWidth;
+        }
+
+        /// <summary>
+        /// Whether the cursor is over a control the section header carries,
+        /// from that control's own live rectangle rather than
         /// <c>Control.MouseOver</c>. Toggling it rebuilds the whole plan,
         /// so the control this asks about is a different instance on every
         /// click and the hover chain has not resolved to it - the same
         /// staleness Services/TreeRowPillHitTest was written for, and the
         /// same half-open convention answers it.
         /// </summary>
-        private static bool CursorOverCheckbox(Checkbox checkbox)
+        private static bool CursorOverHeaderControl(Control control)
         {
-            if (checkbox == null)
+            if (control == null)
             {
                 return false;
             }
 
-            var cursor = checkbox.RelativeMousePosition;
+            var cursor = control.RelativeMousePosition;
             return TreeRowPillHitTest.Covers(
-                new TreeRowPillHitTest.PillBox(0, 0, checkbox.Width, checkbox.Height),
+                new TreeRowPillHitTest.PillBox(0, 0, control.Width, control.Height),
                 cursor.X, cursor.Y);
         }
 
@@ -5399,7 +5482,7 @@ namespace TaimisToolbench.Views
             var header = CreateSectionHeader(
                 headerTitle, section.SectionType, panelWidth, section.IsDefaultExpanded,
                 () => pressStartedOnCheckbox,
-                () => CursorOverCheckbox(hideUnlockedCheckbox));
+                () => CursorOverHeaderControl(hideUnlockedCheckbox));
             var headerPanel = header.HeaderPanel;
             var contentFlow = header.ContentFlow;
 
@@ -5419,7 +5502,7 @@ namespace TaimisToolbench.Views
 
             headerPanel.LeftMouseButtonPressed += (_, __) =>
             {
-                pressStartedOnCheckbox = CursorOverCheckbox(hideUnlockedCheckbox);
+                pressStartedOnCheckbox = CursorOverHeaderControl(hideUnlockedCheckbox);
             };
 
             hideUnlockedCheckbox.CheckedChanged += (_, e) =>

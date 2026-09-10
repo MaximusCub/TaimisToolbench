@@ -112,6 +112,11 @@
     <Compile Include="Models\PersistedPlanLoad.cs" />
     <Compile Include="Models\PlanHistoryEntry.cs" />
     <Compile Include="Services\GzipJsonFile.cs" />
+    <Compile Include="Services\PopoutLayout.cs" />
+    <Compile Include="Services\PopoutOpacity.cs" />
+    <Compile Include="Services\PopoutRemaining.cs" />
+    <Compile Include="Services\PopoutRowKey.cs" />
+    <Compile Include="Services\PopoutSectionState.cs" />
     <Compile Include="Services\PlanHistoryStore.cs" />
     <Compile Include="Services\PlanHistoryBlobStore.cs" />
     <Compile Include="Services\PlanHistoryDedupKey.cs" />
@@ -131,6 +136,10 @@
     <Compile Include="Services\StaleAccountDataWarning.cs" />
     <Compile Include="Services\PlanHistoryLabels.cs" />
     <Compile Include="Views\PlanHistoryTabContent.cs" />
+    <Compile Include="Views\PopoutTable.cs" />
+    <Compile Include="Views\PopoutToolbar.cs" />
+    <Compile Include="Views\PopoutWindow.cs" />
+    <Compile Include="Views\PopoutWindowHost.cs" />
     <Compile Include="Services\PlanStore.cs" />
     <Compile Include="Services\PlanStoreHelpers.cs" />
     <Compile Include="Services\PlanStructuralValidator.cs" />

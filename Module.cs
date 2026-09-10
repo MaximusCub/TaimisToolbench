@@ -49,6 +49,7 @@ namespace TaimisToolbench
 
         private CornerIcon _cornerIcon;
         private ResizableTabbedWindow _mainWindow;
+        private Views.PopoutWindowHost _popoutWindows;
         private ModalDialog _modalDialog;
         private ApiAccessDialog _apiAccessDialog;
         private MainView _snapshotContent;
@@ -1081,8 +1082,24 @@ namespace TaimisToolbench
                 // not GetMetadataAsync.
                 _warmItemStatsAsync,
                 () => lifetimeToken,
-                () => _currentSnapshot
+                () => _currentSnapshot,
+                vm => _popoutWindows?.PublishPlan(vm),
+                sectionType => _popoutWindows?.Open(sectionType)
             );
+
+            // Built after the view that opens it, and held here rather than
+            // on the view: its windows are sprite-screen children so they
+            // outlive the module window, which means only Unload can end
+            // them. UserRefreshAsync is the same ungated fetch the Account
+            // Snapshot tab's Refresh Now runs - a popout's Refresh is a
+            // deliberate press too, so it is not held back by the freshness
+            // windows in Services/SnapshotRefreshPolicy.
+            _popoutWindows = new PopoutWindowHost(
+                () => new AsyncTexture2D(ContentService.Textures.Pixel),
+                UserRefreshAsync,
+                () => _currentSnapshot,
+                itemMetadataService.GetCachedStatBlock,
+                _settings);
 
             _settingsContent = new SettingsTabContent(
                 _settings,
@@ -2093,6 +2110,11 @@ namespace TaimisToolbench
             _modalDialog?.Dispose();
             _apiAccessDialog?.Dispose();
             _cornerIcon?.Dispose();
+
+            // Before the module window and for the same reason the two
+            // lines above it exist: these windows are parented to the
+            // sprite screen, so disposing _mainWindow never reaches them.
+            _popoutWindows?.Dispose();
             _mainWindow?.Dispose();
 
             // The module's ONE rich tooltip surface. Like the tickers
