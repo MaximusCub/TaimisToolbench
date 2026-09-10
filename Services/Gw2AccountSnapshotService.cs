@@ -243,6 +243,11 @@ namespace TaimisToolbench.Services
             // fetch drops those entries (IsHeldByCharacter); this endpoint
             // reports each item once for the whole account, with a count of
             // how many an equipment template can draw at a time.
+
+            // Legendary runes and sigils are armory entries too, so this
+            // set is also what stops a row per socket multiplying one of
+            // them by the slots drawing it (SocketedItemRows).
+            var armoryItemIds = new HashSet<int>();
             if (armoryTask != null)
             {
                 try
@@ -255,6 +260,7 @@ namespace TaimisToolbench.Services
                             continue;
                         }
 
+                        armoryItemIds.Add(entry.Id);
                         snapshot.Items.Add(new SnapshotItemEntry
                         {
                             ItemId = entry.Id,
@@ -297,6 +303,8 @@ namespace TaimisToolbench.Services
 
                 snapshot.Items.AddRange(harvest.Items);
                 snapshot.LegendaryArmoryEquipped.AddRange(harvest.ArmoryEquipped);
+                SocketedItemRows.SettleArmoryOwned(
+                    snapshot.Items, snapshot.LegendaryArmoryEquipped, armoryItemIds);
                 snapshot.CharacterDisciplines = harvest.Disciplines;
                 snapshot.CharacterCount = harvest.CharacterCount;
                 snapshot.IncompleteCharacterCount = harvest.IncompleteCharacterCount;

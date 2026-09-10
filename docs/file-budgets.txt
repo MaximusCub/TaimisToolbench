@@ -119,7 +119,7 @@ Services/AchievementBitDedupPrePass.cs                                          
 Services/AcquisitionHintService.cs                                                      75
 Services/BoundedConcurrency.cs                                                          51
 Services/CharacterPagePlan.cs                                                           68
-Services/CharacterRecordProjection.cs                                                   221
+Services/CharacterRecordProjection.cs                                                   238
 Services/CharacterSnapshotCollector.cs                                                  195
 Services/ClickSoundVolume.cs                                                            90
 Services/CoinSegmentMath.cs                                                             306
@@ -150,7 +150,7 @@ Services/FirstLoadSnapshotGate.cs                                               
 Services/GlyphButtonMetrics.cs                                                          69
 Services/GridLayout.cs                                                                  93
 Services/Gw2AccountRecipeClient.cs                                                      30
-Services/Gw2AccountSnapshotService.cs                                                   738
+Services/Gw2AccountSnapshotService.cs                                                   746
 Services/Gw2ApiConnectionLimit.cs                                                       71
 Services/Gw2ItemApiClient.cs                                                            271
 Services/Gw2PriceApiClient.cs                                                           76
@@ -733,7 +733,7 @@ tools/TaimisToolbench.Harness/CountingGw2HttpClient.cs                          
 tools/TaimisToolbench.Harness/FetchProfilePlan.cs                                       286
 tools/TaimisToolbench.Harness/FetchProfiler.cs                                          639
 tools/TaimisToolbench.Harness/SnapshotComparison.cs                                     200
-tools/TaimisToolbench.Harness/SnapshotFetchShapes.cs                                    516
+tools/TaimisToolbench.Harness/SnapshotFetchShapes.cs                                    527
 tools/TaimisToolbench.Harness/Program.cs                                                861
 tools/TaimisToolbench.Harness/TerminalClassifier.cs                                    650
 tools/TaimisToolbench.RecipeSeeder/Program.cs                                           787

@@ -101,6 +101,7 @@
     <Compile Include="Services\SnapshotHelpers.cs" />
     <Compile Include="Services\EquipmentLocationPolicy.cs" />
     <Compile Include="Services\SnapshotHoldLine.cs" />
+    <Compile Include="Services\SocketedItemRows.cs" />
     <Compile Include="Services\SnapshotSearchResultBuilder.cs" />
     <Compile Include="Services\EquippedRuneSetIndex.cs" />
     <Compile Include="Services\SocketedUpgradeIndex.cs" />

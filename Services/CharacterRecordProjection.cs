@@ -83,7 +83,9 @@ namespace TaimisToolbench.Services
         /// "Equipped:&lt;name&gt;" source, which is not the source its bags
         /// use. Ids drawn from the account-wide Legendary Armory are named
         /// on the part instead, and never counted
-        /// (Models.SnapshotArmoryEquip).
+        /// (Models.SnapshotArmoryEquip). What is socketed into a slot
+        /// becomes a row of its own either way
+        /// (Services.SocketedItemRows).
         /// </summary>
         /// <remarks>
         /// The record's equipment block reports each physical item once and
@@ -117,6 +119,13 @@ namespace TaimisToolbench.Services
                         && EquipmentLocationPolicy.IsEquippedFromLegendaryArmory(location))
                     {
                         part.ArmoryItemIds.Add(item.Id);
+
+                        // The wrapper is the armory's to count. What is
+                        // fitted into it is not: those are this account's
+                        // own items, one per socket.
+                        SocketedItemRows.AddFor(
+                            part.Items, item.Id, characterName, 1,
+                            item.Upgrades, item.Infusions);
                     }
 
                     continue;
@@ -134,6 +143,14 @@ namespace TaimisToolbench.Services
                     Infusions = SocketedIds(item.Infusions),
                     SkinId = SkinIdOf(item.Skin),
                 });
+
+                // The lists above stay on the gear row for the tooltip and
+                // the rune-set count; these are the same items as rows of
+                // their own, which is the only shape search and the plan's
+                // owned-stock reader can see.
+                SocketedItemRows.AddFor(
+                    part.Items, item.Id, characterName, 1,
+                    item.Upgrades, item.Infusions);
             }
         }
 
