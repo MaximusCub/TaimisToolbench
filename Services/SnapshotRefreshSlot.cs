@@ -14,24 +14,17 @@ namespace TaimisToolbench.Services
     /// Interlocked.Exchange so exactly one caller ever owns the outgoing
     /// source. A volatile bool cannot serve here: volatile makes a write
     /// VISIBLE, it does not make check-then-set ATOMIC.
-    /// <see cref="BeginFetch"/> hands back the token by value, before the
-    /// source is published, so a concurrent <see cref="CancelCurrent"/>
-    /// cancels the fetch - which is what it means - instead of racing a
-    /// field read the fetch would otherwise have to make.
     /// </para>
     /// <para>
     /// What the claim installs IS the thing losers wait on, so a caller
-    /// that loses can always find the refresh that won. Publishing the
-    /// fetch separately left a window between the winning claim and the
-    /// publication in which a loser found nothing to wait on and no slot
-    /// to claim.
+    /// that loses can always find the refresh that won.
     /// </para>
     /// <para>What the old check-then-set gate cost in practice:
     /// docs/ARCHITECTURE.md, "Services Q-Z: relocated design narrative".</para>
     /// </summary>
     internal sealed class SnapshotRefreshSlot
     {
-        private TaskCompletionSource<AccountSnapshot> _claim;
+        private Claim _claim;
         private CancellationTokenSource _cts;
 
         /// <summary>
@@ -55,7 +48,7 @@ namespace TaimisToolbench.Services
             get
             {
                 var claim = Volatile.Read(ref _claim);
-                return claim == null ? null : claim.Task;
+                return claim == null ? null : claim.Waiters.Task;
             }
         }
 
@@ -67,9 +60,7 @@ namespace TaimisToolbench.Services
         /// </summary>
         public bool TryClaim()
         {
-            var candidate = new TaskCompletionSource<AccountSnapshot>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
-            return Interlocked.CompareExchange(ref _claim, candidate, null) == null;
+            return Interlocked.CompareExchange(ref _claim, new Claim(), null) == null;
         }
 
         /// <summary>
@@ -85,24 +76,44 @@ namespace TaimisToolbench.Services
                 return;
             }
 
+            // Recorded before the continuation is attached so Release can
+            // settle the waiters itself. Release runs in the claimant's
+            // finally, which can beat this continuation to a fetch that has
+            // only just completed, and cancelling the waiters there would
+            // report a refresh that did happen as one that did not.
+            Volatile.Write(ref claim.Fetch, fetch);
+
             fetch.ContinueWith(
-                (completed, state) => Settle((TaskCompletionSource<AccountSnapshot>)state, completed),
+                (completed, state) => Settle((Claim)state, completed),
                 claim,
                 TaskContinuationOptions.ExecuteSynchronously);
         }
 
         /// <summary>
-        /// Ends the claim. A claim released without ever publishing a fetch
-        /// hands its waiters a cancellation: nothing was read, and telling
-        /// them otherwise would report a refresh that never ran.
+        /// Ends the claim, handing its waiters whatever the fetch behind it
+        /// did. A claim released without ever publishing a fetch cancels
+        /// them: nothing was read, and telling them otherwise would report
+        /// a refresh that never ran.
         /// </summary>
         public void Release()
         {
             var claim = Interlocked.Exchange(ref _claim, null);
-            if (claim != null)
+            if (claim == null)
             {
-                claim.TrySetCanceled();
+                return;
             }
+
+            var fetch = Volatile.Read(ref claim.Fetch);
+            if (fetch == null)
+            {
+                claim.Waiters.TrySetCanceled();
+            }
+            else if (fetch.IsCompleted)
+            {
+                Settle(claim, fetch);
+            }
+
+            // else: the continuation PublishFetch attached settles them.
         }
 
         /// <summary>
@@ -129,26 +140,26 @@ namespace TaimisToolbench.Services
             Swap(null);
         }
 
-        private static void Settle(TaskCompletionSource<AccountSnapshot> claim, Task<AccountSnapshot> fetch)
+        private static void Settle(Claim claim, Task<AccountSnapshot> fetch)
         {
             if (fetch.IsFaulted)
             {
-                claim.TrySetException(fetch.Exception.InnerExceptions);
+                claim.Waiters.TrySetException(fetch.Exception.InnerExceptions);
 
                 // Marks the stored exception observed. Nothing waits on a
                 // claim no other caller joined, and an unobserved faulted
-                // task raises TaskScheduler.UnobservedTaskException when
-                // it is finalized. A waiter still gets the exception.
-                var observed = claim.Task.Exception;
+                // task raises TaskScheduler.UnobservedTaskException when it
+                // is finalized. A waiter still gets the exception.
+                var observed = claim.Waiters.Task.Exception;
                 _ = observed;
             }
             else if (fetch.IsCanceled)
             {
-                claim.TrySetCanceled();
+                claim.Waiters.TrySetCanceled();
             }
             else
             {
-                claim.TrySetResult(fetch.Result);
+                claim.Waiters.TrySetResult(fetch.Result);
             }
         }
 
@@ -157,6 +168,18 @@ namespace TaimisToolbench.Services
             var previous = Interlocked.Exchange(ref _cts, next);
             previous?.Cancel();
             previous?.Dispose();
+        }
+
+        /// <summary>
+        /// One refresh's hold on the slot: what waiters wait on, and the
+        /// fetch that settles them once it exists.
+        /// </summary>
+        private sealed class Claim
+        {
+            public readonly TaskCompletionSource<AccountSnapshot> Waiters =
+                new TaskCompletionSource<AccountSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public Task<AccountSnapshot> Fetch;
         }
     }
 }
