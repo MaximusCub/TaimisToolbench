@@ -38,9 +38,9 @@ namespace TaimisToolbench.Views.Rendering
         /// rowPanel, runs the row's own extraRelayout repositioning, then
         /// resizes the divider - in that order, matching every
         /// pre-extraction row builder's own closure exactly. extraRelayout
-        /// may be null for a row with nothing else to reposition (none of
-        /// today's five callers needs this, but a future flush-fit row with
-        /// only font-fixed content might).
+        /// may be null for a row with nothing else to reposition, which is
+        /// what the Used Materials row passes: every x on it is derived
+        /// from the render's own Amount band, not from the panel width.
         /// <para>
         /// The rule spans the whole row: every table's right-hand block is
         /// pinned one PlanRelayoutMath.TableRightMargin in from the panel

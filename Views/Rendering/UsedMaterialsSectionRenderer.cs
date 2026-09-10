@@ -46,13 +46,6 @@ namespace TaimisToolbench.Views.Rendering
             _getItemFacts = getItemFacts ?? throw new ArgumentNullException(nameof(getItemFacts));
         }
 
-        // Left x of the name column (past the row's tier-2 icon frame at
-        // x=8, plus an 8px gap), and the gap the ellipsis budget keeps
-        // between the name and the Amount column.
-        private const int IconX = 8;
-        private const int NameX = IconX + PlanContentHeightMath.RowIconFrameSize + 8;
-        private const int NameToQtyGap = 12;
-
         // Text anchor of the row's single reading line. The tier-2 resize
         // grew the icon frame 34 -> 42, moving its center down 4px; the
         // line keeps its pre-tier-2 offset from that center (9 -> 13).
@@ -62,16 +55,15 @@ namespace TaimisToolbench.Views.Rendering
 
         /// <summary>
         /// One-pass pre-scan, as every other plan table has: the widest
-        /// rendered "Nx" string, which is the Amount
-        /// column's reserved band and therefore the Item column's ellipsis
-        /// budget. Data-derived, so it is measured once here and reused by
-        /// every row's relayout closure rather than re-measured per resize
-        /// tick.
+        /// rendered "Nx" string, which is the Amount column's reserved band
+        /// and so where the Item column beside it starts. Data-derived, so
+        /// it is measured once here and reused by every row's relayout
+        /// closure rather than re-measured per resize tick.
         /// <para>
         /// The band is max(widest data, header label): the "Amount" header
-        /// right-aligns onto the same edge as the rows, and at the
+        /// shares the band's centre line with the rows, and at the
         /// ColumnHeader tier it is routinely wider than a short "12x", so
-        /// scanning data alone would let a name run under its own header.
+        /// scanning data alone would seat the word over nothing.
         /// </para>
         /// </summary>
         internal void Render(PlanSectionViewModel section, FlowPanel contentFlow, int panelWidth)
@@ -97,36 +89,29 @@ namespace TaimisToolbench.Views.Rendering
                 }
             }
 
-            // Item/Amount column header. Without it this is the one plan
-            // table with a right-hand column nothing names, leaving the
-            // reader to infer that a bare "12x" column is a quantity.
-            // Unconditional, like the Shopping List's and the two
-            // column-header tables', so it can never disagree with
-            // PlanContentHeightMath.SectionBodyHeight, which counts it the
-            // same way. No rightXForWidth: the Amount column is pinned to
-            // the panel edge, ColumnHeaderRowRenderer's own default.
-            // rightLabelXForWidth, though: the WORD centres on the
-            // quantities, not on the panel's right margin
-            // (JustifiedColumnTracks.CenteredOverContent).
+            // Amount/Item column header. Unconditional, like the Shopping
+            // List's and the two column-header tables', so it can never
+            // disagree with PlanContentHeightMath.SectionBodyHeight, which
+            // counts it the same way. Both words sit at a fixed x: the
+            // Amount band is the row's left inset and the Item column
+            // starts where that band ends, so neither moves with the panel
+            // and the width the closures are handed is unused.
+            int itemHeaderX = ColumnHeaderLabelMath.LabelX(
+                UsedMaterialsColumnMath.NameX(maxQtyWidth),
+                UsedMaterialsColumnMath.IconX(maxQtyWidth));
             ColumnHeaderRowRenderer.CreateColumnHeaderRow(
                 contentFlow, panelWidth,
-                "Item", ColumnHeaderLabelMath.LabelX(NameX, IconX),
-                "Amount", _sink,
-                onLeftClick: () => SortBy(PlanTableColumn.Item),
-                onRightClick: () => SortBy(PlanTableColumn.Amount),
-                leftSort: _sortState.DirectionFor(PlanTableColumn.Item),
-                rightSort: _sortState.DirectionFor(PlanTableColumn.Amount),
-                // The quantities pin to the table's own edge, so a header
-                // wider than the widest of them has nowhere to centre and
-                // right-aligns on that edge - the bound a room never yields.
-                rightLabelXForWidth: w => JustifiedColumnTracks.CenteredOverContentRightAligned(
-                    PlanRelayoutMath.PinnedRightEdge(w), maxQtyWidth, amountHeaderWidth,
-                    PlanRelayoutMath.TrailingColumnHeaderRoom(
-                        PlanRelayoutMath.PinnedRightEdge(w), maxQtyWidth, NameToQtyGap)),
-                // The Item column is everything left of the Amount band -
-                // the name's own ellipsis terms, with the gap split.
-                leftColumnEndForWidth: w => PlanRelayoutMath.HeaderSplitBeforeColumn(
-                    PlanRelayoutMath.PinnedRightEdge(w), maxQtyWidth, NameToQtyGap),
+                "Amount", UsedMaterialsColumnMath.AmountTextX(maxQtyWidth, amountHeaderWidth),
+                "Item", _sink,
+                onLeftClick: () => SortBy(PlanTableColumn.Amount),
+                onRightClick: () => SortBy(PlanTableColumn.Item),
+                leftSort: _sortState.DirectionFor(PlanTableColumn.Amount),
+                rightSort: _sortState.DirectionFor(PlanTableColumn.Item),
+                // rightLabelXForWidth, not the default: the Item word rules
+                // LEFT with its own icons, and the default would right-align
+                // it onto the panel's margin.
+                rightLabelXForWidth: w => itemHeaderX,
+                leftColumnEndForWidth: w => UsedMaterialsColumnMath.HeaderSplitX(maxQtyWidth),
                 rowsHeight: () => rows.Count * PlanContentHeightMath.UsedMaterialRowHeight);
 
             for (int i = 0; i < rows.Count; i++)
@@ -150,30 +135,32 @@ namespace TaimisToolbench.Views.Rendering
             const int rowHeight = PlanContentHeightMath.UsedMaterialRowHeight;
             var rowPanel = new ClippedPanel() { Size = new Point(panelWidth, rowHeight), Parent = parent };
 
-            int qtyRightEdge = PlanRelayoutMath.PinnedRightEdge(panelWidth);
             var font = UiFonts.Body;
 
             string qtyText = $"{row.Quantity}x";
             int qtyWidth = (int)System.Math.Ceiling(font.MeasureString(qtyText).Width);
 
-            // maxQtyWidth, not this row's own qtyWidth: the Amount column
-            // is a reserved band right-aligned on the pinned edge, so the
-            // name's budget stops at the band's LEFT edge. Budgeting
-            // against one row's short "1x" would let its name run under the
-            // column's widest value.
+            // maxQtyWidth, not this row's own qtyWidth: the Amount band is
+            // the whole column's, so a short "1x" row must open its icon on
+            // the same rule the widest row does.
+            int iconX = UsedMaterialsColumnMath.IconX(maxQtyWidth);
+            int nameX = UsedMaterialsColumnMath.NameX(maxQtyWidth);
             string fullName = row.Label ?? "";
 
             // Composed at HOVER time, not here: a plan restored from disk
             // fills its stat cache in the background (Q13), and a snapshot
             // taken now could never show what lands after it. It also
             // keeps the compose work off the render path.
+            //
+            // 0 trailing column and 0 gap: the Item column is the last one
+            // on the row, so its budget runs to the table's pinned edge.
             var nameHandle = IconNameRowHelpers.DrawIconAndName(
                 rowPanel, row.ItemId,
-                IconX, PlanContentHeightMath.IconRowIconY, fullName, font,
-                qtyRightEdge, maxQtyWidth, NameToQtyGap, NameX, RowTextY,
+                iconX, PlanContentHeightMath.IconRowIconY, fullName, font,
+                PlanRelayoutMath.PinnedRightEdge(panelWidth), 0, 0, nameX, RowTextY,
                 ItemIconTier.BagSidebar, _getItemFacts);
 
-            var qtyLabel = LabelHelpers.WithDescenderClearance(
+            LabelHelpers.WithDescenderClearance(
                 new Label()
                 {
                     Text = qtyText,
@@ -181,13 +168,15 @@ namespace TaimisToolbench.Views.Rendering
                     TextColor = new Color(200, 200, 200),
                     AutoSizeWidth = true,
                     AutoSizeHeight = true,
-                    Location = new Point(qtyRightEdge - qtyWidth, RowTextY),
+                    Location = new Point(
+                        UsedMaterialsColumnMath.AmountTextX(maxQtyWidth, qtyWidth), RowTextY),
                     Parent = rowPanel,
                 });
 
-            // Qty label position is a pure reposition (qtyWidth is
-            // font-only); the name is left untouched during drag ticks and
-            // only re-ellipsized at settle (RunReellipsis) to avoid a
+            // No extraRelayout: every x on this row is data-derived now, so
+            // a resize moves nothing but the row panel and its divider. The
+            // name is left untouched during drag ticks and only
+            // re-ellipsized at settle (RunReellipsis), to avoid a
             // MeasureString call per row per tick.
             //
             // IconRowDividerClearance, not 0: the row height absorbs the
@@ -197,18 +186,14 @@ namespace TaimisToolbench.Views.Rendering
             // the clearance where the old 36 did not.
             RowRelayoutHelpers.FinishRow(
                 rowPanel, panelWidth, rowHeight, isLast,
-                PlanContentHeightMath.IconRowDividerClearance, _sink,
-                w =>
-                {
-                    qtyLabel.Location = new Point(
-                        PlanRelayoutMath.PinnedRightEdge(w) - qtyWidth, RowTextY);
-                });
+                PlanContentHeightMath.IconRowDividerClearance, _sink, null);
+
             // The re-ellipsis no longer re-stamps anything: the tooltip
             // builder above reads the label's CURRENT text when the box is
             // drawn, so a resize that truncates or untruncates the name is
             // already reflected.
             _sink.AddReellipsis(w => IconNameRowHelpers.ReellipsizeName(
-                nameHandle, font, PlanRelayoutMath.PinnedRightEdge(w), maxQtyWidth, NameToQtyGap));
+                nameHandle, font, PlanRelayoutMath.PinnedRightEdge(w), 0, 0));
         }
     }
 }

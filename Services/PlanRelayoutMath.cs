@@ -97,8 +97,10 @@ namespace TaimisToolbench.Services
         /// The one rail every plan table's left-hand header word sits on:
         /// <see cref="ColumnHeaderLabelMath"/> applied to the icon gutter
         /// the tables open their rows with
-        /// (<see cref="ShoppingColumnMath.IconX"/>), which Used Materials
-        /// and Required Recipes duplicate as their own IconX/NameX pair.
+        /// (<see cref="ShoppingColumnMath.IconX"/>), which Required Recipes
+        /// duplicates as its own IconX/NameX pair. Used Materials opens
+        /// with an Amount column instead, so its icon rule is that band's
+        /// right edge (<see cref="UsedMaterialsColumnMath"/>).
         /// <para>
         /// A rail rather than each table's own answer because the Recipe
         /// Tree's grid differs from the tables stacked under it - a caret
