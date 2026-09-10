@@ -76,6 +76,7 @@ result.ItemMetadata[1].ItemId = 1
 result.ItemMetadata[1].Name = Karma Item
 result.ItemMetadata[1].Rarity = null
 result.MaterialOpportunityCost = null
+result.MissingRecipeSheetSources.count = 0
 result.MultiItemRoots = null
 result.NetSaleValue = 2550
 result.OwnedCurrencyAmounts = null

@@ -215,5 +215,13 @@ namespace TaimisToolbench.Models
         /// Informational only - see Models/VendorRequirementNotice.cs.
         /// </summary>
         public List<VendorRequirementNotice> VendorRequirementNotices { get; set; }
+
+        /// <summary>
+        /// See MissingRecipeSheetSourceCalculator.Apply, the sole
+        /// producer. Cosmetic display data only; null until the calculator
+        /// runs, empty (not null) when no missing recipe has a sheet any
+        /// vendor sells.
+        /// </summary>
+        public List<MissingRecipeSheetSource> MissingRecipeSheetSources { get; set; }
     }
 }

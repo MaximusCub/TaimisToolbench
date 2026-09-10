@@ -162,6 +162,11 @@ namespace TaimisToolbench.Services
                 return false;
             }
 
+            if (!NoNullEntries(result.MissingRecipeSheetSources, "MissingRecipeSheetSources", out reason))
+            {
+                return false;
+            }
+
             if (!NoNullEntries(result.SeasonalVendorTips, "SeasonalVendorTips", out reason))
             {
                 return false;
