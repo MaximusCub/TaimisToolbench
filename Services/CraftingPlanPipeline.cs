@@ -475,6 +475,7 @@ namespace TaimisToolbench.Services
             RecipeSheetSavingsCalculator.Apply(
                 result, learnedRecipeIds, prices, priceBasis, _offersForRecipeSheetItem,
                 _recipeSheetItemIdByRecipeId, effectiveCharacterDisciplines);
+            MissingRecipeSheetSourceCalculator.Apply(result, _offersForRecipeSheetItem);
             SeasonalVendorTipCalculator.Apply(
                 result, vendorOffers, prices, priceBasis, _activeFestivalNames());
 
@@ -800,6 +801,7 @@ namespace TaimisToolbench.Services
             RecipeSheetSavingsCalculator.Apply(
                 result, context.LearnedRecipeIds, context.Prices, context.PriceBasis, _offersForRecipeSheetItem,
                 _recipeSheetItemIdByRecipeId, context.CharacterDisciplines);
+            MissingRecipeSheetSourceCalculator.Apply(result, _offersForRecipeSheetItem);
             SeasonalVendorTipCalculator.Apply(
                 result, context.VendorOffers, context.Prices, context.PriceBasis, _activeFestivalNames());
             CompetencyOpportunityCalculator.Apply(result);
@@ -1551,11 +1553,13 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// The recipe sheets this plan's craft steps would need, so their
-        /// names, icons and rarities arrive in the one bulk metadata
-        /// fetch. Reads the SAME craft steps PlanResultBuilder derives the
-        /// required recipes from, so the section can never name a sheet
-        /// this fetch did not cover.
+        /// The recipe sheets this plan's craft steps would need, plus the
+        /// items those sheets are bartered for, so their names, icons and
+        /// rarities arrive in the one bulk metadata fetch. Reads the SAME
+        /// craft steps PlanResultBuilder derives the required recipes
+        /// from, so neither the Required Recipes section nor
+        /// MissingRecipeSheetSourceCalculator's note can name an item this
+        /// fetch did not cover.
         /// </summary>
         private void AddRecipeSheetItemIds(List<PlanStep> steps, HashSet<int> metadataIds)
         {
@@ -1570,6 +1574,43 @@ namespace TaimisToolbench.Services
                     _recipeSheetItemIdByRecipeId.TryGetValue(step.RecipeId, out int sheetItemId))
                 {
                     metadataIds.Add(sheetItemId);
+                    AddRecipeSheetBarterItemIds(sheetItemId, metadataIds);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Every item any vendor charges for one recipe sheet. The note
+        /// states a barter cost as "5x &lt;name&gt;", and
+        /// PlanViewModelBuilder drops the whole note rather than print a
+        /// placeholder for a name it does not hold.
+        /// </summary>
+        private void AddRecipeSheetBarterItemIds(int sheetItemId, HashSet<int> metadataIds)
+        {
+            if (_offersForRecipeSheetItem == null)
+            {
+                return;
+            }
+
+            var offers = _offersForRecipeSheetItem(sheetItemId);
+            if (offers == null)
+            {
+                return;
+            }
+
+            foreach (var offer in offers)
+            {
+                if (offer?.CostLines == null)
+                {
+                    continue;
+                }
+
+                foreach (var line in offer.CostLines)
+                {
+                    if (line != null && string.Equals(line.Type, "Item", StringComparison.Ordinal))
+                    {
+                        metadataIds.Add(line.Id);
+                    }
                 }
             }
         }

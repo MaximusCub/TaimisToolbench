@@ -79,7 +79,7 @@ namespace TaimisToolbench.Models
         /// <para>Derivation: docs/ARCHITECTURE.md section 12.</para>
         /// </summary>
         public const string SchemaShapeHash =
-            "33f17a2e8c331f5bd2bb7a4a91ce6e92e40cc5935ef83091e1e46a9f4e5ed07e";
+            "2d3ff22a03ef79d63ec1cbe18cb9accf8ea123b33d89df44a8db50dc9b248263";
 
         /// <summary>
         /// See <see cref="CurrentSchemaVersion"/>'s own doc comment for why

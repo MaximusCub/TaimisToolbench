@@ -1587,6 +1587,68 @@ namespace TaimisToolbench.Services
                 }
             }
 
+            // 3b. Where to buy the sheet for a recipe the plan needs and
+            // the account has not learned, alphabetical by sheet name. One
+            // row each: the coin part rides CoinValue so the view draws
+            // icons, and everything else is named in the label.
+            if (result.MissingRecipeSheetSources != null && result.MissingRecipeSheetSources.Count > 0)
+            {
+                var sourceRows = new List<(string Name, PlanRowViewModel Row)>(
+                    result.MissingRecipeSheetSources.Count);
+                foreach (var source in result.MissingRecipeSheetSources)
+                {
+                    string sheetName = ResolvedNameOrNull(source.SheetItemId, result.ItemMetadata);
+                    if (sheetName == null)
+                    {
+                        continue;
+                    }
+
+                    bool hasNonCoin = source.NonCoinCostLines != null &&
+                        source.NonCoinCostLines.Count > 0;
+                    if (!hasNonCoin && !source.CoinCost.HasValue)
+                    {
+                        // A restored plan can carry a row with neither half
+                        // of a price. The note's whole content is the price.
+                        continue;
+                    }
+
+                    string costText = hasNonCoin
+                        ? BuildSheetBarterDescription(
+                            source.NonCoinCostLines, result.ItemMetadata, result.CurrencyMetadata)
+                        : null;
+                    if (hasNonCoin && costText == null)
+                    {
+                        continue;
+                    }
+
+                    string where = source.OtherMerchantCount > 0
+                        ? $"{source.MerchantName} and {StatusText.Count(source.OtherMerchantCount, "other merchant")}"
+                        : source.MerchantName;
+
+                    string label = $"Missing recipe - buy {sheetName} from {where} for";
+                    if (costText != null)
+                    {
+                        label += " " + costText;
+                        if (source.CoinCost.HasValue)
+                        {
+                            label += " plus";
+                        }
+                    }
+
+                    sourceRows.Add((sheetName, new PlanRowViewModel
+                    {
+                        RowType = PlanRowType.NoteLine,
+                        Label = label,
+                        CoinValue = source.CoinCost ?? 0,
+                    }));
+                    noteEntryCount++;
+                }
+
+                section.Rows.AddRange(sourceRows
+                    .OrderBy(r => r.Name, StringComparer.Ordinal)
+                    .Select(r => r.Row));
+            }
+
             // 4. Seasonal vendor tip opportunities, alphabetical by item
             // name. Two physical rows per tip: a single combined label
             // ellipsizes at the panel edge and cuts exactly the clause
@@ -1804,6 +1866,55 @@ namespace TaimisToolbench.Services
                 }
 
                 parts.Add($"{line.Count}x {ResolveName(line.Id, metadata)}");
+            }
+
+            return string.Join(" + ", parts);
+        }
+
+        /// <summary>
+        /// The non-coin half of a recipe sheet's price as text: "5x Charm
+        /// of Skill", "350 Karma", or both joined by " + ". Null for a
+        /// null or empty list, and null when any item line's name is not
+        /// in metadata - an "Unknown Item" here would understate what the
+        /// player has to hand over, so the caller drops the note instead.
+        /// </summary>
+        private static string BuildSheetBarterDescription(
+            IReadOnlyList<CostLine> costLines,
+            IReadOnlyDictionary<int, ItemMetadata> metadata,
+            IReadOnlyDictionary<int, CurrencyMetadata> currencyMetadata)
+        {
+            if (costLines == null || costLines.Count == 0)
+            {
+                return null;
+            }
+
+            var parts = new List<string>(costLines.Count);
+            foreach (var line in costLines)
+            {
+                if (line == null)
+                {
+                    return null;
+                }
+
+                if (string.Equals(line.Type, "Item", StringComparison.Ordinal))
+                {
+                    string name = ResolvedNameOrNull(line.Id, metadata);
+                    if (name == null)
+                    {
+                        return null;
+                    }
+
+                    parts.Add($"{line.Count}x {name}");
+                }
+                else if (string.Equals(line.Type, "Currency", StringComparison.Ordinal))
+                {
+                    parts.Add(
+                        $"{line.Count} {CurrencyDisplayResolver.ResolveName(line.Id, currencyMetadata)}");
+                }
+                else
+                {
+                    return null;
+                }
             }
 
             return string.Join(" + ", parts);
