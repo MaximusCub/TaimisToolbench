@@ -109,7 +109,7 @@ Models/UsedMaterial.cs                                                          
 Models/VendorItemCostLine.cs                                                            42
 Models/VendorOffer.cs                                                                   86
 Models/VendorOfferDataset.cs                                                            15
-Module.cs                                                                               3440
+Module.cs                                                                               3525
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
@@ -392,7 +392,7 @@ Views/Rendering/StickyHeaderHost.cs                                             
 Views/Rendering/SummarySectionRenderer.cs                                               1332
 Views/Rendering/TextRowRenderer.cs                                                      36
 Views/Rendering/TooltipFacility.cs                                                      288
-Views/Rendering/TreeSectionController.cs                                                2386
+Views/Rendering/TreeSectionController.cs                                                2427
 Views/Rendering/TreeToolbarCommands.cs                                                  81
 Views/Rendering/UiFonts.cs                                                              250
 Views/Rendering/GlyphFont.cs                                                            123
@@ -588,7 +588,6 @@ tests/TaimisToolbench.Tests/Services/PlanViewModelBuilderStepSectionsTests.cs   
 tests/TaimisToolbench.Tests/Services/PlanViewModelBuilderSublabelTests.cs               264
 tests/TaimisToolbench.Tests/Services/PlanViewModelBuilderSummaryTests.cs                1321
 tests/TaimisToolbench.Tests/Services/RankerCascadeIntegrationTests.cs                   361
-tests/TaimisToolbench.Tests/Services/RankerGateStatusTests.cs                           281
 tests/TaimisToolbench.Tests/Services/RankerMaterialsCurrencyValueTests.cs               328
 tests/TaimisToolbench.Tests/Services/RankerPriorityCascadeTests.cs                      377
 tests/TaimisToolbench.Tests/Services/RankerPriorityOrderingTests.cs                     256
