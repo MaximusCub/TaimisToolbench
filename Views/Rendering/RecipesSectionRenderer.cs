@@ -38,12 +38,15 @@ namespace TaimisToolbench.Views.Rendering
     {
         private readonly ISectionRelayoutSink _sink;
         private readonly Func<int, ItemTooltipFacts> _getItemFacts;
+        private readonly Func<int, CurrencyTooltipFacts> _getCurrencyFacts;
 
         internal RecipesSectionRenderer(
-            ISectionRelayoutSink sink, Func<int, ItemTooltipFacts> getItemFacts)
+            ISectionRelayoutSink sink, Func<int, ItemTooltipFacts> getItemFacts,
+            Func<int, CurrencyTooltipFacts> getCurrencyFacts)
         {
             _sink = sink ?? throw new ArgumentNullException(nameof(sink));
             _getItemFacts = getItemFacts ?? throw new ArgumentNullException(nameof(getItemFacts));
+            _getCurrencyFacts = getCurrencyFacts ?? throw new ArgumentNullException(nameof(getCurrencyFacts));
         }
 
         // Left x of the name column (past the row's tier-2 framed icon at
@@ -339,7 +342,7 @@ namespace TaimisToolbench.Views.Rendering
                 {
                     sheetCostCell = CoinCurrencyRenderer.RenderValueCellRightAligned(
                         rowPanel, row.CoinValue, row.CurrencyCosts,
-                        edges.SheetCostRightEdge, NameY, font);
+                        edges.SheetCostRightEdge, NameY, font, _getCurrencyFacts);
                 }
 
                 if (!string.IsNullOrEmpty(row.SheetBarterText))

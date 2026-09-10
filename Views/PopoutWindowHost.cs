@@ -26,7 +26,8 @@ namespace TaimisToolbench.Views
         private readonly Func<AsyncTexture2D> _background;
         private readonly Func<Task<AccountSnapshot>> _refreshAsync;
         private readonly Func<AccountSnapshot> _getSnapshot;
-        private readonly Func<int, ItemStatBlock> _getItemStatBlock;
+        private readonly Func<int, ItemTooltipFacts> _getItemFacts;
+        private readonly Func<int, CurrencyTooltipFacts> _getCurrencyFacts;
         private readonly ModuleSettings _settings;
 
         private readonly Dictionary<PlanSectionType, PopoutSectionState> _states =
@@ -41,13 +42,16 @@ namespace TaimisToolbench.Views
             Func<AsyncTexture2D> background,
             Func<Task<AccountSnapshot>> refreshAsync,
             Func<AccountSnapshot> getSnapshot,
-            Func<int, ItemStatBlock> getItemStatBlock,
+            Func<int, ItemTooltipFacts> getItemFacts,
+            Func<int, CurrencyTooltipFacts> getCurrencyFacts,
             ModuleSettings settings)
         {
             _background = background ?? throw new ArgumentNullException(nameof(background));
             _refreshAsync = refreshAsync ?? throw new ArgumentNullException(nameof(refreshAsync));
             _getSnapshot = getSnapshot ?? throw new ArgumentNullException(nameof(getSnapshot));
-            _getItemStatBlock = getItemStatBlock;
+            _getItemFacts = getItemFacts ?? throw new ArgumentNullException(nameof(getItemFacts));
+            _getCurrencyFacts = getCurrencyFacts
+                ?? throw new ArgumentNullException(nameof(getCurrencyFacts));
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
             _states[PlanSectionType.ShoppingList] =
@@ -146,7 +150,8 @@ namespace TaimisToolbench.Views
                 "Module_Popout_" + sectionType.ToString(),
                 contentSize,
                 _refreshAsync,
-                _getItemStatBlock,
+                _getItemFacts,
+                _getCurrencyFacts,
                 () => _settings.GetClampedPopoutOpacityPercent(sectionType),
                 percent => _settings.SetPopoutOpacityPercent(sectionType, percent));
 

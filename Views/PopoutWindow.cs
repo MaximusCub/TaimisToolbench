@@ -30,7 +30,8 @@ namespace TaimisToolbench.Views
 
         private readonly PopoutSectionState _state;
         private readonly Func<Task<AccountSnapshot>> _refreshAsync;
-        private readonly Func<int, ItemStatBlock> _getItemStatBlock;
+        private readonly Func<int, ItemTooltipFacts> _getItemFacts;
+        private readonly Func<int, CurrencyTooltipFacts> _getCurrencyFacts;
         private readonly Func<int> _opacityPercent;
         private readonly Action<int> _setOpacityPercent;
         private readonly Point _minWindowSize;
@@ -58,14 +59,17 @@ namespace TaimisToolbench.Views
             string windowId,
             Point contentSize,
             Func<Task<AccountSnapshot>> refreshAsync,
-            Func<int, ItemStatBlock> getItemStatBlock,
+            Func<int, ItemTooltipFacts> getItemFacts,
+            Func<int, CurrencyTooltipFacts> getCurrencyFacts,
             Func<int> opacityPercent,
             Action<int> setOpacityPercent)
             : base(background, contentSize.X, contentSize.Y)
         {
             _state = state ?? throw new ArgumentNullException(nameof(state));
             _refreshAsync = refreshAsync ?? throw new ArgumentNullException(nameof(refreshAsync));
-            _getItemStatBlock = getItemStatBlock;
+            _getItemFacts = getItemFacts ?? throw new ArgumentNullException(nameof(getItemFacts));
+            _getCurrencyFacts = getCurrencyFacts
+                ?? throw new ArgumentNullException(nameof(getCurrencyFacts));
             _opacityPercent = opacityPercent ?? throw new ArgumentNullException(nameof(opacityPercent));
             _setOpacityPercent = setOpacityPercent ?? throw new ArgumentNullException(nameof(setOpacityPercent));
 
@@ -173,7 +177,7 @@ namespace TaimisToolbench.Views
 
             int width = TableWidth();
             _table = new PopoutTable(
-                _state, this, _state.Sort, OnSortChanged, _getItemStatBlock)
+                _state, this, _state.Sort, OnSortChanged, _getItemFacts, _getCurrencyFacts)
                 .Build(_contentPanel, ContentRegion.Width);
 
             _laidOutWidth = width;

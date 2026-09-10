@@ -5535,7 +5535,7 @@ namespace TaimisToolbench.Views
                     Rows = visibleRows,
                     IsDefaultExpanded = section.IsDefaultExpanded,
                 };
-                new RecipesSectionRenderer(this, ItemFactsFor)
+                new RecipesSectionRenderer(this, ItemFactsFor, CurrencyFactsFor)
                     .Render(filteredSection, contentFlow, panelWidth);
             }
 

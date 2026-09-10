@@ -1098,7 +1098,11 @@ namespace TaimisToolbench
                 () => new AsyncTexture2D(ContentService.Textures.Pixel),
                 UserRefreshAsync,
                 () => _currentSnapshot,
-                itemMetadataService.GetCachedStatBlock,
+                // The Crafting Plan tab's own resolvers, not a second pair
+                // built here: a popout is a picture of one of its tables,
+                // so a row must hover identically in both.
+                _craftingContent.ItemFactsFor,
+                _craftingContent.CurrencyFactsFor,
                 _settings);
 
             _settingsContent = new SettingsTabContent(

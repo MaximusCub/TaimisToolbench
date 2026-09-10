@@ -37,20 +37,24 @@ namespace TaimisToolbench.Views
         private readonly ISectionRelayoutSink _sink;
         private readonly TableSortState<PlanTableColumn> _sortState;
         private readonly Action _onSortChanged;
-        private readonly Func<int, ItemStatBlock> _getItemStatBlock;
+        private readonly Func<int, ItemTooltipFacts> _getItemFacts;
+        private readonly Func<int, CurrencyTooltipFacts> _getCurrencyFacts;
 
         internal PopoutTable(
             PopoutSectionState state,
             ISectionRelayoutSink sink,
             TableSortState<PlanTableColumn> sortState,
             Action onSortChanged,
-            Func<int, ItemStatBlock> getItemStatBlock)
+            Func<int, ItemTooltipFacts> getItemFacts,
+            Func<int, CurrencyTooltipFacts> getCurrencyFacts)
         {
             _state = state ?? throw new ArgumentNullException(nameof(state));
             _sink = sink ?? throw new ArgumentNullException(nameof(sink));
             _sortState = sortState ?? throw new ArgumentNullException(nameof(sortState));
             _onSortChanged = onSortChanged ?? throw new ArgumentNullException(nameof(onSortChanged));
-            _getItemStatBlock = getItemStatBlock;
+            _getItemFacts = getItemFacts ?? throw new ArgumentNullException(nameof(getItemFacts));
+            _getCurrencyFacts = getCurrencyFacts
+                ?? throw new ArgumentNullException(nameof(getCurrencyFacts));
         }
 
         /// <summary>
@@ -131,12 +135,13 @@ namespace TaimisToolbench.Views
 
             if (_state.SectionType == PlanSectionType.CraftingSteps)
             {
-                new CraftStepsSectionRenderer(_sink, _getItemStatBlock)
+                new CraftStepsSectionRenderer(_sink, _getItemFacts)
                     .Render(section, tableFlow, tableWidth);
                 return;
             }
 
-            new ShoppingListSectionRenderer(_sink, _sortState, _onSortChanged, _getItemStatBlock)
+            new ShoppingListSectionRenderer(
+                _sink, _sortState, _onSortChanged, _getCurrencyFacts, _getItemFacts)
                 .Render(section, tableFlow, tableWidth);
         }
 
