@@ -1747,6 +1747,8 @@ namespace TaimisToolbench
 
             Gw2ApiManager.SubtokenUpdated += OnSubtokenUpdated;
 
+            ReportUnapprovedApiPermissions();
+
             if (_apiReady.IsReady())
             {
                 await RefreshSnapshotInBackgroundAsync();
@@ -2248,6 +2250,60 @@ namespace TaimisToolbench
             }
 
             return snapshot;
+        }
+
+        /// <summary>
+        /// Says once, at load, which declared API permissions the account
+        /// never approved - see ApiPermissionGap for why that happens and
+        /// why it does not resolve itself. Gw2ApiManager.Permissions is the
+        /// approved list and is populated with no subtoken, unlike
+        /// HasPermissions, so this can run before the player is in world.
+        /// <para>
+        /// Log tab and status line only. A missing optional permission
+        /// turns a feature off; it does not warrant interrupting anybody.
+        /// </para>
+        /// </summary>
+        private void ReportUnapprovedApiPermissions()
+        {
+            try
+            {
+                var declared = ModuleParameters?.Manifest?.ApiPermissions;
+                if (declared == null)
+                {
+                    return;
+                }
+
+                var declaredNames = new List<string>();
+                foreach (var permission in declared.Keys)
+                {
+                    declaredNames.Add(NameOfPermission(permission));
+                }
+
+                var approvedNames = new List<string>();
+                foreach (var permission in Gw2ApiManager.Permissions ?? new List<Gw2Sharp.WebApi.V2.Models.TokenPermission>())
+                {
+                    approvedNames.Add(NameOfPermission(permission));
+                }
+
+                var unapproved = ApiPermissionGap.Unapproved(declaredNames, approvedNames);
+
+                if (unapproved.Count == 0)
+                {
+                    return;
+                }
+
+                ModuleLog.Shared.Write(ModuleLogLevel.Warn, "api", ApiPermissionGap.Compose(unapproved));
+                SaveStatusThreadSafe(StatusText.Stamp(ApiPermissionGap.ComposeStatus(unapproved), DateTime.Now));
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Could not compare declared API permissions against approved ones");
+            }
+        }
+
+        private static string NameOfPermission(Gw2Sharp.WebApi.V2.Models.TokenPermission permission)
+        {
+            return permission.ToString().ToLowerInvariant();
         }
 
         /// <summary>
