@@ -258,6 +258,16 @@ namespace TaimisToolbench
         // class so its orderings are testable - see PlanRefreshGate.
         private PlanRefreshGate _planRefreshGate;
 
+        // Whether Blish has granted usable API access. Every permission
+        // probe in this class goes through it so a Generate press waiting
+        // for the subtoken is released by whichever part of the module
+        // notices it first - see ApiReadySignal.
+        private ApiReadySignal _apiReady;
+
+        // When LoadAsync ran, in UTC. Bounds how long a Generate press
+        // waits for the subtoken - see SnapshotRefreshPolicy.ApiWaitBudget.
+        private DateTime _loadedAtUtc;
+
         // Cancels the background /v2/build lookup and the corpus probe
         // behind it - both retry/run across several seconds and hold
         // _httpClient, which Unload disposes.
@@ -465,9 +475,10 @@ namespace TaimisToolbench
             _planHistoryBlobStore = new PlanHistoryBlobStore(dataDir, onStoreError);
             _planStore = new PlanStore(dataDir, onStoreError, onStoreInfo);
             _snapshotService = new Gw2AccountSnapshotService(Gw2ApiManager);
+            _apiReady = new ApiReadySignal(_snapshotService.HasRequiredPermissions);
             _planRefreshGate = new PlanRefreshGate(
                 _refreshSlot,
-                _snapshotService.HasRequiredPermissions,
+                _apiReady,
                 IsInRefreshFailureBackoff,
                 FetchForPlanAsync);
             _lastStatus = _statusStore.Load();
@@ -1682,6 +1693,8 @@ namespace TaimisToolbench
 
         protected override async Task LoadAsync()
         {
+            _loadedAtUtc = DateTime.UtcNow;
+
             // A disk-restored snapshot routes through the same drain and
             // commit gate as a network refresh, so a Clear Cache racing
             // this load composes exactly like it does against a fetch.
@@ -1739,7 +1752,7 @@ namespace TaimisToolbench
 
             Gw2ApiManager.SubtokenUpdated += OnSubtokenUpdated;
 
-            if (_snapshotService.HasRequiredPermissions())
+            if (_apiReady.IsReady())
             {
                 await RefreshSnapshotInBackgroundAsync();
             }
@@ -1933,7 +1946,7 @@ namespace TaimisToolbench
                         out _sinceFirstLoadGateCheck)
                     && FirstLoadSnapshotGate.ShouldRefreshNow(
                         hasCachedSnapshot: false,
-                        apiReady: _snapshotService.HasRequiredPermissions(),
+                        apiReady: _apiReady.IsReady(),
                         alreadyAttempted: _firstLoadRefreshAttempted,
                         refreshInProgress: false,
                         inFailureBackoff: IsInRefreshFailureBackoff()))
@@ -1956,7 +1969,7 @@ namespace TaimisToolbench
                 return;
             }
 
-            if (!_snapshotService.HasRequiredPermissions())
+            if (!_apiReady.IsReady())
             {
                 return;
             }
@@ -2112,7 +2125,7 @@ namespace TaimisToolbench
 
         private void OnSubtokenUpdated(object sender, ValueEventArgs<IEnumerable<Gw2Sharp.WebApi.V2.Models.TokenPermission>> e)
         {
-            if (_snapshotService.HasRequiredPermissions())
+            if (_apiReady.IsReady())
             {
                 _ = RefreshSnapshotInBackgroundAsync();
             }
@@ -2276,11 +2289,11 @@ namespace TaimisToolbench
         /// used before this call existed.
         /// </para>
         /// <para>
-        /// Data newer than SnapshotRefreshPolicy.GenerateFreshness is
-        /// solved against as it stands. That skip reports no failure: a
-        /// snapshot the module chose not to refresh is not a snapshot it
-        /// could not refresh, and the Crafting Plan tab's dialog keys off
-        /// the difference.
+        /// Only an attempt that did not work is a failure. A snapshot the
+        /// module chose not to refresh, or had nothing to refresh it with,
+        /// is not one it could not refresh, and the Crafting Plan tab's
+        /// dialog keys off the difference. So refresh.Failed is set in
+        /// these catch blocks and nowhere else.
         /// </para>
         /// </summary>
         private async Task<PlanAccountData> RefreshForPlanAsync(
@@ -2290,25 +2303,31 @@ namespace TaimisToolbench
 
             try
             {
+                var utcNow = DateTime.UtcNow;
                 var outcome = await _planRefreshGate.RunAsync(
-                    _currentSnapshot?.CapturedAt, DateTime.UtcNow);
+                    _currentSnapshot?.CapturedAt,
+                    utcNow,
+                    SnapshotRefreshPolicy.ApiWaitBudget(_loadedAtUtc, utcNow),
+                    ct);
 
                 switch (outcome)
                 {
                     case PlanRefreshOutcome.NoApiAccess:
+                        // The press already waited out the startup grace,
+                        // so this is a key the user has to add or widen in
+                        // Blish rather than one still on its way.
+                        SaveStatusThreadSafe(StatusText.Stamp(StatusText.NoApiAccess, DateTime.Now));
+                        ModuleLog.Shared.Write(ModuleLogLevel.Info, "snapshot",
+                            "Plan solved without a refresh - no usable GW2 API access");
+                        break;
                     case PlanRefreshOutcome.SkippedInBackoff:
-                        // A refresh failed inside the last minute, so this
-                        // press would spend a fresh account fetch to fail
-                        // the same way. The background path has waited this
-                        // window out since it was written; the plan path
-                        // did not, which is what made every Generate press
-                        // during an outage a new attempt.
-                        //
-                        // No status line is written here. The failure that
-                        // opened the window already stamped one, and a
-                        // second stamp would date an attempt that did not
-                        // happen.
-                        MarkPlanRefreshFailed(refresh, null);
+                        // No status line. The failure that opened the
+                        // window already stamped one, and a second stamp
+                        // would date an attempt that did not happen.
+                        Logger.Debug("Skipping snapshot refresh for a plan - within backoff window after a prior failure");
+                        break;
+                    case PlanRefreshOutcome.LostTheClaim:
+                        Logger.Debug("Snapshot refresh for a plan found the slot taken and then free, twice");
                         break;
                 }
             }
@@ -2319,9 +2338,11 @@ namespace TaimisToolbench
                     throw;
                 }
 
-                // Clear Cache cancelled the fetch through the refresh
-                // slot. It writes its own status line, and a "Refresh
-                // failed" stamped over that would name the wrong cause.
+                // Either Clear Cache cancelled the fetch through the
+                // refresh slot, or the claim this press was waiting on
+                // ended without running one. Clear Cache writes its own
+                // status line, and a "Refresh failed" stamped over that
+                // would name the wrong cause.
                 Logger.Debug("Snapshot refresh for a plan was cancelled");
                 MarkPlanRefreshFailed(refresh, null);
             }
@@ -2539,7 +2560,7 @@ namespace TaimisToolbench
                 return;
             }
 
-            if (!_snapshotService.HasRequiredPermissions())
+            if (!_apiReady.IsReady())
             {
                 return;
             }

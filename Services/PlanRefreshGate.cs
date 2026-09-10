@@ -20,13 +20,13 @@ namespace TaimisToolbench.Services
     internal sealed class PlanRefreshGate
     {
         private readonly SnapshotRefreshSlot _slot;
-        private readonly Func<bool> _apiReady;
+        private readonly ApiReadySignal _apiReady;
         private readonly Func<bool> _inFailureBackoff;
         private readonly Func<CancellationToken, Task<AccountSnapshot>> _fetch;
 
         public PlanRefreshGate(
             SnapshotRefreshSlot slot,
-            Func<bool> apiReady,
+            ApiReadySignal apiReady,
             Func<bool> inFailureBackoff,
             Func<CancellationToken, Task<AccountSnapshot>> fetch)
         {
@@ -60,17 +60,22 @@ namespace TaimisToolbench.Services
         /// Runs the refresh this press should run, and names what it did.
         /// A fetch that throws throws out of here: the caller owns what a
         /// failed attempt says to the user.
+        /// <para>
+        /// Freshness is settled before API access, so a press that wants no
+        /// fetch waits for no subtoken.
+        /// </para>
         /// </summary>
-        public async Task<PlanRefreshOutcome> RunAsync(DateTime? capturedAtUtc, DateTime utcNow)
+        public async Task<PlanRefreshOutcome> RunAsync(
+            DateTime? capturedAtUtc, DateTime utcNow, TimeSpan apiWaitBudget, CancellationToken ct)
         {
-            if (!_apiReady())
-            {
-                return PlanRefreshOutcome.NoApiAccess;
-            }
-
             if (!SnapshotRefreshPolicy.ShouldRefreshOnGenerate(capturedAtUtc, utcNow))
             {
                 return PlanRefreshOutcome.UsedLoadedData;
+            }
+
+            if (!await _apiReady.WaitAsync(apiWaitBudget, ct))
+            {
+                return PlanRefreshOutcome.NoApiAccess;
             }
 
             // Two passes, not a spin. The second only runs when another

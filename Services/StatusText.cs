@@ -527,6 +527,14 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// The account was not refreshed because the module has no GW2 API
+        /// access it can use. Says NOT REFRESHED, not failed: nothing was
+        /// attempted, and the user has to add or widen a key in Blish
+        /// before anything can be.
+        /// </summary>
+        public const string NoApiAccess = "Not refreshed: no GW2 API access";
+
+        /// <summary>
         /// Cause text for a failed Refresh Now (Views/MainView.cs), keyed
         /// by SnapshotFailureClassifier's classification - the fix,
         /// measured in game, for the "Refresh Failed" dead end (at CHARACTER

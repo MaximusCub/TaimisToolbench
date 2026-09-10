@@ -22,7 +22,7 @@ namespace TaimisToolbench.Tests.Services
             int fetches = 0;
             var gate = Build(fetches: () => fetches++);
 
-            var outcome = await gate.RunAsync(Now.AddSeconds(-30), Now);
+            var outcome = await gate.RunAsync(Now.AddSeconds(-30), Now, TimeSpan.Zero, CancellationToken.None);
 
             Assert.Equal(PlanRefreshOutcome.UsedLoadedData, outcome);
             Assert.Equal(0, fetches);
@@ -34,7 +34,7 @@ namespace TaimisToolbench.Tests.Services
             int fetches = 0;
             var gate = Build(fetches: () => fetches++);
 
-            var outcome = await gate.RunAsync(Now.AddSeconds(-90), Now);
+            var outcome = await gate.RunAsync(Now.AddSeconds(-90), Now, TimeSpan.Zero, CancellationToken.None);
 
             Assert.Equal(PlanRefreshOutcome.Refreshed, outcome);
             Assert.Equal(1, fetches);
@@ -46,7 +46,7 @@ namespace TaimisToolbench.Tests.Services
             int fetches = 0;
             var gate = Build(apiReady: false, fetches: () => fetches++);
 
-            var outcome = await gate.RunAsync(null, Now);
+            var outcome = await gate.RunAsync(null, Now, TimeSpan.Zero, CancellationToken.None);
 
             Assert.Equal(PlanRefreshOutcome.NoApiAccess, outcome);
             Assert.Equal(0, fetches);
@@ -58,7 +58,7 @@ namespace TaimisToolbench.Tests.Services
             int fetches = 0;
             var gate = Build(inFailureBackoff: true, fetches: () => fetches++);
 
-            var outcome = await gate.RunAsync(null, Now);
+            var outcome = await gate.RunAsync(null, Now, TimeSpan.Zero, CancellationToken.None);
 
             Assert.Equal(PlanRefreshOutcome.SkippedInBackoff, outcome);
             Assert.Equal(0, fetches);
@@ -75,7 +75,7 @@ namespace TaimisToolbench.Tests.Services
             int fetches = 0;
             var gate = Build(slot: slot, fetches: () => fetches++);
 
-            var press = gate.RunAsync(null, Now);
+            var press = gate.RunAsync(null, Now, TimeSpan.Zero, CancellationToken.None);
             Assert.False(press.IsCompleted);
 
             running.SetResult(new AccountSnapshot { CapturedAt = Now });
@@ -100,7 +100,7 @@ namespace TaimisToolbench.Tests.Services
             int fetches = 0;
             var gate = Build(slot: slot, fetches: () => fetches++);
 
-            var press = gate.RunAsync(null, Now);
+            var press = gate.RunAsync(null, Now, TimeSpan.Zero, CancellationToken.None);
             Assert.False(press.IsCompleted);
 
             // What the winning claimant does next, one method call later.
@@ -121,7 +121,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.True(slot.TryClaim());
             var gate = Build(slot: slot);
 
-            var press = gate.RunAsync(null, Now);
+            var press = gate.RunAsync(null, Now, TimeSpan.Zero, CancellationToken.None);
 
             var winning = new TaskCompletionSource<AccountSnapshot>();
             slot.PublishFetch(winning.Task);
@@ -135,11 +135,54 @@ namespace TaimisToolbench.Tests.Services
         {
             var gate = new PlanRefreshGate(
                 new SnapshotRefreshSlot(),
-                () => true,
+                new ApiReadySignal(() => true),
                 () => false,
                 ct => { throw new InvalidOperationException("the account read failed"); });
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => gate.RunAsync(null, Now));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => gate.RunAsync(null, Now, TimeSpan.Zero, CancellationToken.None));
+        }
+
+        /// <summary>
+        /// What the owner hit. Blish had not granted the subtoken nine
+        /// seconds into the session, so the press found no API access. It
+        /// now waits out what is left of the startup grace instead of
+        /// giving up on one reading.
+        /// </summary>
+        [Fact]
+        public async Task A_press_during_startup_waits_for_the_subtoken_and_then_fetches()
+        {
+            bool granted = false;
+            int fetches = 0;
+            var signal = new ApiReadySignal(() => granted);
+            var gate = new PlanRefreshGate(
+                new SnapshotRefreshSlot(),
+                signal,
+                () => false,
+                ct =>
+                {
+                    fetches++;
+                    return Task.FromResult(new AccountSnapshot { CapturedAt = Now });
+                });
+
+            var press = gate.RunAsync(null, Now, TimeSpan.FromMinutes(1), CancellationToken.None);
+            Assert.False(press.IsCompleted);
+
+            // What Module.Update does on the tick Blish grants the token.
+            granted = true;
+            Assert.True(signal.IsReady());
+
+            Assert.Equal(PlanRefreshOutcome.Refreshed, await press);
+            Assert.Equal(1, fetches);
+        }
+
+        [Fact]
+        public async Task A_press_on_fresh_data_never_waits_for_the_subtoken()
+        {
+            var gate = Build(apiReady: false);
+
+            var outcome = await gate.RunAsync(Now.AddSeconds(-30), Now, TimeSpan.FromDays(1), CancellationToken.None);
+
+            Assert.Equal(PlanRefreshOutcome.UsedLoadedData, outcome);
         }
 
         private static PlanRefreshGate Build(
@@ -150,7 +193,7 @@ namespace TaimisToolbench.Tests.Services
         {
             return new PlanRefreshGate(
                 slot ?? new SnapshotRefreshSlot(),
-                () => apiReady,
+                new ApiReadySignal(() => apiReady),
                 () => inFailureBackoff,
                 ct =>
                 {

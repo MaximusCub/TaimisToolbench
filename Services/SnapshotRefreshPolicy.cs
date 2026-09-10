@@ -48,6 +48,38 @@ namespace TaimisToolbench.Services
         public static readonly TimeSpan GenerateFreshness = TimeSpan.FromSeconds(60);
 
         /// <summary>
+        /// How long after the module loads a Generate Plan press will wait
+        /// for Blish to grant the module API access before solving without
+        /// it.
+        /// <para>
+        /// Thirty seconds because the one session on record took 29 for the
+        /// subtoken to arrive (module log, 2026-09-10 03:02 UTC). It is a
+        /// window since load, not a per-press budget, so a press five
+        /// minutes into a session with no usable key waits for nothing.
+        /// After it, an absent subtoken is a setup state rather than a slow
+        /// start, and the module says so instead of waiting again.
+        /// </para>
+        /// </summary>
+        public static readonly TimeSpan ApiReadyGrace = TimeSpan.FromSeconds(30);
+
+        /// <summary>
+        /// What is left of <see cref="ApiReadyGrace"/>, never negative. A
+        /// load stamp in the future yields the whole grace rather than a
+        /// wait longer than it.
+        /// </summary>
+        public static TimeSpan ApiWaitBudget(DateTime loadedAtUtc, DateTime utcNow)
+        {
+            var sinceLoad = utcNow - loadedAtUtc;
+            if (sinceLoad < TimeSpan.Zero)
+            {
+                return ApiReadyGrace;
+            }
+
+            var left = ApiReadyGrace - sinceLoad;
+            return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+        }
+
+        /// <summary>
         /// Whether opening the tab should start a refresh. True when there
         /// is no snapshot at all. False for a snapshot stamped in the
         /// future, which is clock skew rather than freshness the caller can
