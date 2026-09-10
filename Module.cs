@@ -254,11 +254,15 @@ namespace TaimisToolbench
         // comment for the race that shape allowed.
         private readonly SnapshotRefreshSlot _refreshSlot = new SnapshotRefreshSlot();
 
-        // The fetch a later caller joins instead of starting its own. Only
-        // a caller holding _refreshSlot ever publishes one, so at most one
-        // is live; a joiner can still read one that has just finished,
-        // which costs it an already-completed await.
-        private Task<AccountSnapshot> _snapshotFetchInFlight;
+        // The refresh half of a Generate Plan press, held apart from this
+        // class so its orderings are testable - see PlanRefreshGate.
+        private PlanRefreshGate _planRefreshGate;
+
+        // Whether Blish has granted usable API access. Every permission
+        // probe in this class goes through it so a Generate press waiting
+        // for the subtoken is released by whichever part of the module
+        // notices it first - see ApiReadySignal.
+        private ApiReadySignal _apiReady;
 
         // Cancels the background /v2/build lookup and the corpus probe
         // behind it - both retry/run across several seconds and hold
@@ -477,6 +481,13 @@ namespace TaimisToolbench
             _planHistoryBlobStore = new PlanHistoryBlobStore(dataDir, onStoreError);
             _planStore = new PlanStore(dataDir, onStoreError, onStoreInfo);
             _snapshotService = new Gw2AccountSnapshotService(Gw2ApiManager);
+            _apiReady = new ApiReadySignal(_snapshotService.HasRequiredPermissions);
+            _planRefreshGate = new PlanRefreshGate(
+                _refreshSlot,
+                _apiReady,
+                IsPlayerInWorld,
+                IsInRefreshFailureBackoff,
+                FetchForPlanAsync);
             _lastStatus = _statusStore.Load();
 
             _httpClient = new HttpClient();
@@ -1752,7 +1763,9 @@ namespace TaimisToolbench
 
             Gw2ApiManager.SubtokenUpdated += OnSubtokenUpdated;
 
-            if (_snapshotService.HasRequiredPermissions())
+            ReportUnapprovedApiPermissions();
+
+            if (_apiReady.IsReady())
             {
                 await RefreshSnapshotInBackgroundAsync();
             }
@@ -1948,7 +1961,7 @@ namespace TaimisToolbench
                         out _sinceFirstLoadGateCheck)
                     && FirstLoadSnapshotGate.ShouldRefreshNow(
                         hasCachedSnapshot: false,
-                        apiReady: _snapshotService.HasRequiredPermissions(),
+                        apiReady: _apiReady.IsReady(),
                         alreadyAttempted: _firstLoadRefreshAttempted,
                         refreshInProgress: false,
                         inFailureBackoff: IsInRefreshFailureBackoff()))
@@ -1971,7 +1984,7 @@ namespace TaimisToolbench
                 return;
             }
 
-            if (!_snapshotService.HasRequiredPermissions())
+            if (!_apiReady.IsReady())
             {
                 return;
             }
@@ -2133,7 +2146,7 @@ namespace TaimisToolbench
 
         private void OnSubtokenUpdated(object sender, ValueEventArgs<IEnumerable<Gw2Sharp.WebApi.V2.Models.TokenPermission>> e)
         {
-            if (_snapshotService.HasRequiredPermissions())
+            if (_apiReady.IsReady())
             {
                 _ = RefreshSnapshotInBackgroundAsync();
             }
@@ -2251,24 +2264,117 @@ namespace TaimisToolbench
         private async Task<AccountSnapshot> TrackedFetchAsync(CancellationToken ct)
         {
             var fetch = FetchAndSaveSnapshotAsync(ct);
-            Volatile.Write(ref _snapshotFetchInFlight, fetch);
+            _refreshSlot.PublishFetch(fetch);
+
+            var snapshot = await fetch;
+            if (snapshot != null)
+            {
+                _refreshFailures.RecordSuccess();
+                Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
+            }
+
+            return snapshot;
+        }
+
+        /// <summary>
+        /// Says once, at load, which declared API permissions the account
+        /// never approved - see ApiPermissionGap for why that happens and
+        /// why it does not resolve itself. Gw2ApiManager.Permissions is the
+        /// approved list and is populated with no subtoken, unlike
+        /// HasPermissions, so this can run before the player is in world.
+        /// <para>
+        /// Log tab and status line only. A missing optional permission
+        /// turns a feature off; it does not warrant interrupting anybody.
+        /// </para>
+        /// </summary>
+        private void ReportUnapprovedApiPermissions()
+        {
             try
             {
-                var snapshot = await fetch;
-                if (snapshot != null)
+                var declared = ModuleParameters?.Manifest?.ApiPermissions;
+                if (declared == null)
                 {
-                    _refreshFailures.RecordSuccess();
+                    return;
                 }
 
-                return snapshot;
+                var declaredNames = new List<string>();
+                foreach (var permission in declared.Keys)
+                {
+                    declaredNames.Add(NameOfPermission(permission));
+                }
+
+                var approvedNames = new List<string>();
+                foreach (var permission in Gw2ApiManager.Permissions ?? new List<Gw2Sharp.WebApi.V2.Models.TokenPermission>())
+                {
+                    approvedNames.Add(NameOfPermission(permission));
+                }
+
+                var unapproved = ApiPermissionGap.Unapproved(declaredNames, approvedNames);
+
+                if (unapproved.Count == 0)
+                {
+                    return;
+                }
+
+                ModuleLog.Shared.Write(ModuleLogLevel.Warn, "api", ApiPermissionGap.Compose(unapproved));
+                SaveStatusThreadSafe(StatusText.Stamp(ApiPermissionGap.ComposeStatus(unapproved), DateTime.Now));
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Could not compare declared API permissions against approved ones");
+            }
+        }
+
+        private static string NameOfPermission(Gw2Sharp.WebApi.V2.Models.TokenPermission permission)
+        {
+            return permission.ToString().ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Whether MumbleLink reports a character, which is what decides
+        /// whether Blish can hand this module a subtoken at all - see
+        /// SnapshotRefreshPolicy.SubtokenHandover.
+        /// </summary>
+        private bool IsPlayerInWorld()
+        {
+            try
+            {
+                var mumble = GameService.Gw2Mumble;
+                return mumble != null &&
+                    mumble.PlayerCharacter != null &&
+                    !string.IsNullOrEmpty(mumble.PlayerCharacter.Name);
+            }
+            catch (Exception ex)
+            {
+                // Unknown reads as in world. The only cost is one press
+                // waiting out the handover budget for nothing, against
+                // telling a player who is already signed in to sign in.
+                ModuleLog.Shared.Write(ModuleLogLevel.Debug, "snapshot",
+                    $"Gw2Mumble unavailable, cannot tell whether a character is in the world: {ex.GetType().Name} - {ex.Message}");
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// The fetch <see cref="_planRefreshGate"/> runs when a Generate
+        /// press is the caller that claimed the slot.
+        /// </summary>
+        private async Task<AccountSnapshot> FetchForPlanAsync(CancellationToken ct)
+        {
+            _backgroundRefreshInFlight = true;
+            try
+            {
+                var fetched = await TrackedFetchAsync(ct);
+                if (fetched != null)
+                {
+                    SaveStatusThreadSafe(StatusText.Stamp("Updated", fetched.CapturedAt.ToLocalTime()));
+                }
+
+                return fetched;
             }
             finally
             {
-                // Only clears the field when it still holds THIS fetch, so
-                // a later refresh's publication survives this one's exit.
-                // Discarded because the return is a Task: without it the
-                // compiler reads the call as a forgotten await.
-                _ = Interlocked.CompareExchange(ref _snapshotFetchInFlight, null, fetch);
+                _backgroundRefreshInFlight = false;
             }
         }
 
@@ -2283,11 +2389,11 @@ namespace TaimisToolbench
         /// used before this call existed.
         /// </para>
         /// <para>
-        /// Data newer than SnapshotRefreshPolicy.GenerateFreshness is
-        /// solved against as it stands. That skip reports no failure: a
-        /// snapshot the module chose not to refresh is not a snapshot it
-        /// could not refresh, and the Crafting Plan tab's dialog keys off
-        /// the difference.
+        /// Only an attempt that did not work is a failure. A snapshot the
+        /// module chose not to refresh, or had nothing to refresh it with,
+        /// is not one it could not refresh, and the Crafting Plan tab's
+        /// dialog keys off the difference. So refresh.Failed is set in
+        /// these catch blocks and nowhere else.
         /// </para>
         /// </summary>
         private async Task<PlanAccountData> RefreshForPlanAsync(
@@ -2295,83 +2401,69 @@ namespace TaimisToolbench
         {
             var refresh = new PlanAccountRefresh();
 
-            if (!_snapshotService.HasRequiredPermissions())
+            try
             {
+                var outcome = await _planRefreshGate.RunAsync(
+                    _currentSnapshot?.CapturedAt,
+                    DateTime.UtcNow,
+                    SnapshotRefreshPolicy.SubtokenHandover,
+                    ct);
+
+                switch (outcome)
+                {
+                    case PlanRefreshOutcome.NotInWorld:
+                        // Blish cannot renew a subtoken until MumbleLink
+                        // ticks, which it does not do outside the world.
+                        // Nothing is wrong with the key, so the line names
+                        // the one thing that changes the outcome.
+                        SaveStatusThreadSafe(StatusText.Stamp(StatusText.NotInWorld, DateTime.Now));
+                        ModuleLog.Shared.Write(ModuleLogLevel.Info, "snapshot",
+                            "Plan solved without a refresh - no character in the world, so Blish has no subtoken to hand over");
+                        break;
+                    case PlanRefreshOutcome.NoApiAccess:
+                        // In the world, and the subtoken still did not
+                        // arrive, so this is a key the user has to add or
+                        // widen in Blish rather than one still on its way.
+                        SaveStatusThreadSafe(StatusText.Stamp(StatusText.NoApiAccess, DateTime.Now));
+                        ModuleLog.Shared.Write(ModuleLogLevel.Info, "snapshot",
+                            "Plan solved without a refresh - no usable GW2 API access");
+                        break;
+                    case PlanRefreshOutcome.SkippedInBackoff:
+                        // No status line. The failure that opened the
+                        // window already stamped one, and a second stamp
+                        // would date an attempt that did not happen.
+                        Logger.Debug("Skipping snapshot refresh for a plan - within backoff window after a prior failure");
+                        break;
+                    case PlanRefreshOutcome.LostTheClaim:
+                        Logger.Debug("Snapshot refresh for a plan found the slot taken and then free, twice");
+                        break;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                if (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+
+                // Either Clear Cache cancelled the fetch through the
+                // refresh slot, or the claim this press was waiting on
+                // ended without running one. Clear Cache writes its own
+                // status line, and a "Refresh failed" stamped over that
+                // would name the wrong cause.
+                Logger.Debug("Snapshot refresh for a plan was cancelled");
                 MarkPlanRefreshFailed(refresh, null);
             }
-            else if (SnapshotRefreshPolicy.ShouldRefreshOnGenerate(
-                _currentSnapshot?.CapturedAt, DateTime.UtcNow))
+            catch (Exception ex)
             {
-                try
-                {
-                    var running = Volatile.Read(ref _snapshotFetchInFlight);
-                    if (running != null)
-                    {
-                        await running;
-                    }
-                    else if (IsInRefreshFailureBackoff())
-                    {
-                        // A refresh failed inside the last minute, so this
-                        // press would spend a fresh account fetch to fail
-                        // the same way. The background path has waited this
-                        // window out since it was written; the plan path
-                        // did not, which is what made every Generate press
-                        // during an outage a new attempt.
-                        //
-                        // No status line is written here. The failure that
-                        // opened the window already stamped one, and a
-                        // second stamp would date an attempt that did not
-                        // happen.
-                        Logger.Debug("Skipping snapshot refresh for a plan - within backoff window after a prior failure");
-                        MarkPlanRefreshFailed(refresh, null);
-                    }
-                    else if (_refreshSlot.TryClaim())
-                    {
-                        _backgroundRefreshInFlight = true;
-                        try
-                        {
-                            var fetched = await TrackedFetchAsync(_refreshSlot.BeginFetch());
-                            if (fetched != null)
-                            {
-                                SaveStatusThreadSafe(StatusText.Stamp("Updated", fetched.CapturedAt.ToLocalTime()));
-                            }
-                        }
-                        finally
-                        {
-                            _backgroundRefreshInFlight = false;
-                            _refreshSlot.Release();
-                        }
-                    }
+                Logger.Warn(ex, "Failed to refresh account snapshot for a plan");
+                ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot",
+                    $"Failed to refresh account snapshot for a plan: {ex.GetType().Name} - {ex.Message}");
+                Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, DateTime.UtcNow.Ticks);
 
-                    if (!refresh.Failed)
-                    {
-                        Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    if (ct.IsCancellationRequested)
-                    {
-                        throw;
-                    }
-
-                    // Clear Cache cancelled the fetch through the refresh
-                    // slot. It writes its own status line, and a "Refresh
-                    // failed" stamped over that would name the wrong cause.
-                    Logger.Debug("Snapshot refresh for a plan was cancelled");
-                    MarkPlanRefreshFailed(refresh, null);
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn(ex, "Failed to refresh account snapshot for a plan");
-                    ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot",
-                        $"Failed to refresh account snapshot for a plan: {ex.GetType().Name} - {ex.Message}");
-                    Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, DateTime.UtcNow.Ticks);
-
-                    var classification = SnapshotFailureClassifier.Classify(ex);
-                    SaveStatusThreadSafe(StatusText.Stamp(StatusText.ForRefreshFailure(classification), DateTime.Now));
-                    MarkPlanRefreshFailed(refresh, ex as SnapshotFetchFailedException);
-                }
+                var classification = SnapshotFailureClassifier.Classify(ex);
+                SaveStatusThreadSafe(StatusText.Stamp(StatusText.ForRefreshFailure(classification), DateTime.Now));
+                MarkPlanRefreshFailed(refresh, ex as SnapshotFetchFailedException);
             }
 
             // After the fetch, so a refresh that succeeded here has already
@@ -2447,7 +2539,6 @@ namespace TaimisToolbench
             try
             {
                 var snapshot = await TrackedFetchAsync(_refreshSlot.BeginFetch());
-                Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
                 if (snapshot != null)
                 {
                     var status = StatusText.Stamp("Updated", snapshot.CapturedAt.ToLocalTime());
@@ -2577,7 +2668,7 @@ namespace TaimisToolbench
                 return;
             }
 
-            if (!_snapshotService.HasRequiredPermissions())
+            if (!_apiReady.IsReady())
             {
                 return;
             }

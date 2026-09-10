@@ -48,6 +48,27 @@ namespace TaimisToolbench.Services
         public static readonly TimeSpan GenerateFreshness = TimeSpan.FromSeconds(60);
 
         /// <summary>
+        /// How long a Generate Plan press waits for Blish to hand the
+        /// module its API subtoken before solving without it.
+        /// <para>
+        /// Blish only renews a module's subtoken when MumbleLink reports a
+        /// character name change, and MumbleLink does not tick outside the
+        /// world. So the wait is for the handover itself, which was
+        /// measured at 1.16 and 2.36 seconds from the first in-world tick
+        /// across two sessions. Five seconds is roughly double the slower
+        /// of the two.
+        /// </para>
+        /// <para>
+        /// It is deliberately not measured from module load. A player
+        /// sitting on a loading screen or at character select can be there
+        /// for any length of time, and no amount of waiting produces a
+        /// subtoken until they are in the world. That case is answered by
+        /// not waiting at all - see PlanRefreshGate.
+        /// </para>
+        /// </summary>
+        public static readonly TimeSpan SubtokenHandover = TimeSpan.FromSeconds(5);
+
+        /// <summary>
         /// Whether opening the tab should start a refresh. True when there
         /// is no snapshot at all. False for a snapshot stamped in the
         /// future, which is clock skew rather than freshness the caller can

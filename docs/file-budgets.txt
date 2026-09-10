@@ -109,7 +109,7 @@ Models/UsedMaterial.cs                                                          
 Models/VendorItemCostLine.cs                                                            42
 Models/VendorOffer.cs                                                                   86
 Models/VendorOfferDataset.cs                                                            15
-Module.cs                                                                               3349
+Module.cs                                                                               3440
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
@@ -281,7 +281,7 @@ Services/SnapshotHelpers.cs                                                     
 Services/SnapshotHoldLine.cs                                                            355
 Services/SnapshotItemGridLayout.cs                                                      321
 Services/SnapshotIconWindow.cs                                                          185
-Services/SnapshotRefreshSlot.cs                                                         93
+Services/SnapshotRefreshSlot.cs                                                         185
 Services/SnapshotResultLayout.cs                                                        90
 Services/SnapshotSearchResultBuilder.cs                                                 572
 Services/SnapshotStore.cs                                                               98
@@ -294,7 +294,7 @@ Services/SortIndicatorLayout.cs                                                 
 Services/SourceFilterFlowLayout.cs                                                      85
 Services/StaticItemSearchProvider.cs                                                    42
 Services/StatusStore.cs                                                                 73
-Services/StatusText.cs                                                                  572
+Services/StatusText.cs                                                                  589
 Services/StatusUpdateGuard.cs                                                           38
 Services/StickyHeaderLayout.cs                                                          117
 Services/SummarySectionLayoutMath.cs                                                   1037
@@ -307,7 +307,7 @@ Services/PlanAccountRefresh.cs                                                  
 Services/PlanItemIds.cs                                                                 73
 Services/ItemTooltipFacts.cs                                                            160
 Services/SecondTooltipBox.cs                                                            82
-Services/SnapshotRefreshPolicy.cs                                                       88
+Services/SnapshotRefreshPolicy.cs                                                       120
 Services/StaleAccountDataWarning.cs                                                     396
 Services/TextWrapMath.cs                                                                324
 Services/TooltipContent.cs                                                              701
@@ -643,7 +643,7 @@ tests/TaimisToolbench.Tests/Services/SnapshotHelpersTests.cs                    
 tests/TaimisToolbench.Tests/Services/SnapshotHoldLineTests.cs                           320
 tests/TaimisToolbench.Tests/Services/SnapshotItemGridLayoutTests.cs                     427
 tests/TaimisToolbench.Tests/Services/SnapshotIconWindowTests.cs                         279
-tests/TaimisToolbench.Tests/Services/SnapshotRefreshSlotTests.cs                        241
+tests/TaimisToolbench.Tests/Services/SnapshotRefreshSlotTests.cs                        335
 tests/TaimisToolbench.Tests/Services/SnapshotResultLayoutTests.cs                       94
 tests/TaimisToolbench.Tests/Services/SnapshotSearchResultBuilderTests.cs                1329
 tests/TaimisToolbench.Tests/Services/SnapshotSerializationTests.cs                      283
@@ -665,7 +665,7 @@ tests/TaimisToolbench.Tests/Services/IconWikiTargetTests.cs                     
 tests/TaimisToolbench.Tests/Services/ItemTooltipStandardTests.cs                        225
 tests/TaimisToolbench.Tests/Services/RequiredRecipeSheetNamingTests.cs                  185
 tests/TaimisToolbench.Tests/Services/SecondTooltipBoxTests.cs                           123
-tests/TaimisToolbench.Tests/Services/SnapshotRefreshPolicyTests.cs                      145
+tests/TaimisToolbench.Tests/Services/SnapshotRefreshPolicyTests.cs                      174
 tests/TaimisToolbench.Tests/Services/StaleAccountDataWarningTests.cs                    440
 tests/TaimisToolbench.Tests/Services/TextWrapMathTests.cs                               297
 tests/TaimisToolbench.Tests/Services/TooltipComposerContentTests.cs                     215
