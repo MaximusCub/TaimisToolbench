@@ -656,7 +656,7 @@ tests/TaimisToolbench.Tests/Services/SummarySectionLayoutMathTests.cs           
 tests/TaimisToolbench.Tests/Services/TableSortStateTests.cs                             198
 tests/TaimisToolbench.Tests/Services/GlyphButtonMetricsTests.cs                         143
 tests/TaimisToolbench.Tests/Services/GlyphFontDescriptorTests.cs                        332
-tests/TaimisToolbench.Tests/Services/IconStandardCallSiteTests.cs                       371
+tests/TaimisToolbench.Tests/Services/IconStandardCallSiteTests.cs                       444
 tests/TaimisToolbench.Tests/Services/IconWikiTargetTests.cs                             106
 tests/TaimisToolbench.Tests/Services/RequiredRecipeSheetNamingTests.cs                  185
 tests/TaimisToolbench.Tests/Services/SecondTooltipBoxTests.cs                           123
