@@ -96,7 +96,7 @@ Models/RequiredRecipe.cs                                                        
 Models/SeasonalVendorTip.cs                                                             48
 Models/SettingsFormState.cs                                                             149
 Models/SnapshotCharacterDiscipline.cs                                                   24
-Models/SnapshotHoldLocation.cs                                                          59
+Models/SnapshotHoldLocation.cs                                                          67
 Models/SnapshotItemEntry.cs                                                             80
 Models/SnapshotSearchRow.cs                                                             58
 Models/SnapshotSourceFilter.cs                                                          42
@@ -278,12 +278,12 @@ Services/SnapshotFailureKind.cs                                                 
 Services/SnapshotFetchFailedException.cs                                                131
 Services/SnapshotHeaderLayout.cs                                                        209
 Services/SnapshotHelpers.cs                                                             79
-Services/SnapshotHoldLine.cs                                                            355
+Services/SnapshotHoldLine.cs                                                            398
 Services/SnapshotItemGridLayout.cs                                                      321
 Services/SnapshotIconWindow.cs                                                          185
 Services/SnapshotRefreshSlot.cs                                                         185
 Services/SnapshotResultLayout.cs                                                        90
-Services/SnapshotSearchResultBuilder.cs                                                 572
+Services/SnapshotSearchResultBuilder.cs                                                 581
 Services/SnapshotStore.cs                                                               98
 Services/SnapshotTableSorter.cs                                                         99
 Services/SocketedUpgradeIndex.cs                                                        146

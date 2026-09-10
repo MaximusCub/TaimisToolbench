@@ -220,6 +220,15 @@ namespace TaimisToolbench.Services
             // the breakdown loop below already answers for itself.
             Func<string, bool> sourceVisible = source => IsSourceEnabled(source, sourceFilter);
 
+            // Same once-per-call reason. A socket place names the gear it
+            // sits in, and this map is the only thing on this path that can
+            // turn that gear's id into a name.
+            Func<int, string> hostItemName = hostId =>
+            {
+                SnapshotItemEntry host;
+                return itemsById.TryGetValue(hostId, out host) ? host.Name : null;
+            };
+
             foreach (var kvp in itemsById)
             {
                 int itemId = kvp.Key;
@@ -259,7 +268,7 @@ namespace TaimisToolbench.Services
                         characterMatches = CharacterNameMatches(source, trimmedSearch);
                     }
 
-                    var location = SnapshotHoldLine.FromSource(source, quantity);
+                    var location = SnapshotHoldLine.FromSource(source, quantity, hostItemName);
                     if (location.Category == SnapshotHoldCategory.LegendaryArmory)
                     {
                         location.EquippedBy = VisibleWearers(
