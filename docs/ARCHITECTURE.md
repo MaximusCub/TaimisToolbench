@@ -2929,14 +2929,23 @@ reached.
 
 ### 12.4 What the shape hash last moved for
 
-`PersistedPlan.SchemaShapeHash` last moved for vendor requirements, which
-are purely additive: `VendorOffer.Requirement`, `PlanStep.VendorRequirement`,
+`PersistedPlan.SchemaShapeHash` last moved for the missing recipe sheet
+sources and for what a vendor-requirement notice now says, both purely
+additive: `CraftingPlanResult.MissingRecipeSheetSources` and the
+`MissingRecipeSheetSource` type it reaches, plus
+`VendorRequirementNotice.Kind`, `VendorRequirementNotice.UnknownReason`,
+`CraftingPlanResult.AccountProgressionAccess` and
+`PlanSolveContext.AccountProgressionAccess`. An older file omits them,
+Newtonsoft leaves each at null or its zero value, and a restored plan then
+prices no missing sheet and tells the reader to generate the plan again
+before it can say whether a gated vendor will trade. A plan written before
+it still deserializes and `CurrentSchemaVersion` stays at 4.
+
+Before that it moved for vendor requirements, also additive:
+`VendorOffer.Requirement`, `PlanStep.VendorRequirement`,
 `PlanSolveContext.AccountProgression`,
 `CraftingPlanResult.VendorRequirementNotices`, and the `VendorRequirement`,
-`VendorRequirementNotice` and `AccountProgression` types they reach. An older
-file omits all of them, Newtonsoft leaves them null, and a restored plan then
-shows no vendor-requirement notices until it is re-solved. A plan written
-before it still deserializes and `CurrentSchemaVersion` stays at 4.
+`VendorRequirementNotice` and `AccountProgression` types they reach.
 
 Before that it moved for a REMOVAL, and removals are
 what `CurrentSchemaVersion` exists to gate: `VendorOffer.Locations` is gone,
