@@ -280,7 +280,11 @@ namespace TaimisToolbench.Tests.Services
                 .Select(m => m.Groups[1].Value));
 
             Assert.Equal(
-                new[] { "Acquisition", "ItemPage", "None", "RecipeSheet" }, page.ToArray());
+                new[]
+                {
+                    "Acquisition", "ItemPage", "None", "RecipeSheet", "SheetPageAcquisition",
+                },
+                page.ToArray());
         }
 
         /// <summary>
