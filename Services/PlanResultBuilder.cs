@@ -427,7 +427,8 @@ namespace TaimisToolbench.Services
                     continue;
                 }
 
-                var status = VendorRequirementEvaluator.Evaluate(requirement, accountProgression);
+                var status = VendorRequirementEvaluator.Evaluate(
+                    requirement, accountProgression, out var unknownReason);
                 if (status == VendorRequirementStatus.Met)
                 {
                     continue;
@@ -438,6 +439,8 @@ namespace TaimisToolbench.Services
                     ItemId = step.ItemId,
                     RequirementText = requirement.Text,
                     Status = status,
+                    Kind = VendorRequirementEvaluator.KindOf(requirement),
+                    UnknownReason = unknownReason,
                 });
             }
 

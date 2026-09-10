@@ -50,7 +50,7 @@ namespace TaimisToolbench.Tests.Services
         {
             Assert.Equal(
                 VendorRequirementStatus.Unknown,
-                VendorRequirementEvaluator.Evaluate(Achievement(1912), null));
+                VendorRequirementEvaluator.Evaluate(Achievement(1912), null, out _));
         }
 
         [Fact]
@@ -68,7 +68,7 @@ namespace TaimisToolbench.Tests.Services
                     Progression(
                         achievements: new HashSet<int> { 1912 },
                         masteries: new Dictionary<int, int> { [8] = 4 },
-                        access: new HashSet<string> { "HeartOfThorns" })));
+                        access: new HashSet<string> { "HeartOfThorns" }), out _));
         }
 
         [Fact]
@@ -77,7 +77,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(
                 VendorRequirementStatus.Met,
                 VendorRequirementEvaluator.Evaluate(
-                    Achievement(1912), Progression(achievements: new HashSet<int> { 1912 })));
+                    Achievement(1912), Progression(achievements: new HashSet<int> { 1912 }), out _));
         }
 
         [Fact]
@@ -86,7 +86,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(
                 VendorRequirementStatus.NotMet,
                 VendorRequirementEvaluator.Evaluate(
-                    Achievement(1912), Progression(achievements: new HashSet<int>())));
+                    Achievement(1912), Progression(achievements: new HashSet<int>()), out _));
         }
 
         [Fact]
@@ -98,7 +98,7 @@ namespace TaimisToolbench.Tests.Services
                 VendorRequirementStatus.Unknown,
                 VendorRequirementEvaluator.Evaluate(
                     Achievement(1912),
-                    Progression(access: new HashSet<string> { "HeartOfThorns" })));
+                    Progression(access: new HashSet<string> { "HeartOfThorns" }), out _));
         }
 
         [Fact]
@@ -108,10 +108,10 @@ namespace TaimisToolbench.Tests.Services
 
             Assert.Equal(
                 VendorRequirementStatus.Met,
-                VendorRequirementEvaluator.Evaluate(MasteryLevel(8, 2), progression));
+                VendorRequirementEvaluator.Evaluate(MasteryLevel(8, 2), progression, out _));
             Assert.Equal(
                 VendorRequirementStatus.Met,
-                VendorRequirementEvaluator.Evaluate(MasteryLevel(8, 0), progression));
+                VendorRequirementEvaluator.Evaluate(MasteryLevel(8, 0), progression, out _));
         }
 
         [Fact]
@@ -121,7 +121,7 @@ namespace TaimisToolbench.Tests.Services
                 VendorRequirementStatus.NotMet,
                 VendorRequirementEvaluator.Evaluate(
                     MasteryLevel(8, 3),
-                    Progression(masteries: new Dictionary<int, int> { [8] = 2 })));
+                    Progression(masteries: new Dictionary<int, int> { [8] = 2 }), out _));
         }
 
         [Fact]
@@ -131,7 +131,7 @@ namespace TaimisToolbench.Tests.Services
                 VendorRequirementStatus.NotMet,
                 VendorRequirementEvaluator.Evaluate(
                     MasteryLevel(8, 0),
-                    Progression(masteries: new Dictionary<int, int> { [9] = 4 })));
+                    Progression(masteries: new Dictionary<int, int> { [9] = 4 }), out _));
         }
 
         [Fact]
@@ -141,7 +141,7 @@ namespace TaimisToolbench.Tests.Services
                 VendorRequirementStatus.Unknown,
                 VendorRequirementEvaluator.Evaluate(
                     MasteryLevel(8, 1),
-                    Progression(achievements: new HashSet<int> { 1912 })));
+                    Progression(achievements: new HashSet<int> { 1912 }), out _));
         }
 
         [Fact]
@@ -151,7 +151,7 @@ namespace TaimisToolbench.Tests.Services
                 VendorRequirementStatus.Met,
                 VendorRequirementEvaluator.Evaluate(
                     Expansion("JanthirWilds"),
-                    Progression(access: new HashSet<string> { "GuildWars2", "JanthirWilds" })));
+                    Progression(access: new HashSet<string> { "GuildWars2", "JanthirWilds" }), out _));
         }
 
         [Fact]
@@ -161,7 +161,7 @@ namespace TaimisToolbench.Tests.Services
                 VendorRequirementStatus.NotMet,
                 VendorRequirementEvaluator.Evaluate(
                     Expansion("JanthirWilds"),
-                    Progression(access: new HashSet<string> { "GuildWars2" })));
+                    Progression(access: new HashSet<string> { "GuildWars2" }), out _));
         }
 
         [Fact]
@@ -173,7 +173,7 @@ namespace TaimisToolbench.Tests.Services
                 VendorRequirementStatus.Met,
                 VendorRequirementEvaluator.Evaluate(
                     Expansion("HeartOfThorns"),
-                    Progression(access: new HashSet<string> { "GuildWars2", "PathOfFire" })));
+                    Progression(access: new HashSet<string> { "GuildWars2", "PathOfFire" }), out _));
         }
 
         [Fact]
@@ -183,7 +183,7 @@ namespace TaimisToolbench.Tests.Services
                 VendorRequirementStatus.NotMet,
                 VendorRequirementEvaluator.Evaluate(
                     Expansion("PathOfFire"),
-                    Progression(access: new HashSet<string> { "GuildWars2", "HeartOfThorns" })));
+                    Progression(access: new HashSet<string> { "GuildWars2", "HeartOfThorns" }), out _));
         }
 
         [Fact]
@@ -193,7 +193,7 @@ namespace TaimisToolbench.Tests.Services
                 VendorRequirementStatus.Unknown,
                 VendorRequirementEvaluator.Evaluate(
                     Expansion("JanthirWilds"),
-                    Progression(achievements: new HashSet<int>())));
+                    Progression(achievements: new HashSet<int>()), out _));
         }
     }
 }

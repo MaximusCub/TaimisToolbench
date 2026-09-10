@@ -3,6 +3,48 @@ using System.Collections.Generic;
 namespace TaimisToolbench.Models
 {
     /// <summary>
+    /// Whether the module could read the account's achievements and
+    /// masteries, and when it could not, why. Each answer maps to one
+    /// action the player can take, which is the whole reason the cases are
+    /// distinguished: a Blish HUD consent toggle and a Guild Wars 2 API key
+    /// are different things in different places.
+    /// </summary>
+    internal enum AccountProgressionAccess
+    {
+        /// <summary>No vendor in this plan gates anything, so nothing was
+        /// asked for.</summary>
+        NotNeeded,
+
+        /// <summary>The module's subtoken carries "progression".</summary>
+        Granted,
+
+        /// <summary>
+        /// The permission is declared in manifest.json but is not in the
+        /// module's consented list, so Blish HUD never requested it. Blish
+        /// builds the subtoken from ModuleState.UserEnabledPermissions
+        /// alone (Blish HUD/GameServices/Modules/Managers/Gw2ApiManager.cs,
+        /// GetModuleInstance), and a newly declared optional permission is
+        /// not added to a module's saved state. The player ticks it in the
+        /// module's own permission panel, which Blish only makes editable
+        /// while the module is disabled.
+        /// </summary>
+        NotConsented,
+
+        /// <summary>
+        /// Consented, and a subtoken arrived without it: the account's own
+        /// API key does not grant progression, so the subtoken request
+        /// could not either.
+        /// </summary>
+        KeyMissingScope,
+
+        /// <summary>Consented, and no subtoken has arrived yet.</summary>
+        SubtokenNotReady,
+
+        /// <summary>The request itself failed.</summary>
+        FetchFailed,
+    }
+
+    /// <summary>
     /// What the account has unlocked, as far as a vendor requirement needs
     /// to know.
     /// <para>

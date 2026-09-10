@@ -391,10 +391,15 @@ namespace TaimisToolbench.Views.Rendering
             // prints both in its own columns, so the box restated them in
             // sentences and added nothing.
             int itemId = row.ItemId;
+            // The one prose line this box carries: the vendor requirement
+            // gating this purchase, which the table has no column for and
+            // which must travel with the row through a sort.
+            string hintLine = row.HintText;
             var hover = ItemIconTooltip.ForItem(
                 ItemTooltipIdentity.ForItem(fullName, row.IconUrl, row.Rarity),
                 _getItemStatBlock == null || itemId <= 0 ? (Func<ItemStatBlock>)null
                     : () => _getItemStatBlock(itemId),
+                () => string.IsNullOrEmpty(hintLine) ? null : new List<string> { hintLine },
                 IconWikiTarget.ItemPage(fullName));
 
             var nameHandle = IconNameRowHelpers.CreateIconAndEllipsizedName(

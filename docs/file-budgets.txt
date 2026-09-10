@@ -55,7 +55,7 @@ Models/CompetencyOpportunity.cs                                                 
 Models/CostLine.cs                                                                      11
 Models/CraftingDecision.cs                                                              73
 Models/CraftingPlan.cs                                                                  31
-Models/CraftingPlanResult.cs                                                            227
+Models/CraftingPlanResult.cs                                                            235
 Models/CraftingTreeNode.cs                                                              236
 Models/CurrencyCost.cs                                                                  9
 Models/CurrencyDecisionDefaults.cs                                                      142
@@ -79,7 +79,7 @@ Models/PillSourceCostBreakdown.cs                                               
 Models/PlanAccountData.cs                                                               31
 Models/PlanHistoryEntry.cs                                                              146
 Models/PlanRequestItem.cs                                                               26
-Models/PlanSolveContext.cs                                                              221
+Models/PlanSolveContext.cs                                                              228
 Models/PlanStatus.cs                                                                    11
 Models/PlanStep.cs                                                                      79
 Models/PlanViewModel.cs                                                                 530
@@ -130,7 +130,7 @@ Services/CompositeRecipeApiClient.cs                                            
 Services/CostLineValuation.cs                                                           121
 Services/CraftCompetencyEvaluator.cs                                                    125
 Services/CraftableItemSearchProvider.cs                                                 127
-Services/CraftingPlanPipeline.cs                                                        1895
+Services/CraftingPlanPipeline.cs                                                        1954
 Services/CraftingTreeBuilder.cs                                                         626
 Services/CurrencyDisplayResolver.cs                                                     236
 Services/CurrencyMetadataService.cs                                                     159
@@ -223,7 +223,7 @@ Services/PlanStripStatusBoard.cs                                                
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     602
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        2160
+Services/PlanViewModelBuilder.cs                                                        2224
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
@@ -381,7 +381,7 @@ Views/Rendering/RichTooltipSurface.cs                                           
 Views/Rendering/RowRelayoutHelpers.cs                                                   72
 Views/Rendering/RowActionKey.cs                                                         103
 Views/Rendering/ShoppingBadgeColors.cs                                                  72
-Views/Rendering/ShoppingListSectionRenderer.cs                                          512
+Views/Rendering/ShoppingListSectionRenderer.cs                                          517
 Views/Rendering/SortIndicator.cs                                                        145
 Views/Rendering/SortableHeaderBlock.cs                                                  108
 Views/Rendering/SortableHeaderCells.cs                                                  249
@@ -689,6 +689,7 @@ tests/TaimisToolbench.Tests/Services/VendorCurrencyTradeUpRoutingTests.cs       
 tests/TaimisToolbench.Tests/Services/VendorCapNoticeAgreementTests.cs                   124
 tests/TaimisToolbench.Tests/Services/VendorOfferLocationsTests.cs                       113
 tests/TaimisToolbench.Tests/Services/VendorOfferStoreTests.cs                           576
+tests/TaimisToolbench.Tests/Services/VendorRequirementNoticeTests.cs                    421
 tests/TaimisToolbench.Tests/Services/VendorUnlockRecipeTests.cs                         233
 tests/TaimisToolbench.Tests/Services/WheelDeltaSanitizerTests.cs                        183
 tests/TaimisToolbench.Tests/Services/WikiLinkBuilderTests.cs                            228

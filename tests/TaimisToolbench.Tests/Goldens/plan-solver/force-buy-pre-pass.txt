@@ -1,3 +1,4 @@
+result.AccountProgressionAccess = NotNeeded
 result.AcquisitionHints = null
 result.CharacterDisciplines = null
 result.CompetencyOpportunities.count = 0
@@ -189,6 +190,7 @@ result.SolveContext.AccountItems[0].SkinName =
 result.SolveContext.AccountItems[0].Source = MaterialStorage
 result.SolveContext.AccountItems[0].Upgrades = null
 result.SolveContext.AccountProgression = null
+result.SolveContext.AccountProgressionAccess = NotNeeded
 result.SolveContext.AcquisitionHints = null
 result.SolveContext.ActiveCharacterName = null
 result.SolveContext.CharacterDisciplines = null

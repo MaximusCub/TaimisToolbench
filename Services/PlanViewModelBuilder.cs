@@ -127,13 +127,9 @@ namespace TaimisToolbench.Services
             // notices are pre-filtered so a plan whose only "notice" is a
             // TP-liquid item's vendor cap gets no notices-only section.
             var vendorCapNotices = VendorCapNotices.Filter(result);
-            var vendorRequirementNotices = result.VendorRequirementNotices
-                ?? (IReadOnlyList<VendorRequirementNotice>)Array.Empty<VendorRequirementNotice>();
-            if (craftSteps.Count > 0 || vendorCapNotices.Count > 0 ||
-                vendorRequirementNotices.Count > 0)
+            if (craftSteps.Count > 0 || vendorCapNotices.Count > 0)
             {
-                vm.Sections.Add(BuildCraftingStepsSection(
-                    craftSteps, vendorCapNotices, vendorRequirementNotices, result));
+                vm.Sections.Add(BuildCraftingStepsSection(craftSteps, vendorCapNotices, result));
             }
 
             // 7. Notes section - only if it has at least one note. Last:
@@ -984,6 +980,8 @@ namespace TaimisToolbench.Services
                 IsDefaultExpanded = true,
             };
 
+            var requirementsByItemId = BuildVendorRequirementsByItemId(result);
+
             foreach (var step in steps)
             {
                 TradeUpPurchase purchase = default(TradeUpPurchase);
@@ -1012,7 +1010,8 @@ namespace TaimisToolbench.Services
                     CoinValue = step.TotalCost,
                     UnitCoinValue = unitCoin,
                     UnitCoinBundleQuantity = unitCoinBundle,
-                    HintText = ResolveHintText(rowType, step.ItemId, result.AcquisitionHints),
+                    HintText = ResolveShoppingHintText(
+                        rowType, step.ItemId, result, requirementsByItemId),
                     BadgeText = ResolveBadgeText(rowType, step.ItemId, result.AcquisitionHints),
                     // Owned/needed split, cosmetic only - Total column
                     // only, never Each (a per-unit rate has no ownership
@@ -1104,6 +1103,57 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// The requirement gating each purchase, keyed by the item, so the
+        /// Shopping List row for it can answer with it on hover. The row
+        /// rather than a row of its own: the table sorts, and a notice row
+        /// placed after its item would be carried away from it by the
+        /// first click on a header.
+        /// </summary>
+        private static Dictionary<int, string> BuildVendorRequirementsByItemId(
+            CraftingPlanResult result)
+        {
+            if (result.VendorRequirementNotices == null ||
+                result.VendorRequirementNotices.Count == 0)
+            {
+                return null;
+            }
+
+            var byItemId = new Dictionary<int, string>(result.VendorRequirementNotices.Count);
+            foreach (var requirement in result.VendorRequirementNotices)
+            {
+                if (requirement != null)
+                {
+                    byItemId[requirement.ItemId] = VendorRequirementNoticeText.ForRow(
+                        requirement, result.AccountProgressionAccess);
+                }
+            }
+
+            return byItemId;
+        }
+
+        /// <summary>
+        /// A shopping row's hover prose: the vendor requirement gating this
+        /// purchase, or the acquisition hint, never both - only a
+        /// ShoppingUnknown row has a hint, and only a ShoppingVendor row
+        /// can be gated.
+        /// </summary>
+        private static string ResolveShoppingHintText(
+            PlanRowType rowType,
+            int itemId,
+            CraftingPlanResult result,
+            IReadOnlyDictionary<int, string> requirementsByItemId)
+        {
+            if (rowType == PlanRowType.ShoppingVendor &&
+                requirementsByItemId != null &&
+                requirementsByItemId.TryGetValue(itemId, out string requirement))
+            {
+                return requirement;
+            }
+
+            return ResolveHintText(rowType, itemId, result.AcquisitionHints);
+        }
+
+        /// <summary>
         /// Acquisition-hint tooltip text for shopping rows. Only ever
         /// populated for ShoppingUnknown rows - a hint entry existing for
         /// an item that actually has a priced/vendor source must not bleed
@@ -1155,7 +1205,6 @@ namespace TaimisToolbench.Services
 
         private PlanSectionViewModel BuildCraftingStepsSection(
             List<PlanStep> steps, IReadOnlyList<TimegatedItem> vendorCapNotices,
-            IReadOnlyList<VendorRequirementNotice> vendorRequirementNotices,
             CraftingPlanResult result)
         {
             var section = new PlanSectionViewModel
@@ -1235,25 +1284,6 @@ namespace TaimisToolbench.Services
                 {
                     RowType = PlanRowType.TimegatedNotice,
                     Label = $"{itemName} is timegated - vendor {capLabel} limit: {timegated.CapValue} (plan needs {timegated.NeededCount})",
-                });
-            }
-
-            // Vendor-requirement notices: what a vendor the plan buys from
-            // wants of the account. A requirement the account MEETS reaches
-            // no row at all (PlanResultBuilder drops it), so only two
-            // wordings exist here, and neither says a requirement is unmet
-            // when it was merely not checked.
-            foreach (var requirement in vendorRequirementNotices)
-            {
-                string itemName = ResolveName(requirement.ItemId, result.ItemMetadata);
-                string tail = requirement.Status == VendorRequirementStatus.NotMet
-                    ? "which your account does not have"
-                    : "which was not checked";
-
-                section.Rows.Add(new PlanRowViewModel
-                {
-                    RowType = PlanRowType.VendorRequirementNotice,
-                    Label = $"{itemName} - this vendor requires {requirement.RequirementText}, {tail}",
                 });
             }
 
@@ -1415,11 +1445,19 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// Assembles Notes rows in a fixed order - excess/reclaim, total
-        /// (2+ excess lines only), competency, competency opportunity,
-        /// recipe-sheet savings, seasonal vendor tips, forge-scope - so
-        /// re-solves and screenshots stay diffable. Returns zero rows when
-        /// every kind is empty; the caller skips the section then.
+        /// Assembles Notes rows in a fixed order - vendor requirements,
+        /// excess/reclaim, total (2+ excess lines only), competency,
+        /// competency opportunity, recipe-sheet savings, seasonal vendor
+        /// tips, forge-scope - so re-solves and screenshots stay diffable.
+        /// Returns zero rows when every kind is empty; the caller skips the
+        /// section then.
+        /// <para>
+        /// Vendor requirements lead because they are the only kind that
+        /// says the plan may not be doable, rather than that it could be
+        /// cheaper. They used to trail the Crafting Steps list, where an
+        /// unheaded line under the last step read as an orphan and named a
+        /// purchase that is not a craft step at all.
+        /// </para>
         /// </summary>
         private PlanSectionViewModel BuildNotesSection(CraftingPlanResult result)
         {
@@ -1431,6 +1469,32 @@ namespace TaimisToolbench.Services
 
             // "(N)" counts real entries, not rollup or continuation rows.
             int noteEntryCount = 0;
+
+            // 0. What a vendor the plan buys from wants of the account. A
+            // requirement the account MEETS reaches no row at all
+            // (PlanResultBuilder drops it), so every row here is either
+            // unmet or unchecked, and the words say which and what to do -
+            // see Services/VendorRequirementNoticeText.cs.
+            if (result.VendorRequirementNotices != null)
+            {
+                var requirementRows =
+                    new List<(string Name, PlanRowViewModel Row)>(result.VendorRequirementNotices.Count);
+                foreach (var requirement in result.VendorRequirementNotices)
+                {
+                    string itemName = ResolveName(requirement.ItemId, result.ItemMetadata);
+                    requirementRows.Add((itemName, new PlanRowViewModel
+                    {
+                        RowType = PlanRowType.NoteLine,
+                        Label = VendorRequirementNoticeText.For(
+                            itemName, requirement, result.AccountProgressionAccess),
+                    }));
+                    noteEntryCount++;
+                }
+
+                section.Rows.AddRange(requirementRows
+                    .OrderBy(r => r.Name, StringComparer.Ordinal)
+                    .Select(r => r.Row));
+            }
 
             // 1. Excess/reclaim lines, alphabetical by resolved item name
             // (not the composed Label, whose "Excess: <qty>x " prefix

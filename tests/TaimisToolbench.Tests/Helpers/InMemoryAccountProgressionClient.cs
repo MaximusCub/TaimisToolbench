@@ -10,13 +10,14 @@ namespace TaimisToolbench.Tests.Helpers
     internal class InMemoryAccountProgressionClient : IAccountProgressionClient
     {
         private readonly AccountProgression _progression;
-        private readonly bool _hasPermission;
+        private readonly AccountProgressionAccess _access;
 
         public InMemoryAccountProgressionClient(
-            AccountProgression progression, bool hasPermission = true)
+            AccountProgression progression,
+            AccountProgressionAccess access = AccountProgressionAccess.Granted)
         {
             _progression = progression;
-            _hasPermission = hasPermission;
+            _access = access;
         }
 
         /// <summary>
@@ -28,9 +29,9 @@ namespace TaimisToolbench.Tests.Helpers
 
         public int GetCallCount { get; private set; }
 
-        public bool HasProgressionPermission()
+        public AccountProgressionAccess ProgressionAccess()
         {
-            return _hasPermission;
+            return _access;
         }
 
         public Task<AccountProgression> GetProgressionAsync(CancellationToken ct)
@@ -43,6 +44,19 @@ namespace TaimisToolbench.Tests.Helpers
             }
 
             return Task.FromResult(_progression);
+        }
+
+        /// <summary>
+        /// What the real client returns when the subtoken does not carry
+        /// "progression": expansion access read off /v2/account, and null
+        /// for everything that scope gates.
+        /// </summary>
+        public static AccountProgression WithoutProgressionScope()
+        {
+            return new AccountProgression
+            {
+                ExpansionAccess = new HashSet<string>(),
+            };
         }
 
         public static AccountProgression WithAchievements(params int[] achievementIds)

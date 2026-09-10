@@ -17,6 +17,45 @@ namespace TaimisToolbench.Models
     }
 
     /// <summary>
+    /// What kind of thing a vendor demands, so a notice can say so. A
+    /// player reading a bare name cannot tell an achievement from an item.
+    /// </summary>
+    internal enum VendorRequirementKind
+    {
+        /// <summary>
+        /// The updater recognized none of the wiki's prose as a GW2 API
+        /// name, so nothing can be checked and nothing can be named.
+        /// </summary>
+        Unclassified,
+        Achievement,
+        Mastery,
+        Expansion,
+    }
+
+    /// <summary>
+    /// Why a requirement came back
+    /// <see cref="VendorRequirementStatus.Unknown"/>. The two causes need
+    /// different words: one is a limit of the module's data, the other is
+    /// account data it could have read and did not, which the player can
+    /// act on. CraftingPlanResult.AccountProgressionAccess says which
+    /// action.
+    /// </summary>
+    internal enum VendorRequirementUnknownReason
+    {
+        /// <summary>The status is Met or NotMet; there is nothing to
+        /// explain.</summary>
+        None,
+
+        /// <summary>The requirement names nothing the module can
+        /// check.</summary>
+        RequirementNotUnderstood,
+
+        /// <summary>The requirement is checkable and the account data for
+        /// it was not read.</summary>
+        AccountDataUnavailable,
+    }
+
+    /// <summary>
     /// What a vendor demands of the account before it will trade, from the
     /// wiki's "Has requirement" text.
     /// <para>
