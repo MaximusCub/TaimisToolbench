@@ -99,19 +99,19 @@ namespace TaimisToolbench.Services
         public const int RankerStatusBudgetChars = 86;
 
         /// <summary>
-        /// Characters the Crafting Plan's status line may run to before it
-        /// ellipsizes. Its band is 1206 logical pixels at the same window
-        /// floor - TopRegionLayoutMath.StatusBandWidth derives that from the
-        /// shipped constants and TopRegionLayoutMathTests pins it - and the
-        /// two bands draw the same face, so this is
+        /// Characters the Crafting Plan's status line may run to. Its band
+        /// is 1206 logical pixels at the same window floor -
+        /// TopRegionLayoutMath.StatusBandWidth derives that from the shipped
+        /// constants and TopRegionLayoutMathTests pins it - and the two
+        /// bands draw the same face, so this is
         /// <see cref="RankerStatusBudgetChars"/>' own measured rate carried
         /// across: 86 characters in 779 pixels is 9.06 a character, and 1206
         /// buys 133 of them.
         /// <para>
-        /// The widest line the strip composes is far past this, so it is
-        /// the ellipsizer that keeps it on screen rather than this budget.
-        /// PlanStatusLineTests builds that line through the real
-        /// composition and pins its length.
+        /// The line is written short enough to fit rather than shortened
+        /// after the fact. PlanStatusLineTests builds the widest line the
+        /// strip can compose through the real composition and holds it
+        /// under this number.
         /// </para>
         /// </summary>
         public const int PlanStatusBudgetChars = 133;
@@ -407,20 +407,21 @@ namespace TaimisToolbench.Services
         /// <summary>
         /// The Crafting Plan status line's account-data clause, or null when
         /// there is nothing to say about the snapshot the plan subtracted
-        /// owned materials from. It reports two separate faults: data older
-        /// than <paramref name="staleThreshold"/>, and characters the fetch
-        /// could not read in full.
+        /// owned materials from. It reports two faults: data older than
+        /// <paramref name="staleThreshold"/>, and characters the fetch could
+        /// not read in full.
         /// <para>
         /// The age half is gated on the same threshold as the Snapshot tab's
         /// recolor and Module.Update()'s auto-refresh, so the three cannot
         /// disagree. The incomplete half has no threshold: a snapshot taken
         /// ten seconds ago with a character missing is exactly the fault
-        /// that makes a plan recommend buying an owned item.
-        /// </para>
-        /// <para>
-        /// It names account data rather than following the Crafting
-        /// Ranker's bare "(37m ago)": this clause follows a "Plan
-        /// generated" timestamp that a bare age would read as restating.
+        /// that makes a plan recommend buying an owned item. It is a flag
+        /// and not a count - four clauses compete for
+        /// <see cref="PlanStatusBudgetChars"/>, and the Snapshot tab names
+        /// the count through <see cref="ForSnapshotDetail"/>. The clause names
+        /// account data rather than following the Crafting Ranker's bare
+        /// "(37m ago)", which after a "Plan generated" timestamp would read
+        /// as restating it.
         /// </para>
         /// </summary>
         public static string ForPlanAccountDataNote(
@@ -434,13 +435,12 @@ namespace TaimisToolbench.Services
             var parts = new List<string>(2);
             if (IsStale(age, staleThreshold))
             {
-                parts.Add("captured " + ForAgeAgo(age));
+                parts.Add(AgeMagnitude(age) + " old");
             }
 
-            string incomplete = ForIncompleteCharacters(incompleteCharacters, characterCount);
-            if (incomplete != null)
+            if (HasIncompleteCharacters(incompleteCharacters, characterCount))
             {
-                parts.Add(incomplete);
+                parts.Add("incomplete");
             }
 
             return parts.Count == 0 ? null : "account data " + string.Join(", ", parts);
@@ -474,12 +474,11 @@ namespace TaimisToolbench.Services
         /// since this plan was solved that the next Generate would pick up.
         /// Null when nothing has.
         /// <para>
-        /// Both facts share ONE remedy clause rather than carrying one
-        /// each. The strip is a single unellipsized line, and its worst
-        /// realistic content already overruns the 1246px the label has at
-        /// the 1378px window minimum; two copies of "Generate Plan to
-        /// apply" cost a further 292px of that overrun and tell the reader
-        /// nothing the first did not.
+        /// The remedy is not spelled out. The Generate Plan button sits on
+        /// this same strip, two rows above the line, so "Generate Plan to
+        /// apply" spent 22 of the band's 133 characters
+        /// (<see cref="PlanStatusBudgetChars"/>) restating the control the
+        /// reader is already looking at.
         /// </para>
         /// <para>
         /// Deliberately not merged with
@@ -509,7 +508,7 @@ namespace TaimisToolbench.Services
                 subject = "Account data";
             }
 
-            return subject + " changed - Generate Plan to apply";
+            return subject + " changed";
         }
 
         /// <summary>

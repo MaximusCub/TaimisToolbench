@@ -879,60 +879,18 @@ namespace TaimisToolbench.Views
 
         public void SetStatus(string status)
         {
-            _statusFullText = status ?? "";
-            ApplyStatusText();
-        }
-
-        // The status line's whole text, so a resize re-takes the ellipsis
-        // from the original rather than compounding it onto an
-        // already-shortened string.
-        private string _statusFullText = "";
-
-        // Width the line ellipsizes against - TopRegionLayoutMath.
-        // StatusBandWidth of the live panel. Held separately from
-        // Label.Width, which stays the width of the TEXT: see
-        // InlineSpinnerLayout.LabelWidthForText.
-        private int _statusBudget;
-
-        private static int StatusBandWidthFor(int panelWidth)
-        {
-            return TopRegionLayoutMath.StatusBandWidth(
-                panelWidth, InlineSpinnerLayout.PlanStripSize, InlineSpinnerLayout.LabelGap);
-        }
-
-        /// <summary>
-        /// Paints <see cref="_statusFullText"/> into the label, shortened
-        /// to the band and with the whole line on a hover when it does not
-        /// fit. The strip's worst line runs to well over the band - see
-        /// StatusText.PlanStatusBudgetChars - and without this it clipped
-        /// with no ellipsis and no way to read the rest.
-        /// <para>
-        /// Called by every writer the strip has - RenderFromBoard's ~7Hz
-        /// spinner render, the resolving and invalid-quantity notices, the
-        /// section renderers' own callback - and by every relayout, since
-        /// the band moves with the panel.
-        /// </para>
-        /// </summary>
-        private void ApplyStatusText()
-        {
-            if (_statusLabel == null)
+            if (_statusLabel != null)
             {
-                return;
+                _statusLabel.Text = status ?? "";
+
+                // The label is AutoSizeWidth, so its right edge moves with
+                // every text change and the spinner has to follow it. Done
+                // here rather than only in RenderFromBoard because the
+                // strip has several other writers (Resolving..., the
+                // invalid-quantity notice, the section renderers' own
+                // SetStatus callback) and any of them can land mid-flight.
+                InlineSpinner.PlaceAfter(_statusSpinner, _statusLabel, InlineSpinnerLayout.LabelGap);
             }
-
-            var font = UiFonts.Status;
-            string shown = LabelHelpers.EllipsizeToWidth(
-                font, _statusFullText, Math.Max(0, _statusBudget));
-            _statusLabel.Text = shown;
-            _statusLabel.Width = InlineSpinnerLayout.LabelWidthForText(
-                LabelHelpers.MeasureWith(font)(shown), _statusBudget);
-            TooltipFacility.ApplyPlain(
-                _statusLabel,
-                string.Equals(shown, _statusFullText, StringComparison.Ordinal) ? null : _statusFullText);
-
-            // The label's right edge moves with every text change and the
-            // spinner has to follow it.
-            InlineSpinner.PlaceAfter(_statusSpinner, _statusLabel, InlineSpinnerLayout.LabelGap);
         }
 
         /// <summary>
@@ -2264,10 +2222,7 @@ namespace TaimisToolbench.Views
             _controlsPanel.Location = new Point(0, layout.ControlsRowY);
             PlaceTreeToolbarRow(w, layout.TreeToolbarRowY);
             _statusLabel.Location = new Point(0, layout.StatusRowY);
-
-            // Re-ellipsizes from the whole text and re-seats the spinner.
-            _statusBudget = StatusBandWidthFor(w);
-            ApplyStatusText();
+            InlineSpinner.PlaceAfter(_statusSpinner, _statusLabel, InlineSpinnerLayout.LabelGap);
             _separator.Location = new Point(0, layout.SeparatorY);
             _contentPanel.Location = new Point(0, layout.ContentY);
             _contentPanel.Size = new Point(w, h - layout.TopRegionHeight);
@@ -2472,12 +2427,11 @@ namespace TaimisToolbench.Views
             // Status label. Its own tier: the strip reports what the module
             // is doing, and had been reporting it at the same size as
             // every row in the plan below.
-            // AutoSizeWidth off: the line is ellipsized to the band and the
-            // width is then set to the SHOWN text - see ApplyStatusText.
             _statusLabel = new Label()
             {
                 Font = UiFonts.Status,
-                AutoSizeWidth = false,
+                Text = ReadyStatus,
+                AutoSizeWidth = true,
                 AutoSizeHeight = true,
                 Location = new Point(0, layout.StatusRowY),
                 Parent = buildPanel,
@@ -2486,11 +2440,7 @@ namespace TaimisToolbench.Views
 
             _statusSpinner = InlineSpinner.Create(buildPanel, InlineSpinnerLayout.PlanStripSize);
             _statusSpinner.ZIndex = TopStripZIndex;
-
-            // Both before the first paint: the label is empty until one
-            // runs, and the band the other measures against is zero.
-            _statusBudget = StatusBandWidthFor(w);
-            SetStatus(ReadyStatus);
+            InlineSpinner.PlaceAfter(_statusSpinner, _statusLabel, InlineSpinnerLayout.LabelGap);
 
             // Static separator between controls and content
             // WheelTransparent, not a plain Panel: it now paints above the
@@ -3175,10 +3125,7 @@ namespace TaimisToolbench.Views
             _generateButton.Location = new Point(w - 120 - RightEdgePadding, 3);
             PlaceTreeToolbarRow(w, layout.TreeToolbarRowY);
             _statusLabel.Location = new Point(0, layout.StatusRowY);
-
-            // Re-ellipsizes from the whole text and re-seats the spinner.
-            _statusBudget = StatusBandWidthFor(w);
-            ApplyStatusText();
+            InlineSpinner.PlaceAfter(_statusSpinner, _statusLabel, InlineSpinnerLayout.LabelGap);
             _separator.Size = new Point(w - RightEdgePadding, 2);
             _separator.Location = new Point(0, layout.SeparatorY);
             _contentPanel.Location = new Point(0, layout.ContentY);

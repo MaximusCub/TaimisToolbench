@@ -140,6 +140,12 @@ namespace TaimisToolbench.Services
         /// it otherwise, which is the same "the strip says one thing, the
         /// plan is another" mistake as planning for the wrong item.
         /// Null when every row with text resolved.
+        /// <para>
+        /// Four clauses share a 133-character band
+        /// (StatusText.PlanStatusBudgetChars), so this one states the count
+        /// and stops. Which rows they were is on screen: they are the input
+        /// rows with text and no item.
+        /// </para>
         /// </summary>
         public static string UnresolvedRowsNotice(int unresolvedRowCount)
         {
@@ -148,12 +154,9 @@ namespace TaimisToolbench.Services
                 return null;
             }
 
-            // One hyphen clause, per the module's own status grammar -
-            // the consequence stated actively rather than as a second
-            // "and is not" limb of the same sentence.
             return unresolvedRowCount == 1
-                ? "1 row has no item selected - left out of this plan."
-                : unresolvedRowCount + " rows have no item selected - left out of this plan.";
+                ? "1 row left out"
+                : unresolvedRowCount + " rows left out";
         }
     }
 

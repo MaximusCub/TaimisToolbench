@@ -247,12 +247,8 @@ namespace TaimisToolbench.Tests.Services
         {
             // A plan built from only some of the rows must admit to the rest
             // rather than letting a requested item vanish silently.
-            Assert.Equal(
-                "1 row has no item selected - left out of this plan.",
-                ItemRowSelection.UnresolvedRowsNotice(1));
-            Assert.Equal(
-                "3 rows have no item selected - left out of this plan.",
-                ItemRowSelection.UnresolvedRowsNotice(3));
+            Assert.Equal("1 row left out", ItemRowSelection.UnresolvedRowsNotice(1));
+            Assert.Equal("3 rows left out", ItemRowSelection.UnresolvedRowsNotice(3));
         }
     }
 }

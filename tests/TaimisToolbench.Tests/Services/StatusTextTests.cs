@@ -404,11 +404,11 @@ namespace TaimisToolbench.Tests.Services
             // The same boundary IsStale uses, so the clause and the Snapshot
             // tab's amber recolor can never disagree about one snapshot.
             Assert.Equal(
-                "account data captured 10m ago",
+                "account data 10m old",
                 StatusText.ForPlanAccountDataNote(
                     TimeSpan.FromMinutes(10), DefaultRefreshInterval, 0, 9));
             Assert.Equal(
-                "account data captured 37m ago",
+                "account data 37m old",
                 StatusText.ForPlanAccountDataNote(
                     TimeSpan.FromMinutes(37), DefaultRefreshInterval, 0, 9));
         }
@@ -418,18 +418,24 @@ namespace TaimisToolbench.Tests.Services
         {
             // A snapshot captured seconds ago with a character missing is
             // exactly the fault that makes a plan recommend buying an owned
-            // item, so no age threshold gates this half.
+            // item, so no age threshold gates this half. It is a flag and
+            // not a count: the band holds four clauses in 133 characters,
+            // and ForSnapshotDetail names the count on the Snapshot tab.
             Assert.Equal(
-                "account data incomplete for 2 of 9 characters",
+                "account data incomplete",
                 StatusText.ForPlanAccountDataNote(
                     TimeSpan.Zero, DefaultRefreshInterval, 2, 9));
+            Assert.Equal(
+                "account data incomplete",
+                StatusText.ForPlanAccountDataNote(
+                    TimeSpan.Zero, DefaultRefreshInterval, 99, 99));
         }
 
         [Fact]
         public void ForPlanAccountDataNote_BothFaults_ReportsBothOnOneClause()
         {
             Assert.Equal(
-                "account data captured 37m ago, incomplete for 2 of 9 characters",
+                "account data 37m old, incomplete",
                 StatusText.ForPlanAccountDataNote(
                     TimeSpan.FromMinutes(37), DefaultRefreshInterval, 2, 9));
         }
@@ -454,9 +460,9 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Theory]
-        [InlineData(60, "account data captured 1h 0m ago")]
-        [InlineData(1440, "account data captured 1d ago")]
-        [InlineData(43200, "account data captured 1mo ago")]
+        [InlineData(60, "account data 1h 0m old")]
+        [InlineData(1440, "account data 1d old")]
+        [InlineData(43200, "account data 1mo old")]
         public void ForPlanAccountDataNote_RidesTheSameLadder(double minutes, string expected)
         {
             Assert.Equal(expected, StatusText.ForPlanAccountDataNote(
@@ -475,25 +481,25 @@ namespace TaimisToolbench.Tests.Services
         public void ForPlanStaleInputs_NamesWhicheverChanged()
         {
             Assert.Equal(
-                "Settings changed - Generate Plan to apply",
+                "Settings changed",
                 StatusText.ForPlanStaleInputs(true, false));
             Assert.Equal(
-                "Account data changed - Generate Plan to apply",
+                "Account data changed",
                 StatusText.ForPlanStaleInputs(false, true));
         }
 
         /// <summary>
-        /// Both facts, ONE remedy clause. Two notices each ending in
-        /// "Generate Plan to apply" cost 292px of a status line that
-        /// already overruns its label at the window minimum.
+        /// Both facts, ONE clause, and no remedy spelled out. The Generate
+        /// Plan button is on the same strip, and the band holds 133
+        /// characters for four competing clauses.
         /// </summary>
         [Fact]
-        public void ForPlanStaleInputs_BothChanged_StateTheRemedyOnce()
+        public void ForPlanStaleInputs_BothChanged_ShareOneClause()
         {
             string both = StatusText.ForPlanStaleInputs(true, true);
 
-            Assert.Equal("Settings and account data changed - Generate Plan to apply", both);
-            Assert.Equal(1, CountOccurrences(both, "Generate Plan to apply"));
+            Assert.Equal("Settings and account data changed", both);
+            Assert.Equal(1, CountOccurrences(both, "changed"));
         }
 
         private static int CountOccurrences(string haystack, string needle)

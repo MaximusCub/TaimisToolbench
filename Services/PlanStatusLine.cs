@@ -8,19 +8,20 @@ namespace TaimisToolbench.Services
     /// reporting right now, then the notices that outlive it.
     /// <para>
     /// Blish-free so the widest line the strip can compose is measurable in
-    /// a test. It is far wider than the band - see
-    /// <see cref="StatusText.PlanStatusBudgetChars"/> - so the view
-    /// ellipsizes and hangs the whole text on a hover.
+    /// a test. That line has to FIT the band rather than be shortened to it
+    /// - see <see cref="StatusText.PlanStatusBudgetChars"/> - so every
+    /// clause here is written to its share of 133 characters.
     /// </para>
     /// </summary>
     internal static class PlanStatusLine
     {
         /// <summary>
-        /// Separator between the line's clauses. Wide on purpose: the
-        /// clauses are separate facts, and each already spends hyphens of
-        /// its own.
+        /// Separator between the line's clauses. Narrow: at "  |  " the two
+        /// separators cost four of the band's 133 characters
+        /// (<see cref="StatusText.PlanStatusBudgetChars"/>), and the bar
+        /// already separates the clauses on its own.
         /// </summary>
-        public const string NoticeSeparator = "  |  ";
+        public const string NoticeSeparator = " | ";
 
         /// <summary>
         /// The finished plan's own clause. Carries the account-data note

@@ -7,8 +7,8 @@ namespace TaimisToolbench.Tests.Services
     /// <summary>
     /// The Crafting Plan strip is one line, and four separate facts can be
     /// true of a plan at once. Composed here so the widest line the strip
-    /// can produce is measurable; the label that draws it and the hover
-    /// that carries the rest are view code and are not covered.
+    /// can produce is measurable against the band it has to fit; the label
+    /// that draws it is view code and is not covered.
     /// </summary>
     public class PlanStatusLineTests
     {
@@ -30,7 +30,7 @@ namespace TaimisToolbench.Tests.Services
             string line = PlanStatusLine.ForGeneratedPlan(
                 Generated, TimeSpan.FromHours(11), StaleAfter, 0, 9);
 
-            Assert.EndsWith(" (account data captured 11h 0m ago)", line);
+            Assert.EndsWith(" (account data 11h 0m old)", line);
             Assert.StartsWith(StatusText.Stamp("Plan generated", Generated), line);
         }
 
@@ -97,7 +97,7 @@ namespace TaimisToolbench.Tests.Services
         /// to the strip fails here and has to be a decision rather than a
         /// silent widening.
         /// </summary>
-        private const int WorstRealisticLineChars = 232;
+        private const int WorstRealisticLineChars = 132;
 
         [Fact]
         public void WorstRealisticLine_StaysWithinItsPinnedLength()
@@ -108,24 +108,39 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void WorstRealisticLine_OverrunsTheBand_SoItMustBeEllipsized()
+        public void WorstRealisticLine_FitsTheBand()
         {
-            // 232 characters against a band that holds about 133. The line
-            // has been over since the notices were added; before the
-            // ellipsizer it simply clipped, with no marker and no way to
-            // read the rest. This asserts the overrun is real, so the
-            // ellipsizer cannot be dropped as unnecessary.
+            // The whole point of the clause wording. The line is short
+            // enough to draw in full, so nothing is shortened and nothing
+            // hides on a hover. This was 232 characters against a band that
+            // holds about 133.
+            string line = WorstRealisticLine();
+
             Assert.True(
-                WorstRealisticLine().Length > StatusText.PlanStatusBudgetChars,
-                $"worst line {WorstRealisticLine().Length} chars, budget "
+                line.Length <= StatusText.PlanStatusBudgetChars,
+                $"worst line {line.Length} chars, budget "
                     + $"{StatusText.PlanStatusBudgetChars}");
+        }
+
+        [Fact]
+        public void WorstRealisticLine_NamesEveryFactItWasBuiltFrom()
+        {
+            // Shortening the clauses must not have dropped one of them.
+            // Each fact is still on the line, in its own words.
+            string line = WorstRealisticLine();
+
+            Assert.Contains("Plan generated", line);
+            Assert.Contains("11h 59m old", line);
+            Assert.Contains("incomplete", line);
+            Assert.Contains("12 rows left out", line);
+            Assert.Contains("Settings and account data changed", line);
         }
 
         [Fact]
         public void OrdinaryCompletionLine_FitsTheBandWithRoomToSpare()
         {
             // The line almost every generation actually shows: fresh data,
-            // nothing outstanding. It must not ellipsize.
+            // nothing outstanding.
             string line = PlanStatusLine.WithStandingNotices(
                 PlanStatusLine.ForGeneratedPlan(Generated, TimeSpan.FromMinutes(1), StaleAfter, 0, 9),
                 null,
