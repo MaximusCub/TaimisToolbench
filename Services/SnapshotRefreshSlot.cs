@@ -1,4 +1,6 @@
 using System.Threading;
+using System.Threading.Tasks;
+using TaimisToolbench.Models;
 
 namespace TaimisToolbench.Services
 {
@@ -24,6 +26,38 @@ namespace TaimisToolbench.Services
     {
         private int _claimed;
         private CancellationTokenSource _cts;
+        private Task<AccountSnapshot> _fetchInFlight;
+
+        /// <summary>
+        /// The fetch a later caller joins instead of starting its own, or
+        /// null when none is published. Only a caller holding the claim
+        /// ever publishes one, so at most one is live; a joiner can still
+        /// read one that has just finished, which costs it an
+        /// already-completed await.
+        /// </summary>
+        public Task<AccountSnapshot> RunningFetch
+        {
+            get { return Volatile.Read(ref _fetchInFlight); }
+        }
+
+        /// <summary>
+        /// Publishes the fetch this claim is running, so a later caller
+        /// can wait for it.
+        /// </summary>
+        public void PublishFetch(Task<AccountSnapshot> fetch)
+        {
+            Volatile.Write(ref _fetchInFlight, fetch);
+        }
+
+        /// <summary>
+        /// Withdraws <paramref name="fetch"/> only while it is still the
+        /// published one, so a later refresh's publication survives this
+        /// one's exit.
+        /// </summary>
+        public void ClearFetch(Task<AccountSnapshot> fetch)
+        {
+            Interlocked.CompareExchange(ref _fetchInFlight, null, fetch);
+        }
 
         /// <summary>
         /// Whether a refresh currently holds the slot. Advisory only - a

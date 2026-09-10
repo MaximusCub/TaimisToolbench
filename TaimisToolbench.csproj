@@ -123,6 +123,8 @@
     <Compile Include="Models\PlanAccountData.cs" />
     <Compile Include="Services\PlanItemIds.cs" />
     <Compile Include="Services\PlanAccountRefresh.cs" />
+    <Compile Include="Services\PlanRefreshGate.cs" />
+    <Compile Include="Services\PlanRefreshOutcome.cs" />
     <Compile Include="Services\PlanStatusLine.cs" />
     <Compile Include="Services\RefreshFailureRun.cs" />
     <Compile Include="Services\SnapshotRefreshPolicy.cs" />

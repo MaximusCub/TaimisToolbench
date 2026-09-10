@@ -254,11 +254,9 @@ namespace TaimisToolbench
         // comment for the race that shape allowed.
         private readonly SnapshotRefreshSlot _refreshSlot = new SnapshotRefreshSlot();
 
-        // The fetch a later caller joins instead of starting its own. Only
-        // a caller holding _refreshSlot ever publishes one, so at most one
-        // is live; a joiner can still read one that has just finished,
-        // which costs it an already-completed await.
-        private Task<AccountSnapshot> _snapshotFetchInFlight;
+        // The refresh half of a Generate Plan press, held apart from this
+        // class so its orderings are testable - see PlanRefreshGate.
+        private PlanRefreshGate _planRefreshGate;
 
         // Cancels the background /v2/build lookup and the corpus probe
         // behind it - both retry/run across several seconds and hold
@@ -467,6 +465,11 @@ namespace TaimisToolbench
             _planHistoryBlobStore = new PlanHistoryBlobStore(dataDir, onStoreError);
             _planStore = new PlanStore(dataDir, onStoreError, onStoreInfo);
             _snapshotService = new Gw2AccountSnapshotService(Gw2ApiManager);
+            _planRefreshGate = new PlanRefreshGate(
+                _refreshSlot,
+                _snapshotService.HasRequiredPermissions,
+                IsInRefreshFailureBackoff,
+                FetchForPlanAsync);
             _lastStatus = _statusStore.Load();
 
             _httpClient = new HttpClient();
@@ -2227,7 +2230,7 @@ namespace TaimisToolbench
         private async Task<AccountSnapshot> TrackedFetchAsync(CancellationToken ct)
         {
             var fetch = FetchAndSaveSnapshotAsync(ct);
-            Volatile.Write(ref _snapshotFetchInFlight, fetch);
+            _refreshSlot.PublishFetch(fetch);
             try
             {
                 var snapshot = await fetch;
@@ -2240,11 +2243,30 @@ namespace TaimisToolbench
             }
             finally
             {
-                // Only clears the field when it still holds THIS fetch, so
-                // a later refresh's publication survives this one's exit.
-                // Discarded because the return is a Task: without it the
-                // compiler reads the call as a forgotten await.
-                _ = Interlocked.CompareExchange(ref _snapshotFetchInFlight, null, fetch);
+                _refreshSlot.ClearFetch(fetch);
+            }
+        }
+
+        /// <summary>
+        /// The fetch <see cref="_planRefreshGate"/> runs when a Generate
+        /// press is the caller that claimed the slot.
+        /// </summary>
+        private async Task<AccountSnapshot> FetchForPlanAsync(CancellationToken ct)
+        {
+            _backgroundRefreshInFlight = true;
+            try
+            {
+                var fetched = await TrackedFetchAsync(ct);
+                if (fetched != null)
+                {
+                    SaveStatusThreadSafe(StatusText.Stamp("Updated", fetched.CapturedAt.ToLocalTime()));
+                }
+
+                return fetched;
+            }
+            finally
+            {
+                _backgroundRefreshInFlight = false;
             }
         }
 
@@ -2271,22 +2293,15 @@ namespace TaimisToolbench
         {
             var refresh = new PlanAccountRefresh();
 
-            if (!_snapshotService.HasRequiredPermissions())
+            try
             {
-                MarkPlanRefreshFailed(refresh, null);
-            }
-            else if (SnapshotRefreshPolicy.ShouldRefreshOnGenerate(
-                _currentSnapshot?.CapturedAt, DateTime.UtcNow))
-            {
-                try
+                var outcome = await _planRefreshGate.RunAsync(
+                    _currentSnapshot?.CapturedAt, DateTime.UtcNow);
+
+                switch (outcome)
                 {
-                    var running = Volatile.Read(ref _snapshotFetchInFlight);
-                    if (running != null)
-                    {
-                        await running;
-                    }
-                    else if (IsInRefreshFailureBackoff())
-                    {
+                    case PlanRefreshOutcome.NoApiAccess:
+                    case PlanRefreshOutcome.SkippedInBackoff:
                         // A refresh failed inside the last minute, so this
                         // press would spend a fresh account fetch to fail
                         // the same way. The background path has waited this
@@ -2298,56 +2313,38 @@ namespace TaimisToolbench
                         // opened the window already stamped one, and a
                         // second stamp would date an attempt that did not
                         // happen.
-                        Logger.Debug("Skipping snapshot refresh for a plan - within backoff window after a prior failure");
                         MarkPlanRefreshFailed(refresh, null);
-                    }
-                    else if (_refreshSlot.TryClaim())
-                    {
-                        _backgroundRefreshInFlight = true;
-                        try
-                        {
-                            var fetched = await TrackedFetchAsync(_refreshSlot.BeginFetch());
-                            if (fetched != null)
-                            {
-                                SaveStatusThreadSafe(StatusText.Stamp("Updated", fetched.CapturedAt.ToLocalTime()));
-                            }
-                        }
-                        finally
-                        {
-                            _backgroundRefreshInFlight = false;
-                            _refreshSlot.Release();
-                        }
-                    }
-
-                    if (!refresh.Failed)
-                    {
+                        break;
+                    case PlanRefreshOutcome.Refreshed:
+                    case PlanRefreshOutcome.JoinedRunningFetch:
+                    case PlanRefreshOutcome.LostTheClaim:
                         Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
-                    }
+                        break;
                 }
-                catch (OperationCanceledException)
+            }
+            catch (OperationCanceledException)
+            {
+                if (ct.IsCancellationRequested)
                 {
-                    if (ct.IsCancellationRequested)
-                    {
-                        throw;
-                    }
-
-                    // Clear Cache cancelled the fetch through the refresh
-                    // slot. It writes its own status line, and a "Refresh
-                    // failed" stamped over that would name the wrong cause.
-                    Logger.Debug("Snapshot refresh for a plan was cancelled");
-                    MarkPlanRefreshFailed(refresh, null);
+                    throw;
                 }
-                catch (Exception ex)
-                {
-                    Logger.Warn(ex, "Failed to refresh account snapshot for a plan");
-                    ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot",
-                        $"Failed to refresh account snapshot for a plan: {ex.GetType().Name} - {ex.Message}");
-                    Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, DateTime.UtcNow.Ticks);
 
-                    var classification = SnapshotFailureClassifier.Classify(ex);
-                    SaveStatusThreadSafe(StatusText.Stamp(StatusText.ForRefreshFailure(classification), DateTime.Now));
-                    MarkPlanRefreshFailed(refresh, ex as SnapshotFetchFailedException);
-                }
+                // Clear Cache cancelled the fetch through the refresh
+                // slot. It writes its own status line, and a "Refresh
+                // failed" stamped over that would name the wrong cause.
+                Logger.Debug("Snapshot refresh for a plan was cancelled");
+                MarkPlanRefreshFailed(refresh, null);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Failed to refresh account snapshot for a plan");
+                ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot",
+                    $"Failed to refresh account snapshot for a plan: {ex.GetType().Name} - {ex.Message}");
+                Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, DateTime.UtcNow.Ticks);
+
+                var classification = SnapshotFailureClassifier.Classify(ex);
+                SaveStatusThreadSafe(StatusText.Stamp(StatusText.ForRefreshFailure(classification), DateTime.Now));
+                MarkPlanRefreshFailed(refresh, ex as SnapshotFetchFailedException);
             }
 
             // After the fetch, so a refresh that succeeded here has already
