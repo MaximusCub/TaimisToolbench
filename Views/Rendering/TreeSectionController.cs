@@ -1208,8 +1208,6 @@ namespace TaimisToolbench.Views.Rendering
             handle.QtyLabel = qtyLabel;
             handle.NameLabel = nameLabel;
 
-            WireWikiLinkContextAction(rowPanel, node);
-
             StampRowIcon(iconFrame, iconScrim, hover);
 
             // Decision pill column: one pill per feasible source (direct
@@ -1250,77 +1248,6 @@ namespace TaimisToolbench.Views.Rendering
                 node, parent, panelWidth, depth, shape, rowPanel, arrowLabel, handle);
 
             RegisterRowResizeHandlers(handle, rowPanel, childFlow, nameFont);
-        }
-
-        /// <summary>
-        /// The row's right-click-to-wiki context action, wired only for
-        /// names that can resolve to a page - see WikiLinkBuilder's
-        /// SentinelNames for the ones that never can.
-        /// </summary>
-        private static void WireWikiLinkContextAction(Panel rowPanel, CraftingTreeNode node)
-        {
-            // This module's only external-URL launch - a context action
-            // (right-click), not a visible icon. Every tree
-            // row gets this, item leaf or internal node alike - a wiki page
-            // that does not exist for an internal-only concept (e.g. a
-            // synthesized cost-component "currency" name) just 404s rather
-            // than crashing anything; WikiLinkBuilder.HasWikiPage/
-            // BuildItemPageUrl additionally suppress the affordance
-            // entirely for the known placeholder names (see
-            // WikiLinkBuilder's SentinelNames), which never resolve to a
-            // real page at all.
-            //
-            // Fix-pass (render-path allocation): HasWikiPage is a cheap
-            // non-whitespace + not-a-placeholder-name check - the actual
-            // URL (Trim + Replace + Uri.EscapeDataString, a closure, and a
-            // delegate) is built lazily inside the press/release handlers
-            // below instead of eagerly for every tree row on every build
-            // and every lazy expand, since most rows are never
-            // right-clicked at all.
-            //
-            // Fix-pass (right-click-as-camera-drag): GW2's own right-drag
-            // is the camera-rotate gesture, and firing on button-DOWN alone
-            // (the previous behavior) meant a drag begun over this row -
-            // input Blish otherwise swallows here today - opened the
-            // browser and yanked focus out of a fullscreen game the
-            // instant the button went down, with no way to abort. Firing
-            // on RightMouseButtonReleased alone is NOT a fix: Blish routes
-            // the release event to whichever row is under the cursor at
-            // release time, so a drag that started on a DIFFERENT row
-            // would open THIS row's page instead. Pairing press+release on
-            // this SAME rowPanel closes that: press arms a per-row flag,
-            // and only this row's own Released handler (which only fires
-            // when the release also lands on this row) can consume it.
-            // MouseLeft additionally disarms the flag the moment the
-            // cursor leaves this row after a press, so a drag that starts
-            // here, wanders off, and is released back over this row later
-            // (from an unrelated gesture) cannot replay a stale arm.
-            //
-            // Unlike RenderChildContainer's caret handler, this one does
-            // not exclude clicks landing on a pill (this method never sees
-            // them). Intentional and harmless: decision pills carry no
-            // right-click meaning, so a right-click that lands on one
-            // still falls through to this row's wiki-link handler rather
-            // than doing nothing.
-            if (WikiLinkBuilder.HasWikiPage(node.Name))
-            {
-                // Which page a row opens is decided by
-                // TreeRowTooltipComposer.WikiTargetFor, the same value the
-                // row's icon hover reads, so the row and its icon can never
-                // open different pages.
-                var wikiTarget = TreeRowTooltipComposer.WikiTargetFor(node);
-                bool wikiLinkArmed = false;
-                rowPanel.RightMouseButtonPressed += (_, __) => wikiLinkArmed = true;
-                rowPanel.MouseLeft += (_, __) => wikiLinkArmed = false;
-                rowPanel.RightMouseButtonReleased += (_, __) =>
-                {
-                    if (wikiLinkArmed)
-                    {
-                        wikiLinkArmed = false;
-                        WikiLinkLauncher.Open(wikiTarget.BuildUrl());
-                    }
-                };
-            }
         }
 
         /// <summary>

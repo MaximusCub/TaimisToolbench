@@ -5,19 +5,22 @@ using TaimisToolbench.Services;
 namespace TaimisToolbench.Views.Rendering
 {
     /// <summary>
-    /// The right-click-to-wiki gesture, wired onto an icon's whole control
-    /// tree by <see cref="ItemIconTooltip.StampOnIconTree"/>. Building an
-    /// icon through <see cref="IconControls"/> is what wires it, so no call
-    /// site can draw one and forget.
+    /// The right-click-to-wiki gesture, stamped onto an icon by
+    /// <see cref="ItemIconTooltip.StampOnIconTree"/> as
+    /// <see cref="IconControls"/> builds it, so no call site can forget.
     /// <para>
-    /// GW2's own right-drag is the camera-rotate gesture, so firing on
-    /// button-DOWN opens the browser and yanks focus out of a fullscreen
-    /// game the instant a drag begun over the icon goes down, with no way
-    /// to abort. Firing on release alone is not a fix either: Blish routes
-    /// the release to whichever control is under the cursor at release
-    /// time, so a drag started elsewhere would open THIS icon's page.
-    /// Press arms a per-control flag, this control's own release consumes
-    /// it, and MouseLeft disarms it so a stale arm cannot be replayed.
+    /// EXACTLY ONE control per gesture, never an ancestor of another wired
+    /// control. Blish's Container.TriggerMouseInput raises the container's
+    /// OWN mouse event before walking its children, so a wired frame and
+    /// its wired art square both fire on one click and open two tabs.
+    /// Hovers resolve on the deepest control alone; clicks accumulate.
+    /// </para>
+    /// <para>
+    /// GW2's own right-drag rotates the camera, so firing on button-DOWN
+    /// yanks focus out of a fullscreen game with no way to abort. Release
+    /// alone is no fix: Blish routes it to whatever the cursor is over
+    /// then. Press arms a flag, this control's own release consumes it,
+    /// and MouseLeft disarms it so a stale arm cannot be replayed.
     /// </para>
     /// </summary>
     internal static class IconWikiClick
@@ -38,36 +41,32 @@ namespace TaimisToolbench.Views.Rendering
         private static readonly ConditionalWeakTable<Control, Wiring> Wired =
             new ConditionalWeakTable<Control, Wiring>();
 
-        internal static void ApplyToIconTree(Control control, IconWikiTarget target)
+        internal static void ApplyToIcon(Control icon, IconWikiTarget target)
         {
-            if (control == null)
+            if (icon == null)
             {
                 return;
             }
 
-            if (Wired.TryGetValue(control, out var wiring))
+            if (Wired.TryGetValue(icon, out var wiring))
             {
                 wiring.Target = target;
                 wiring.Armed = false;
-            }
-            else if (target.HasPage)
-            {
-                // Nothing is allocated for an icon with no page. The rich
-                // tooltip surface rebuilds its own icons on every hover, so
-                // wiring three handlers there would be garbage per hover
-                // for a control the cursor can never click.
-                wiring = new Wiring { Target = target };
-                Wired.Add(control, wiring);
-                Wire(control, wiring);
+                return;
             }
 
-            if (control is Container container)
+            // Nothing is allocated for an icon with no page. The rich
+            // tooltip surface rebuilds its own icons on every hover, so
+            // wiring three handlers there would be garbage per hover for a
+            // control the cursor can never click.
+            if (!target.HasPage)
             {
-                foreach (var child in container.Children)
-                {
-                    ApplyToIconTree(child, target);
-                }
+                return;
             }
+
+            wiring = new Wiring { Target = target };
+            Wired.Add(icon, wiring);
+            Wire(icon, wiring);
         }
 
         private static void Wire(Control control, Wiring wiring)

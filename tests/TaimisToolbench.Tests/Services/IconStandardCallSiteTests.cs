@@ -22,6 +22,9 @@ namespace TaimisToolbench.Tests.Services
     /// </summary>
     public class IconStandardCallSiteTests
     {
+        // The one file that owns the right-click-to-wiki gesture.
+        private const string WikiClickFile = "Views/Rendering/IconWikiClick.cs";
+
         // The entry points that take an id and a bucket.
         private static readonly string[] ByIdCalls =
         {
@@ -340,6 +343,76 @@ namespace TaimisToolbench.Tests.Services
                 .ToArray();
 
             Assert.Equal(new string[0], offenders);
+        }
+
+        /// <summary>
+        /// One file wires the right-click, and one file opens the browser.
+        /// A second subscription on a row that already carries one is how
+        /// the shopping list came to open two tabs per click: Blish HUD's
+        /// Container.TriggerMouseInput raises the container's own event
+        /// before walking its children, so an outer handler and an inner
+        /// handler both fire for a single press and a single release.
+        /// </summary>
+        [Fact]
+        public void OnlyIconWikiClickWiresTheRightClick()
+        {
+            var subscriptions = new[]
+            {
+                "RightMouseButtonPressed +=",
+                "RightMouseButtonReleased +=",
+                "WikiLinkLauncher.Open(",
+            };
+
+            var offenders = new List<string>();
+            foreach (var file in ModuleSources())
+            {
+                if (file == WikiClickFile)
+                {
+                    continue;
+                }
+
+                string text = Read(file);
+                foreach (var marker in subscriptions)
+                {
+                    if (text.Contains(marker))
+                    {
+                        offenders.Add(file + " - " + marker);
+                    }
+                }
+            }
+
+            Assert.Equal(new string[0], offenders.ToArray());
+        }
+
+        /// <summary>
+        /// The gesture goes on ONE control, never on a control and its own
+        /// descendant. Hovers resolve on the deepest control alone, so the
+        /// hover half stamps the whole icon tree; click handlers accumulate
+        /// up the tree instead, so wiring the frame AND its art square
+        /// opened the browser twice. This fails if the wiring walks
+        /// children again.
+        /// </summary>
+        [Fact]
+        public void TheRightClickIsWiredOnOneControlNotATree()
+        {
+            string text = Read(WikiClickFile);
+            var offenders = new List<string>();
+
+            if (text.Contains(".Children"))
+            {
+                offenders.Add("the wiring walks a container's Children");
+            }
+
+            // A self-call is the other shape a tree walk takes.
+            int declared = Regex.Matches(text, @"static void ApplyToIcon\(").Count;
+            int mentions = Regex.Matches(text, @"ApplyToIcon\(").Count;
+            if (declared != 1 || mentions != declared)
+            {
+                offenders.Add("ApplyToIcon is declared " + declared
+                    + " times and named " + mentions + " times");
+            }
+
+            Assert.Equal(new string[0], offenders.ToArray());
         }
     }
 }

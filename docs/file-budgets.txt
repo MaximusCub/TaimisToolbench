@@ -377,7 +377,7 @@ Views/Rendering/PlanHeaderRenderer.cs                                           
 Views/Rendering/PressFeedback.cs                                                        118
 Views/Rendering/RankerReadinessColors.cs                                                99
 Views/Rendering/RarityColors.cs                                                         199
-Views/Rendering/RecipesSectionRenderer.cs                                               363
+Views/Rendering/RecipesSectionRenderer.cs                                               321
 Views/Rendering/RichTooltipSurface.cs                                                   738
 Views/Rendering/RowRelayoutHelpers.cs                                                   72
 Views/Rendering/RowActionKey.cs                                                         103
@@ -391,11 +391,11 @@ Views/Rendering/StickyHeaderHost.cs                                             
 Views/Rendering/SummarySectionRenderer.cs                                               1332
 Views/Rendering/TextRowRenderer.cs                                                      36
 Views/Rendering/TooltipFacility.cs                                                      288
-Views/Rendering/TreeSectionController.cs                                                2530
+Views/Rendering/TreeSectionController.cs                                                2386
 Views/Rendering/TreeToolbarCommands.cs                                                  81
 Views/Rendering/UiFonts.cs                                                              250
 Views/Rendering/GlyphFont.cs                                                            123
-Views/Rendering/IconWikiClick.cs                                                        93
+Views/Rendering/IconWikiClick.cs                                                        92
 Views/Rendering/UiMetrics.cs                                                            60
 Views/Rendering/UsedMaterialsSectionRenderer.cs                                         223
 Views/ResizableTabbedWindow.cs                                                          250

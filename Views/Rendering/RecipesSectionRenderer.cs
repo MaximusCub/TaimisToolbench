@@ -212,48 +212,6 @@ namespace TaimisToolbench.Views.Rendering
 
             var rowPanel = new ClippedPanel() { Size = new Point(panelWidth, rowHeight), Parent = parent };
 
-            // A context action
-            // (right-click), not a visible icon - the row already packs an
-            // icon/name/optional sublabel/right-aligned status tag into a
-            // fixed height with no spare column.
-            // Right-click also cannot collide with the row's existing
-            // interactions (this row has none - unlike the Recipe Tree,
-            // Required Recipes rows are not expand/collapse toggles), and
-            // is naturally low-accidental-click-risk for a click that
-            // steals focus into the default browser.
-            //
-            // Fix-pass (right-click-as-camera-drag): mirrors
-            // TreeSectionController's identical fix - GW2's own right-drag
-            // is the camera-rotate gesture, so firing on button-DOWN alone
-            // opened the browser and yanked focus out of a fullscreen game
-            // the instant a drag begun over this row went down, with no
-            // way to abort. A bare switch to RightMouseButtonReleased is
-            // not sufficient either: Blish routes the release event to
-            // whichever row is under the cursor at release time, so a drag
-            // that started on a DIFFERENT row would open THIS row's page.
-            // Pairing press+release on this SAME rowPanel closes that:
-            // press arms a per-row flag, and only this row's own Released
-            // handler (which only fires when the release also lands on
-            // this row) can consume it; MouseLeft disarms the flag as soon
-            // as the cursor leaves this row after a press, so a stale arm
-            // from an earlier aborted drag can't be replayed by an
-            // unrelated release later landing back on this row.
-            var wikiTarget = row.WikiTarget;
-            if (wikiTarget.HasPage)
-            {
-                bool wikiLinkArmed = false;
-                rowPanel.RightMouseButtonPressed += (_, __) => wikiLinkArmed = true;
-                rowPanel.MouseLeft += (_, __) => wikiLinkArmed = false;
-                rowPanel.RightMouseButtonReleased += (_, __) =>
-                {
-                    if (wikiLinkArmed)
-                    {
-                        wikiLinkArmed = false;
-                        WikiLinkLauncher.Open(wikiTarget.BuildUrl());
-                    }
-                };
-            }
-
             string hintLine = row.HintText;
             IconControls.DrawItemIcon(
                 rowPanel, row.ItemId, IconX, PlanContentHeightMath.IconRowIconY,
