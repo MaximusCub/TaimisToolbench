@@ -1762,6 +1762,74 @@ additive-only row graph behind it).
 
 ---
 
+## 13. Popout windows
+
+A player who has generated a plan wants the Shopping List or the Crafting
+Steps on screen while they play, with the module window shut. The popout
+windows serve that and nothing else.
+
+### The table is the plan tab's table
+
+`Views/PopoutTable.cs` calls `Views/Rendering/ShoppingListSectionRenderer.cs`
+and `Views/Rendering/CraftStepsSectionRenderer.cs`. It does not reimplement
+either. Both were already written against `ISectionRelayoutSink` (section 5),
+which was the only thing tying them to `Views/CraftingPlanView.cs`, so a
+popout implements that interface and gets the pinned column header, the
+click-to-sort cells, the resize ellipsis, the row rules, the icon hovers and
+the wiki right-click for free. Nothing had to be lifted out of the tab.
+
+One window type hosts either section. The row shapes differ because two
+renderers draw them, not because the surfaces differ.
+
+### Where the tick column goes
+
+The plan tab draws the same rows and must not grow tick boxes, so a tick
+cannot live inside a row. The renderer's flow is inset by
+`PopoutLayout.CheckColumnWidth` and the boxes are laid down the gutter beside
+it, at offsets `PopoutLayout.CheckboxYOffsets` derives from the same per-row
+heights `PlanContentHeightMath.SectionBodyHeight` sums. Both are children of
+one panel inside the scroll region, so they scroll together.
+
+A tick is stored against a row identity (`Services/PopoutRowKey.cs`), never
+against a screen position, so a tick follows its row through a sort. The
+Shopping List renderer sorts its own rows, so `PopoutTable` re-derives the
+same order from the same pure `PlanTableSorter.Sort` call against the same
+state rather than guessing at it.
+
+### What a Refresh can and cannot change
+
+It syncs the account and then subtracts. It does not solve.
+
+It can: remove a row whose item the player has acquired since the last sync,
+reduce a partly-acquired row's outstanding quantity and its money columns pro
+rata, and clear every tick.
+
+It cannot: change a craft-or-buy decision, reprice anything, reorder the
+list, add a row, or bring a removed row back. A row with no item id of its
+own - a currency row - is never touched.
+
+Progress is measured as a delta against the holding at the previous sync, and
+the baseline moves forward each time. An absolute count would resurrect a
+finished shopping row the moment its materials were spent on the very craft
+they were bought for. A delta cannot: a fall in the holding contributes
+nothing.
+
+The button is not held back by `Services/SnapshotRefreshPolicy`'s freshness
+windows. Those exist for refreshes the module decides to run on the player's
+behalf. This one is a deliberate press, like the Account Snapshot tab's
+Refresh Now.
+
+### Lifetime
+
+The windows are parented to the sprite screen, never to the module window,
+which is what lets one outlive it. `Views/PopoutWindowHost.cs` owns them and
+is held by `Module`, disposed in `Unload` beside the tickers and suggestion
+panels that are screen-parented for the same reason. Ticks and sort survive
+closing and reopening a popout within a session, and do not survive a
+restart, because a sync clears them anyway.
+
+---
+
 ## V. Views: relocated design narrative
 
 The `Views/` tree carries a lot of hard-won reasoning: decompiled Blish HUD

@@ -108,7 +108,7 @@ Models/UsedMaterial.cs                                                          
 Models/VendorItemCostLine.cs                                                            42
 Models/VendorOffer.cs                                                                   86
 Models/VendorOfferDataset.cs                                                            15
-Module.cs                                                                               3349
+Module.cs                                                                               3371
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
@@ -189,7 +189,7 @@ Services/ModuleLog.cs                                                           
 Services/ModuleLogEntry.cs                                                              43
 Services/ModuleLogLevel.cs                                                              20
 Services/ModuleLogStore.cs                                                              272
-Services/ModuleSettings.cs                                                              437
+Services/ModuleSettings.cs                                                              479
 Services/MultiItemHeaderLayout.cs                                                       137
 Services/MultiItemHeaderTooltipComposer.cs                                              67
 Services/MysticForgeRecipeData.cs                                                       211
@@ -336,7 +336,7 @@ Services/WindowSizing.cs                                                        
 Views/AboutTabContent.cs                                                                1000
 Views/ApiAccessDialog.cs                                                                231
 Views/AutocompleteTextBox.cs                                                            45
-Views/CraftingPlanView.cs                                                               5541
+Views/CraftingPlanView.cs                                                               5624
 Views/FocusRelease.cs                                                                   159
 Views/ItemInputRowStrip.cs                                                              465
 Views/ItemRowState.cs                                                                   39
@@ -347,6 +347,7 @@ Views/DialogWindow.cs                                                           
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    428
 Views/PlanHistoryTabContent.cs                                                          1529
+Views/PopoutWindow.cs                                                                   455
 Views/RankerTabContent.cs                                                               3209
 Views/Rendering/ClickSound.cs                                                           197
 Views/Rendering/CaretKeyButton.cs                                                       109
