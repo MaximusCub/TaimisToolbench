@@ -333,7 +333,7 @@ Services/VendorOfferLocations.cs                                                
 Services/VendorOfferStore.cs                                                            218
 Services/WheelDeltaSanitizer.cs                                                         92
 Services/WikiLinkBuilder.cs                                                             139
-Services/WikiLinkLauncher.cs                                                           123
+Services/WikiLinkLauncher.cs                                                           171
 Services/WindowPlacement.cs                                                             106
 Services/WindowSizing.cs                                                                276
 Views/AboutTabContent.cs                                                                1000

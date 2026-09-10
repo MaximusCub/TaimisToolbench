@@ -4087,6 +4087,70 @@ the URL off, and a cold browser start, DDE negotiation, or a "choose an app"
 prompt can stall that call for hundreds of milliseconds to seconds, freezing
 the whole overlay - scroll and relayout included - for as long as it runs.
 
+**Why the browser opens behind the game.** Windows lets a process raise a
+window to the foreground only under the conditions listed in the Remarks of
+[`SetForegroundWindow`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow):
+the calling process is the foreground process, was started by the foreground
+process, received the last input event, is being debugged, there is no
+foreground process at all, or the foreground lock time-out has expired.
+[`AllowSetForegroundWindow`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-allowsetforegroundwindow)
+passes that right to another process and is documented to fail when the
+caller does not hold it: "The function will fail if the calling process
+cannot set the foreground window."
+
+Blish HUD cannot hold it while the player is playing, for three separate
+reasons.
+
+- The overlay window is click-through and stays that way.
+  `WindowUtil.SetWindowParam` is the only `GWL_EXSTYLE` write in Blish HUD
+  and it ORs `WS_EX_TRANSPARENT` in on every call, so nothing ever clears
+  the bit. Read off the running overlay, its ex-style is `0x000900A0`
+  (`WS_EX_LAYERED | WS_EX_COMPOSITED | WS_EX_TOOLWINDOW |
+  WS_EX_TRANSPARENT`). A click-through window is never hit-tested, so a
+  click can never activate it.
+- Blish HUD never activates itself. Its only `SetForegroundWindow` call site
+  is `Gw2InstanceIntegration.FocusGw2`, which targets the Guild Wars 2
+  window, and nothing in Blish core calls it. `WindowUtil.UpdateOverlay`
+  moves the overlay in the Z order with `SetWindowPos`, which does not
+  activate, and demotes it below Guild Wars 2 whenever Guild Wars 2 is
+  active.
+- The right-click is never delivered to Blish HUD. Blish reads mouse and
+  keyboard input from `WH_MOUSE_LL` and `WH_KEYBOARD_LL` global hooks while
+  Windows routes the input itself to Guild Wars 2. Guild Wars 2 is therefore
+  both the foreground process and the process that received the last input
+  event. Focusing a Blish text box does not change this: it registers a
+  delegate and swallows keystrokes at the hook, and never activates a window.
+
+The overlay window is not barred from the foreground outright. It carries no
+`WS_EX_NOACTIVATE`, and polling `GetForegroundWindow` caught it holding the
+foreground twice while the player was switching between other applications.
+That state cannot be the one a wiki click arrives in, though.
+`InputService` enables the hooks on `Gw2AcquiredFocus` and disables them on
+`Gw2LostFocus`, so the module can only receive a right-click while Guild
+Wars 2 has focus, and while Guild Wars 2 has focus it is the foreground
+process. The two states exclude each other.
+
+That leaves the foreground lock time-out as the only condition the module
+can ever satisfy, and only while nobody is playing. Measured on the
+maintainer's machine, where `HKCU\Control Panel\Desktop\ForegroundLockTimeout`
+holds its 200000 ms default: `AllowSetForegroundWindow(ASFW_ANY)` called
+from a background process returned FALSE with `GetLastError` 5
+(`ERROR_ACCESS_DENIED`) at 0 ms, 15 ms, 281 ms and 469 ms since the last
+user input, and TRUE at 265953 ms. The grant is not dead code. It succeeds,
+and the browser does come forward, once the player has been idle longer than
+the time-out.
+
+One other Blish module does force the browser forward, using
+`AttachThreadInput` against the foreground thread followed by
+`BringWindowToTop`. This module will not do that: it hijacks the input queue
+of a process it does not own.
+
+So `WikiLinkLauncher.Launch` records which of the two cases happened and
+reports a `WikiLaunchOutcome`. `Module.DrainWikiLaunchNotice` raises a
+screen notification for `ForegroundRefused` and `Failed` only. When the grant
+succeeded the browser is already in front of the player, and a caption
+telling them so would be noise.
+
 ### S2.11 Recipe corpus refresh
 
 **`RecipeCorpusRefresher` - the case that motivates it.** Recipe 14025's
