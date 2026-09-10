@@ -10,6 +10,15 @@ namespace TaimisToolbench.Services
 
         public SettingEntry<int> ModalDialogY { get; private set; }
 
+        // How far a popout window is faded over the game, per popout. Two
+        // entries rather than one, because a player who wants the shopping
+        // list solid while they stand at a vendor may still want the
+        // crafting steps ghosted beside it. PopoutOpacity owns the floor
+        // that stops either reaching zero.
+        public SettingEntry<int> PopoutShoppingListOpacityPercent { get; private set; }
+
+        public SettingEntry<int> PopoutCraftingStepsOpacityPercent { get; private set; }
+
         // User-provided coin valuations for the non-coin currencies (karma,
         // laurels, ...) and untradeable barter items a vendor takes, stored
         // as JSON (see CurrencyValuationSerializer for the shape). The
@@ -135,6 +144,16 @@ namespace TaimisToolbench.Services
                 "ModalDialogY", -1,
                 () => "Modal Dialog Y",
                 () => "Vertical position of the modal dialog");
+
+            PopoutShoppingListOpacityPercent = settings.DefineSetting(
+                "PopoutShoppingListOpacityPercent", PopoutOpacity.DefaultPercent,
+                () => "Shopping List Popout Opacity",
+                () => "How solid the Shopping List popout window is, as a percent");
+
+            PopoutCraftingStepsOpacityPercent = settings.DefineSetting(
+                "PopoutCraftingStepsOpacityPercent", PopoutOpacity.DefaultPercent,
+                () => "Crafting Steps Popout Opacity",
+                () => "How solid the Crafting Steps popout window is, as a percent");
 
             CurrencyValuationsJson = settings.DefineSetting(
                 "CurrencyValuationsJson", string.Empty,
@@ -380,6 +399,29 @@ namespace TaimisToolbench.Services
         public int GetClampedClickSoundVolumePercent()
         {
             return ClickSoundVolume.Clamp(ClickSoundVolumePercent.Value);
+        }
+
+        /// <summary>
+        /// Clamped popout opacity for actual use - same contract as the
+        /// clamped accessors above. Blish's own Manage Modules panel writes
+        /// these entries unvalidated, so the floor has to be applied on the
+        /// way out and not only by the slider that normally sets them.
+        /// </summary>
+        public int GetClampedPopoutOpacityPercent(PlanSectionType sectionType)
+        {
+            return PopoutOpacity.Clamp(EntryFor(sectionType).Value);
+        }
+
+        public void SetPopoutOpacityPercent(PlanSectionType sectionType, int percent)
+        {
+            EntryFor(sectionType).Value = PopoutOpacity.Clamp(percent);
+        }
+
+        private SettingEntry<int> EntryFor(PlanSectionType sectionType)
+        {
+            return sectionType == PlanSectionType.CraftingSteps
+                ? PopoutCraftingStepsOpacityPercent
+                : PopoutShoppingListOpacityPercent;
         }
 
         /// <summary>
