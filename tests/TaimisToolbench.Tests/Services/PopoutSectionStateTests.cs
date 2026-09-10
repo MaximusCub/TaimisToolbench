@@ -85,6 +85,42 @@ namespace TaimisToolbench.Tests.Services
             Assert.False(state.IsChecked(sorted[1]));
         }
 
+        /// <summary>
+        /// The tick column and the Shopping List renderer each sort the
+        /// section for themselves, so the renderer sorts a list that is
+        /// already in its own order. Sorting twice has to land where sorting
+        /// once did, or a tick sits beside the wrong row. It does because
+        /// the sort is stable and breaks ties on the original index, but
+        /// nothing said so until this.
+        /// </summary>
+        [Fact]
+        public void PlanTableSorter_SortingAnAlreadySortedTableChangesNothing()
+        {
+            var rows = new List<PlanRowViewModel>
+            {
+                Buy(MithrilOre, "Mithril Ore", 250, 5000),
+                Buy(ElderWoodLog, "Elder Wood Log", 250, 900),
+                Buy(24, "Thermocatalytic Reagent", 10, 900),
+                Buy(19701, "Orichalcum Ore", 10, 20000),
+            };
+
+            foreach (PlanTableColumn column in Enum.GetValues(typeof(PlanTableColumn)))
+            {
+                var sort = new TableSortState<PlanTableColumn>();
+                for (int click = 0; click < 3; click++)
+                {
+                    sort.Cycle(column);
+                    var once = PlanTableSorter.Sort(rows, sort);
+                    var twice = PlanTableSorter.Sort(once, sort);
+                    Assert.Equal(once.Count, twice.Count);
+                    for (int i = 0; i < once.Count; i++)
+                    {
+                        Assert.Same(once[i], twice[i]);
+                    }
+                }
+            }
+        }
+
         [Fact]
         public void IsChecked_TellsTwoRowsOfTheSameItemApart()
         {
