@@ -110,8 +110,16 @@ namespace TaimisToolbench.Views
             // columns, nor shorter than its chrome plus a header band and
             // one row: below either the popout stops being a picture of
             // the plan tab's table, which is the whole point of it.
+            //
+            // The toolbar strip has a floor of its own, and it is not
+            // implied by the table's: Crafting Steps carries the narrower
+            // table of the two, so its columns would allow a width at which
+            // the Refresh button overlaps the opacity readout above them.
+            // The window takes whichever floor is higher.
             _minWindowSize = new Point(
-                PopoutLayout.MinContentWidth(state.SectionType) + ChromeWidth,
+                Math.Max(
+                    PopoutLayout.MinContentWidth(state.SectionType),
+                    PopoutToolbar.MinContentWidth()) + ChromeWidth,
                 PopoutLayout.ChromeHeight
                     + PlanContentHeightMath.ColumnHeaderRowHeight
                     + PlanContentHeightMath.ShoppingRowHeight

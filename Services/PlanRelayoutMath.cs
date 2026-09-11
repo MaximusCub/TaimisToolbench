@@ -99,6 +99,13 @@ namespace TaimisToolbench.Services
         /// header word is drawn for. The two tables that open with an
         /// Amount band instead start theirs past it, at
         /// <see cref="AmountLedRowMath.IconX"/>.
+        /// <para>
+        /// Two renderers restate this pair as literals of their own rather
+        /// than reading it here: Views/Rendering/RecipesSectionRenderer.cs
+        /// and Services/NotesSectionLayoutMath.cs. They agree only because
+        /// all three spell out the same numbers, so a change here has to be
+        /// made in those two as well.
+        /// </para>
         /// </summary>
         public const int IconLedRowIconX = 8;
 

@@ -212,7 +212,7 @@ Services/PlanHistoryRowLayout.cs                                                
 Services/PlanHistoryStore.cs                                                            155
 Services/PlanHistoryTableSorter.cs                                                      103
 Services/PlanPhaseEvent.cs                                                              80
-Services/PlanRelayoutMath.cs                                                            491
+Services/PlanRelayoutMath.cs                                                            498
 Services/PlanResultBuilder.cs                                                           483
 Services/PlanRootNodes.cs                                                               46
 Services/PlanSolver.cs                                                                  2346
@@ -350,7 +350,7 @@ Views/DialogWindow.cs                                                           
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    428
 Views/PlanHistoryTabContent.cs                                                          1557
-Views/PopoutWindow.cs                                                                   539
+Views/PopoutWindow.cs                                                                   547
 Views/PopoutWindowHost.cs                                                               313
 Views/RankerTabContent.cs                                                               3209
 Views/Rendering/ClickSound.cs                                                           197

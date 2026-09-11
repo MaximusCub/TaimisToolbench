@@ -56,7 +56,7 @@ namespace TaimisToolbench.Services
         /// Floor for the Item column's reserve: a list of short names must
         /// not collapse the row's subject to a stub, and the column's own
         /// header sits on the same rule. Also the floor that decides the
-        /// packed fallback - below the width that can hold this plus four
+        /// packed fallback - below the width that can hold this plus three
         /// full data tracks there is nothing to distribute.
         /// </summary>
         public const int NameMinWidth = 200;
@@ -120,7 +120,7 @@ namespace TaimisToolbench.Services
             public int NameX => AmountLedRowMath.NameX(AmountBandWidth);
 
             /// <summary>
-            /// Whether the four data columns are DISTRIBUTED over equal
+            /// Whether the three data columns are DISTRIBUTED over equal
             /// tracks or packed right-to-left off the pinned edge. False is
             /// the narrow-panel fallback - see <see cref="ComputeEdges"/>.
             /// </summary>
@@ -132,7 +132,7 @@ namespace TaimisToolbench.Services
             public readonly int TrackSpan;
 
             /// <summary>
-            /// Left edge of the four data tracks - the Item column's
+            /// Left edge of the three data tracks - the Item column's
             /// reserve past <see cref="NameX"/>, and so where that column's
             /// header CELL ends. 0 when packed, where the Item column has
             /// no reserve of its own and simply absorbs whatever the
@@ -153,7 +153,7 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// Every edge of one render of the table, in whichever of the two
-        /// regimes the width supports: the four data columns DISTRIBUTED
+        /// regimes the width supports: the three data columns DISTRIBUTED
         /// over equal tracks, or - on a panel too narrow for that - packed
         /// right-to-left off totalRightEdge as they always were. Header and
         /// data rows stay in lockstep by construction either way, because
@@ -224,7 +224,7 @@ namespace TaimisToolbench.Services
         /// The Item column's reserve: its longest name plus
         /// <see cref="NameHeadroom"/>, never below
         /// <see cref="NameMinWidth"/>. <see cref="ComputeEdges"/> caps it
-        /// again at whatever four full data tracks leave, so a list of very
+        /// again at whatever three full data tracks leave, so a list of very
         /// long names gives up headroom before the data columns give up
         /// legibility.
         /// </summary>

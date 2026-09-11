@@ -27,6 +27,19 @@ namespace TaimisToolbench.Views
 
         private const string OpacityCaption = "Opacity";
 
+        /// <summary>
+        /// Narrowest content box the strip holds without the Refresh button
+        /// touching the opacity readout. Read by the window before any
+        /// strip exists, so it measures the caption the same way the
+        /// constructor does rather than reading a width back off a Label.
+        /// </summary>
+        internal static int MinContentWidth()
+        {
+            return PopoutToolbarLayout.MinContentWidth(
+                (int)Math.Ceiling(UiFonts.Status.MeasureString(OpacityCaption).Width),
+                RefreshButtonWidth);
+        }
+
         private const int SliderHeight = 16;
 
         private const int CaptionY = 6;
