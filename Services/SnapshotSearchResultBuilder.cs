@@ -468,7 +468,8 @@ namespace TaimisToolbench.Services
         /// <para>
         /// Wearers stay names; a socket anywhere else becomes a whole place
         /// phrase, because "Equipped" is not what a banked piece is
-        /// (Models.SnapshotHoldLocation.SocketedInto).
+        /// (Models.SnapshotHoldLocation.SocketedInto). One phrase per place,
+        /// so two banked pieces holding it read as one Bank.
         /// </para>
         /// </summary>
         private static void AttachArmoryDraws(
@@ -486,7 +487,7 @@ namespace TaimisToolbench.Services
             }
 
             List<string> wearers = null;
-            List<string> sockets = null;
+            List<string> socketSources = null;
             var excluded = filter == null ? null : filter.UncheckedCharacters;
 
             for (int i = 0; i < draws.Count; i++)
@@ -504,12 +505,12 @@ namespace TaimisToolbench.Services
                         continue;
                     }
 
-                    if (sockets == null)
+                    if (socketSources == null)
                     {
-                        sockets = new List<string>();
+                        socketSources = new List<string>();
                     }
 
-                    sockets.Add(SnapshotHoldLine.PlacePhrase(draw.Source, hostItemName));
+                    socketSources.Add(draw.Source);
                     continue;
                 }
 
@@ -528,7 +529,9 @@ namespace TaimisToolbench.Services
             }
 
             location.EquippedBy = wearers;
-            location.SocketedInto = sockets;
+            location.SocketedInto = socketSources == null
+                ? null
+                : SnapshotHoldLine.PlacePhrases(socketSources, hostItemName);
         }
 
         /// <summary>
