@@ -110,9 +110,10 @@ namespace TaimisToolbench.Services
                 return false;
             }
 
-            // Read as the state, not as a zero budget: a wait still
-            // STARTS when the budget is zero, and the caller has to be told
-            // about it so the one it is told about is the one that happens.
+            // Asked of the state rather than of the window it maps to. A
+            // window of zero still counts as a wait that started, which is
+            // what lets a test drive the ran-out path off the clock, so a
+            // zero window cannot also mean "do not wait at all".
             if (state == GameClientState.NotRunning)
             {
                 return false;
