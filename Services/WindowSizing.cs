@@ -45,7 +45,7 @@ namespace TaimisToolbench.Services
         /// again, which is strictly better than a window whose right edge
         /// (cost column, Generate button, resize grip) is off-screen.
         /// </summary>
-        public const int NarrowScreenFloorWidth = 930;
+        public const int NarrowScreenFloorWidth = WindowRegionWidth;
 
         /// <summary>
         /// Horizontal chrome between the window's own width and the panel
@@ -62,7 +62,8 @@ namespace TaimisToolbench.Services
         /// within 400px of a layout boundary.
         /// </summary>
         public const int WindowToTabPanelChrome =
-            46 + (2 * TabPanelOuterPadding) + 8 + (2 * TabPanelInnerPadding) + RightEdgePadding;
+            WindowContentLeftInset + WindowContentRightMargin
+            + (2 * TabPanelOuterPadding) + 8 + (2 * TabPanelInnerPadding) + RightEdgePadding;
 
         /// <summary>
         /// Width the vertical scrollbar of a scrolling content panel
@@ -122,6 +123,46 @@ namespace TaimisToolbench.Services
 
         /// <summary>Height of that window region.</summary>
         public const int WindowRegionHeight = 710;
+
+        /// <summary>
+        /// The GW2 window art the module window is drawn from. Named here
+        /// rather than at the one call site because the popout windows draw
+        /// from the same asset and the same two regions below it: Blish
+        /// scales the texture so the window region maps onto whatever size
+        /// the window is at, so one pair of regions serves both.
+        /// </summary>
+        public const int WindowBackgroundAssetId = 502049;
+
+        /// <summary>Texture-space left of the window region.</summary>
+        public const int WindowRegionLeft = 35;
+
+        /// <summary>Width of that window region.</summary>
+        public const int WindowRegionWidth = 930;
+
+        /// <summary>Texture-space left of the content region.</summary>
+        public const int WindowContentRegionLeft = 81;
+
+        /// <summary>Width of the content region.</summary>
+        public const int WindowContentRegionWidth = 884;
+
+        /// <summary>
+        /// Control-space left inset of the window's content region, which
+        /// is WindowBase2.ConstructWindow's <c>contentRegion.X</c> less its
+        /// window padding. Constant at every window width, because both
+        /// terms are texture-space.
+        /// </summary>
+        public const int WindowContentLeftInset =
+            WindowContentRegionLeft - WindowRegionLeft;
+
+        /// <summary>
+        /// Blish's WindowBase2 <c>_contentMargin.X</c>: the control-space
+        /// gap left to the right of the content region. The twin of
+        /// <see cref="WindowContentBottomMargin"/>, and 0 at these regions -
+        /// the module window's content runs to its own right edge.
+        /// </summary>
+        public const int WindowContentRightMargin =
+            (WindowRegionLeft + WindowRegionWidth)
+            - (WindowContentRegionLeft + WindowContentRegionWidth);
 
         /// <summary>Texture-space top of the content region.</summary>
         public const int WindowContentRegionTop = 11;

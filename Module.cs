@@ -1135,7 +1135,7 @@ namespace TaimisToolbench
             // deliberate press too, so it is not held back by the freshness
             // windows in Services/SnapshotRefreshPolicy.
             _popoutWindows = new PopoutWindowHost(
-                () => new AsyncTexture2D(ContentService.Textures.Pixel),
+                ModuleWindowArt.Background,
                 UserRefreshAsync,
                 () => _currentSnapshot,
                 // The Crafting Plan tab's own resolvers, not a second pair
@@ -1271,30 +1271,21 @@ namespace TaimisToolbench
             int minWindowWidth = WindowSizing.EffectiveMinWindowWidth(
                 GameService.Graphics.SpriteScreen.Width);
 
-            // The window/content regions below stay at the 930x710 pair the
-            // 1024x1024 background texture (502049) was authored against -
-            // they are texture-space regions, and Blish grows the content
-            // region by the same delta it grows the window by, so the 46px
-            // horizontal chrome they encode holds at every size. Only the
-            // minimum (WindowSizing) moved; the window opens at it because
+            // The window/content regions stay at the 930x710 pair the
+            // 1024x1024 background texture was authored against - they are
+            // texture-space regions, and Blish grows the content region by
+            // the same delta it grows the window by, so the horizontal
+            // chrome they encode holds at every size. Only the minimum
+            // (WindowSizing) moved; the window opens at it because
             // ResizableTabbedWindow clamps the constructed size up, on the
             // same paths that clamp a drag and a size persisted by an
             // earlier session.
             // Validated in-game to align with Event Table / Blish HUD's own
             // TabbedWindow dimensions.
-            // The vertical terms of both rectangles live in WindowSizing,
-            // which owns the bottom margin they leave Blish and the panel
-            // height that falls out of it; the horizontal ones stay here,
-            // accounted for by WindowSizing.WindowToTabPanelChrome.
             _mainWindow = new ResizableTabbedWindow(
-                AsyncTexture2D.FromAssetId(502049),
-                new Rectangle(
-                    35, WindowSizing.WindowRegionTop, 930, WindowSizing.WindowRegionHeight),
-                new Rectangle(
-                    81,
-                    WindowSizing.WindowContentRegionTop,
-                    884,
-                    WindowSizing.WindowContentRegionHeight),
+                ModuleWindowArt.Background(),
+                ModuleWindowArt.WindowRegion(),
+                ModuleWindowArt.ContentRegion(),
                 new Point(WindowSizing.MinWindowWidth, WindowSizing.MinWindowHeight))
             {
                 Parent = GameService.Graphics.SpriteScreen,

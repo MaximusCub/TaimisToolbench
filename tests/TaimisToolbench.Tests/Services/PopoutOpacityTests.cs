@@ -54,6 +54,76 @@ namespace TaimisToolbench.Tests.Services
             Assert.True(PopoutOpacity.ToFactor(PopoutOpacity.MinPercent) > 0.45f);
         }
 
+        /// <summary>
+        /// The reported defect: a stored opacity was gone the next time the
+        /// window was opened. A Blish window sets its own Opacity to 0 on
+        /// every Show and animates it to 1, so the stored value has to be
+        /// re-imposed per frame; capping is what stops the animation
+        /// passing it.
+        /// </summary>
+        [Fact]
+        public void CapToStored_HoldsAShowAnimationAtTheStoredValue()
+        {
+            const int Stored = 70;
+            float highest = 0f;
+
+            for (int frame = 0; frame <= 10; frame++)
+            {
+                float held = PopoutOpacity.CapToStored(frame / 10f, Stored);
+                if (held > highest)
+                {
+                    highest = held;
+                }
+            }
+
+            Assert.Equal(PopoutOpacity.ToFactor(Stored), highest);
+        }
+
+        /// <summary>
+        /// The other half: the hide animation drives Opacity DOWN to 0, and
+        /// a window whose Opacity never reaches 0 is never made invisible.
+        /// Capping leaves that descent alone.
+        /// </summary>
+        [Fact]
+        public void CapToStored_LeavesAHideAnimationToReachZero()
+        {
+            const int Stored = 70;
+            float last = 1f;
+
+            for (int frame = 10; frame >= 0; frame--)
+            {
+                last = PopoutOpacity.CapToStored(frame / 10f, Stored);
+            }
+
+            Assert.Equal(0f, last);
+        }
+
+        [Fact]
+        public void CapToStored_NeverRaisesAValueAlreadyUnderTheStoredOne()
+        {
+            Assert.Equal(0.2f, PopoutOpacity.CapToStored(0.2f, 100));
+            Assert.Equal(0.5f, PopoutOpacity.CapToStored(0.5f, 70));
+        }
+
+        [Fact]
+        public void CapToStored_ClampsAStoredValueOutsideTheBand()
+        {
+            Assert.Equal(
+                PopoutOpacity.ToFactor(PopoutOpacity.MinPercent),
+                PopoutOpacity.CapToStored(1f, 0));
+            Assert.Equal(
+                PopoutOpacity.ToFactor(PopoutOpacity.MaxPercent),
+                PopoutOpacity.CapToStored(1f, 400));
+        }
+
+        [Theory]
+        [InlineData(float.NaN)]
+        [InlineData(float.PositiveInfinity)]
+        public void CapToStored_ReplacesAnUnreadableValueWithTheStoredOne(float current)
+        {
+            Assert.Equal(PopoutOpacity.ToFactor(80), PopoutOpacity.CapToStored(current, 80));
+        }
+
         [Theory]
         [InlineData(72.4f, 72)]
         [InlineData(72.6f, 73)]

@@ -9,8 +9,9 @@ using TaimisToolbench.Views.Rendering;
 namespace TaimisToolbench.Views
 {
     /// <summary>
-    /// A popout's own chrome: the Refresh button, the transparency slider
-    /// and its readout, and the status line the two report through.
+    /// A popout's own chrome: the transparency slider and its readout on
+    /// the left, the Refresh button on the right, and the status line the
+    /// two report through.
     /// <para>
     /// The three are the only parts of a popout with no equivalent on the
     /// Crafting Plan tab, so they are the only parts drawn by new code. Each
@@ -24,13 +25,15 @@ namespace TaimisToolbench.Views
     {
         private const int RefreshButtonWidth = 90;
 
-        private const int OpacityCaptionWidth = 60;
+        private const string OpacityCaption = "Opacity";
 
         private const int SliderHeight = 16;
 
         private const int CaptionY = 6;
 
         private const int SliderY = 8;
+
+        private const int ButtonY = (PopoutLayout.ToolbarHeight - UiMetrics.ButtonHeight) / 2;
 
         private const int SeparatorZIndex = 11;
 
@@ -40,12 +43,15 @@ namespace TaimisToolbench.Views
         private readonly Panel _bar;
         private readonly Panel _separator;
         private readonly FeedbackButton _refreshButton;
-        private readonly Label _caption;
         private readonly Label _readout;
         private readonly Label _status;
         private readonly LoadingSpinner _spinner;
 
         private TrackBar _slider;
+
+        // Measured once: the caption is one unchanging word, and every
+        // seat on the strip's left cluster is ruled off it.
+        private readonly int _captionWidth;
 
         internal PopoutToolbar(
             Container parent,
@@ -68,7 +74,8 @@ namespace TaimisToolbench.Views
             {
                 Text = "Refresh",
                 Size = new Point(RefreshButtonWidth, UiMetrics.ButtonHeight),
-                Location = Point.Zero,
+                Location = new Point(
+                    PopoutToolbarLayout.RefreshX(contentWidth, RefreshButtonWidth), ButtonY),
                 Parent = _bar,
             };
             _refreshButton.Click += async (_, __) => await onRefresh();
@@ -78,14 +85,23 @@ namespace TaimisToolbench.Views
                 + "the last sync. Clears every tick. It does not rebuild the plan.");
 
             int percent = PopoutOpacity.Clamp(opacityPercent);
-            _caption = new Label()
+
+            // Measured, not banded: the word is wider at the Status tier
+            // than the 60px band it used to be given, and the slider was
+            // seated off that band rather than off the word. Measured beside
+            // an autosized Label rather than read back off one, which is
+            // LabelHelpers.CreateRightAlignedLabel's own shape: a Blish
+            // Label recalculates its width on the next layout pass, not
+            // inside the property that changes it.
+            _captionWidth = (int)Math.Ceiling(
+                UiFonts.Status.MeasureString(OpacityCaption).Width);
+            new Label()
             {
-                Text = "Opacity",
+                Text = OpacityCaption,
                 Font = UiFonts.Status,
-                AutoSizeWidth = false,
+                AutoSizeWidth = true,
                 AutoSizeHeight = true,
-                Size = new Point(OpacityCaptionWidth, PopoutLayout.ToolbarHeight),
-                Location = new Point(CaptionX(contentWidth), CaptionY),
+                Location = new Point(PopoutToolbarLayout.CaptionX, CaptionY),
                 Parent = _bar,
             };
 
@@ -100,7 +116,7 @@ namespace TaimisToolbench.Views
                 MaxValue = PopoutOpacity.MaxPercent,
                 Value = percent,
                 Size = new Point(SettingsFormLayout.SliderWidth, SliderHeight),
-                Location = new Point(SliderX(contentWidth), SliderY),
+                Location = new Point(PopoutToolbarLayout.SliderX(_captionWidth), SliderY),
                 BasicTooltipText =
                     "Fades the window over the game. It stops at "
                     + PopoutOpacity.MinPercent + "% so it can never vanish.",
@@ -114,7 +130,7 @@ namespace TaimisToolbench.Views
                 AutoSizeWidth = false,
                 AutoSizeHeight = true,
                 Size = new Point(SettingsFormLayout.ReadoutWidth, PopoutLayout.ToolbarHeight),
-                Location = new Point(ReadoutX(contentWidth), CaptionY),
+                Location = new Point(PopoutToolbarLayout.ReadoutX(_captionWidth), CaptionY),
                 Parent = _bar,
             };
 
@@ -127,7 +143,7 @@ namespace TaimisToolbench.Views
                 Font = UiFonts.Status,
                 AutoSizeWidth = true,
                 AutoSizeHeight = true,
-                Location = new Point(0, PopoutLayout.ToolbarHeight + 4),
+                Location = new Point(0, PopoutLayout.ToolbarHeight + PopoutLayout.StatusTextY),
                 Parent = parent,
             };
             _spinner = InlineSpinner.Create(parent, InlineSpinnerLayout.PlanStripSize);
@@ -188,16 +204,16 @@ namespace TaimisToolbench.Views
             _spinner.Visible = busy;
         }
 
+        /// <summary>
+        /// Only the Refresh button moves: the opacity cluster rules off the
+        /// strip's left edge, which does not move with the window.
+        /// </summary>
         internal void Relayout(int contentWidth)
         {
             _bar.Size = new Point(contentWidth, PopoutLayout.ToolbarHeight);
             _separator.Size = new Point(contentWidth, PopoutLayout.SeparatorHeight);
-            _caption.Location = new Point(CaptionX(contentWidth), CaptionY);
-            _readout.Location = new Point(ReadoutX(contentWidth), CaptionY);
-            if (_slider != null)
-            {
-                _slider.Location = new Point(SliderX(contentWidth), SliderY);
-            }
+            _refreshButton.Location = new Point(
+                PopoutToolbarLayout.RefreshX(contentWidth, RefreshButtonWidth), ButtonY);
         }
 
         /// <summary>
@@ -218,21 +234,6 @@ namespace TaimisToolbench.Views
             _slider.Parent = null;
             _slider.Dispose();
             _slider = null;
-        }
-
-        private static int ReadoutX(int contentWidth)
-        {
-            return contentWidth - WindowSizing.ScrollbarAllowance - SettingsFormLayout.ReadoutWidth;
-        }
-
-        private static int SliderX(int contentWidth)
-        {
-            return ReadoutX(contentWidth) - UiSpacing.ButtonGap - SettingsFormLayout.SliderWidth;
-        }
-
-        private static int CaptionX(int contentWidth)
-        {
-            return SliderX(contentWidth) - UiSpacing.ButtonGap - OpacityCaptionWidth;
         }
     }
 }

@@ -1,19 +1,19 @@
 namespace TaimisToolbench.Services
 {
     /// <summary>
-    /// Pure column arithmetic (Blish-free, unit-testable) for the Crafting
-    /// Plan's Used Materials table: an Amount band on the row's left inset,
-    /// then the Item column - icon and name - filling everything up to the
-    /// table's pinned right edge.
+    /// Pure column arithmetic (Blish-free, unit-testable) for the prefix a
+    /// plan row that reads AMOUNT FIRST opens with: an Amount band on the
+    /// row's left inset, then the icon, then the name. Both the Used
+    /// Materials table and the Shopping List draw it.
     /// <para>
-    /// Both insets are the Snapshot cell's own, so the two tables that read
+    /// Both insets are the Snapshot cell's own, so every table that reads
     /// the amount before the name cannot drift apart. The Amount band is
     /// the widest value floored at the header BLOCK, which is why every
     /// method here takes it rather than deriving it: the widths come from
     /// BitmapFont.MeasureString, which is Blish-bound.
     /// </para>
     /// </summary>
-    internal static class UsedMaterialsColumnMath
+    internal static class AmountLedRowMath
     {
         /// <summary>Left edge of the Amount band.</summary>
         public const int AmountX = SnapshotItemGridLayout.CellAmountX;
@@ -23,12 +23,12 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// Gap a plan row keeps between its icon frame and the name beside
-        /// it. Derived from the Shopping List's own pair rather than
-        /// restated, because the two tables stack on one panel and a reader
-        /// sees one rule down the icons.
+        /// it. Derived from the icon-led rail rather than restated, because
+        /// the amount-led tables stack on one panel with the icon-led ones
+        /// and a reader sees one rule down the names.
         /// </summary>
         public const int IconToNameGap =
-            ShoppingColumnMath.NameX - ShoppingColumnMath.IconX
+            PlanRelayoutMath.IconLedRowNameX - PlanRelayoutMath.IconLedRowIconX
                 - PlanContentHeightMath.RowIconFrameSize;
 
         /// <summary>Left edge of the row's tier-2 icon frame.</summary>

@@ -46,8 +46,22 @@ namespace TaimisToolbench.Services
         /// <summary>Height of the toolbar strip above the table.</summary>
         public const int ToolbarHeight = 34;
 
-        /// <summary>Height of the status line under the toolbar.</summary>
-        public const int StatusRowHeight = 24;
+        /// <summary>Gap between the toolbar and the status line's line box.</summary>
+        public const int StatusTextY = 4;
+
+        /// <summary>
+        /// Gap between the status line's lowest ink and the rule under it.
+        /// The row used to be 24px against a line whose descenders reach
+        /// 23, so the text sat 3px INTO the rule.
+        /// </summary>
+        public const int StatusBottomPadding = UiSpacing.ButtonGap;
+
+        /// <summary>
+        /// Height of the status line under the toolbar. Not a const:
+        /// TypeRampMetrics reports its measured ink from a static field.
+        /// </summary>
+        public static readonly int StatusRowHeight =
+            StatusTextY + TypeRampMetrics.StatusInk.LowestInk + StatusBottomPadding;
 
         /// <summary>Rule between the chrome and the scrolling table.</summary>
         public const int SeparatorHeight = 2;
@@ -55,7 +69,18 @@ namespace TaimisToolbench.Services
         /// <summary>
         /// Everything above the table inside the content box.
         /// </summary>
-        public const int ChromeHeight = ToolbarHeight + StatusRowHeight + SeparatorHeight;
+        public static readonly int ChromeHeight =
+            ToolbarHeight + StatusRowHeight + SeparatorHeight;
+
+        /// <summary>
+        /// Clearance kept below the last row, inside the content box. The
+        /// window's own art already leaves
+        /// <see cref="WindowSizing.WindowContentBottomMargin"/> under that
+        /// box; this is the inner pad a tab's content keeps on top of it,
+        /// so a popout's last icon does not sit on the frame the way the
+        /// plan tab's never does.
+        /// </summary>
+        public const int ContentBottomPadding = WindowSizing.TabPanelInnerPadding;
 
         /// <summary>
         /// How many rows a popout opens tall. Ten icon-led rows plus a
@@ -71,13 +96,16 @@ namespace TaimisToolbench.Services
         /// five-column table in, tick column and scrollbar strip included:
         /// the table is laid out in what is left after both, so a floor
         /// that counted neither would be short by their width. Below the
-        /// width
-        /// <see cref="ShoppingColumnMath"/> can distribute four data tracks
-        /// over, the table falls back to packing its columns right to left,
+        /// width <see cref="ShoppingColumnMath"/> can distribute three data
+        /// tracks over, the table packs its columns right to left instead,
         /// which is a different picture from the one the plan tab shows.
-        /// The four bands are floored at the widest of
-        /// <see cref="ShoppingColumnMath.TotalMinWidth"/> and
-        /// <see cref="ShoppingColumnMath.EachMinWidth"/>.
+        /// <para>
+        /// The Amount band ahead of the name is taken at
+        /// <see cref="SnapshotItemGridLayout.AmountColumnFloor"/>, the
+        /// measured width the same header word wants in the module's other
+        /// minimum-width derivation. A floor, not a guarantee: a list whose
+        /// widest count out-measures it wants a wider window than this.
+        /// </para>
         /// </summary>
         public static int MinShoppingContentWidth()
         {
@@ -85,7 +113,7 @@ namespace TaimisToolbench.Services
                 ? ShoppingColumnMath.TotalMinWidth
                 : ShoppingColumnMath.EachMinWidth;
 
-            int table = ShoppingColumnMath.NameX
+            int table = AmountLedRowMath.NameX(SnapshotItemGridLayout.AmountColumnFloor)
                 + ShoppingColumnMath.NameMinWidth
                 + (ShoppingColumnMath.DataColumnCount * (widestBand + ShoppingColumnMath.ColumnGap))
                 + PlanRelayoutMath.TableRightMargin;
@@ -146,7 +174,9 @@ namespace TaimisToolbench.Services
             PlanSectionType sectionType, IReadOnlyList<PlanRowViewModel> rows)
         {
             var shown = Head(rows, DefaultVisibleRows);
-            return ChromeHeight + PlanContentHeightMath.SectionBodyHeight(sectionType, shown);
+            return ChromeHeight
+                + PlanContentHeightMath.SectionBodyHeight(sectionType, shown)
+                + ContentBottomPadding;
         }
 
         private static IReadOnlyList<PlanRowViewModel> Head(

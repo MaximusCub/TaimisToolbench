@@ -30,19 +30,23 @@ namespace TaimisToolbench.Tests.Services
         /// distribute four data tracks over, the columns pack right to left
         /// instead, which is a different picture.
         /// </summary>
-        [Fact]
-        public void MinContentWidth_KeepsTheShoppingTableInItsDistributedRegime()
+        private static ShoppingColumnMath.ColumnEdges ShoppingEdgesAt(int tableWidth)
         {
-            int tableWidth = PopoutLayout.TableWidth(
-                PopoutLayout.MinContentWidth(PlanSectionType.ShoppingList));
-
-            var edges = ShoppingColumnMath.ComputeEdgesForPanel(
+            return ShoppingColumnMath.ComputeEdgesForPanel(
                 tableWidth,
                 ShoppingColumnMath.EachMinWidth,
                 ShoppingColumnMath.TotalMinWidth,
-                ShoppingColumnMath.TotalMinWidth,
+                SnapshotItemGridLayout.AmountColumnFloor,
                 ShoppingColumnMath.TotalMinWidth,
                 0);
+        }
+
+        [Fact]
+        public void MinContentWidth_KeepsTheShoppingTableInItsDistributedRegime()
+        {
+            var edges = ShoppingEdgesAt(
+                PopoutLayout.TableWidth(
+                    PopoutLayout.MinContentWidth(PlanSectionType.ShoppingList)));
 
             Assert.True(edges.Distributed);
             Assert.True(edges.NameColumnWidth >= ShoppingColumnMath.NameMinWidth);
@@ -51,18 +55,31 @@ namespace TaimisToolbench.Tests.Services
         [Fact]
         public void MinContentWidth_OneLessPixelDropsTheTableOutOfIt()
         {
-            int tableWidth = PopoutLayout.TableWidth(
-                PopoutLayout.MinContentWidth(PlanSectionType.ShoppingList)) - 1;
-
-            var edges = ShoppingColumnMath.ComputeEdgesForPanel(
-                tableWidth,
-                ShoppingColumnMath.EachMinWidth,
-                ShoppingColumnMath.TotalMinWidth,
-                ShoppingColumnMath.TotalMinWidth,
-                ShoppingColumnMath.TotalMinWidth,
-                0);
+            var edges = ShoppingEdgesAt(
+                PopoutLayout.TableWidth(
+                    PopoutLayout.MinContentWidth(PlanSectionType.ShoppingList)) - 1);
 
             Assert.False(edges.Distributed);
+        }
+
+        /// <summary>
+        /// The tick column is drawn beside the renderer's rows, so the
+        /// boxes have to line up with rows whose first cell is now the
+        /// Amount band. The offsets are the row heights' own, which is what
+        /// makes that true whatever the row draws first.
+        /// </summary>
+        [Fact]
+        public void MinContentWidth_LeavesTheAmountBandClearOfTheTickColumn()
+        {
+            var edges = ShoppingEdgesAt(
+                PopoutLayout.TableWidth(
+                    PopoutLayout.MinContentWidth(PlanSectionType.ShoppingList)));
+
+            Assert.True(
+                PopoutLayout.CheckColumnWidth
+                >= PopoutLayout.CheckboxX + PopoutLayout.CheckboxSize);
+            Assert.True(edges.IconX > AmountLedRowMath.AmountX);
+            Assert.True(edges.NameX > edges.IconX);
         }
 
         /// <summary>
@@ -104,7 +121,8 @@ namespace TaimisToolbench.Tests.Services
 
             int expected = PopoutLayout.ChromeHeight
                 + PlanContentHeightMath.ColumnHeaderRowHeight
-                + (PopoutLayout.DefaultVisibleRows * PlanContentHeightMath.ShoppingRowHeight);
+                + (PopoutLayout.DefaultVisibleRows * PlanContentHeightMath.ShoppingRowHeight)
+                + PopoutLayout.ContentBottomPadding;
 
             Assert.Equal(expected, height);
         }
@@ -117,7 +135,8 @@ namespace TaimisToolbench.Tests.Services
 
             int expected = PopoutLayout.ChromeHeight
                 + PlanContentHeightMath.ColumnHeaderRowHeight
-                + (3 * PlanContentHeightMath.ShoppingRowHeight);
+                + (3 * PlanContentHeightMath.ShoppingRowHeight)
+                + PopoutLayout.ContentBottomPadding;
 
             Assert.Equal(expected, height);
         }
@@ -175,6 +194,24 @@ namespace TaimisToolbench.Tests.Services
             Assert.True(
                 offsets[2] + PopoutLayout.CheckboxSize
                 <= thirdRowTop + PlanContentHeightMath.CraftStepRowHeight);
+        }
+
+        /// <summary>
+        /// The status line used to sit 3px INTO the rule under it: the row
+        /// was 24px against a line whose descenders reach 23 at the Status
+        /// tier. The row is derived from that ink now.
+        /// </summary>
+        [Fact]
+        public void StatusRow_LeavesTheTextClearOfTheRuleUnderIt()
+        {
+            Assert.True(PopoutLayout.StatusBottomPadding > 0);
+            Assert.Equal(
+                PopoutLayout.StatusBottomPadding,
+                PopoutLayout.StatusRowHeight
+                    - PopoutLayout.StatusTextY - TypeRampMetrics.StatusInk.LowestInk);
+            Assert.True(
+                PopoutLayout.StatusTextY + TypeRampMetrics.StatusInk.LowestInk
+                < PopoutLayout.StatusRowHeight);
         }
 
         [Fact]
