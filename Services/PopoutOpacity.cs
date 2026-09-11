@@ -44,6 +44,30 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// <paramref name="current"/> held at or under the stored percent.
+        /// A Blish window animates its own Opacity to 1 every time it is
+        /// shown, so a stored setting has to be re-imposed per frame rather
+        /// than assigned once. Capping and not assigning is what leaves the
+        /// window's fade OUT - a descent towards 0 - untouched, so the
+        /// window still disappears when it is closed.
+        /// <para>
+        /// A NaN or infinite reading is replaced by the stored value
+        /// outright: those never come from the animation, and passing one
+        /// through would leave the window at an opacity nothing can undo.
+        /// </para>
+        /// </summary>
+        public static float CapToStored(float current, int percent)
+        {
+            float ceiling = ToFactor(percent);
+            if (float.IsNaN(current) || float.IsInfinity(current))
+            {
+                return ceiling;
+            }
+
+            return current > ceiling ? ceiling : current;
+        }
+
+        /// <summary>
         /// The percent a slider's float value means, or false when the drag
         /// landed off the band entirely. Mirrors
         /// <see cref="ClickSoundVolume.TryPercentFromSliderValue"/>: a Blish

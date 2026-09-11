@@ -5,6 +5,7 @@ using Blish_HUD;
 using Blish_HUD.Content;
 using Blish_HUD.Controls;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using TaimisToolbench.Models;
 using TaimisToolbench.Services;
 using TaimisToolbench.Views.Rendering;
@@ -23,10 +24,36 @@ namespace TaimisToolbench.Views
     /// is shared, and the row shape is the section renderer's, chosen by
     /// <see cref="PopoutTable"/>. See docs/ARCHITECTURE.md, "Popout windows".
     /// </para>
+    /// <para>
+    /// Dressed in the module window's own art and regions
+    /// (<see cref="ModuleWindowArt"/>), which Blish scales onto whatever
+    /// size the window is at.
+    /// </para>
     /// </summary>
-    internal sealed class PopoutWindow : DialogWindow, ISectionRelayoutSink
+    internal sealed class PopoutWindow : StandardWindow, ISectionRelayoutSink
     {
         private static readonly Logger Logger = Logger.GetLogger<PopoutWindow>();
+
+        /// <summary>
+        /// What the window costs outside its content box, from the regions
+        /// Views/ModuleWindowArt hands Blish. Both terms are the module
+        /// window's own, so a popout's frame is the frame the player
+        /// already knows.
+        /// </summary>
+        private const int ChromeWidth =
+            WindowSizing.WindowContentLeftInset + WindowSizing.WindowContentRightMargin;
+
+        private const int ChromeHeight =
+            WindowSizing.WindowContentTop + WindowSizing.WindowContentBottomMargin;
+
+        /// <summary>
+        /// Left rule of the window's own title. WindowBase2 draws a Title
+        /// 78px in, which is the seat a TabbedWindow2's sidebar and emblem
+        /// fill; a popout has neither, so the word reads as indented. This
+        /// window leaves Blish's Title unset and draws its own on the same
+        /// rule the table under it starts at.
+        /// </summary>
+        private const int TitleX = WindowSizing.WindowContentLeftInset;
 
         private readonly PopoutSectionState _state;
         private readonly Func<Task<AccountSnapshot>> _refreshAsync;
@@ -35,6 +62,7 @@ namespace TaimisToolbench.Views
         private readonly Func<int> _opacityPercent;
         private readonly Action<int> _setOpacityPercent;
         private readonly Point _minWindowSize;
+        private readonly string _titleText;
 
         private readonly List<Action<int>> _relayoutActions = new List<Action<int>>();
         private readonly List<Action<int>> _reellipsisActions = new List<Action<int>>();
@@ -47,6 +75,11 @@ namespace TaimisToolbench.Views
 
         private int _laidOutWidth = -1;
         private bool _refreshing;
+
+        // The percent UpdateContainer holds the window under, cached rather
+        // than read from the settings every frame. Written only by
+        // ApplyOpacity, which is the one path that changes the setting.
+        private int _appliedOpacityPercent = PopoutOpacity.DefaultPercent;
 
         // Read by the two callbacks that can land after teardown: an
         // in-flight sync and the settle pass's marshalled re-ellipsis.
@@ -63,7 +96,7 @@ namespace TaimisToolbench.Views
             Func<int, CurrencyTooltipFacts> getCurrencyFacts,
             Func<int> opacityPercent,
             Action<int> setOpacityPercent)
-            : base(background, contentSize.X, contentSize.Y)
+            : base(background, ModuleWindowArt.WindowRegion(), ModuleWindowArt.ContentRegion())
         {
             _state = state ?? throw new ArgumentNullException(nameof(state));
             _refreshAsync = refreshAsync ?? throw new ArgumentNullException(nameof(refreshAsync));
@@ -74,22 +107,25 @@ namespace TaimisToolbench.Views
             _setOpacityPercent = setOpacityPercent ?? throw new ArgumentNullException(nameof(setOpacityPercent));
 
             // A window is never dragged narrower than the table's own
-            // five columns, nor shorter than its chrome plus a header band
-            // and one row: below either the popout stops being a picture of
+            // columns, nor shorter than its chrome plus a header band and
+            // one row: below either the popout stops being a picture of
             // the plan tab's table, which is the whole point of it.
             _minWindowSize = new Point(
                 PopoutLayout.MinContentWidth(state.SectionType) + ChromeWidth,
                 PopoutLayout.ChromeHeight
                     + PlanContentHeightMath.ColumnHeaderRowHeight
                     + PlanContentHeightMath.ShoppingRowHeight
+                    + PopoutLayout.ContentBottomPadding
                     + ChromeHeight);
 
-            // A 1x1 pixel with a solid fill, the way Views/ModalDialog
-            // seats its own window: an asset-texture background at this
-            // size overflows, and StandardWindow draws its chrome from its
-            // own textures either way.
-            BackgroundColor = new Color(30, 30, 30);
-            Title = title;
+            // The base constructor sized the window from the texture's own
+            // window region. Written here, after the floor exists, so the
+            // window is never observably below it.
+            Size = new Point(
+                Math.Max(contentSize.X + ChromeWidth, _minWindowSize.X),
+                Math.Max(contentSize.Y + ChromeHeight, _minWindowSize.Y));
+
+            _titleText = title;
             Id = windowId;
             Parent = GameService.Graphics.SpriteScreen;
             CanResize = true;
@@ -115,10 +151,6 @@ namespace TaimisToolbench.Views
             BuildChrome();
             ApplyOpacity(_opacityPercent());
             Rebuild();
-
-            // The base constructor's own layout pass ran before
-            // _minWindowSize was assigned, so it could not apply the floor.
-            // A plan whose section is empty constructs under it.
             ClampToMinimum();
         }
 
@@ -241,12 +273,45 @@ namespace TaimisToolbench.Views
         /// </summary>
         private void ApplyOpacity(int percent)
         {
-            Opacity = PopoutOpacity.ToFactor(percent);
+            _appliedOpacityPercent = PopoutOpacity.Clamp(percent);
+            Opacity = PopoutOpacity.ToFactor(_appliedOpacityPercent);
+        }
+
+        /// <summary>
+        /// Holds the window under the opacity the player stored.
+        /// WindowBase2 drives Opacity to 1 on every Show through a tween
+        /// this class cannot reach, which is what used to drop a stored
+        /// setting the moment the window was reopened. Capping rather than
+        /// assigning leaves the Hide tween's descent to 0 alone, so the
+        /// window still fades out and still becomes invisible.
+        /// </summary>
+        public override void UpdateContainer(GameTime gameTime)
+        {
+            base.UpdateContainer(gameTime);
+            Opacity = PopoutOpacity.CapToStored(Opacity, _appliedOpacityPercent);
+        }
+
+        public override void PaintBeforeChildren(SpriteBatch spriteBatch, Rectangle bounds)
+        {
+            base.PaintBeforeChildren(spriteBatch, bounds);
+            if (string.IsNullOrEmpty(_titleText))
+            {
+                return;
+            }
+
+            spriteBatch.DrawStringOnCtrl(
+                this,
+                _titleText,
+                UiFonts.Display,
+                new Rectangle(TitleX, 0, Width - TitleX, WindowSizing.TitleBarHeight),
+                ContentService.Colors.ColonialWhite);
         }
 
         private int ContentHeight()
         {
-            int height = ContentRegion.Height - PopoutLayout.ChromeHeight;
+            int height = ContentRegion.Height
+                - PopoutLayout.ChromeHeight
+                - PopoutLayout.ContentBottomPadding;
             return height > 0 ? height : 0;
         }
 

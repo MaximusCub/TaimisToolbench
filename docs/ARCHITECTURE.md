@@ -1819,6 +1819,35 @@ windows. Those exist for refreshes the module decides to run on the player's
 behalf. This one is a deliberate press, like the Account Snapshot tab's
 Refresh Now.
 
+### Window chrome
+
+A popout is dressed in the module window's own art and texture-space regions
+(`Views/ModuleWindowArt.cs`, named in `Services/WindowSizing.cs`). Blish
+scales a window background so the window region maps onto the control's own
+bounds, so one pair of regions serves a 1378px module window and a small
+popout alike. The chrome those regions imply - 46px left of the content box,
+40px above it, 15px below - is the module window's and is already named, so
+the popout retypes none of it.
+
+`WindowBase2` draws a window's `Title` 78px in, which is the seat a
+`TabbedWindow2`'s tab sidebar and emblem fill. A popout has neither, so the
+word read as indented. The popout leaves Blish's `Title` unset and paints its
+own in `PaintBeforeChildren`, on the same left rule the table under it starts
+at.
+
+### Why a stored opacity has to be re-imposed every frame
+
+`WindowBase2.Show` sets `Opacity` to 0 and resumes a tween that animates it
+to 1; `Hide` reflects the same tween back down to 0. The tween is private, so
+an opacity written once before `Show` was overwritten 0.2 seconds later: the
+setting persisted, the window stopped honouring it the first time it was
+closed and reopened. `PopoutWindow.UpdateContainer` caps `Opacity` at the
+stored value every frame, through `Services/PopoutOpacity.CapToStored`.
+
+Capping and not assigning is the part that matters. `Hide`'s completion
+callback only makes the window invisible if `Opacity` has reached 0, so a
+window pinned to its stored value in both directions would never close.
+
 ### Lifetime
 
 The windows are parented to the sprite screen, never to the module window,
