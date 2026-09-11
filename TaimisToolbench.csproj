@@ -392,6 +392,7 @@
     <Compile Include="Views\RankerTabContent.cs" />
     <Compile Include="Views\SettingsTabContent.cs" />
     <Compile Include="Views\AboutTabContent.cs" />
+    <Compile Include="Views\BlishSettingsHintView.cs" />
     <Compile Include="Views\ViewAdapter.cs" />
     <Compile Include="Views\FocusRelease.cs" />
     <Compile Include="Views\ResizableTabbedWindow.cs" />

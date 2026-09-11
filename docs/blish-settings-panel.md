@@ -6,11 +6,13 @@ this module does not draw and cannot lay out. This page records what that
 panel does with a setting, because two of its behaviours are load-bearing for
 `Services/ModuleSettingText.cs` and neither is obvious from the module side.
 
-**This module now shows nothing in that panel.** Every setting it defines sits
+**This module draws no settings in that panel.** Every setting it defines sits
 in the non-rendered sub-collection described below, and every one of them is
 changed on the module's own Settings tab, or by the control that owns it. The
-rest of this page still applies, because turning one setting back on is a
-one-word change in `Services/ModuleSettingText.cs`.
+panel carries one line and an Open Settings button instead, built by
+`Views/BlishSettingsHintView.cs`. The rest of this page still applies, because
+turning one setting back on is a one-word change in
+`Services/ModuleSettingText.cs`.
 
 ## Why nothing is shown there
 
@@ -25,6 +27,24 @@ A setting is either the module's to present or Blish's, and splitting them
 leaves a player with two places to look and no rule for which. The module
 already draws a Settings tab with grouped rows, validation and live apply, so
 the whole set lives there.
+
+## What the panel shows instead
+
+`Module.GetSettingsView` returns `Views/BlishSettingsHintView.cs`, which is a
+line of text and a button. Overriding `GetSettingsView` replaces Blish's own
+setting list outright, so it is a second reason nothing is drawn there, and
+the two other modules the maintainer runs both do the same: Pathing returns a
+hint view with an Open Settings button, and Estreya's EventTable returns a
+single button that opens its own window.
+
+The button selects the Settings tab and then shows the window. That order
+matters twice. `TabbedWindow2.OnTabChanged` calls `ShowView` whether or not
+the window is visible, so the tab can be chosen while it is closed. And its
+tab-swap sound plays only `if (this.Visible && e.PreviousValue != null)`, so
+choosing the tab first means opening a closed window does not play one.
+
+`WindowBase2.Show` calls `BringWindowToFront` before its own visibility check,
+so the button also works when the window is already open on another tab.
 
 Everything below is read from Blish HUD 1.3.0, which is the version
 `manifest.json` depends on and the version installed on the maintainer's

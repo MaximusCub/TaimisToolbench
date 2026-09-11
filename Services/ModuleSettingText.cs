@@ -31,6 +31,15 @@ namespace TaimisToolbench.Services
         /// </summary>
         public const int MaxDisplayNameWidth = 175;
 
+        /// <summary>
+        /// The line Blish's panel shows in place of the setting list it would
+        /// otherwise draw, and the label on the button beside it. Built by
+        /// Views/BlishSettingsHintView.cs.
+        /// </summary>
+        public const string PanelHintText = "Settings for this module are in its own window.";
+
+        public const string PanelHintButtonText = "Open Settings";
+
         /// <summary>One setting's key and the text Blish shows for it.</summary>
         internal sealed class Descriptor
         {

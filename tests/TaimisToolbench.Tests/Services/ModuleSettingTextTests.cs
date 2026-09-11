@@ -115,6 +115,25 @@ namespace TaimisToolbench.Tests.Services
         }
 
         /// <summary>
+        /// Blish's panel draws no setting for this module, so these two
+        /// strings are the only text it shows. Both are drawn in Menomonia,
+        /// and the hint has to stay on one line: the view that draws it does
+        /// not wrap, so a longer string clips with nothing to notice.
+        /// </summary>
+        [Fact]
+        public void ThePanelHintDrawsAndFitsOneLine()
+        {
+            Assert.True(Font.CanDraw(ModuleSettingText.PanelHintText));
+            Assert.True(Font.CanDraw(ModuleSettingText.PanelHintButtonText));
+
+            // Blish 1.3.0 seats a setting's slider at x=185 and makes it 277
+            // wide, so the panel is at least 462. The budget is the round
+            // number below that, less the view's own 16px insets.
+            int width = Font.MeasureLabelWidth(ModuleSettingText.PanelHintText);
+            Assert.True(width <= 400, "The panel hint is " + width + "px and will clip.");
+        }
+
+        /// <summary>
         /// A descriptor missing from All is a name no width check ever sees,
         /// which is exactly how the collided names got in.
         /// </summary>

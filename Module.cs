@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Blish_HUD;
 using Blish_HUD.Content;
 using Blish_HUD.Controls;
+using Blish_HUD.Graphics.UI;
 using Blish_HUD.Modules;
 using Blish_HUD.Modules.Managers;
 using Blish_HUD.Settings;
@@ -386,6 +387,37 @@ namespace TaimisToolbench
         protected override void DefineSettings(SettingCollection settings)
         {
             _settings = new ModuleSettings(settings);
+        }
+
+        /// <summary>
+        /// Replaces Blish's own setting list in the Manage Modules panel.
+        /// Every setting is defined into a sub-collection Blish does not
+        /// render, so that list is empty; this puts a line and a button
+        /// there instead. See docs/blish-settings-panel.md.
+        /// </summary>
+        public override IView GetSettingsView()
+        {
+            return new BlishSettingsHintView(OpenSettingsTab);
+        }
+
+        /// <summary>
+        /// Shows the module window on its Settings tab. Selecting the tab
+        /// before showing the window means a window that was closed never
+        /// appears on the tab it was left on first.
+        /// </summary>
+        private void OpenSettingsTab()
+        {
+            // Null before Initialize runs BuildWindow, and again after
+            // Unload clears it. Blish's panel can outlive the module's
+            // window, and a click that lands then must not throw inside
+            // Blish's own UI.
+            if (_mainWindow == null || _settingsTab == null)
+            {
+                return;
+            }
+
+            _mainWindow.SelectedTab = _settingsTab;
+            _mainWindow.Show();
         }
 
         /// <summary>
@@ -2120,6 +2152,12 @@ namespace TaimisToolbench
             // sprite screen, so disposing _mainWindow never reaches them.
             _popoutWindows?.Dispose();
             _mainWindow?.Dispose();
+
+            // Cleared, not just disposed. Blish's Manage Modules panel may
+            // still hold the view GetSettingsView returned, and its button
+            // reads this field - see OpenSettingsTab. Control exposes no
+            // public disposed flag, so null is the only readable signal.
+            _mainWindow = null;
 
             // The module's ONE rich tooltip surface. Like the tickers
             // above it is parented to the SpriteScreen (only while
