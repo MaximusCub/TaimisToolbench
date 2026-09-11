@@ -126,6 +126,11 @@ namespace TaimisToolbench.Views
                 Math.Max(contentSize.Y + ChromeHeight, _minWindowSize.Y));
 
             _titleText = title;
+
+            // Emptied, not left unset: WindowBase2's Title defaults to the
+            // literal "No Title", which it would paint at its own 78px seat
+            // beside the one this window draws.
+            Title = string.Empty;
             Id = windowId;
             Parent = GameService.Graphics.SpriteScreen;
             CanResize = true;
