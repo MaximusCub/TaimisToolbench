@@ -350,7 +350,7 @@ Views/DialogWindow.cs                                                           
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    428
 Views/PlanHistoryTabContent.cs                                                          1557
-Views/PopoutWindow.cs                                                                    534
+Views/PopoutWindow.cs                                                                   539
 Views/PopoutWindowHost.cs                                                               313
 Views/RankerTabContent.cs                                                               3209
 Views/Rendering/ClickSound.cs                                                           197
