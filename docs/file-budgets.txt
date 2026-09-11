@@ -212,7 +212,7 @@ Services/PlanHistoryRowLayout.cs                                                
 Services/PlanHistoryStore.cs                                                            155
 Services/PlanHistoryTableSorter.cs                                                      103
 Services/PlanPhaseEvent.cs                                                              73
-Services/PlanRelayoutMath.cs                                                            481
+Services/PlanRelayoutMath.cs                                                            491
 Services/PlanResultBuilder.cs                                                           483
 Services/PlanRootNodes.cs                                                               46
 Services/PlanSolver.cs                                                                  2346
@@ -335,7 +335,7 @@ Services/WheelDeltaSanitizer.cs                                                 
 Services/WikiLinkBuilder.cs                                                             177
 Services/WikiLinkLauncher.cs                                                           171
 Services/WindowPlacement.cs                                                             106
-Services/WindowSizing.cs                                                                276
+Services/WindowSizing.cs                                                                298
 Views/AboutTabContent.cs                                                                1000
 Views/ApiAccessDialog.cs                                                                231
 Views/AutocompleteTextBox.cs                                                            45
@@ -350,7 +350,7 @@ Views/DialogWindow.cs                                                           
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    428
 Views/PlanHistoryTabContent.cs                                                          1557
-Views/PopoutWindow.cs                                                                   469
+Views/PopoutWindow.cs                                                                    534
 Views/PopoutWindowHost.cs                                                               313
 Views/RankerTabContent.cs                                                               3209
 Views/Rendering/ClickSound.cs                                                           197
@@ -384,7 +384,7 @@ Views/Rendering/RichTooltipSurface.cs                                           
 Views/Rendering/RowRelayoutHelpers.cs                                                   68
 Views/Rendering/RowActionKey.cs                                                         103
 Views/Rendering/ShoppingBadgeColors.cs                                                  72
-Views/Rendering/ShoppingListSectionRenderer.cs                                          526
+Views/Rendering/ShoppingListSectionRenderer.cs                                          531
 Views/Rendering/SortIndicator.cs                                                        145
 Views/Rendering/SortableHeaderBlock.cs                                                  108
 Views/Rendering/SortableHeaderCells.cs                                                  249
@@ -631,7 +631,7 @@ tests/TaimisToolbench.Tests/Services/SettingsCurrencyGridLayoutTests.cs         
 tests/TaimisToolbench.Tests/Services/SettingsFormLayoutTests.cs                         268
 tests/TaimisToolbench.Tests/Services/SettingsInputParserTests.cs                        338
 tests/TaimisToolbench.Tests/Services/SettingsSaveBarLayoutTests.cs                      117
-tests/TaimisToolbench.Tests/Services/ShoppingColumnMathTests.cs                         675
+tests/TaimisToolbench.Tests/Services/ShoppingColumnMathTests.cs                         696
 tests/TaimisToolbench.Tests/Services/ShoppingListEachTimesAmountTests.cs                131
 tests/TaimisToolbench.Tests/Services/ShoppingRowTooltipFormatterTests.cs                246
 tests/TaimisToolbench.Tests/Services/ShoppingSourceBadgeTests.cs                        233

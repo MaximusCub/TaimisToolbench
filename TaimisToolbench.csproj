@@ -115,6 +115,7 @@
     <Compile Include="Services\GzipJsonFile.cs" />
     <Compile Include="Services\PopoutLayout.cs" />
     <Compile Include="Services\PopoutOpacity.cs" />
+    <Compile Include="Services\PopoutToolbarLayout.cs" />
     <Compile Include="Services\PopoutRemaining.cs" />
     <Compile Include="Services\PopoutRowKey.cs" />
     <Compile Include="Services\PopoutSectionState.cs" />
@@ -175,7 +176,7 @@
     <Compile Include="Services\TypeRampMetrics.cs" />
     <Compile Include="Services\GridLayout.cs" />
     <Compile Include="Services\UiSpacing.cs" />
-    <Compile Include="Services\UsedMaterialsColumnMath.cs" />
+    <Compile Include="Services\AmountLedRowMath.cs" />
     <Compile Include="Services\TradingPostMath.cs" />
     <Compile Include="Services\FirstLoadSnapshotGate.cs" />
     <Compile Include="Services\ScrollAnchorMath.cs" />
@@ -377,6 +378,7 @@
     <Compile Include="Views\DialogWindow.cs" />
     <Compile Include="Views\ModalBackdrop.cs" />
     <Compile Include="Views\ModalDialog.cs" />
+    <Compile Include="Views\ModuleWindowArt.cs" />
     <Compile Include="Views\ApiAccessDialog.cs" />
     <Compile Include="Views\LogTabContent.cs" />
     <Compile Include="Models\RankerWatchlistEntry.cs" />
