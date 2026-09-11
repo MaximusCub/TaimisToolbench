@@ -24,13 +24,14 @@ namespace TaimisToolbench.Services
         JoinedRunningFetch,
 
         /// <summary>
-        /// The player is not in the world, so Blish cannot hand the module
-        /// a subtoken yet and waiting for one would achieve nothing.
+        /// No character is in the world, and the wait for a subtoken ran
+        /// out before one arrived - see ApiHandoverWait. Signing in is
+        /// what changes the answer.
         /// </summary>
         NotInWorld,
 
         /// <summary>
-        /// The player is in the world and the subtoken still did not
+        /// A character is in the world and the subtoken still did not
         /// arrive, so the module has no GW2 API access it can use.
         /// </summary>
         NoApiAccess,

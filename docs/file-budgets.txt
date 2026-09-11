@@ -109,7 +109,7 @@ Models/UsedMaterial.cs                                                          
 Models/VendorItemCostLine.cs                                                            42
 Models/VendorOffer.cs                                                                   86
 Models/VendorOfferDataset.cs                                                            15
-Module.cs                                                                               3529
+Module.cs                                                                               3614
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
@@ -211,7 +211,7 @@ Services/PlanHistoryRetention.cs                                                
 Services/PlanHistoryRowLayout.cs                                                        369
 Services/PlanHistoryStore.cs                                                            155
 Services/PlanHistoryTableSorter.cs                                                      103
-Services/PlanPhaseEvent.cs                                                              73
+Services/PlanPhaseEvent.cs                                                              80
 Services/PlanRelayoutMath.cs                                                            481
 Services/PlanResultBuilder.cs                                                           483
 Services/PlanRootNodes.cs                                                               46

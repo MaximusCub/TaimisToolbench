@@ -9,12 +9,13 @@ namespace TaimisToolbench.Services
     /// be seen any other way, and StatusUpdateGuard alone cannot catch it.
     /// <para>
     /// This holds only because <see cref="PlanPhase"/>'s declaration order
-    /// IS the pipeline's emission order (BuildingTree -&gt; FetchingPrices
-    /// -&gt; SolvingDecisions -&gt; FetchingItemDetails -&gt;
-    /// CheckingLearnedRecipes -&gt; BuildingDisplay), which makes its int
-    /// ordinal a monotonic sequence per generation. Inserting or reordering
-    /// a member out of emission order breaks this guard silently - see
-    /// PlanPhaseEvent's own doc comment and CraftingPlanPipeline's
+    /// IS the emission order (WaitingForGame -&gt; BuildingTree -&gt;
+    /// FetchingPrices -&gt; SolvingDecisions -&gt; FetchingItemDetails
+    /// -&gt; CheckingLearnedRecipes -&gt; BuildingDisplay), which makes its
+    /// int ordinal a monotonic sequence per generation. Inserting or
+    /// reordering a member out of emission order breaks this guard
+    /// silently - see PlanPhaseEvent's own doc comment, Module's
+    /// WaitForApiHandoverAsync and CraftingPlanPipeline's
     /// phaseTracker.Start call sites.
     /// </para>
     /// <para>Derivation: docs/ARCHITECTURE.md section 6.1.</para>

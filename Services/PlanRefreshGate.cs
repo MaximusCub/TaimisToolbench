@@ -12,23 +12,24 @@ namespace TaimisToolbench.Services
     /// <para>
     /// Blish-free so the orderings it has to get right - a press landing
     /// beside a refresh the module started for its own reasons - are
-    /// reachable from tests. Module supplies the three readings it cannot:
-    /// whether Blish has granted usable API access, whether a recent
-    /// failure's backoff window is open, and the fetch itself.
+    /// reachable from tests. Module supplies the four readings it cannot:
+    /// whether Blish has granted usable API access, how far along the game
+    /// client is, whether a recent failure's backoff window is open, and
+    /// the fetch itself.
     /// </para>
     /// </summary>
     internal sealed class PlanRefreshGate
     {
         private readonly SnapshotRefreshSlot _slot;
         private readonly ApiReadySignal _apiReady;
-        private readonly Func<bool> _inWorld;
+        private readonly Func<GameClientState> _gameState;
         private readonly Func<bool> _inFailureBackoff;
         private readonly Func<CancellationToken, Task<AccountSnapshot>> _fetch;
 
         public PlanRefreshGate(
             SnapshotRefreshSlot slot,
             ApiReadySignal apiReady,
-            Func<bool> inWorld,
+            Func<GameClientState> gameState,
             Func<bool> inFailureBackoff,
             Func<CancellationToken, Task<AccountSnapshot>> fetch)
         {
@@ -42,9 +43,9 @@ namespace TaimisToolbench.Services
                 throw new ArgumentNullException("apiReady");
             }
 
-            if (inWorld == null)
+            if (gameState == null)
             {
-                throw new ArgumentNullException("inWorld");
+                throw new ArgumentNullException("gameState");
             }
 
             if (inFailureBackoff == null)
@@ -59,7 +60,7 @@ namespace TaimisToolbench.Services
 
             _slot = slot;
             _apiReady = apiReady;
-            _inWorld = inWorld;
+            _gameState = gameState;
             _inFailureBackoff = inFailureBackoff;
             _fetch = fetch;
         }
@@ -69,12 +70,14 @@ namespace TaimisToolbench.Services
         /// A fetch that throws throws out of here: the caller owns what a
         /// failed attempt says to the user.
         /// <para>
-        /// Freshness is settled before API access, so a press that wants no
-        /// fetch waits for no subtoken.
+        /// It does not wait for the subtoken. ApiHandoverWait does that,
+        /// before the press starts any of the work this runs alongside, so
+        /// that the status strip can name the wait rather than showing
+        /// whichever pipeline phase happened to be current.
         /// </para>
         /// </summary>
         public async Task<PlanRefreshOutcome> RunAsync(
-            DateTime? capturedAtUtc, DateTime utcNow, TimeSpan apiWaitBudget, CancellationToken ct)
+            DateTime? capturedAtUtc, DateTime utcNow)
         {
             if (!SnapshotRefreshPolicy.ShouldRefreshOnGenerate(capturedAtUtc, utcNow))
             {
@@ -83,19 +86,13 @@ namespace TaimisToolbench.Services
 
             if (!_apiReady.IsReady())
             {
-                // Blish renews a module's subtoken off a MumbleLink
-                // character-name change, and MumbleLink does not tick
-                // outside the world. Waiting out of world waits for
-                // something that cannot happen.
-                if (!_inWorld())
-                {
-                    return PlanRefreshOutcome.NotInWorld;
-                }
-
-                if (!await _apiReady.WaitAsync(apiWaitBudget, ct))
-                {
-                    return PlanRefreshOutcome.NoApiAccess;
-                }
+                // Two different things to tell the player. Out of world,
+                // the subtoken is waiting on them to sign in. In the
+                // world, it has had its window and is not coming, so the
+                // key itself is what needs attention.
+                return _gameState() == GameClientState.InWorld
+                    ? PlanRefreshOutcome.NoApiAccess
+                    : PlanRefreshOutcome.NotInWorld;
             }
 
             // Two passes, not a spin. The second only runs when another

@@ -259,6 +259,12 @@ namespace TaimisToolbench
         // class so its orderings are testable - see PlanRefreshGate.
         private PlanRefreshGate _planRefreshGate;
 
+        // The wait half of the same press. Held for the life of the module
+        // because it remembers a wait that ran out, which is what stops a
+        // second press spending the same window again - see
+        // ApiHandoverWait.
+        private ApiHandoverWait _apiHandoverWait;
+
         // Whether Blish has granted usable API access. Every permission
         // probe in this class goes through it so a Generate press waiting
         // for the subtoken is released by whichever part of the module
@@ -483,10 +489,12 @@ namespace TaimisToolbench
             _planStore = new PlanStore(dataDir, onStoreError, onStoreInfo);
             _snapshotService = new Gw2AccountSnapshotService(Gw2ApiManager);
             _apiReady = new ApiReadySignal(_snapshotService.HasRequiredPermissions);
+            _apiHandoverWait = new ApiHandoverWait(
+                _apiReady, ReadGameClientState, SnapshotRefreshPolicy.HandoverWaitFor);
             _planRefreshGate = new PlanRefreshGate(
                 _refreshSlot,
                 _apiReady,
-                IsPlayerInWorld,
+                ReadGameClientState,
                 IsInRefreshFailureBackoff,
                 FetchForPlanAsync);
             _lastStatus = _statusStore.Load();
@@ -1451,7 +1459,7 @@ namespace TaimisToolbench
         /// is the one captured when the view was built - a later Initialize
         /// installs a different source, and Unload disposes this one.
         /// </param>
-        private Task<CraftingPlanResult> StartGenerateAsync(
+        private async Task<CraftingPlanResult> StartGenerateAsync(
             IReadOnlyList<PlanRequestItem> items,
             bool useOwn,
             bool valueOwnMaterials,
@@ -1529,6 +1537,22 @@ namespace TaimisToolbench
             var generateCts = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetimeToken);
             ct = generateCts.Token;
 
+            // Ahead of both tasks below rather than alongside them. The
+            // status strip names one phase at a time, and a wait hidden
+            // under "Fetching prices" reads as a freeze. It also settles
+            // API access before the pipeline reaches the account
+            // progression read, which needs the same subtoken the refresh
+            // does.
+            try
+            {
+                await WaitForApiHandoverAsync(phaseProgress, ct);
+            }
+            catch
+            {
+                generateCts.Dispose();
+                throw;
+            }
+
             // Started here and awaited inside the pipeline, after the price
             // fetch: the refresh runs alongside the tree build and the
             // prices instead of ahead of them, so a generation waits for
@@ -1540,7 +1564,7 @@ namespace TaimisToolbench
             // A pipeline that throws before the seam - a failed tree build -
             // never awaits the refresh, and a cancelled refresh would then
             // be an unobserved fault.
-            accountRefresh.ContinueWith(
+            _ = accountRefresh.ContinueWith(
                 t => { var ignored = t.Exception; },
                 TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
 
@@ -1551,7 +1575,54 @@ namespace TaimisToolbench
                 characterDisciplines: null,
                 accountDataAsync: () => accountRefresh);
 
-            return PersistAfterGenerateAsync(generateTask, items, useOwn, priceBasis, valueOwnMaterials, myPersistGen, ct, generateCts);
+            return await PersistAfterGenerateAsync(
+                generateTask, items, useOwn, priceBasis, valueOwnMaterials, myPersistGen, ct, generateCts);
+        }
+
+        /// <summary>
+        /// Waits for Blish to hand over the API subtoken, and tells the
+        /// status strip what the press is waiting for while it does.
+        /// <para>
+        /// The phase event is reported only when a wait actually starts,
+        /// so a press that already has access never flashes a line about
+        /// waiting. PlanPhase.WaitingForGame is first in its enum because
+        /// PhaseOrdinalGuard takes declaration order for emission order,
+        /// and this is the one phase that runs before the pipeline.
+        /// </para>
+        /// </summary>
+        private async Task WaitForApiHandoverAsync(
+            IProgress<PlanPhaseEvent> phaseProgress, CancellationToken ct)
+        {
+            bool waited = false;
+            var sw = new System.Diagnostics.Stopwatch();
+
+            bool granted = await _apiHandoverWait.WaitAsync(
+                state =>
+                {
+                    waited = true;
+                    sw.Start();
+                    phaseProgress?.Report(new PlanPhaseEvent
+                    {
+                        Phase = PlanPhase.WaitingForGame,
+                        DisplayName = state == GameClientState.InWorld
+                            ? "Waiting for API access"
+                            : "Waiting for Guild Wars 2",
+                        Detail = state == GameClientState.InWorld
+                            ? null
+                            : "sign in to a character",
+                    });
+                },
+                ct);
+
+            if (!waited)
+            {
+                return;
+            }
+
+            sw.Stop();
+            ModuleLog.Shared.Write(ModuleLogLevel.Info, "plan", granted
+                ? $"Generate Plan waited {sw.ElapsedMilliseconds}ms for the API subtoken and got it"
+                : $"Generate Plan waited {sw.ElapsedMilliseconds}ms for the API subtoken and did not get one");
         }
 
         /// <summary>
@@ -2357,27 +2428,43 @@ namespace TaimisToolbench
         }
 
         /// <summary>
-        /// Whether MumbleLink reports a character, which is what decides
-        /// whether Blish can hand this module a subtoken at all - see
-        /// SnapshotRefreshPolicy.SubtokenHandover.
+        /// How far along the game client is, which is what decides how
+        /// long waiting for a subtoken can help - see
+        /// SnapshotRefreshPolicy.HandoverWaitFor.
+        /// <para>
+        /// Blish sets IsInGame from the MumbleLink tick age
+        /// (TimeSinceTick under half a second) and Gw2IsRunning, which is
+        /// exactly the condition it renews a subtoken under. It reports a
+        /// loading screen, a cinematic and character select as one
+        /// not-in-game state and cannot separate them.
+        /// </para>
         /// </summary>
-        private bool IsPlayerInWorld()
+        private GameClientState ReadGameClientState()
         {
             try
             {
-                var mumble = GameService.Gw2Mumble;
-                return mumble != null &&
-                    mumble.PlayerCharacter != null &&
-                    !string.IsNullOrEmpty(mumble.PlayerCharacter.Name);
+                var instance = GameService.GameIntegration?.Gw2Instance;
+                if (instance == null)
+                {
+                    return GameClientState.InWorld;
+                }
+
+                if (!instance.Gw2IsRunning)
+                {
+                    return GameClientState.NotRunning;
+                }
+
+                return instance.IsInGame ? GameClientState.InWorld : GameClientState.Loading;
             }
             catch (Exception ex)
             {
                 // Unknown reads as in world. The only cost is one press
-                // waiting out the handover budget for nothing, against
-                // telling a player who is already signed in to sign in.
+                // spending the shorter of the two windows for nothing,
+                // against telling a player who is already signed in to
+                // sign in.
                 ModuleLog.Shared.Write(ModuleLogLevel.Debug, "snapshot",
-                    $"Gw2Mumble unavailable, cannot tell whether a character is in the world: {ex.GetType().Name} - {ex.Message}");
-                return true;
+                    $"Blish game integration unavailable, cannot tell how far along the client is: {ex.GetType().Name} - {ex.Message}");
+                return GameClientState.InWorld;
             }
         }
 
@@ -2431,9 +2518,7 @@ namespace TaimisToolbench
             {
                 var outcome = await _planRefreshGate.RunAsync(
                     _currentSnapshot?.CapturedAt,
-                    DateTime.UtcNow,
-                    SnapshotRefreshPolicy.SubtokenHandover,
-                    ct);
+                    DateTime.UtcNow);
 
                 switch (outcome)
                 {

@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 using System.Threading.Tasks;
 using TaimisToolbench.Models;
 using TaimisToolbench.Services;
@@ -22,7 +21,7 @@ namespace TaimisToolbench.Tests.Services
             int fetches = 0;
             var gate = Build(fetches: () => fetches++);
 
-            var outcome = await gate.RunAsync(Now.AddSeconds(-30), Now, TimeSpan.Zero, CancellationToken.None);
+            var outcome = await gate.RunAsync(Now.AddSeconds(-30), Now);
 
             Assert.Equal(PlanRefreshOutcome.UsedLoadedData, outcome);
             Assert.Equal(0, fetches);
@@ -34,7 +33,7 @@ namespace TaimisToolbench.Tests.Services
             int fetches = 0;
             var gate = Build(fetches: () => fetches++);
 
-            var outcome = await gate.RunAsync(Now.AddSeconds(-90), Now, TimeSpan.Zero, CancellationToken.None);
+            var outcome = await gate.RunAsync(Now.AddSeconds(-90), Now);
 
             Assert.Equal(PlanRefreshOutcome.Refreshed, outcome);
             Assert.Equal(1, fetches);
@@ -44,27 +43,26 @@ namespace TaimisToolbench.Tests.Services
         public async Task A_press_in_world_with_no_api_access_does_not_fetch()
         {
             int fetches = 0;
-            var gate = Build(apiReady: false, inWorld: true, fetches: () => fetches++);
+            var gate = Build(apiReady: false, state: GameClientState.InWorld, fetches: () => fetches++);
 
-            var outcome = await gate.RunAsync(null, Now, TimeSpan.Zero, CancellationToken.None);
+            var outcome = await gate.RunAsync(null, Now);
 
             Assert.Equal(PlanRefreshOutcome.NoApiAccess, outcome);
             Assert.Equal(0, fetches);
         }
 
         /// <summary>
-        /// Blish only renews a subtoken off a MumbleLink character-name
-        /// change, and MumbleLink does not tick outside the world. A press
-        /// at character select must not spend the handover budget waiting
-        /// for something that cannot arrive.
+        /// Out of world the player is told to sign in, in the world they
+        /// are told the module has no API access. The wait that precedes
+        /// both is over by the time the gate runs - see ApiHandoverWait.
         /// </summary>
         [Fact]
-        public async Task A_press_out_of_world_reports_that_and_does_not_wait()
+        public async Task A_press_out_of_world_with_no_api_access_names_the_sign_in()
         {
             int fetches = 0;
-            var gate = Build(apiReady: false, inWorld: false, fetches: () => fetches++);
+            var gate = Build(apiReady: false, state: GameClientState.Loading, fetches: () => fetches++);
 
-            var press = gate.RunAsync(null, Now, TimeSpan.FromDays(1), CancellationToken.None);
+            var press = gate.RunAsync(null, Now);
 
             Assert.True(press.IsCompleted);
             Assert.Equal(PlanRefreshOutcome.NotInWorld, await press);
@@ -75,9 +73,9 @@ namespace TaimisToolbench.Tests.Services
         public async Task A_press_out_of_world_still_fetches_once_the_subtoken_has_arrived()
         {
             int fetches = 0;
-            var gate = Build(apiReady: true, inWorld: false, fetches: () => fetches++);
+            var gate = Build(apiReady: true, state: GameClientState.Loading, fetches: () => fetches++);
 
-            var outcome = await gate.RunAsync(null, Now, TimeSpan.Zero, CancellationToken.None);
+            var outcome = await gate.RunAsync(null, Now);
 
             Assert.Equal(PlanRefreshOutcome.Refreshed, outcome);
             Assert.Equal(1, fetches);
@@ -89,7 +87,7 @@ namespace TaimisToolbench.Tests.Services
             int fetches = 0;
             var gate = Build(inFailureBackoff: true, fetches: () => fetches++);
 
-            var outcome = await gate.RunAsync(null, Now, TimeSpan.Zero, CancellationToken.None);
+            var outcome = await gate.RunAsync(null, Now);
 
             Assert.Equal(PlanRefreshOutcome.SkippedInBackoff, outcome);
             Assert.Equal(0, fetches);
@@ -106,7 +104,7 @@ namespace TaimisToolbench.Tests.Services
             int fetches = 0;
             var gate = Build(slot: slot, fetches: () => fetches++);
 
-            var press = gate.RunAsync(null, Now, TimeSpan.Zero, CancellationToken.None);
+            var press = gate.RunAsync(null, Now);
             Assert.False(press.IsCompleted);
 
             running.SetResult(new AccountSnapshot { CapturedAt = Now });
@@ -131,7 +129,7 @@ namespace TaimisToolbench.Tests.Services
             int fetches = 0;
             var gate = Build(slot: slot, fetches: () => fetches++);
 
-            var press = gate.RunAsync(null, Now, TimeSpan.Zero, CancellationToken.None);
+            var press = gate.RunAsync(null, Now);
             Assert.False(press.IsCompleted);
 
             // What the winning claimant does next, one method call later.
@@ -152,7 +150,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.True(slot.TryClaim());
             var gate = Build(slot: slot);
 
-            var press = gate.RunAsync(null, Now, TimeSpan.Zero, CancellationToken.None);
+            var press = gate.RunAsync(null, Now);
 
             var winning = new TaskCompletionSource<AccountSnapshot>();
             slot.PublishFetch(winning.Task);
@@ -167,53 +165,23 @@ namespace TaimisToolbench.Tests.Services
             var gate = new PlanRefreshGate(
                 new SnapshotRefreshSlot(),
                 new ApiReadySignal(() => true),
-                () => true,
+                () => GameClientState.InWorld,
                 () => false,
                 ct => { throw new InvalidOperationException("the account read failed"); });
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => gate.RunAsync(null, Now, TimeSpan.Zero, CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => gate.RunAsync(null, Now));
         }
 
         /// <summary>
-        /// What the owner hit. Blish had not granted the subtoken nine
-        /// seconds into the session, so the press found no API access. It
-        /// now waits out what is left of the startup grace instead of
-        /// giving up on one reading.
+        /// Freshness is settled before API access, so a press that wants
+        /// no fetch is not held up by a key the module has not got.
         /// </summary>
         [Fact]
-        public async Task A_press_during_startup_waits_for_the_subtoken_and_then_fetches()
-        {
-            bool granted = false;
-            int fetches = 0;
-            var signal = new ApiReadySignal(() => granted);
-            var gate = new PlanRefreshGate(
-                new SnapshotRefreshSlot(),
-                signal,
-                () => true,
-                () => false,
-                ct =>
-                {
-                    fetches++;
-                    return Task.FromResult(new AccountSnapshot { CapturedAt = Now });
-                });
-
-            var press = gate.RunAsync(null, Now, TimeSpan.FromMinutes(1), CancellationToken.None);
-            Assert.False(press.IsCompleted);
-
-            // What Module.Update does on the tick Blish grants the token.
-            granted = true;
-            Assert.True(signal.IsReady());
-
-            Assert.Equal(PlanRefreshOutcome.Refreshed, await press);
-            Assert.Equal(1, fetches);
-        }
-
-        [Fact]
-        public async Task A_press_on_fresh_data_never_waits_for_the_subtoken()
+        public async Task A_press_on_fresh_data_uses_it_without_any_api_access()
         {
             var gate = Build(apiReady: false);
 
-            var outcome = await gate.RunAsync(Now.AddSeconds(-30), Now, TimeSpan.FromDays(1), CancellationToken.None);
+            var outcome = await gate.RunAsync(Now.AddSeconds(-30), Now);
 
             Assert.Equal(PlanRefreshOutcome.UsedLoadedData, outcome);
         }
@@ -221,14 +189,14 @@ namespace TaimisToolbench.Tests.Services
         private static PlanRefreshGate Build(
             SnapshotRefreshSlot slot = null,
             bool apiReady = true,
-            bool inWorld = true,
+            GameClientState state = GameClientState.InWorld,
             bool inFailureBackoff = false,
             Action fetches = null)
         {
             return new PlanRefreshGate(
                 slot ?? new SnapshotRefreshSlot(),
                 new ApiReadySignal(() => apiReady),
-                () => inWorld,
+                () => state,
                 () => inFailureBackoff,
                 ct =>
                 {
