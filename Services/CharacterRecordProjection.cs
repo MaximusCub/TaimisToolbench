@@ -50,6 +50,8 @@ namespace TaimisToolbench.Services
                 return;
             }
 
+            string source = AccountItemIndex.CharacterSourcePrefix + characterName;
+
             foreach (var bag in bags)
             {
                 if (bag?.Inventory == null)
@@ -68,11 +70,17 @@ namespace TaimisToolbench.Services
                     {
                         ItemId = item.Id,
                         Count = item.Count,
-                        Source = AccountItemIndex.CharacterSourcePrefix + characterName,
+                        Source = source,
                         Upgrades = SocketedIds(item.Upgrades),
                         Infusions = SocketedIds(item.Infusions),
                         SkinId = SkinIdOf(item.Skin),
                     });
+
+                    // A bag stack's sockets are the account's items just as
+                    // a worn slot's are, and were lost the same way.
+                    SocketedItemRows.AddFor(
+                        part.Items, item.Id, source, item.Count,
+                        item.Upgrades, item.Infusions);
                 }
             }
         }
@@ -85,7 +93,7 @@ namespace TaimisToolbench.Services
         /// on the part instead, and never counted
         /// (Models.SnapshotArmoryEquip). What is socketed into a slot
         /// becomes a row of its own either way
-        /// (Services.SocketedItemRows).
+        /// (Services.SocketedItemRows), as it does for a bag stack.
         /// </summary>
         /// <remarks>
         /// The record's equipment block reports each physical item once and
@@ -104,6 +112,8 @@ namespace TaimisToolbench.Services
             {
                 return;
             }
+
+            string equipped = AccountItemIndex.CharacterEquipmentSourcePrefix + characterName;
 
             foreach (var item in equipment)
             {
@@ -124,7 +134,7 @@ namespace TaimisToolbench.Services
                         // fitted into it is not: those are this account's
                         // own items, one per socket.
                         SocketedItemRows.AddFor(
-                            part.Items, item.Id, characterName, 1,
+                            part.Items, item.Id, equipped, 1,
                             item.Upgrades, item.Infusions);
                     }
 
@@ -138,7 +148,7 @@ namespace TaimisToolbench.Services
 
                     // Worn gear gets its own source encoding so the snapshot
                     // can tell it apart from this same character's bags.
-                    Source = AccountItemIndex.CharacterEquipmentSourcePrefix + characterName,
+                    Source = equipped,
                     Upgrades = SocketedIds(item.Upgrades),
                     Infusions = SocketedIds(item.Infusions),
                     SkinId = SkinIdOf(item.Skin),
@@ -149,7 +159,7 @@ namespace TaimisToolbench.Services
                 // their own, which is the only shape search and the plan's
                 // owned-stock reader can see.
                 SocketedItemRows.AddFor(
-                    part.Items, item.Id, characterName, 1,
+                    part.Items, item.Id, equipped, 1,
                     item.Upgrades, item.Infusions);
             }
         }

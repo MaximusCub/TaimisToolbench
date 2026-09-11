@@ -37,70 +37,88 @@ namespace TaimisToolbench.Services
         private const string EquippedBySeparator = ", ";
 
         /// <summary>
+        /// Opens one place holding gear that draws on an account-wide item.
+        /// Same lead-in as the wearers, because it answers the same
+        /// question; a separate one because the place carries its own
+        /// label and cannot sit inside their comma list.
+        /// </summary>
+        private const string DrawnFromPrefix = " - ";
+
+        /// <summary>
         /// Reads a raw AccountItemIndex source key as a place. An
         /// unrecognized key becomes
-        /// <see cref="SnapshotHoldCategory.Unknown"/> and keeps its raw text,
-        /// so real inventory the module does not yet know about still shows
-        /// (KNOWN-ISSUES #31: never silently mask data).
+        /// <see cref="SnapshotHoldCategory.Unknown"/> and keeps the place
+        /// half of its text, so real inventory the module does not yet know
+        /// about still shows (KNOWN-ISSUES #31: never silently mask data).
         /// <para>
-        /// A socket key names the gear it sits in by item id.
+        /// A socket key names the gear it sits in by item id, and names its
+        /// place with the container half of the key, so a socket reads as
+        /// the same place a loose stack there would.
         /// <paramref name="hostItemName"/> is what turns that id into a
         /// name; without one, or when it answers blank, the place prints
-        /// the wearer alone rather than an id (repo invariant: item ids are
-        /// never shown).
+        /// without the gear rather than with an id (repo invariant: item
+        /// ids are never shown).
         /// </para>
         /// </summary>
         public static SnapshotHoldLocation FromSource(
             string rawSource, int count, Func<int, string> hostItemName = null)
         {
-            var location = new SnapshotHoldLocation
-            {
-                Count = count,
-                RawSource = rawSource ?? "",
-            };
+            var location = new SnapshotHoldLocation { Count = count };
 
-            // Ahead of the character read, not inside it: a socket key
-            // carries an item id, and a key too damaged to read a name out
-            // of must still not fall through to the raw-text case below
-            // (repo invariant: item ids are never shown).
             if (AccountItemIndex.IsSocketedSource(rawSource))
             {
-                AccountItemIndex.TryGetCharacterName(rawSource, out string wearer);
-                location.Category = SnapshotHoldCategory.Equipped;
-                location.CharacterName = wearer;
                 location.HostItemName = HostNameOf(rawSource, hostItemName);
-                return location;
             }
 
             if (AccountItemIndex.TryGetCharacterName(rawSource, out string characterName))
             {
-                location.Category = AccountItemIndex.IsEquipmentSource(rawSource)
+                location.Category = AccountItemIndex.IsWornGearPlace(rawSource)
                     ? SnapshotHoldCategory.Equipped
                     : SnapshotHoldCategory.Bags;
                 location.CharacterName = characterName;
                 return location;
             }
 
-            switch (rawSource)
+            if (AccountItemIndex.ContainerIs(rawSource, AccountItemIndex.SourceSharedInventory))
             {
-                case AccountItemIndex.SourceSharedInventory:
-                    location.Category = SnapshotHoldCategory.SharedInventory;
-                    break;
-                case AccountItemIndex.SourceBank:
-                    location.Category = SnapshotHoldCategory.Bank;
-                    break;
-                case AccountItemIndex.SourceMaterialStorage:
-                    location.Category = SnapshotHoldCategory.MaterialStorage;
-                    break;
-                case AccountItemIndex.SourceLegendaryArmory:
-                    location.Category = SnapshotHoldCategory.LegendaryArmory;
-                    break;
-                default:
-                    location.Category = SnapshotHoldCategory.Unknown;
-                    break;
+                location.Category = SnapshotHoldCategory.SharedInventory;
+            }
+            else if (AccountItemIndex.ContainerIs(rawSource, AccountItemIndex.SourceBank))
+            {
+                location.Category = SnapshotHoldCategory.Bank;
+            }
+            else if (AccountItemIndex.ContainerIs(rawSource, AccountItemIndex.SourceMaterialStorage))
+            {
+                location.Category = SnapshotHoldCategory.MaterialStorage;
+            }
+            else if (AccountItemIndex.ContainerIs(rawSource, AccountItemIndex.SourceLegendaryArmory))
+            {
+                location.Category = SnapshotHoldCategory.LegendaryArmory;
+            }
+            else
+            {
+                // Only the Unknown label prints this, so only the Unknown
+                // case pays for it: this runs per source per row on the
+                // keystroke path. The container half, not the whole key,
+                // because a socket key carries an item id (repo invariant:
+                // item ids are never shown).
+                location.Category = SnapshotHoldCategory.Unknown;
+                location.RawSource = AccountItemIndex.ContainerSource(rawSource);
             }
 
             return location;
+        }
+
+        /// <summary>
+        /// One place on its own, as the line would print it with no other
+        /// place beside it and no count: "Bank", "Bank (in Dusk)",
+        /// "Equipped: Divineaxe (in Obsidian Helm)".
+        /// </summary>
+        public static string PlacePhrase(string rawSource, Func<int, string> hostItemName)
+        {
+            var line = new StringBuilder();
+            AppendPlaceLabel(line, FromSource(rawSource, 0, hostItemName));
+            return line.ToString();
         }
 
         /// <summary>
@@ -230,13 +248,11 @@ namespace TaimisToolbench.Services
             {
                 // A place that holds for the whole account names nobody, so
                 // there is no list for a colon to introduce: "Bank", or
-                // "Bank (2)" when the counts are on.
-                if (showCounts)
-                {
-                    AppendEachCount(line, locations, category);
-                }
-
+                // "Bank (2)" when the counts are on. Two such places print
+                // the label twice, because each carries its own gear.
+                AppendNamelessPlaces(line, locations, category, showCounts);
                 AppendEquippedBy(line, locations, category);
+                AppendSocketedInto(line, locations, category);
                 return;
             }
 
@@ -266,6 +282,76 @@ namespace TaimisToolbench.Services
             }
 
             AppendEquippedBy(line, locations, category);
+            AppendSocketedInto(line, locations, category);
+        }
+
+        /// <summary>
+        /// Appends every place in a category that names no character. The
+        /// caller has already written the first one's label, so this adds
+        /// the gear and the count to that one and a whole label to each
+        /// place after it.
+        /// </summary>
+        private static void AppendNamelessPlaces(
+            StringBuilder line,
+            IReadOnlyList<SnapshotHoldLocation> locations,
+            SnapshotHoldCategory category,
+            bool showCounts)
+        {
+            bool wrote = false;
+
+            for (int i = 0; i < locations.Count; i++)
+            {
+                var location = locations[i];
+                if (location == null || location.Category != category)
+                {
+                    continue;
+                }
+
+                if (wrote)
+                {
+                    line.Append(CategorySeparator).Append(CategoryLabel(location));
+                }
+
+                AppendHost(line, location);
+
+                if (showCounts)
+                {
+                    AppendCount(line, location.Count);
+                }
+
+                wrote = true;
+            }
+        }
+
+        /// <summary>
+        /// Appends the places holding gear that draws on this account-wide
+        /// copy, each on the same lead-in the wearers use. A banked piece is
+        /// not equipped, so it cannot go in that list.
+        /// </summary>
+        private static void AppendSocketedInto(
+            StringBuilder line,
+            IReadOnlyList<SnapshotHoldLocation> locations,
+            SnapshotHoldCategory category)
+        {
+            for (int i = 0; i < locations.Count; i++)
+            {
+                var location = locations[i];
+                if (location == null
+                    || location.Category != category
+                    || location.SocketedInto == null)
+                {
+                    continue;
+                }
+
+                var places = location.SocketedInto;
+                for (int p = 0; p < places.Count; p++)
+                {
+                    if (!string.IsNullOrEmpty(places[p]))
+                    {
+                        line.Append(DrawnFromPrefix).Append(places[p]);
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -324,10 +410,7 @@ namespace TaimisToolbench.Services
             }
 
             line.Append(location.CharacterName);
-            if (!string.IsNullOrEmpty(location.HostItemName))
-            {
-                line.Append(" (").Append(location.HostItemName).Append(")");
-            }
+            AppendHost(line, location);
 
             if (showCounts)
             {
@@ -351,22 +434,31 @@ namespace TaimisToolbench.Services
             return string.IsNullOrWhiteSpace(name) ? "" : name;
         }
 
-        /// <summary>Appends one count per place in the category, for the
-        /// categories that name nobody. More than one place lands in such a
-        /// category only if a future source key maps into it.</summary>
-        private static void AppendEachCount(
-            StringBuilder line,
-            IReadOnlyList<SnapshotHoldLocation> locations,
-            SnapshotHoldCategory category)
+        /// <summary>
+        /// Appends the gear a place is inside, or nothing when the place is
+        /// not a socket or the capture could not name the gear. The word
+        /// "in" is what keeps the gear apart from a bracketed count.
+        /// </summary>
+        private static void AppendHost(StringBuilder line, SnapshotHoldLocation location)
         {
-            for (int i = 0; i < locations.Count; i++)
+            if (!string.IsNullOrEmpty(location.HostItemName))
             {
-                var location = locations[i];
-                if (location != null && location.Category == category)
-                {
-                    AppendCount(line, location.Count);
-                }
+                line.Append(" (in ").Append(location.HostItemName).Append(")");
             }
+        }
+
+        /// <summary>One place's whole label, with no count.</summary>
+        private static void AppendPlaceLabel(
+            StringBuilder line, SnapshotHoldLocation location)
+        {
+            line.Append(CategoryLabel(location));
+
+            if (HasCharacterName(location))
+            {
+                line.Append(": ").Append(location.CharacterName);
+            }
+
+            AppendHost(line, location);
         }
 
         /// <summary>Every count on the line is bracketed, whether its place

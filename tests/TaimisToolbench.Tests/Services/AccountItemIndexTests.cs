@@ -461,5 +461,87 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(0, new AccountItemIndex(null).DistinctItemCount);
             Assert.Equal(0, new AccountItemIndex(new List<SnapshotItemEntry>()).DistinctItemCount);
         }
+
+        // --- Socket keys ---
+        [Fact]
+        public void ASocketKeyCarriesAWholeSourceKeyAsItsContainer()
+        {
+            string banked = AccountItemIndex.SocketedSource(30684, AccountItemIndex.SourceBank);
+            string worn = AccountItemIndex.SocketedSource(30684, EquipSource("Bank"));
+
+            Assert.Equal("Socketed:30684:Bank", banked);
+            Assert.Equal("Socketed:30684:Equipped:Bank", worn);
+
+            // A character named Bank carries its own prefix, so the two
+            // keys cannot be the same string and cannot be read as each
+            // other.
+            Assert.NotEqual(banked, worn);
+            Assert.True(AccountItemIndex.ContainerIs(banked, AccountItemIndex.SourceBank));
+            Assert.False(AccountItemIndex.ContainerIs(worn, AccountItemIndex.SourceBank));
+        }
+
+        [Fact]
+        public void ASocketKeysCharacterNameStillRunsToTheEnd()
+        {
+            string worn = AccountItemIndex.SocketedSource(30684, EquipSource("Divineaxe"));
+            string bags = AccountItemIndex.SocketedSource(30684, CharSource("Divineaxe"));
+
+            Assert.Equal(
+                "Divineaxe", worn.Substring(AccountItemIndex.CharacterNameOffset(worn)));
+            Assert.Equal(
+                "Divineaxe", bags.Substring(AccountItemIndex.CharacterNameOffset(bags)));
+            Assert.True(AccountItemIndex.IsWornGearPlace(worn));
+            Assert.False(AccountItemIndex.IsWornGearPlace(bags));
+
+            // The narrower question, which decides where a rune id lives,
+            // must stay false for a socket row.
+            Assert.False(AccountItemIndex.IsEquipmentSource(worn));
+        }
+
+        [Fact]
+        public void ABankKeyNamesNoCharacter()
+        {
+            string banked = AccountItemIndex.SocketedSource(30684, AccountItemIndex.SourceBank);
+
+            Assert.Equal(-1, AccountItemIndex.CharacterNameOffset(banked));
+            Assert.Equal(-1, AccountItemIndex.CharacterNameOffset(AccountItemIndex.SourceBank));
+        }
+
+        [Fact]
+        public void ContainerReadsSurviveADamagedKey()
+        {
+            Assert.Equal("", AccountItemIndex.ContainerSource("Socketed:no-colon-after"));
+            Assert.Equal("", AccountItemIndex.ContainerSource(null));
+            Assert.False(AccountItemIndex.ContainerIs("Socketed:no-colon-after", "Bank"));
+            Assert.False(AccountItemIndex.ContainerIs(null, "Bank"));
+            Assert.False(AccountItemIndex.ContainerIs("Bank", null));
+            Assert.Equal("Bank", AccountItemIndex.ContainerSource("Bank"));
+        }
+
+        [Fact]
+        public void ALooseCopyIsSpentBeforeASocketAndStoredGearBeforeWornGear()
+        {
+            string bankSocket = AccountItemIndex.SocketedSource(
+                30684, AccountItemIndex.SourceBank);
+            string sharedSocket = AccountItemIndex.SocketedSource(
+                30684, AccountItemIndex.SourceSharedInventory);
+            string bagSocket = AccountItemIndex.SocketedSource(30684, CharSource("Zoe"));
+            string wornSocket = AccountItemIndex.SocketedSource(30684, EquipSource("Zoe"));
+
+            var index = new AccountItemIndex(new List<SnapshotItemEntry>
+            {
+                Entry(100, 1, wornSocket),
+                Entry(100, 1, bagSocket),
+                Entry(100, 1, sharedSocket),
+                Entry(100, 1, bankSocket),
+                Entry(100, 1, CharSource("Zoe")),
+            });
+
+            var prioritized = AccountItemIndex.GetPrioritizedSources(100, index, null);
+
+            Assert.Equal(
+                new[] { CharSource("Zoe"), bankSocket, sharedSocket, bagSocket, wornSocket },
+                prioritized.ToArray());
+        }
     }
 }

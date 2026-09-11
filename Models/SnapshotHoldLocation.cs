@@ -51,16 +51,31 @@ namespace TaimisToolbench.Models
 
         /// <summary>
         /// The gear this item is socketed into, for a place that is a
-        /// socket rather than a bag or a slot. Empty everywhere else, and
+        /// socket rather than a loose stack. Empty everywhere else, and
         /// empty as well when the capture could not name the gear, so a
         /// reader is never shown a host it cannot identify.
         /// </summary>
         public string HostItemName { get; set; } = "";
 
         /// <summary>
-        /// The raw source key, kept for <see cref="SnapshotHoldCategory.Unknown"/>
-        /// so a source the module does not yet recognize still reads as
-        /// something rather than disappearing.
+        /// Places holding gear that draws on this account-wide copy, each
+        /// already formatted as a whole phrase ("Bank (in Dusk)"). Null or
+        /// empty everywhere else.
+        /// <para>
+        /// The same rule as <see cref="EquippedBy"/>: these places hold
+        /// none of the item themselves, so naming them must never add to a
+        /// total. They are apart from it because a banked piece is not
+        /// equipped and cannot be read out under that word.
+        /// </para>
+        /// </summary>
+        public IReadOnlyList<string> SocketedInto { get; set; }
+
+        /// <summary>
+        /// The place half of the source key, kept for
+        /// <see cref="SnapshotHoldCategory.Unknown"/> so a source the module
+        /// does not yet recognize still reads as something rather than
+        /// disappearing. The half, not the whole key, because a socket key
+        /// carries an item id and this one is printed.
         /// </summary>
         public string RawSource { get; set; } = "";
     }

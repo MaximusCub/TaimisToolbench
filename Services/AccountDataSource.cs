@@ -69,13 +69,11 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// Which source a <see cref="Models.SnapshotItemEntry.Source"/>
+        /// Which read a <see cref="Models.SnapshotItemEntry.Source"/>
         /// string came from, or null for a source string this build does not
-        /// recognise. The vocabulary is AccountItemIndex's; the two
-        /// character-scoped keys carry a name after the prefix, and the
-        /// socket key names a character too; all three fold into
-        /// <see cref="AccountDataSource.Characters"/>, which is the read
-        /// they all came from.
+        /// recognise. The vocabulary is AccountItemIndex's. A socket key
+        /// answers for the container it names, because a rune in a banked
+        /// helm was read by the bank call, not the character call.
         /// </summary>
         public static AccountDataSource? ForItemSource(string itemSource)
         {
@@ -84,29 +82,27 @@ namespace TaimisToolbench.Services
                 return null;
             }
 
-            if (itemSource.StartsWith(AccountItemIndex.CharacterSourcePrefix, StringComparison.Ordinal) ||
-                itemSource.StartsWith(AccountItemIndex.CharacterEquipmentSourcePrefix, StringComparison.Ordinal) ||
-                AccountItemIndex.IsSocketedSource(itemSource))
+            if (AccountItemIndex.CharacterNameOffset(itemSource) >= 0)
             {
                 return AccountDataSource.Characters;
             }
 
-            if (string.Equals(itemSource, AccountItemIndex.SourceBank, StringComparison.Ordinal))
+            if (AccountItemIndex.ContainerIs(itemSource, AccountItemIndex.SourceBank))
             {
                 return AccountDataSource.Bank;
             }
 
-            if (string.Equals(itemSource, AccountItemIndex.SourceSharedInventory, StringComparison.Ordinal))
+            if (AccountItemIndex.ContainerIs(itemSource, AccountItemIndex.SourceSharedInventory))
             {
                 return AccountDataSource.SharedInventory;
             }
 
-            if (string.Equals(itemSource, AccountItemIndex.SourceMaterialStorage, StringComparison.Ordinal))
+            if (AccountItemIndex.ContainerIs(itemSource, AccountItemIndex.SourceMaterialStorage))
             {
                 return AccountDataSource.MaterialStorage;
             }
 
-            if (string.Equals(itemSource, AccountItemIndex.SourceLegendaryArmory, StringComparison.Ordinal))
+            if (AccountItemIndex.ContainerIs(itemSource, AccountItemIndex.SourceLegendaryArmory))
             {
                 return AccountDataSource.LegendaryArmory;
             }

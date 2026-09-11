@@ -165,6 +165,10 @@ namespace TaimisToolbench.Services
                         Infusions = CharacterRecordProjection.SocketedIds(item.Infusions),
                         SkinId = CharacterRecordProjection.SkinIdOf(item.Skin),
                     });
+
+                    SocketedItemRows.AddFor(
+                        snapshot.Items, item.Id, AccountItemIndex.SourceBank,
+                        item.Count, item.Upgrades, item.Infusions);
                 }
             }
             catch (Exception ex) when (!(ex is OperationCanceledException))
@@ -196,6 +200,10 @@ namespace TaimisToolbench.Services
                         Infusions = CharacterRecordProjection.SocketedIds(item.Infusions),
                         SkinId = CharacterRecordProjection.SkinIdOf(item.Skin),
                     });
+
+                    SocketedItemRows.AddFor(
+                        snapshot.Items, item.Id, AccountItemIndex.SourceSharedInventory,
+                        item.Count, item.Upgrades, item.Infusions);
                 }
             }
             catch (Exception ex) when (!(ex is OperationCanceledException))

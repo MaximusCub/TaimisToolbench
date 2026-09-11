@@ -68,11 +68,11 @@ namespace TaimisToolbench.Views
         // filter, so it is settled per row - see TransmutedNameIndex.
         private IReadOnlyDictionary<int, IReadOnlyList<TransmutedItemCopy>> _transmutedCopiesByItemId;
 
-        // itemId -> the characters wearing that Legendary Armory item,
-        // built beside _itemsById once per snapshot. Names only: the armory
-        // copy is account-wide and already counted once, so nothing here
-        // may reach a total (Models.SnapshotArmoryEquip).
-        private IReadOnlyDictionary<int, List<string>> _armoryEquippedByItemId;
+        // itemId -> the places drawing that Legendary Armory item, built
+        // beside _itemsById once per snapshot. Places only: the armory copy
+        // is account-wide and already counted once, so nothing here may
+        // reach a total (Models.SnapshotArmoryEquip).
+        private IReadOnlyDictionary<int, List<SnapshotArmoryEquip>> _armoryEquippedByItemId;
 
         // Tops up the stat blocks the socket blocks are drawn FROM. Scoped
         // to the socketed ids and their hosts rather than to the whole
