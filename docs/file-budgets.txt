@@ -191,7 +191,7 @@ Services/ModuleLog.cs                                                           
 Services/ModuleLogEntry.cs                                                              43
 Services/ModuleLogLevel.cs                                                              20
 Services/ModuleLogStore.cs                                                              272
-Services/ModuleSettings.cs                                                              479
+Services/ModuleSettings.cs                                                              475
 Services/MultiItemHeaderLayout.cs                                                       137
 Services/MultiItemHeaderTooltipComposer.cs                                              67
 Services/MysticForgeRecipeData.cs                                                       211

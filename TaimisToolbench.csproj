@@ -397,6 +397,7 @@
     <Compile Include="Views\FocusRelease.cs" />
     <Compile Include="Views\ResizableTabbedWindow.cs" />
     <Compile Include="Views\MainThreadMarshal.cs" />
+    <Compile Include="Services\ModuleSettingText.cs" />
     <Compile Include="Services\ModuleSettings.cs" />
     <Compile Include="Services\CurrencyValuationSerializer.cs" />
     <Compile Include="Services\SettingsInputParser.cs" />

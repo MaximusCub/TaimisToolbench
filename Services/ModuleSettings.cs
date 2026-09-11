@@ -135,85 +135,81 @@ namespace TaimisToolbench.Services
 
         public ModuleSettings(SettingCollection settings)
         {
-            ModalDialogX = settings.DefineSetting(
-                "ModalDialogX", -1,
-                () => "Modal Dialog X",
-                () => "Horizontal position of the modal dialog");
+            var hidden = settings.AddSubCollection(
+                HiddenCollectionKey, renderInUi: false, lazyLoaded: false, displayNameFunc: null);
 
-            ModalDialogY = settings.DefineSetting(
-                "ModalDialogY", -1,
-                () => "Modal Dialog Y",
-                () => "Vertical position of the modal dialog");
+            ModalDialogX = DefineHidden(settings, hidden, ModuleSettingText.ModalDialogX, -1);
+            ModalDialogY = DefineHidden(settings, hidden, ModuleSettingText.ModalDialogY, -1);
 
-            PopoutShoppingListOpacityPercent = settings.DefineSetting(
-                "PopoutShoppingListOpacityPercent", PopoutOpacity.DefaultPercent,
-                () => "Shopping List Popout Opacity",
-                () => "How solid the Shopping List popout window is, as a percent");
+            PopoutShoppingListOpacityPercent = DefineHidden(
+                settings, hidden, ModuleSettingText.PopoutShoppingListOpacityPercent, PopoutOpacity.DefaultPercent);
+            PopoutCraftingStepsOpacityPercent = DefineHidden(
+                settings, hidden, ModuleSettingText.PopoutCraftingStepsOpacityPercent, PopoutOpacity.DefaultPercent);
 
-            PopoutCraftingStepsOpacityPercent = settings.DefineSetting(
-                "PopoutCraftingStepsOpacityPercent", PopoutOpacity.DefaultPercent,
-                () => "Crafting Steps Popout Opacity",
-                () => "How solid the Crafting Steps popout window is, as a percent");
+            CurrencyValuationsJson = DefineHidden(
+                settings, hidden, ModuleSettingText.CurrencyValuationsJson, string.Empty);
+            ValueOwnMaterials = DefineHidden(settings, hidden, ModuleSettingText.ValueOwnMaterials, true);
+            ScrollDiagnosticsEnabled = DefineHidden(
+                settings, hidden, ModuleSettingText.ScrollDiagnosticsEnabled, false);
 
-            CurrencyValuationsJson = settings.DefineSetting(
-                "CurrencyValuationsJson", string.Empty,
-                () => "Vendor Cost Valuations",
-                () => "User-provided coin values for non-coin currencies and barter items (JSON)");
+            HomesteadFiberTier = Define(settings, ModuleSettingText.HomesteadFiberTier, 0);
+            HomesteadMetalTier = Define(settings, ModuleSettingText.HomesteadMetalTier, 0);
+            HomesteadWoodTier = Define(settings, ModuleSettingText.HomesteadWoodTier, 0);
 
-            ValueOwnMaterials = settings.DefineSetting(
-                "ValueOwnMaterials", true,
-                () => "Value own materials",
-                () => "Force-buy items where buying beats crafting from fresh components by more than 15%, and value owned materials at their sell opportunity cost instead of treating them as free");
+            LogMaxSizeBytes = Define(settings, ModuleSettingText.LogMaxSizeBytes, 2 * 1024 * 1024);
+            LogRetentionDays = Define(settings, ModuleSettingText.LogRetentionDays, 14);
+            LogDiagnosticsEnabled = Define(settings, ModuleSettingText.LogDiagnosticsEnabled, false);
 
-            HomesteadFiberTier = settings.DefineSetting(
-                "HomesteadFiberTier", 0,
-                () => "Homestead Fiber efficiency tier",
-                () => "Farm refinement efficiency upgrades owned (0, 1, or 2)");
+            PlanHistoryMaxEntries = Define(settings, ModuleSettingText.PlanHistoryMaxEntries, 25);
+            SnapshotRefreshIntervalMinutes = Define(
+                settings, ModuleSettingText.SnapshotRefreshIntervalMinutes, 10);
+            ClickSoundVolumePercent = Define(
+                settings, ModuleSettingText.ClickSoundVolumePercent, ClickSoundVolume.DefaultPercent);
+        }
 
-            HomesteadMetalTier = settings.DefineSetting(
-                "HomesteadMetalTier", 0,
-                () => "Homestead Metal efficiency tier",
-                () => "Metal Forge refinement efficiency upgrades owned (0, 1, or 2)");
+        // Blish renders every SettingEntry a module defines into its own
+        // Manage Modules panel, and offers exactly one way to opt out: a
+        // sub-collection whose RenderInUi is false, which
+        // Blish_HUD.Settings.UI.Views.SettingView.FromType skips whole. The
+        // key names a real JSON object inside the module's settings, so it
+        // is fixed for the life of the module.
+        private const string HiddenCollectionKey = "Internal";
 
-            HomesteadWoodTier = settings.DefineSetting(
-                "HomesteadWoodTier", 0,
-                () => "Homestead Wood efficiency tier",
-                () => "Lumber Mill refinement efficiency upgrades owned (0, 1, or 2)");
+        private static SettingEntry<T> Define<T>(
+            SettingCollection collection, ModuleSettingText.Descriptor descriptor, T defaultValue)
+        {
+            return collection.DefineSetting(
+                descriptor.Key, defaultValue,
+                () => descriptor.DisplayName,
+                () => descriptor.Description);
+        }
 
-            ScrollDiagnosticsEnabled = settings.DefineSetting(
-                "ScrollDiagnosticsEnabled", false,
-                () => "Scroll diagnostics",
-                () => "Log scroll machinery events for debugging");
+        /// <summary>
+        /// Defines a setting into the non-rendered sub-collection, carrying
+        /// any value already saved under the old top-level key across.
+        /// <para>
+        /// A sub-collection is a nested JSON object, so moving a setting
+        /// into one moves where its value is stored even though the key is
+        /// unchanged. Without this, a player who had dragged a dialog or set
+        /// a pop-out opacity would silently get the default back. The
+        /// top-level copy is undefined afterwards so the file does not keep
+        /// a second, stale figure for the same setting.
+        /// </para>
+        /// </summary>
+        private static SettingEntry<T> DefineHidden<T>(
+            SettingCollection root, SettingCollection hidden,
+            ModuleSettingText.Descriptor descriptor, T defaultValue)
+        {
+            bool alreadyMoved = hidden.ContainsSetting(descriptor.Key);
+            var entry = Define(hidden, descriptor, defaultValue);
 
-            LogMaxSizeBytes = settings.DefineSetting(
-                "LogMaxSizeBytes", 2 * 1024 * 1024,
-                () => "Log max size (bytes)",
-                () => "Maximum size of the module log file on disk before old entries are trimmed");
+            if (!alreadyMoved && root.TryGetSetting(descriptor.Key, out SettingEntry<T> legacy))
+            {
+                entry.Value = legacy.Value;
+            }
 
-            LogRetentionDays = settings.DefineSetting(
-                "LogRetentionDays", 14,
-                () => "Log retention (days)",
-                () => "Number of days of module log history to keep on disk");
-
-            LogDiagnosticsEnabled = settings.DefineSetting(
-                "LogDiagnosticsEnabled", false,
-                () => "Diagnostics logging",
-                () => "Log fine-grained diagnostic events (including scroll machinery) to the Log tab and file");
-
-            PlanHistoryMaxEntries = settings.DefineSetting(
-                "PlanHistoryMaxEntries", 25,
-                () => "Plan history entries kept",
-                () => "How many previously-generated plans the Plan History tab keeps. Pinned entries are never removed.");
-
-            SnapshotRefreshIntervalMinutes = settings.DefineSetting(
-                "SnapshotRefreshIntervalMinutes", 10,
-                () => "Snapshot refresh interval (minutes)",
-                () => "How long a cached account snapshot may sit before an automatic background refresh is triggered");
-
-            ClickSoundVolumePercent = settings.DefineSetting(
-                "ClickSoundVolumePercent", ClickSoundVolume.DefaultPercent,
-                () => "Click volume",
-                () => "How loud this module's own click plays when you press its buttons, rows and pills (0 = off, 100 = loudest). Checkboxes keep Blish HUD's own click sound.");
+            root.UndefineSetting(descriptor.Key);
+            return entry;
         }
 
         /// <summary>
