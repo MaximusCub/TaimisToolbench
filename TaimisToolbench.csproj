@@ -206,6 +206,8 @@
     <Compile Include="Services\TextWrapMath.cs" />
     <Compile Include="Services\MultiItemHeaderLayout.cs" />
     <Compile Include="Services\MultiItemHeaderTooltipComposer.cs" />
+    <Compile Include="Services\NoteRunLayout.cs" />
+    <Compile Include="Services\TextAdvanceMath.cs" />
     <Compile Include="Services\NoteSegmentWrap.cs" />
     <Compile Include="Services\NotesSectionLayoutMath.cs" />
     <Compile Include="Services\ItemRowRequestBuilder.cs" />

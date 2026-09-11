@@ -164,29 +164,33 @@ namespace TaimisToolbench.Views.Rendering
                 ItemIconTier.BagSidebar, _getItemFacts);
 
             var textFont = UiFonts.Body;
+            var advance = TextAdvanceMath.AdvanceWith(LabelHelpers.MeasureWith(textFont));
             var greyColor = new Color(170, 170, 170);
             int x = TextX;
+            string qtyPrefix = QtyPrefix(row.Quantity);
 
             // "Craft ", "12x " and the item name are one sentence on one
             // baseline: every label on it gets the same box treatment, so
-            // the clearance can never make the three disagree.
-            var craftLabel = LabelHelpers.WithDescenderClearance(
+            // the clearance can never make the three disagree. Each starts
+            // at the PEN the one before it ends on, never at that label's
+            // own width - see TextAdvanceMath for what that would cost.
+            LabelHelpers.WithDescenderClearance(
                 new Label()
                 {
                     Text = CraftPrefix, Font = textFont, TextColor = greyColor,
                     AutoSizeWidth = true, AutoSizeHeight = true,
                     Location = new Point(x, RowTextY), Parent = rowPanel,
                 });
-            x += craftLabel.Width;
+            x += advance(CraftPrefix);
 
-            var qtyLabel = LabelHelpers.WithDescenderClearance(
+            LabelHelpers.WithDescenderClearance(
                 new Label()
                 {
-                    Text = QtyPrefix(row.Quantity), Font = textFont, TextColor = greyColor,
+                    Text = qtyPrefix, Font = textFont, TextColor = greyColor,
                     AutoSizeWidth = true, AutoSizeHeight = true,
                     Location = new Point(x, RowTextY), Parent = rowPanel,
                 });
-            x += qtyLabel.Width;
+            x += advance(qtyPrefix);
 
             // The name is the row's flexing run: "Craft " and "Nx " are
             // fixed words at a font-only cursor x, so the whole of the
