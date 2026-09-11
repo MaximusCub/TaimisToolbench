@@ -15,10 +15,10 @@ namespace TaimisToolbench.Services
     /// DISTRIBUTE over equal tracks across the rest; below the width that
     /// supports that they pack right-to-left as they always did. Cells keep
     /// their own rule inside their band - badges left, numbers and coin runs
-    /// right - and each HEADER centres over the INK its cells cover, bounded
-    /// only by the columns either side of it (see
-    /// <see cref="HeaderRoomsFor"/>), except Item's, which stays on the left
-    /// rule its names keep.
+    /// right - and each HEADER is bounded by the columns either side of it
+    /// (<see cref="HeaderRoomsFor"/>): Source and Amount centre over their
+    /// cells' INK, Each and Total take the right edge their money rules
+    /// against, and Item's stays on the left rule its names keep.
     /// Why: docs/ARCHITECTURE.md, "Services Q-Z: relocated design narrative".
     /// </para>
     /// </summary>

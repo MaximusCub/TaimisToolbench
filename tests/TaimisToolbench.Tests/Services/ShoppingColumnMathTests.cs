@@ -626,5 +626,50 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(2 * edges.QtyRightEdge - 12, 2 * x + 60);
             Assert.NotEqual(edges.QtyRightEdge - 60, x);
         }
+
+        // --- Each and Total headers take their columns' right edge ---
+        [Fact]
+        public void EachAndTotalHeaders_EndWhereTheirValuesEnd()
+        {
+            // The module's minimum window (1378px) leaves this panel. The
+            // header block widths are the word plus the sort indicator's
+            // slot, measured at the ColumnHeader tier, so they are given
+            // here rather than measured - BitmapFont is Blish-bound.
+            var edges = ShoppingColumnMath.ComputeEdgesForPanel(
+                panelWidth: 1252, maxEachWidth: 40, maxTotalWidth: 200,
+                maxQtyWidth: 79, sourceColumnWidth: 96, maxNameWidth: 300);
+            var rooms = ShoppingColumnMath.HeaderRoomsFor(edges, 12, 96, 79, 40, 200);
+
+            int each = JustifiedColumnTracks.RightAlignedOverContent(
+                edges.EachRightEdge, 68, rooms.Each);
+            int total = JustifiedColumnTracks.RightAlignedOverContent(
+                edges.TotalRightEdge, 75, rooms.Total);
+
+            Assert.Equal(edges.EachRightEdge, each + 68);
+            Assert.Equal(edges.TotalRightEdge, total + 75);
+        }
+
+        [Fact]
+        public void EachAndTotalHeaders_MoveRightOffTheirOldCentredSeats()
+        {
+            // What the change is worth at that width: the Each header hung
+            // 14px past its own values, and the Total header stopped 63px
+            // short of the edge its coin runs rule against.
+            var edges = ShoppingColumnMath.ComputeEdgesForPanel(
+                panelWidth: 1252, maxEachWidth: 40, maxTotalWidth: 200,
+                maxQtyWidth: 79, sourceColumnWidth: 96, maxNameWidth: 300);
+            var rooms = ShoppingColumnMath.HeaderRoomsFor(edges, 12, 96, 79, 40, 200);
+
+            Assert.Equal(
+                -14,
+                JustifiedColumnTracks.RightAlignedOverContent(edges.EachRightEdge, 68, rooms.Each)
+                    - JustifiedColumnTracks.CenteredOverContentRightAligned(
+                        edges.EachRightEdge, 40, 68, rooms.Each));
+            Assert.Equal(
+                63,
+                JustifiedColumnTracks.RightAlignedOverContent(edges.TotalRightEdge, 75, rooms.Total)
+                    - JustifiedColumnTracks.CenteredOverContentRightAligned(
+                        edges.TotalRightEdge, 200, 75, rooms.Total));
+        }
     }
 }

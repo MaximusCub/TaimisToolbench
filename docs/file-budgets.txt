@@ -212,7 +212,7 @@ Services/PlanHistoryRowLayout.cs                                                
 Services/PlanHistoryStore.cs                                                            155
 Services/PlanHistoryTableSorter.cs                                                      103
 Services/PlanPhaseEvent.cs                                                              73
-Services/PlanRelayoutMath.cs                                                            479
+Services/PlanRelayoutMath.cs                                                            481
 Services/PlanResultBuilder.cs                                                           483
 Services/PlanRootNodes.cs                                                               46
 Services/PlanSolver.cs                                                                  2346
@@ -265,7 +265,7 @@ Services/SettingsCurrencyGridLayout.cs                                          
 Services/SettingsFormLayout.cs                                                          174
 Services/SettingsInputParser.cs                                                         239
 Services/SettingsSaveBarLayout.cs                                                       80
-Services/ShoppingColumnMath.cs                                                          449
+Services/ShoppingColumnMath.cs                                                          450
 Services/ShoppingRowTooltipFormatter.cs                                                 145
 Services/ShoppingSourceBadge.cs                                                         89
 Services/SnapshotCallRetry.cs                                                           142
@@ -381,10 +381,10 @@ Views/Rendering/RankerReadinessColors.cs                                        
 Views/Rendering/RarityColors.cs                                                         199
 Views/Rendering/RecipesSectionRenderer.cs                                               486
 Views/Rendering/RichTooltipSurface.cs                                                   738
-Views/Rendering/RowRelayoutHelpers.cs                                                   72
+Views/Rendering/RowRelayoutHelpers.cs                                                   68
 Views/Rendering/RowActionKey.cs                                                         103
 Views/Rendering/ShoppingBadgeColors.cs                                                  72
-Views/Rendering/ShoppingListSectionRenderer.cs                                          522
+Views/Rendering/ShoppingListSectionRenderer.cs                                          526
 Views/Rendering/SortIndicator.cs                                                        145
 Views/Rendering/SortableHeaderBlock.cs                                                  108
 Views/Rendering/SortableHeaderCells.cs                                                  249
@@ -399,7 +399,7 @@ Views/Rendering/UiFonts.cs                                                      
 Views/Rendering/GlyphFont.cs                                                            123
 Views/Rendering/IconWikiClick.cs                                                        92
 Views/Rendering/UiMetrics.cs                                                            60
-Views/Rendering/UsedMaterialsSectionRenderer.cs                                         223
+Views/Rendering/UsedMaterialsSectionRenderer.cs                                         199
 Views/ResizableTabbedWindow.cs                                                          250
 Views/SettingsTabContent.cs                                                             2944
 Views/SuggestionPanel.cs                                                                504
@@ -510,6 +510,7 @@ tests/TaimisToolbench.Tests/Services/ItemSlotFactsTests.cs                      
 tests/TaimisToolbench.Tests/Services/ItemStatBlockFactoryTests.cs                       255
 tests/TaimisToolbench.Tests/Services/ItemStatMathTests.cs                               74
 tests/TaimisToolbench.Tests/Services/ItemStatTooltipComposerTests.cs                    741
+tests/TaimisToolbench.Tests/Services/JustifiedColumnTracksTests.cs                      312
 tests/TaimisToolbench.Tests/Services/LayoutConstantCollisionTests.cs                    81
 tests/TaimisToolbench.Tests/Services/LogGutterLayoutTests.cs                            188
 tests/TaimisToolbench.Tests/Services/LogLineFormatTests.cs                              156
@@ -630,7 +631,7 @@ tests/TaimisToolbench.Tests/Services/SettingsCurrencyGridLayoutTests.cs         
 tests/TaimisToolbench.Tests/Services/SettingsFormLayoutTests.cs                         268
 tests/TaimisToolbench.Tests/Services/SettingsInputParserTests.cs                        338
 tests/TaimisToolbench.Tests/Services/SettingsSaveBarLayoutTests.cs                      117
-tests/TaimisToolbench.Tests/Services/ShoppingColumnMathTests.cs                         630
+tests/TaimisToolbench.Tests/Services/ShoppingColumnMathTests.cs                         675
 tests/TaimisToolbench.Tests/Services/ShoppingListEachTimesAmountTests.cs                131
 tests/TaimisToolbench.Tests/Services/ShoppingRowTooltipFormatterTests.cs                246
 tests/TaimisToolbench.Tests/Services/ShoppingSourceBadgeTests.cs                        233
