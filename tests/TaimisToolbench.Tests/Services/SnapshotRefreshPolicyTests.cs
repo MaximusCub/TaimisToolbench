@@ -141,5 +141,34 @@ namespace TaimisToolbench.Tests.Services
             Assert.True(SnapshotRefreshPolicy.ShouldRefreshOnTabOpen(captured, Now));
             Assert.False(SnapshotRefreshPolicy.ShouldRefreshOnGenerate(captured, Now));
         }
+
+        /// <summary>
+        /// A press with no game running must not wait. Blish cannot hand
+        /// over a subtoken it has no client to read MumbleLink from, so
+        /// every second of a wait there is a second the player watches
+        /// nothing happen.
+        /// </summary>
+        [Fact]
+        public void WithNoGameRunning_ThereIsNoWait()
+        {
+            Assert.Equal(TimeSpan.Zero, SnapshotRefreshPolicy.HandoverWaitFor(GameClientState.NotRunning));
+        }
+
+        /// <summary>
+        /// The loading window has to be the longer of the two. The press
+        /// this was built for waited on a screen that had not finished
+        /// loading, and the subtoken arrived 13.2 seconds later.
+        /// </summary>
+        [Fact]
+        public void LoadingWaitsLongerThanTheInWorldHandover()
+        {
+            var loading = SnapshotRefreshPolicy.HandoverWaitFor(GameClientState.Loading);
+            var inWorld = SnapshotRefreshPolicy.HandoverWaitFor(GameClientState.InWorld);
+
+            Assert.Equal(SnapshotRefreshPolicy.GameLoadingHandover, loading);
+            Assert.Equal(SnapshotRefreshPolicy.SubtokenHandover, inWorld);
+            Assert.True(loading > TimeSpan.FromSeconds(13.2));
+            Assert.True(loading > inWorld);
+        }
     }
 }

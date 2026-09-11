@@ -444,6 +444,7 @@
     <Compile Include="Services\AccountCurrencyIndex.cs" />
     <Compile Include="Services\ApiPermissionGap.cs" />
     <Compile Include="Services\ApiReadySignal.cs" />
+    <Compile Include="Services\GameClientState.cs" />
     <Compile Include="Services\InventoryReducer.cs" />
     <Compile Include="Services\OwnedMaterialsForceBuyPrePass.cs" />
     <Compile Include="Services\CraftCompetencyEvaluator.cs" />

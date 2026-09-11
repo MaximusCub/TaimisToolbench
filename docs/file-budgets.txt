@@ -307,7 +307,7 @@ Services/PlanAccountRefresh.cs                                                  
 Services/PlanItemIds.cs                                                                 73
 Services/ItemTooltipFacts.cs                                                            160
 Services/SecondTooltipBox.cs                                                            82
-Services/SnapshotRefreshPolicy.cs                                                       120
+Services/SnapshotRefreshPolicy.cs                                                       145
 Services/StaleAccountDataWarning.cs                                                     396
 Services/TextWrapMath.cs                                                                324
 Services/TooltipContent.cs                                                              701

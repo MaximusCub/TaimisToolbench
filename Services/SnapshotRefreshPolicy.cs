@@ -59,14 +59,50 @@ namespace TaimisToolbench.Services
         /// of the two.
         /// </para>
         /// <para>
-        /// It is deliberately not measured from module load. A player
-        /// sitting on a loading screen or at character select can be there
-        /// for any length of time, and no amount of waiting produces a
-        /// subtoken until they are in the world. That case is answered by
-        /// not waiting at all - see PlanRefreshGate.
+        /// It covers the handover alone, so it only applies once a
+        /// character is in the world. The screens before that are
+        /// <see cref="GameLoadingHandover"/>.
         /// </para>
         /// </summary>
         public static readonly TimeSpan SubtokenHandover = TimeSpan.FromSeconds(5);
+
+        /// <summary>
+        /// How long a Generate Plan press waits for the subtoken while the
+        /// game is running with no character in the world.
+        /// <para>
+        /// Twenty seconds. One press at 03:36:42.727 solved on twelve hour
+        /// old data and warned that it had; the subtoken arrived at
+        /// 03:36:55.915, 13.2 seconds later, on the first frame
+        /// Module.Update found API access. Twenty covers that measurement
+        /// with margin.
+        /// </para>
+        /// <para>
+        /// It is the whole wait rather than an addition to
+        /// <see cref="SubtokenHandover"/>, because the handover cannot
+        /// start until the world loads and so is already inside this
+        /// window. A wait that runs out is not repeated in the same client
+        /// state - see ApiHandoverWait.
+        /// </para>
+        /// </summary>
+        public static readonly TimeSpan GameLoadingHandover = TimeSpan.FromSeconds(20);
+
+        /// <summary>
+        /// How long a press waits for the subtoken in
+        /// <paramref name="state"/>. Zero when the game is not running,
+        /// because nothing is on its way.
+        /// </summary>
+        public static TimeSpan HandoverWaitFor(GameClientState state)
+        {
+            switch (state)
+            {
+                case GameClientState.InWorld:
+                    return SubtokenHandover;
+                case GameClientState.Loading:
+                    return GameLoadingHandover;
+                default:
+                    return TimeSpan.Zero;
+            }
+        }
 
         /// <summary>
         /// Whether opening the tab should start a refresh. True when there
