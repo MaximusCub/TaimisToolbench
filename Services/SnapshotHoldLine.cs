@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 using TaimisToolbench.Models;
@@ -41,14 +42,35 @@ namespace TaimisToolbench.Services
         /// <see cref="SnapshotHoldCategory.Unknown"/> and keeps its raw text,
         /// so real inventory the module does not yet know about still shows
         /// (KNOWN-ISSUES #31: never silently mask data).
+        /// <para>
+        /// A socket key names the gear it sits in by item id.
+        /// <paramref name="hostItemName"/> is what turns that id into a
+        /// name; without one, or when it answers blank, the place prints
+        /// the wearer alone rather than an id (repo invariant: item ids are
+        /// never shown).
+        /// </para>
         /// </summary>
-        public static SnapshotHoldLocation FromSource(string rawSource, int count)
+        public static SnapshotHoldLocation FromSource(
+            string rawSource, int count, Func<int, string> hostItemName = null)
         {
             var location = new SnapshotHoldLocation
             {
                 Count = count,
                 RawSource = rawSource ?? "",
             };
+
+            // Ahead of the character read, not inside it: a socket key
+            // carries an item id, and a key too damaged to read a name out
+            // of must still not fall through to the raw-text case below
+            // (repo invariant: item ids are never shown).
+            if (AccountItemIndex.IsSocketedSource(rawSource))
+            {
+                AccountItemIndex.TryGetCharacterName(rawSource, out string wearer);
+                location.Category = SnapshotHoldCategory.Equipped;
+                location.CharacterName = wearer;
+                location.HostItemName = HostNameOf(rawSource, hostItemName);
+                return location;
+            }
 
             if (AccountItemIndex.TryGetCharacterName(rawSource, out string characterName))
             {
@@ -302,10 +324,31 @@ namespace TaimisToolbench.Services
             }
 
             line.Append(location.CharacterName);
+            if (!string.IsNullOrEmpty(location.HostItemName))
+            {
+                line.Append(" (").Append(location.HostItemName).Append(")");
+            }
+
             if (showCounts)
             {
                 AppendCount(line, location.Count);
             }
+        }
+
+        /// <summary>
+        /// The gear a socket key names, or "" when the key carries no
+        /// readable id or the caller cannot name it.
+        /// </summary>
+        private static string HostNameOf(string rawSource, Func<int, string> hostItemName)
+        {
+            if (hostItemName == null
+                || !AccountItemIndex.TryGetSocketedHostItemId(rawSource, out int hostItemId))
+            {
+                return "";
+            }
+
+            string name = hostItemName(hostItemId);
+            return string.IsNullOrWhiteSpace(name) ? "" : name;
         }
 
         /// <summary>Appends one count per place in the category, for the

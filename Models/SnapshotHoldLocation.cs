@@ -50,6 +50,14 @@ namespace TaimisToolbench.Models
         public IReadOnlyList<string> EquippedBy { get; set; }
 
         /// <summary>
+        /// The gear this item is socketed into, for a place that is a
+        /// socket rather than a bag or a slot. Empty everywhere else, and
+        /// empty as well when the capture could not name the gear, so a
+        /// reader is never shown a host it cannot identify.
+        /// </summary>
+        public string HostItemName { get; set; } = "";
+
+        /// <summary>
         /// The raw source key, kept for <see cref="SnapshotHoldCategory.Unknown"/>
         /// so a source the module does not yet recognize still reads as
         /// something rather than disappearing.

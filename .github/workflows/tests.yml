@@ -264,6 +264,46 @@ jobs:
           fi
           echo "$rows rows built from an account item; all record sockets and skin."
 
+      - name: Every worn slot turns its sockets into rows of their own
+        shell: bash
+        run: |
+          # A rune or infusion held only on its host stack's socket lists is
+          # searchable nowhere and counted nowhere, so a plan needing one
+          # tells the player to buy another. The armory branch is the worse
+          # half: it drops the slot outright, and dropped its sockets with
+          # it. Both projections are Gw2Sharp-bound and no test may touch
+          # Gw2Sharp (repo invariant), so this is what holds the two calls
+          # in place. What the rows then mean is SocketedItemRowsTests.
+          python3 - <<'PY'
+          import sys
+
+          FILES = ('Services/CharacterRecordProjection.cs',
+                   'tools/TaimisToolbench.Harness/SnapshotFetchShapes.cs')
+          CALL = 'SocketedItemRows.AddFor('
+          DROP = 'part.ArmoryItemIds.Add(item.Id);'
+
+          bad = []
+          for path in FILES:
+              text = open(path, encoding='utf-8').read()
+              if text.count(CALL) < 2:
+                  bad.append('%s calls %s %d times; the slot it keeps and the '
+                             'slot the armory fills each need one.'
+                             % (path, CALL, text.count(CALL)))
+                  continue
+              start = text.index(DROP)
+              branch = text[start:text.index('continue;', start)]
+              if CALL not in branch:
+                  bad.append('%s drops an armory-drawn slot without reading its '
+                             'sockets first. The wrapper is the armory\'s to '
+                             'count; what is fitted into it is not.' % path)
+
+          if bad:
+              print('\n'.join(bad))
+              sys.exit(1)
+          print('Both equipment projections record what is socketed into every '
+                'slot they see.')
+          PY
+
       - name: Live docs cite source paths that exist
         shell: bash
         run: |

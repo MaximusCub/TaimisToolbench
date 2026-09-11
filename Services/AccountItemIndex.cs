@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using TaimisToolbench.Models;
 
@@ -24,6 +25,15 @@ namespace TaimisToolbench.Services
         // can never collide with a storage-location source key.
         public const string CharacterSourcePrefix = "Character:";
         public const string CharacterEquipmentSourcePrefix = "Equipped:";
+
+        // One upgrade component or infusion sitting in a socket of one
+        // piece of worn gear, as "Socketed:<host item id>:<name>". The
+        // host id is what keeps two pieces on one character apart, so six
+        // copies of a rune across six armour slots stay six places rather
+        // than collapsing into one. The character name runs to the end of
+        // the key, which is what lets the filter and the search compare it
+        // in place the way they do for the two keys above.
+        public const string SocketedSourcePrefix = "Socketed:";
 
         private static readonly IReadOnlyList<string> EmptySources = Array.Empty<string>();
 
@@ -139,7 +149,60 @@ namespace TaimisToolbench.Services
                 return CharacterEquipmentSourcePrefix.Length;
             }
 
+            if (source.StartsWith(SocketedSourcePrefix, StringComparison.Ordinal))
+            {
+                int separator = source.IndexOf(':', SocketedSourcePrefix.Length);
+                return separator < 0 ? -1 : separator + 1;
+            }
+
             return -1;
+        }
+
+        /// <summary>
+        /// The source key for one socketed item, built from the gear it
+        /// sits in and the character wearing that gear.
+        /// </summary>
+        public static string SocketedSource(int hostItemId, string characterName)
+        {
+            return SocketedSourcePrefix
+                + hostItemId.ToString(CultureInfo.InvariantCulture)
+                + ":"
+                + (characterName ?? "");
+        }
+
+        /// <summary>
+        /// True when the source key is an item socketed into worn gear.
+        /// </summary>
+        public static bool IsSocketedSource(string source)
+        {
+            return source != null
+                && source.StartsWith(SocketedSourcePrefix, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// The gear a socketed source key names, or false when the key is
+        /// not one or carries no readable id. A caller that gets false has
+        /// no host to name and must say nothing about one.
+        /// </summary>
+        public static bool TryGetSocketedHostItemId(string source, out int hostItemId)
+        {
+            hostItemId = 0;
+            if (!IsSocketedSource(source))
+            {
+                return false;
+            }
+
+            int separator = source.IndexOf(':', SocketedSourcePrefix.Length);
+            if (separator < 0)
+            {
+                return false;
+            }
+
+            string digits = source.Substring(
+                SocketedSourcePrefix.Length, separator - SocketedSourcePrefix.Length);
+            return int.TryParse(
+                digits, NumberStyles.None, CultureInfo.InvariantCulture, out hostItemId)
+                && hostItemId > 0;
         }
 
         /// <summary>

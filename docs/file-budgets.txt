@@ -96,7 +96,7 @@ Models/RequiredRecipe.cs                                                        
 Models/SeasonalVendorTip.cs                                                             48
 Models/SettingsFormState.cs                                                             149
 Models/SnapshotCharacterDiscipline.cs                                                   24
-Models/SnapshotHoldLocation.cs                                                          59
+Models/SnapshotHoldLocation.cs                                                          67
 Models/SnapshotItemEntry.cs                                                             80
 Models/SnapshotSearchRow.cs                                                             58
 Models/SnapshotSourceFilter.cs                                                          42
@@ -113,13 +113,13 @@ Module.cs                                                                       
 Properties/AssemblyInfo.cs                                                              12
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
-Services/AccountDataSource.cs                                                           114
-Services/AccountItemIndex.cs                                                            240
+Services/AccountDataSource.cs                                                           117
+Services/AccountItemIndex.cs                                                            303
 Services/AchievementBitDedupPrePass.cs                                                  197
 Services/AcquisitionHintService.cs                                                      75
 Services/BoundedConcurrency.cs                                                          51
 Services/CharacterPagePlan.cs                                                           68
-Services/CharacterRecordProjection.cs                                                   221
+Services/CharacterRecordProjection.cs                                                   238
 Services/CharacterSnapshotCollector.cs                                                  195
 Services/ClickSoundVolume.cs                                                            90
 Services/CoinSegmentMath.cs                                                             306
@@ -150,7 +150,7 @@ Services/FirstLoadSnapshotGate.cs                                               
 Services/GlyphButtonMetrics.cs                                                          69
 Services/GridLayout.cs                                                                  93
 Services/Gw2AccountRecipeClient.cs                                                      30
-Services/Gw2AccountSnapshotService.cs                                                   738
+Services/Gw2AccountSnapshotService.cs                                                   746
 Services/Gw2ApiConnectionLimit.cs                                                       71
 Services/Gw2ItemApiClient.cs                                                            271
 Services/Gw2PriceApiClient.cs                                                           76
@@ -278,12 +278,12 @@ Services/SnapshotFailureKind.cs                                                 
 Services/SnapshotFetchFailedException.cs                                                131
 Services/SnapshotHeaderLayout.cs                                                        209
 Services/SnapshotHelpers.cs                                                             79
-Services/SnapshotHoldLine.cs                                                            355
+Services/SnapshotHoldLine.cs                                                            398
 Services/SnapshotItemGridLayout.cs                                                      321
 Services/SnapshotIconWindow.cs                                                          185
 Services/SnapshotRefreshSlot.cs                                                         185
 Services/SnapshotResultLayout.cs                                                        90
-Services/SnapshotSearchResultBuilder.cs                                                 572
+Services/SnapshotSearchResultBuilder.cs                                                 581
 Services/SnapshotStore.cs                                                               98
 Services/SnapshotTableSorter.cs                                                         99
 Services/SocketedUpgradeIndex.cs                                                        146
@@ -650,6 +650,7 @@ tests/TaimisToolbench.Tests/Services/SnapshotSearchResultBuilderTests.cs        
 tests/TaimisToolbench.Tests/Services/SnapshotSerializationTests.cs                      283
 tests/TaimisToolbench.Tests/Services/SnapshotStoreTests.cs                              545
 tests/TaimisToolbench.Tests/Services/SnapshotTableSorterTests.cs                        147
+tests/TaimisToolbench.Tests/Services/SocketedItemRowsTests.cs                           488
 tests/TaimisToolbench.Tests/Services/SocketedUpgradeTests.cs                            321
 tests/TaimisToolbench.Tests/Services/SortIndicatorLayoutTests.cs                        151
 tests/TaimisToolbench.Tests/Services/SourceFilterFlowLayoutTests.cs                     127
@@ -734,7 +735,7 @@ tools/TaimisToolbench.Harness/CountingGw2HttpClient.cs                          
 tools/TaimisToolbench.Harness/FetchProfilePlan.cs                                       286
 tools/TaimisToolbench.Harness/FetchProfiler.cs                                          639
 tools/TaimisToolbench.Harness/SnapshotComparison.cs                                     200
-tools/TaimisToolbench.Harness/SnapshotFetchShapes.cs                                    516
+tools/TaimisToolbench.Harness/SnapshotFetchShapes.cs                                    527
 tools/TaimisToolbench.Harness/Program.cs                                                861
 tools/TaimisToolbench.Harness/TerminalClassifier.cs                                    650
 tools/TaimisToolbench.RecipeSeeder/Program.cs                                           787

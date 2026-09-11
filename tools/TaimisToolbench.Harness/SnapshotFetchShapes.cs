@@ -91,6 +91,7 @@ namespace TaimisToolbench.Harness
                 });
             }
 
+            var armoryItemIds = new HashSet<int>();
             if (armoryTask != null)
             {
                 foreach (var entry in await armoryTask)
@@ -100,6 +101,7 @@ namespace TaimisToolbench.Harness
                         continue;
                     }
 
+                    armoryItemIds.Add(entry.Id);
                     snapshot.Items.Add(new SnapshotItemEntry
                     {
                         ItemId = entry.Id,
@@ -112,6 +114,8 @@ namespace TaimisToolbench.Harness
             var harvest = await characterWork;
             snapshot.Items.AddRange(harvest.Items);
             snapshot.LegendaryArmoryEquipped.AddRange(harvest.ArmoryEquipped);
+            SocketedItemRows.SettleArmoryOwned(
+                snapshot.Items, snapshot.LegendaryArmoryEquipped, armoryItemIds);
             snapshot.CharacterDisciplines = harvest.Disciplines;
             snapshot.CharacterCount = harvest.CharacterCount;
             snapshot.IncompleteCharacterCount = harvest.IncompleteCharacterCount;
@@ -319,6 +323,9 @@ namespace TaimisToolbench.Harness
                         && EquipmentLocationPolicy.IsEquippedFromLegendaryArmory(location))
                     {
                         part.ArmoryItemIds.Add(item.Id);
+                        SocketedItemRows.AddFor(
+                            part.Items, item.Id, characterName, 1,
+                            item.Upgrades, item.Infusions);
                     }
 
                     continue;
@@ -333,6 +340,10 @@ namespace TaimisToolbench.Harness
                     Infusions = SocketedIds(item.Infusions),
                     SkinId = SkinIdOf(item.Skin),
                 });
+
+                SocketedItemRows.AddFor(
+                    part.Items, item.Id, characterName, 1,
+                    item.Upgrades, item.Infusions);
             }
         }
 

@@ -72,8 +72,10 @@ namespace TaimisToolbench.Services
         /// Which source a <see cref="Models.SnapshotItemEntry.Source"/>
         /// string came from, or null for a source string this build does not
         /// recognise. The vocabulary is AccountItemIndex's; the two
-        /// character-scoped keys carry a name after the prefix and both fold
-        /// into <see cref="AccountDataSource.Characters"/>.
+        /// character-scoped keys carry a name after the prefix, and the
+        /// socket key names a character too; all three fold into
+        /// <see cref="AccountDataSource.Characters"/>, which is the read
+        /// they all came from.
         /// </summary>
         public static AccountDataSource? ForItemSource(string itemSource)
         {
@@ -83,7 +85,8 @@ namespace TaimisToolbench.Services
             }
 
             if (itemSource.StartsWith(AccountItemIndex.CharacterSourcePrefix, StringComparison.Ordinal) ||
-                itemSource.StartsWith(AccountItemIndex.CharacterEquipmentSourcePrefix, StringComparison.Ordinal))
+                itemSource.StartsWith(AccountItemIndex.CharacterEquipmentSourcePrefix, StringComparison.Ordinal) ||
+                AccountItemIndex.IsSocketedSource(itemSource))
             {
                 return AccountDataSource.Characters;
             }
