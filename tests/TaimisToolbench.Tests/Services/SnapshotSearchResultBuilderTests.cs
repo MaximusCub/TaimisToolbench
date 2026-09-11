@@ -620,8 +620,11 @@ namespace TaimisToolbench.Tests.Services
                 ArmorySnapshot(
                     (100, "Divineaxe"), (100, "Apoyu"), (100, "Divineaxe"), (200, "Zoe")));
 
-            Assert.Equal(new[] { "Divineaxe", "Apoyu" }, index[100]);
-            Assert.Equal(new[] { "Zoe" }, index[200]);
+            Assert.Equal(
+                new[] { "Divineaxe", "Apoyu" },
+                index[100].Select(d => d.CharacterName).ToArray());
+            Assert.Equal(
+                new[] { "Zoe" }, index[200].Select(d => d.CharacterName).ToArray());
         }
 
         [Fact]
