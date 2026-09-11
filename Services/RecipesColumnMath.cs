@@ -2,8 +2,8 @@ namespace TaimisToolbench.Services
 {
     /// <summary>
     /// Pure column-edge arithmetic (Blish-free, unit-testable) for the
-    /// Required Recipes table: Recipe (flex) | Discipline | Sheet cost |
-    /// Status, every row one line at
+    /// Required Recipes table: Recipe (flex) | Discipline | Cost | Sold By
+    /// | Status, every row one line at
     /// PlanContentHeightMath.RecipeRowHeight.
     /// <para>
     /// The Recipe column reserves what its own longest name needs off the
@@ -11,10 +11,10 @@ namespace TaimisToolbench.Services
     /// rest - the module's shared law, see
     /// <see cref="JustifiedColumnTracks"/>. Below the width that supports
     /// that they pack right-to-left off the pinned edge, which is how the
-    /// whole table was anchored before. Discipline is LEFT-ruled (its
-    /// values are words, the same choice the Shopping List's Source column
-    /// makes); Sheet cost and Status right-align. Each optional column is
-    /// reserved only when some row fills it.
+    /// whole table was anchored before. Discipline and Sold By are
+    /// LEFT-ruled (their values are words, the same choice the Shopping
+    /// List's Source column makes); Cost and Status right-align. Each
+    /// optional column is reserved only when some row fills it.
     /// </para>
     /// <para>Why the discipline is a column rather than a second caption
     /// line: docs/ARCHITECTURE.md, "Services Q-Z: relocated design
@@ -53,6 +53,28 @@ namespace TaimisToolbench.Services
         /// </summary>
         public const int NameMinWidth = ShoppingColumnMath.NameMinWidth;
 
+        /// <summary>
+        /// Cap on the Sold By band, past which the merchant phrase
+        /// ellipsizes and its full text rides the cell's own hover.
+        /// <para>
+        /// A cap is load-bearing rather than cosmetic. Every band feeds
+        /// <see cref="ComputeEdges"/>'s widest-band term, which is what
+        /// decides whether the table distributes at all, and a merchant
+        /// phrase is unbounded: "Scholar Pashsa and 4 other merchants"
+        /// already runs wider than the whole Status column. Uncapped, one
+        /// long phrase drops the table into the packed fallback and
+        /// crushes the Recipe column with it.
+        /// </para>
+        /// <para>
+        /// 220 is the widest band four data columns can carry at the
+        /// module's minimum panel and still distribute: 1252px of panel
+        /// leaves a 1186px span from nameX, the Recipe column's floor
+        /// takes <see cref="NameMinWidth"/> of it, and the 986px left over
+        /// gives each of the four tracks 246px.
+        /// </para>
+        /// </summary>
+        public const int SoldByMaxWidth = 220;
+
         public readonly struct ColumnEdges
         {
             public readonly int StatusRightEdge;
@@ -65,10 +87,18 @@ namespace TaimisToolbench.Services
             /// </summary>
             public readonly int SheetCostRightEdge;
 
+            /// <summary>
+            /// Left rule the Sold By cell's words start on. Meaningless
+            /// when the column is not reserved this render; read
+            /// <see cref="HasSoldBy"/> first.
+            /// </summary>
+            public readonly int SoldByX;
+
             public readonly int NameMaxWidth;
 
             public readonly bool HasDiscipline;
             public readonly bool HasSheetCost;
+            public readonly bool HasSoldBy;
 
             /// <summary>
             /// Whether the data columns are DISTRIBUTED over equal tracks
@@ -95,16 +125,18 @@ namespace TaimisToolbench.Services
             public readonly int DataColumnCount;
 
             internal ColumnEdges(
-                int statusRightEdge, int disciplineX, int sheetCostRightEdge, int nameMaxWidth,
-                bool hasDiscipline, bool hasSheetCost, bool distributed, int trackSpan,
-                int dataStartX, int dataColumnCount)
+                int statusRightEdge, int disciplineX, int sheetCostRightEdge, int soldByX,
+                int nameMaxWidth, bool hasDiscipline, bool hasSheetCost, bool hasSoldBy,
+                bool distributed, int trackSpan, int dataStartX, int dataColumnCount)
             {
                 StatusRightEdge = statusRightEdge;
                 DisciplineX = disciplineX;
                 SheetCostRightEdge = sheetCostRightEdge;
+                SoldByX = soldByX;
                 NameMaxWidth = nameMaxWidth;
                 HasDiscipline = hasDiscipline;
                 HasSheetCost = hasSheetCost;
+                HasSoldBy = hasSoldBy;
                 Distributed = distributed;
                 TrackSpan = trackSpan;
                 DataStartX = dataStartX;
@@ -129,14 +161,18 @@ namespace TaimisToolbench.Services
         /// </summary>
         public static ColumnEdges ComputeEdges(
             int panelWidth, int statusColumnWidth, int disciplineColumnWidth,
-            int sheetCostColumnWidth, int maxNameWidth, int nameX)
+            int sheetCostColumnWidth, int soldByColumnWidth, int maxNameWidth, int nameX)
         {
             int pinnedRightEdge = PlanRelayoutMath.PinnedRightEdge(panelWidth);
             bool hasDiscipline = disciplineColumnWidth > 0;
             bool hasSheetCost = sheetCostColumnWidth > 0;
-            int dataColumnCount = 1 + (hasDiscipline ? 1 : 0) + (hasSheetCost ? 1 : 0);
+            bool hasSoldBy = soldByColumnWidth > 0;
+            int dataColumnCount =
+                1 + (hasDiscipline ? 1 : 0) + (hasSheetCost ? 1 : 0) + (hasSoldBy ? 1 : 0);
 
-            int widestBand = Max(statusColumnWidth, Max(disciplineColumnWidth, sheetCostColumnWidth));
+            int widestBand = Max(
+                statusColumnWidth,
+                Max(disciplineColumnWidth, Max(sheetCostColumnWidth, soldByColumnWidth)));
             int fullSpan = pinnedRightEdge - nameX;
             int nameBand = fullSpan - (dataColumnCount * (widestBand + ColumnGap));
             int wanted = EffectiveNameColumnWidth(maxNameWidth);
@@ -149,7 +185,15 @@ namespace TaimisToolbench.Services
             {
                 int dataStartX = nameX + nameBand;
                 int trackSpan = pinnedRightEdge - dataStartX;
-                int sheetIndex = hasDiscipline ? 1 : 0;
+
+                // Track indices are handed out left to right over the
+                // columns actually reserved, so a table with no Discipline
+                // column closes the gap instead of leaving an empty track
+                // where that column would have been.
+                int nextIndex = 0;
+                int disciplineIndex = hasDiscipline ? nextIndex++ : 0;
+                int sheetIndex = hasSheetCost ? nextIndex++ : 0;
+                int soldByIndex = hasSoldBy ? nextIndex : 0;
 
                 // Status keeps pinnedRightEdge, which by the span's own
                 // construction IS its track's right edge: it is the band
@@ -160,33 +204,53 @@ namespace TaimisToolbench.Services
                 return new ColumnEdges(
                     pinnedRightEdge,
                     hasDiscipline
-                        ? TrackBandX(dataStartX, trackSpan, dataColumnCount, 0, disciplineColumnWidth)
+                        ? TrackBandX(
+                            dataStartX, trackSpan, dataColumnCount, disciplineIndex,
+                            disciplineColumnWidth)
                         : dataStartX,
                     hasSheetCost
                         ? TrackBandX(
                             dataStartX, trackSpan, dataColumnCount, sheetIndex, sheetCostColumnWidth)
                             + sheetCostColumnWidth
                         : dataStartX,
+                    hasSoldBy
+                        ? TrackBandX(
+                            dataStartX, trackSpan, dataColumnCount, soldByIndex, soldByColumnWidth)
+                        : dataStartX,
                     PlanRelayoutMath.NameMaxWidthBeforeColumn(
                         dataStartX, 0, NameToDisciplineGap, nameX),
-                    hasDiscipline, hasSheetCost, true, trackSpan, dataStartX, dataColumnCount);
+                    hasDiscipline, hasSheetCost, hasSoldBy, true, trackSpan, dataStartX,
+                    dataColumnCount);
             }
 
-            int sheetCostRightEdge = pinnedRightEdge - statusColumnWidth - ColumnGap;
-            int firstColumnLeft = hasSheetCost
-                ? sheetCostRightEdge - sheetCostColumnWidth
-                : pinnedRightEdge - statusColumnWidth;
-            int disciplineX = firstColumnLeft - ColumnGap - disciplineColumnWidth;
+            // Packed fallback, stacked right to left off the pinned edge:
+            // Status, then Sold By, then Cost, then Discipline. A column
+            // that is not reserved costs no band and no gap, so the stack
+            // closes over it.
+            int cursor = pinnedRightEdge - statusColumnWidth;
+            int soldByX = cursor - ColumnGap - soldByColumnWidth;
+            if (hasSoldBy)
+            {
+                cursor = soldByX;
+            }
+
+            int sheetCostRightEdge = cursor - ColumnGap;
+            if (hasSheetCost)
+            {
+                cursor = sheetCostRightEdge - sheetCostColumnWidth;
+            }
+
+            int disciplineX = cursor - ColumnGap - disciplineColumnWidth;
             if (hasDiscipline)
             {
-                firstColumnLeft = disciplineX;
+                cursor = disciplineX;
             }
 
             return new ColumnEdges(
-                pinnedRightEdge, disciplineX, sheetCostRightEdge,
+                pinnedRightEdge, disciplineX, sheetCostRightEdge, soldByX,
                 PlanRelayoutMath.NameMaxWidthBeforeColumn(
-                    firstColumnLeft, 0, NameToDisciplineGap, nameX),
-                hasDiscipline, hasSheetCost, false, 0, 0, dataColumnCount);
+                    cursor, 0, NameToDisciplineGap, nameX),
+                hasDiscipline, hasSheetCost, hasSoldBy, false, 0, 0, dataColumnCount);
         }
 
         /// <summary>
@@ -215,32 +279,42 @@ namespace TaimisToolbench.Services
         /// skipped in the neighbour chain.
         /// </summary>
         public static void HeaderRooms(
-            ColumnEdges edges, int disciplineInk, int sheetCostInk, int statusInk,
+            ColumnEdges edges, int disciplineInk, int sheetCostInk, int soldByInk, int statusInk,
             out JustifiedColumnTracks.HeaderRoom discipline,
             out JustifiedColumnTracks.HeaderRoom sheetCost,
+            out JustifiedColumnTracks.HeaderRoom soldBy,
             out JustifiedColumnTracks.HeaderRoom status)
         {
-            int nameBudgetRight = FirstColumnInkLeft(edges, disciplineInk, sheetCostInk, statusInk)
-                - NameToDisciplineGap;
+            int nameBudgetRight =
+                FirstColumnInkLeft(edges, sheetCostInk, statusInk) - NameToDisciplineGap;
             int disciplineInkRight = edges.DisciplineX + disciplineInk;
             int sheetCostInkX = edges.SheetCostRightEdge - sheetCostInk;
+            int soldByInkRight = edges.SoldByX + soldByInk;
             int statusInkX = edges.StatusRightEdge - statusInk;
 
             int beforeSheetCost = edges.HasDiscipline ? disciplineInkRight : nameBudgetRight;
-            int beforeStatus = edges.HasSheetCost ? edges.SheetCostRightEdge : beforeSheetCost;
+            int beforeSoldBy = edges.HasSheetCost ? edges.SheetCostRightEdge : beforeSheetCost;
+            int beforeStatus = edges.HasSoldBy ? soldByInkRight : beforeSoldBy;
+
+            int afterSheetCost = edges.HasSoldBy ? edges.SoldByX : statusInkX;
+            int afterDiscipline = edges.HasSheetCost ? sheetCostInkX : afterSheetCost;
 
             discipline = edges.HasDiscipline
                 ? JustifiedColumnTracks.HeaderRoom.Between(
                     JustifiedColumnTracks.RoomLeftBound(nameBudgetRight, edges.DisciplineX),
-                    JustifiedColumnTracks.RoomRightBound(
-                        disciplineInkRight, edges.HasSheetCost ? sheetCostInkX : statusInkX))
+                    JustifiedColumnTracks.RoomRightBound(disciplineInkRight, afterDiscipline))
                 : JustifiedColumnTracks.HeaderRoom.Between(edges.DisciplineX, edges.DisciplineX);
             sheetCost = edges.HasSheetCost
                 ? JustifiedColumnTracks.HeaderRoom.Between(
                     JustifiedColumnTracks.RoomLeftBound(beforeSheetCost, sheetCostInkX),
-                    JustifiedColumnTracks.RoomRightBound(edges.SheetCostRightEdge, statusInkX))
+                    JustifiedColumnTracks.RoomRightBound(edges.SheetCostRightEdge, afterSheetCost))
                 : JustifiedColumnTracks.HeaderRoom.Between(
                     edges.SheetCostRightEdge, edges.SheetCostRightEdge);
+            soldBy = edges.HasSoldBy
+                ? JustifiedColumnTracks.HeaderRoom.Between(
+                    JustifiedColumnTracks.RoomLeftBound(beforeSoldBy, edges.SoldByX),
+                    JustifiedColumnTracks.RoomRightBound(soldByInkRight, statusInkX))
+                : JustifiedColumnTracks.HeaderRoom.Between(edges.SoldByX, edges.SoldByX);
             status = JustifiedColumnTracks.HeaderRoom.Between(
                 JustifiedColumnTracks.RoomLeftBound(beforeStatus, statusInkX),
                 edges.StatusRightEdge);
@@ -251,16 +325,19 @@ namespace TaimisToolbench.Services
         /// what the recipe name's ellipsis budget stops short of.
         /// </summary>
         private static int FirstColumnInkLeft(
-            ColumnEdges edges, int disciplineInk, int sheetCostInk, int statusInk)
+            ColumnEdges edges, int sheetCostInk, int statusInk)
         {
             if (edges.HasDiscipline)
             {
                 return edges.DisciplineX;
             }
 
-            return edges.HasSheetCost
-                ? edges.SheetCostRightEdge - sheetCostInk
-                : edges.StatusRightEdge - statusInk;
+            if (edges.HasSheetCost)
+            {
+                return edges.SheetCostRightEdge - sheetCostInk;
+            }
+
+            return edges.HasSoldBy ? edges.SoldByX : edges.StatusRightEdge - statusInk;
         }
 
         /// <summary>

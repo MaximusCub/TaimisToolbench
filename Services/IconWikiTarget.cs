@@ -59,7 +59,9 @@ namespace TaimisToolbench.Services
                     return null;
                 }
 
-                return _page == IconWikiPage.Acquisition ? AcquisitionHintText : HintText;
+                bool acquisition = _page == IconWikiPage.Acquisition
+                    || _page == IconWikiPage.SheetPageAcquisition;
+                return acquisition ? AcquisitionHintText : HintText;
             }
         }
 
@@ -82,6 +84,8 @@ namespace TaimisToolbench.Services
                     return WikiLinkBuilder.BuildItemAcquisitionUrl(_title);
                 case IconWikiPage.RecipeSheet:
                     return WikiLinkBuilder.BuildRecipeSheetUrl(_title);
+                case IconWikiPage.SheetPageAcquisition:
+                    return WikiLinkBuilder.BuildSheetPageAcquisitionUrl(_title);
                 default:
                     return WikiLinkBuilder.BuildItemPageUrl(_title);
             }
@@ -116,6 +120,21 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// A recipe SHEET's own page opened at its Acquisition section,
+        /// which is where the wiki lists every merchant selling it.
+        /// <paramref name="sheetItemName"/> is the SHEET's own name, not
+        /// the crafted item's: that name already carries the "Recipe: "
+        /// prefix, so nothing has to synthesize one, and it is known on
+        /// exactly the rows this page is offered from. Contrast
+        /// <see cref="RecipeSheet"/>, which builds the prefix because the
+        /// sheet's own name is not known there.
+        /// </summary>
+        public static IconWikiTarget SheetPageAcquisition(string sheetItemName)
+        {
+            return new IconWikiTarget(sheetItemName, IconWikiPage.SheetPageAcquisition);
+        }
+
+        /// <summary>
         /// Deliberately no page, with the reason named at the call site.
         /// Adding a reason to <see cref="IconWikiSilence"/> is the act of
         /// the commit that needs one.
@@ -135,6 +154,7 @@ namespace TaimisToolbench.Services
             ItemPage,
             Acquisition,
             RecipeSheet,
+            SheetPageAcquisition,
         }
     }
 

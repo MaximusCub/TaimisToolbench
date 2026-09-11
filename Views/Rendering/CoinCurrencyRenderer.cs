@@ -386,8 +386,71 @@ namespace TaimisToolbench.Views.Rendering
             Panel parent, List<CoinSegmentMath.CurrencySegmentSpec> segments, int startX, int y,
             BitmapFont font, Func<int, CurrencyTooltipFacts> getCurrencyFacts, float alphaScale = 1f)
         {
-            var controls = new (Label, Panel)[segments.Count];
+            var texts = new string[segments.Count];
             var widths = new int[segments.Count];
+            var ids = new int[segments.Count];
+            for (int i = 0; i < segments.Count; i++)
+            {
+                texts[i] = segments[i].Text;
+                widths[i] = segments[i].TextWidth;
+                ids[i] = segments[i].CurrencyId;
+            }
+
+            // A currency icon carries no visible
+            // name text anywhere in this cell (unlike SummarySectionRenderer.
+            // CreateCurrencyRow, which prints the name as a label before
+            // the icon) - a hover tooltip is the only way to identify it.
+            // Frame-less at the bar tier: beside the digits this icon is
+            // a currency symbol in the coin denominations' role, and
+            // they take no border (IconFrameGeometry.CurrencyIsFramed).
+            // It still occupies the whole measured bar-tier window, so
+            // this segment's advance below is unchanged by the border
+            // coming off.
+            return LayoutSegmentRun(
+                parent, texts, widths, startX, y, font, alphaScale,
+                (i, x, iconY) => IconControls.CreateCurrencyIcon(
+                    parent, ids[i], x, iconY, ItemIconTier.CurrencyBarRun, getCurrencyFacts));
+        }
+
+        /// <summary>
+        /// Bartered ITEMS as a price run: each count followed by that
+        /// item's own icon, the shape a wallet currency already draws in.
+        /// The Required Recipes table's Cost cell is the one caller - a
+        /// recipe sheet is more often paid for in charms and vials than in
+        /// coin.
+        /// </summary>
+        internal static SegmentLayoutHandle LayoutBarterSegments(
+            Panel parent, List<CoinSegmentMath.BarterSegmentSpec> segments, int startX, int y,
+            BitmapFont font, Func<int, ItemTooltipFacts> getItemFacts)
+        {
+            var texts = new string[segments.Count];
+            var widths = new int[segments.Count];
+            var ids = new int[segments.Count];
+            for (int i = 0; i < segments.Count; i++)
+            {
+                texts[i] = segments[i].Text;
+                widths[i] = segments[i].TextWidth;
+                ids[i] = segments[i].ItemId;
+            }
+
+            return LayoutSegmentRun(
+                parent, texts, widths, startX, y, font, 1f,
+                (i, x, iconY) => IconControls.DrawItemIcon(
+                    parent, ids[i], x, iconY, ItemIconTier.CurrencyBarRun, getItemFacts));
+        }
+
+        /// <summary>
+        /// The layout every non-coin price run shares: a number, a gap, the
+        /// unit's icon, a gap, the next number. Only the icon differs
+        /// between a wallet currency and a bartered item, so only the icon
+        /// is the caller's - the advance, the seat and the text colour are
+        /// decided once here.
+        /// </summary>
+        private static SegmentLayoutHandle LayoutSegmentRun(
+            Panel parent, string[] texts, int[] textWidths, int startX, int y, BitmapFont font,
+            float alphaScale, Func<int, int, int, Panel> makeIcon)
+        {
+            var controls = new (Label, Panel)[texts.Length];
             int iconYOffset = DigitSeat(font, CoinSegmentMath.CoinIconSize);
             int x = startX;
             Color textColor = new Color(220, 220, 220);
@@ -396,12 +459,11 @@ namespace TaimisToolbench.Views.Rendering
                 textColor *= alphaScale;
             }
 
-            for (int i = 0; i < segments.Count; i++)
+            for (int i = 0; i < texts.Length; i++)
             {
-                var seg = segments[i];
                 var label = new Label()
                 {
-                    Text = seg.Text,
+                    Text = texts[i],
                     Font = font,
                     TextColor = textColor,
                     AutoSizeWidth = true,
@@ -410,31 +472,60 @@ namespace TaimisToolbench.Views.Rendering
                     Parent = parent,
                 };
 
-                // A currency icon carries no visible
-                // name text anywhere in this cell (unlike SummarySectionRenderer.
-                // CreateCurrencyRow, which prints the name as a label before
-                // the icon) - a hover tooltip is the only way to identify it.
-                // Frame-less at the bar tier: beside the digits this icon is
-                // a currency symbol in the coin denominations' role, and
-                // they take no border (IconFrameGeometry.CurrencyIsFramed).
-                // It still occupies the whole measured bar-tier window, so
-                // this segment's advance below is unchanged by the border
-                // coming off.
-                var icon = IconControls.CreateCurrencyIcon(
-                    parent, seg.CurrencyId, x + seg.TextWidth + CoinSegmentMath.CoinLabelIconGap,
-                    y + iconYOffset, ItemIconTier.CurrencyBarRun, getCurrencyFacts);
+                var icon = makeIcon(
+                    i, x + textWidths[i] + CoinSegmentMath.CoinLabelIconGap, y + iconYOffset);
 
                 controls[i] = (label, icon);
-                widths[i] = seg.TextWidth;
-                x += seg.TextWidth + CoinSegmentMath.CoinLabelIconGap + CoinSegmentMath.CoinIconSize + CoinSegmentMath.CoinSegmentGap;
+                x += textWidths[i] + CoinSegmentMath.CoinLabelIconGap
+                    + CoinSegmentMath.CoinIconSize + CoinSegmentMath.CoinSegmentGap;
             }
 
             return new SegmentLayoutHandle
             {
                 Controls = controls,
-                TextWidths = widths,
+                TextWidths = textWidths,
                 IconYOffset = iconYOffset,
             };
+        }
+
+        /// <summary>
+        /// Barter specs for one row's items, measured with the font they
+        /// will draw in. The ITEM ID is all a spec carries: the icon
+        /// component resolves the art, the name, the rarity frame and the
+        /// wiki page from it.
+        /// </summary>
+        internal static List<CoinSegmentMath.BarterSegmentSpec> BuildBarterSegments(
+            IReadOnlyList<BarterAmountViewModel> amounts, BitmapFont font)
+        {
+            var segments = new List<CoinSegmentMath.BarterSegmentSpec>();
+            if (amounts == null)
+            {
+                return segments;
+            }
+
+            foreach (var amount in amounts)
+            {
+                string text = amount.Amount.ToString(CultureInfo.InvariantCulture);
+                segments.Add(new CoinSegmentMath.BarterSegmentSpec
+                {
+                    ItemId = amount.ItemId,
+                    Text = text,
+                    TextWidth = (int)Math.Ceiling(font.MeasureString(text).Width),
+                });
+            }
+
+            return segments;
+        }
+
+        /// <summary>
+        /// Width a barter run occupies, off the same specs
+        /// <see cref="LayoutBarterSegments"/> lays out, so a column that
+        /// reserves this can never differ from the run that lands in it.
+        /// </summary>
+        internal static int MeasureBarterWidth(
+            IReadOnlyList<BarterAmountViewModel> amounts, BitmapFont font)
+        {
+            return CoinSegmentMath.TotalBarterSegmentsWidth(BuildBarterSegments(amounts, font));
         }
 
         /// <summary>

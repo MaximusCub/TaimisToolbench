@@ -266,6 +266,19 @@ namespace TaimisToolbench.Tests.Services
                 };
             }
 
+            if (type == typeof(List<BarterAmountViewModel>))
+            {
+                return new List<BarterAmountViewModel>
+                {
+                    new BarterAmountViewModel { ItemId = 89216, Amount = 5 },
+                };
+            }
+
+            if (type == typeof(List<PlanNoteSegment>))
+            {
+                return new List<PlanNoteSegment> { PlanNoteSegment.Plain(property.Name) };
+            }
+
             if (type == typeof(IconWikiTarget))
             {
                 return IconWikiTarget.ItemPage("Mithril Ore");

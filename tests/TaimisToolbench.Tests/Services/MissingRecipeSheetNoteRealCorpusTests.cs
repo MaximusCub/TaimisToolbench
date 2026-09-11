@@ -65,8 +65,13 @@ namespace TaimisToolbench.Tests.Services
             Assert.Empty(result.RecipeSheetSavingsOpportunities);
         }
 
+        /// <summary>
+        /// Each note leads with the sheet's own icon and name, then says
+        /// where to buy it. The price is NOT here: it is the Cost cell on
+        /// that recipe's own Required Recipes row.
+        /// </summary>
         [Fact]
-        public async Task ThePlanNotesNameEachMissingSheetsPriceAndMerchant()
+        public async Task ThePlanNotesNameEachMissingSheetAndItsMerchants()
         {
             var result = await PlanEndlessSummerAsync();
             var vm = new PlanViewModelBuilder().Build(result);
@@ -74,30 +79,50 @@ namespace TaimisToolbench.Tests.Services
             var notes = vm.Sections.SingleOrDefault(s => s.SectionType == PlanSectionType.Notes);
             Assert.NotNull(notes);
 
-            // The sheet is pure coin: 10 gold from Miyani or the Mystic
-            // Forge Attendant. The coin figure rides the row's CoinValue so
-            // the view draws it with icons, per the repo invariant.
-            var lightRow = notes.Rows.Single(r => r.Label.Contains("Recipe: Gift of Light"));
-            Assert.Equal(
-                "Missing recipe - buy Recipe: Gift of Light from Miyani and 1 other merchant for",
-                lightRow.Label);
-            Assert.Equal(100000, lightRow.CoinValue);
+            var lightRow = notes.Rows.Single(r => r.NoteSubject == "Recipe: Gift of Light");
+            Assert.Equal(GiftOfLightSheetItemId, lightRow.ItemId);
+            Assert.Equal("Missing Recipe. Buy from Miyani and 1 other merchant", lightRow.Label);
+            Assert.Equal(0, lightRow.CoinValue);
 
-            // The sheet is bartered for 5 Charm of Skill. CostLineValuation
-            // cannot price that in coin, so the note states the barter cost
-            // as text rather than being dropped.
-            var relicRow = notes.Rows.Single(r => r.Label.Contains("Recipe: Relic of the Sunless"));
+            var relicRow = notes.Rows.Single(r => r.NoteSubject == "Recipe: Relic of the Sunless");
+            Assert.Equal(RelicOfTheSunlessSheetItemId, relicRow.ItemId);
             Assert.Equal(
-                "Missing recipe - buy Recipe: Relic of the Sunless from Abram and 74 other " +
-                "merchants for 5x Charm of Skill",
-                relicRow.Label);
+                "Missing Recipe. Buy from Abram and 74 other merchants", relicRow.Label);
             Assert.Equal(0, relicRow.CoinValue);
         }
 
         /// <summary>
-        /// The section the report was looking in. The price rides the row's
-        /// own CoinValue/CurrencyCosts so the view draws coin and currency
-        /// with icons; bartered ITEMS have no run to draw and are words.
+        /// The merchant phrase is the link, and it opens the sheet page's
+        /// own Acquisition section - the full merchant list, not the one
+        /// merchant the note names. The lead-in is not a link.
+        /// </summary>
+        [Fact]
+        public async Task TheMerchantPhraseLinksToTheSheetsFullMerchantList()
+        {
+            var result = await PlanEndlessSummerAsync();
+            var vm = new PlanViewModelBuilder().Build(result);
+
+            var notes = vm.Sections.Single(s => s.SectionType == PlanSectionType.Notes);
+            var lightRow = notes.Rows.Single(r => r.NoteSubject == "Recipe: Gift of Light");
+
+            Assert.Equal(2, lightRow.NoteSegments.Count);
+            Assert.False(lightRow.NoteSegments[0].IsLink);
+            Assert.Equal("Missing Recipe. Buy from ", lightRow.NoteSegments[0].Text);
+
+            var link = lightRow.NoteSegments[1];
+            Assert.True(link.IsLink);
+            Assert.Equal("Miyani and 1 other merchant", link.Text);
+            Assert.Equal(
+                "https://wiki.guildwars2.com/wiki/Recipe:_Gift_of_Light#Acquisition",
+                link.Link.BuildUrl());
+            Assert.Equal(IconWikiTarget.AcquisitionHintText, link.Link.Hint);
+        }
+
+        /// <summary>
+        /// The section the report was looking in. Every part of the price
+        /// rides a field the view draws as a number with its own icon: coin
+        /// and wallet currency on CoinValue/CurrencyCosts, bartered ITEMS
+        /// on SheetBarterItems. The merchants are the Sold By cell.
         /// </summary>
         [Fact]
         public async Task TheRequiredRecipesRowsCarryTheirSheetPriceAndMerchant()
@@ -110,16 +135,41 @@ namespace TaimisToolbench.Tests.Services
             var lightRow = recipes.Rows.Single(r => r.Label == "Recipe: Gift of Light");
             Assert.Equal(RequiredRecipesVisibility.MissingStatusTag, lightRow.StatusTag);
             Assert.Equal(100000, lightRow.CoinValue);
-            Assert.Null(lightRow.SheetBarterText);
+            Assert.Null(lightRow.SheetBarterItems);
             Assert.Null(lightRow.CurrencyCosts);
-            Assert.Contains("Sold by Miyani and 1 other merchant.", lightRow.HintText);
+            Assert.Equal("Miyani and 1 other merchant", lightRow.SoldByText);
 
             var relicRow = recipes.Rows.Single(r => r.Label == "Recipe: Relic of the Sunless");
             Assert.Equal(RequiredRecipesVisibility.MissingStatusTag, relicRow.StatusTag);
             Assert.Equal(0, relicRow.CoinValue);
-            Assert.Equal("5x Charm of Skill", relicRow.SheetBarterText);
             Assert.Null(relicRow.CurrencyCosts);
-            Assert.Contains("Sold by Abram and 74 other merchants.", relicRow.HintText);
+            Assert.Equal("Abram and 74 other merchants", relicRow.SoldByText);
+
+            // The barter half is an item id and a count, so the cell draws
+            // "5" and the Charm of Skill icon rather than the words.
+            var charm = Assert.Single(relicRow.SheetBarterItems);
+            Assert.Equal(CharmOfSkill, charm.ItemId);
+            Assert.Equal(5, charm.Amount);
+        }
+
+        /// <summary>
+        /// The Sold By cell's right-click opens the sheet page's own
+        /// Acquisition section, which is where every merchant is listed.
+        /// </summary>
+        [Fact]
+        public async Task TheSoldByCellOpensTheSheetsFullMerchantList()
+        {
+            var result = await PlanEndlessSummerAsync();
+            var vm = new PlanViewModelBuilder().Build(result);
+
+            var recipes = vm.Sections.Single(s => s.SectionType == PlanSectionType.RequiredRecipes);
+            var relicRow = recipes.Rows.Single(r => r.Label == "Recipe: Relic of the Sunless");
+
+            Assert.Equal(
+                "https://wiki.guildwars2.com/wiki/Recipe:_Relic_of_the_Sunless#Acquisition",
+                relicRow.SoldByWikiTarget.BuildUrl());
+            Assert.Equal(
+                IconWikiTarget.AcquisitionHintText, relicRow.SoldByWikiTarget.Hint);
         }
 
         /// <summary>
@@ -139,7 +189,8 @@ namespace TaimisToolbench.Tests.Services
 
             Assert.Equal(RequiredRecipesVisibility.LearnedStatusTag, lightRow.StatusTag);
             Assert.Equal(0, lightRow.CoinValue);
-            Assert.Null(lightRow.SheetBarterText);
+            Assert.Null(lightRow.SheetBarterItems);
+            Assert.Null(lightRow.SoldByText);
         }
 
         private static async Task<CraftingPlanResult> PlanEndlessSummerAsync(

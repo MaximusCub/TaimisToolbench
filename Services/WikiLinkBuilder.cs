@@ -97,6 +97,44 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// A recipe SHEET item's own page at its "#Acquisition" section,
+        /// where the wiki lists every merchant that sells it, built from
+        /// the sheet item's own GW2 name.
+        /// <para>
+        /// That name already carries the namespace prefix
+        /// ("Recipe: Relic of the Sunless"), and the colon in it is a
+        /// literal part of the wiki title, so the prefix is re-attached
+        /// unencoded and only the title after it is escaped. Distinct from
+        /// <see cref="BuildRecipeSheetUrl"/>, which synthesizes the prefix
+        /// from the CRAFTED item's name instead - it is used where the
+        /// sheet's own name is not known.
+        /// </para>
+        /// <para>
+        /// A name with no ": " falls back to a plain item page, which is
+        /// what a sheet whose name does not follow the convention is.
+        /// </para>
+        /// </summary>
+        public static string BuildSheetPageAcquisitionUrl(string sheetItemName)
+        {
+            if (!HasWikiPage(sheetItemName))
+            {
+                return null;
+            }
+
+            string name = sheetItemName.Trim();
+            int colon = name.IndexOf(": ", StringComparison.Ordinal);
+            if (colon <= 0)
+            {
+                return BuildItemAcquisitionUrl(name);
+            }
+
+            string title = EncodeTitle(name.Substring(colon + 2));
+            return title.Length == 0
+                ? null
+                : BaseUrl + name.Substring(0, colon + 1) + "_" + title + AcquisitionAnchor;
+        }
+
+        /// <summary>
         /// Required Recipes Missing! row link target (flag-based per the
         /// feature spec): a recipe unlocked via a LearnedFromItem
         /// consumable links to its own "Recipe: &lt;name&gt;" sheet page;

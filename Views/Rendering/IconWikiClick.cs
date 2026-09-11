@@ -5,8 +5,9 @@ using TaimisToolbench.Services;
 namespace TaimisToolbench.Views.Rendering
 {
     /// <summary>
-    /// The right-click-to-wiki gesture, stamped onto an icon by
-    /// <see cref="ItemIconTooltip.StampOnIconTree"/> as
+    /// The wiki-opening gestures, and the only file that subscribes to
+    /// one: <see cref="ApplyToIcon"/>, <see cref="ApplyToCell"/> and
+    /// <see cref="ApplyToLink"/>. An icon's is stamped as
     /// <see cref="IconControls"/> builds it, so no call site can forget.
     /// <para>
     /// EXACTLY ONE control per gesture, never an ancestor of another wired
@@ -43,19 +44,47 @@ namespace TaimisToolbench.Views.Rendering
 
         internal static void ApplyToIcon(Control icon, IconWikiTarget target)
         {
-            if (icon == null)
+            Apply(icon, target, alsoOnLeftClick: false);
+        }
+
+        /// <summary>
+        /// The same right-click on a text CELL that is not an icon - the
+        /// Required Recipes table's Sold By cell, whose words name the
+        /// merchants the wiki lists in full. One control, never a control
+        /// and its own descendant, for the reason above.
+        /// </summary>
+        internal static void ApplyToCell(Control cell, IconWikiTarget target)
+        {
+            Apply(cell, target, alsoOnLeftClick: false);
+        }
+
+        /// <summary>
+        /// A text LINK inside a sentence: the right click above, plus a
+        /// plain left click, which is the gesture a coloured underlined run
+        /// invites. The hover still names the right click, and the right
+        /// click still works, so the sentence the reader is shown stays
+        /// true.
+        /// </summary>
+        internal static void ApplyToLink(Control link, IconWikiTarget target)
+        {
+            Apply(link, target, alsoOnLeftClick: true);
+        }
+
+        private static void Apply(Control control, IconWikiTarget target, bool alsoOnLeftClick)
+        {
+            if (control == null)
             {
                 return;
             }
 
-            if (Wired.TryGetValue(icon, out var wiring))
+            if (Wired.TryGetValue(control, out var wiring))
             {
                 wiring.Target = target;
                 wiring.Armed = false;
                 return;
             }
 
-            // Nothing is allocated for an icon with no page. The rich
+            // Nothing is allocated for a control with no page. The rich
             // tooltip surface rebuilds its own icons on every hover, so
             // wiring three handlers there would be garbage per hover for a
             // control the cursor can never click.
@@ -65,8 +94,12 @@ namespace TaimisToolbench.Views.Rendering
             }
 
             wiring = new Wiring { Target = target };
-            Wired.Add(icon, wiring);
-            Wire(icon, wiring);
+            Wired.Add(control, wiring);
+            Wire(control, wiring);
+            if (alsoOnLeftClick)
+            {
+                control.Click += (_, __) => WikiLinkLauncher.Open(wiring.Target.BuildUrl());
+            }
         }
 
         private static void Wire(Control control, Wiring wiring)

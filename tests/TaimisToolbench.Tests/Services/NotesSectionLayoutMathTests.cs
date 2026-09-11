@@ -162,9 +162,9 @@ namespace TaimisToolbench.Tests.Services
                 () => NotesSectionLayoutMath.WrapNote("abc", LivePanelWidth, 0, null));
         }
 
-        // --- BodyHeight: the arm that now counts LINES, not note rows ---
+        // --- NoteHeight: the arm that counts LINES, not note rows ---
         [Fact]
-        public void BodyHeight_CountsWrappedLinesNotNoteRows()
+        public void NoteHeight_CountsWrappedLinesNotNoteRows()
         {
             const string note = "This plan includes a Mystic Clover-style Mystic Forge yield - its " +
                 "expected output is already probability-adjusted.";
@@ -174,23 +174,76 @@ namespace TaimisToolbench.Tests.Services
             Assert.True(lines > 1);
             Assert.Equal(
                 lines * PlanContentHeightMath.FallbackTextRowHeight,
-                NotesSectionLayoutMath.BodyHeight(lines));
+                NotesSectionLayoutMath.NoteHeight(lines, hasIcon: false));
             // The pre-fix arm (one row per note) would have undercounted.
             Assert.True(
-                NotesSectionLayoutMath.BodyHeight(lines) > PlanContentHeightMath.FallbackTextRowHeight);
+                NotesSectionLayoutMath.NoteHeight(lines, hasIcon: false)
+                    > PlanContentHeightMath.FallbackTextRowHeight);
         }
 
         [Fact]
-        public void BodyHeight_ZeroLines_IsZero()
+        public void NoteHeight_ZeroLines_IsZero()
         {
-            Assert.Equal(0, NotesSectionLayoutMath.BodyHeight(0));
-            Assert.Equal(0, NotesSectionLayoutMath.BodyHeight(-3));
+            Assert.Equal(0, NotesSectionLayoutMath.NoteHeight(0, hasIcon: false));
+            Assert.Equal(0, NotesSectionLayoutMath.NoteHeight(-3, hasIcon: false));
         }
 
         [Fact]
-        public void BodyHeight_UsesTheSharedFixedRowHeightConstant()
+        public void NoteHeight_UsesTheSharedFixedRowHeightConstant()
         {
-            Assert.Equal(PlanContentHeightMath.FallbackTextRowHeight, NotesSectionLayoutMath.BodyHeight(1));
+            Assert.Equal(
+                PlanContentHeightMath.FallbackTextRowHeight,
+                NotesSectionLayoutMath.NoteHeight(1, hasIcon: false));
+        }
+
+        /// <summary>
+        /// A note that names an item spends the icon-led band on its FIRST
+        /// line and a plain text row on every line after it, so its height
+        /// is not a multiple of either.
+        /// </summary>
+        [Fact]
+        public void NoteHeight_WithAnIcon_SpendsTheIconBandOnTheFirstLineOnly()
+        {
+            Assert.Equal(
+                NotesSectionLayoutMath.IconLineHeight,
+                NotesSectionLayoutMath.NoteHeight(1, hasIcon: true));
+            Assert.Equal(
+                NotesSectionLayoutMath.IconLineHeight
+                    + (2 * PlanContentHeightMath.FallbackTextRowHeight),
+                NotesSectionLayoutMath.NoteHeight(3, hasIcon: true));
+            Assert.True(
+                NotesSectionLayoutMath.IconLineHeight
+                    > PlanContentHeightMath.FallbackTextRowHeight,
+                "an icon-led line has to be taller than a text line to hold the icon");
+        }
+
+        /// <summary>
+        /// The subject's name eats into its own note's first line and
+        /// nothing else: later lines hang from the name's rule and get the
+        /// full column.
+        /// </summary>
+        [Fact]
+        public void SubjectBudgets_OnlyTheFirstLinePaysForTheNameAndTheCoinCell()
+        {
+            int first = NotesSectionLayoutMath.SubjectFirstLineBudget(LivePanelWidth, 0, 100);
+            int rest = NotesSectionLayoutMath.SubjectRestBudget(LivePanelWidth);
+
+            Assert.Equal(rest - 100 - NotesSectionLayoutMath.NameToNoteGap, first);
+            Assert.True(
+                NotesSectionLayoutMath.SubjectFirstLineBudget(LivePanelWidth, 60, 100) < first,
+                "a coin cell has to narrow the first line it sits on");
+        }
+
+        [Fact]
+        public void SubjectMaxWidth_HoldsTheFloorOnAPathologicallyNarrowPanel()
+        {
+            Assert.Equal(
+                NotesSectionLayoutMath.MinTextBudget,
+                NotesSectionLayoutMath.SubjectMaxWidth(40));
+            Assert.True(
+                NotesSectionLayoutMath.SubjectMaxWidth(LivePanelWidth)
+                    < NotesSectionLayoutMath.SubjectRestBudget(LivePanelWidth),
+                "a name may never take the whole note column");
         }
     }
 }

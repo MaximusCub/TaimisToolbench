@@ -29,21 +29,20 @@ namespace TaimisToolbench.Tests.Services
                 CoinOffer("c", "Brill", 100));
 
             var row = Assert.Single(section.Rows);
-            Assert.Equal(
-                "Missing recipe - buy Recipe: Gift of Light from Aveline and 1 other merchant for",
-                row.Label);
-            Assert.Equal(100, row.CoinValue);
+            Assert.Equal("Recipe: Gift of Light", row.NoteSubject);
+            Assert.Equal("Missing Recipe. Buy from Aveline and 1 other merchant", row.Label);
         }
 
         /// <summary>
-        /// The barter half is named in the label and the coin half rides
-        /// CoinValue, so the view still draws coin icons to the right of
-        /// the number.
+        /// The note says where to buy and nothing about the price. The
+        /// price is the Required Recipes row's own Cost cell, where the
+        /// coin half rides CoinValue and the barter half SheetBarterItems,
+        /// so every part of it draws as a number with its own icon.
         /// </summary>
         [Fact]
-        public void MixedCoinAndBarterOffer_SplitsAcrossLabelAndCoinValue()
+        public void MixedCoinAndBarterOffer_PricesTheRowAndNotTheNote()
         {
-            var section = NotesFor(new VendorOffer
+            var vm = BuildFor(new VendorOffer
             {
                 OfferId = "mixed",
                 OutputItemId = SheetItemId,
@@ -56,17 +55,24 @@ namespace TaimisToolbench.Tests.Services
                 },
             });
 
-            var row = Assert.Single(section.Rows);
-            Assert.Equal(
-                "Missing recipe - buy Recipe: Gift of Light from Miyani for 5x Charm of Skill plus",
-                row.Label);
-            Assert.Equal(400, row.CoinValue);
+            var row = Assert.Single(
+                vm.Sections.Single(s => s.SectionType == PlanSectionType.Notes).Rows);
+            Assert.Equal("Missing Recipe. Buy from Miyani", row.Label);
+            Assert.Equal(0, row.CoinValue);
+
+            var recipeRow = Assert.Single(
+                vm.Sections.Single(s => s.SectionType == PlanSectionType.RequiredRecipes).Rows);
+            Assert.Equal(400, recipeRow.CoinValue);
+            Assert.Equal("Miyani", recipeRow.SoldByText);
+            var charm = Assert.Single(recipeRow.SheetBarterItems);
+            Assert.Equal(CharmItemId, charm.ItemId);
+            Assert.Equal(5, charm.Amount);
         }
 
         [Fact]
-        public void NonCoinCurrencyOffer_NamesTheCurrency()
+        public void NonCoinCurrencyOffer_PricesTheRowInThatCurrency()
         {
-            var section = NotesFor(new VendorOffer
+            var vm = BuildFor(new VendorOffer
             {
                 OfferId = "karma",
                 OutputItemId = SheetItemId,
@@ -78,11 +84,16 @@ namespace TaimisToolbench.Tests.Services
                 },
             });
 
-            var row = Assert.Single(section.Rows);
-            Assert.Equal(
-                "Missing recipe - buy Recipe: Gift of Light from Miyani for 350 Karma",
-                row.Label);
-            Assert.Equal(0, row.CoinValue);
+            var row = Assert.Single(
+                vm.Sections.Single(s => s.SectionType == PlanSectionType.Notes).Rows);
+            Assert.Equal("Missing Recipe. Buy from Miyani", row.Label);
+
+            var recipeRow = Assert.Single(
+                vm.Sections.Single(s => s.SectionType == PlanSectionType.RequiredRecipes).Rows);
+            Assert.Equal(0, recipeRow.CoinValue);
+            var karma = Assert.Single(recipeRow.CurrencyCosts);
+            Assert.Equal(KarmaCurrencyId, karma.CurrencyId);
+            Assert.Equal(350, karma.Amount);
         }
 
         /// <summary>
@@ -134,12 +145,13 @@ namespace TaimisToolbench.Tests.Services
         }
 
         /// <summary>
-        /// The barter item's name is the whole cost statement. Printing
-        /// PlanViewModelBuilder's "Unknown Item" placeholder instead would
-        /// tell the player nothing about what to bring.
+        /// An item the module has no name and no picture for cannot be
+        /// drawn as part of a price, so the row carries none - half a price
+        /// is a wrong price. The note still says where to buy, which does
+        /// not depend on that item at all.
         /// </summary>
         [Fact]
-        public void BarterItemWithNoMetadata_DropsTheNote()
+        public void BarterItemWithNoMetadata_DropsThePriceAndKeepsTheNote()
         {
             var result = MakeResult(
                 metadata: new Dictionary<int, ItemMetadata>
@@ -161,19 +173,27 @@ namespace TaimisToolbench.Tests.Services
             }));
 
             Assert.Single(result.MissingRecipeSheetSources);
-            Assert.DoesNotContain(
-                new PlanViewModelBuilder().Build(result).Sections,
-                s => s.SectionType == PlanSectionType.Notes);
+
+            var vm = new PlanViewModelBuilder().Build(result);
+            var note = Assert.Single(
+                vm.Sections.Single(s => s.SectionType == PlanSectionType.Notes).Rows);
+            Assert.Equal("Missing Recipe. Buy from Miyani", note.Label);
+
+            var recipeRow = Assert.Single(
+                vm.Sections.Single(s => s.SectionType == PlanSectionType.RequiredRecipes).Rows);
+            Assert.Equal(0, recipeRow.CoinValue);
+            Assert.Null(recipeRow.SheetBarterItems);
+            Assert.Null(recipeRow.SoldByText);
         }
 
         /// <summary>
         /// A plan saved by a build whose calculator wrote the row
         /// differently could restore with neither half of a price. The
-        /// price is the whole point of the note, so the builder drops it
-        /// rather than render "sold by Miyani for" and nothing.
+        /// note is about where to buy, so it still draws; the row's Cost
+        /// cell is what goes empty.
         /// </summary>
         [Fact]
-        public void RestoredSourceCarryingNoPriceAtAll_DrawsNoRow()
+        public void RestoredSourceCarryingNoPriceAtAll_StillNamesTheMerchant()
         {
             var result = MakeResult(
                 metadata: new Dictionary<int, ItemMetadata>
@@ -189,12 +209,18 @@ namespace TaimisToolbench.Tests.Services
                 },
             };
 
-            Assert.DoesNotContain(
-                new PlanViewModelBuilder().Build(result).Sections,
-                s => s.SectionType == PlanSectionType.Notes);
+            var vm = new PlanViewModelBuilder().Build(result);
+            var note = Assert.Single(
+                vm.Sections.Single(s => s.SectionType == PlanSectionType.Notes).Rows);
+            Assert.Equal("Missing Recipe. Buy from Miyani", note.Label);
+
+            var recipeRow = Assert.Single(
+                vm.Sections.Single(s => s.SectionType == PlanSectionType.RequiredRecipes).Rows);
+            Assert.Equal(0, recipeRow.CoinValue);
+            Assert.Null(recipeRow.SoldByText);
         }
 
-        private static PlanSectionViewModel NotesFor(params VendorOffer[] offers)
+        private static PlanViewModel BuildFor(params VendorOffer[] offers)
         {
             var result = MakeResult(
                 metadata: new Dictionary<int, ItemMetadata>
@@ -206,8 +232,12 @@ namespace TaimisToolbench.Tests.Services
 
             MissingRecipeSheetSourceCalculator.Apply(result, OffersReturning(offers));
 
-            return new PlanViewModelBuilder().Build(result).Sections
-                .Single(s => s.SectionType == PlanSectionType.Notes);
+            return new PlanViewModelBuilder().Build(result);
+        }
+
+        private static PlanSectionViewModel NotesFor(params VendorOffer[] offers)
+        {
+            return BuildFor(offers).Sections.Single(s => s.SectionType == PlanSectionType.Notes);
         }
 
         private static IReadOnlyList<MissingRecipeSheetSource> SourcesFor(

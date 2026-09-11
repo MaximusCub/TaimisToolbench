@@ -5327,7 +5327,7 @@ namespace TaimisToolbench.Views
                     // needs its own case rather than the default fallback
                     // below, since CreateTextRow never draws a coin value
                     // and this section's excess/reclaim lines carry one.
-                    notesBodyHeight = new NotesSectionRenderer(this, CurrencyFactsFor)
+                    notesBodyHeight = new NotesSectionRenderer(this, ItemFactsFor, CurrencyFactsFor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 // PlanSectionType.RequiredRecipes is handled entirely by

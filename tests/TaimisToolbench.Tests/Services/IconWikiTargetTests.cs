@@ -46,6 +46,33 @@ namespace TaimisToolbench.Tests.Services
                 "https://wiki.guildwars2.com/wiki/Recipe:_Gift_of_Light", target.BuildUrl());
         }
 
+        /// <summary>
+        /// The Sold By cell's page: the sheet title, colon intact, with the
+        /// merchant list's own anchor on the end.
+        /// </summary>
+        [Fact]
+        public void SheetPageAcquisition_AnchorsTheSheetPageAtItsMerchantList()
+        {
+            var target = IconWikiTarget.SheetPageAcquisition("Recipe: Gift of Light");
+
+            Assert.Equal(IconWikiTarget.AcquisitionHintText, target.Hint);
+            Assert.Equal(
+                "https://wiki.guildwars2.com/wiki/Recipe:_Gift_of_Light#Acquisition",
+                target.BuildUrl());
+        }
+
+        /// <summary>
+        /// A sheet whose name carries no namespace prefix is just an item,
+        /// and its acquisition page is the plain one.
+        /// </summary>
+        [Fact]
+        public void SheetPageAcquisition_WithNoPrefix_FallsBackToThePlainItemPage()
+        {
+            Assert.Equal(
+                "https://wiki.guildwars2.com/wiki/Bolt_of_Damask#Acquisition",
+                IconWikiTarget.SheetPageAcquisition("Bolt of Damask").BuildUrl());
+        }
+
         [Theory]
         [InlineData("Unknown Item")]
         [InlineData("Guild upgrade (unresolved)")]
@@ -61,6 +88,7 @@ namespace TaimisToolbench.Tests.Services
                 IconWikiTarget.ItemPage(name),
                 IconWikiTarget.Acquisition(name),
                 IconWikiTarget.RecipeSheet(name),
+                IconWikiTarget.SheetPageAcquisition(name),
             })
             {
                 Assert.False(target.HasPage);
