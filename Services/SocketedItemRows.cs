@@ -4,8 +4,8 @@ using TaimisToolbench.Models;
 namespace TaimisToolbench.Services
 {
     /// <summary>
-    /// Turns what is fitted into a piece of worn gear into snapshot rows of
-    /// its own.
+    /// Turns what is fitted into a piece of gear into snapshot rows of its
+    /// own.
     /// <para>
     /// A rune, sigil, jewel or infusion is a separate item the account
     /// owns. Held only on its host stack's socket lists it is searchable
@@ -28,15 +28,20 @@ namespace TaimisToolbench.Services
         /// nothing socketed, so a slot the capture could not read produces
         /// no claim at all.
         /// </summary>
+        /// <param name="containerSource">
+        /// The plain source key of wherever the gear itself is: Bank,
+        /// SharedInventory, a character's bags or a character's worn gear.
+        /// </param>
         /// <param name="hostCount">
         /// How many copies of the gear this stack holds. Every copy carries
         /// these sockets, so it multiplies each socket's count. Equipment
-        /// stacks are always one.
+        /// stacks are always one, and gear carrying an upgrade does not
+        /// stack in storage either.
         /// </param>
         public static void AddFor(
             List<SnapshotItemEntry> rows,
             int hostItemId,
-            string characterName,
+            string containerSource,
             int hostCount,
             IEnumerable<int> upgrades,
             IEnumerable<int> infusions)
@@ -47,14 +52,15 @@ namespace TaimisToolbench.Services
             }
 
             int start = rows.Count;
-            string source = AccountItemIndex.SocketedSource(hostItemId, characterName);
+            string source = AccountItemIndex.SocketedSource(hostItemId, containerSource);
             Append(rows, start, source, upgrades, hostCount);
             Append(rows, start, source, infusions, hostCount);
         }
 
         /// <summary>
         /// Drops every socket row for an item the Legendary Armory already
-        /// counts, and names the wearer under the armory's own row instead.
+        /// counts, and records where that copy is drawn from under the
+        /// armory's own row instead.
         /// <para>
         /// Legendary runes and sigils sit in the armory the way legendary
         /// gear does: one account-wide entry with its own count, drawn into
@@ -82,7 +88,7 @@ namespace TaimisToolbench.Services
                     && AccountItemIndex.IsSocketedSource(entry.Source)
                     && armoryItemIds.Contains(entry.ItemId))
                 {
-                    NameWearer(armoryEquipped, entry);
+                    NamePlace(armoryEquipped, entry);
                     continue;
                 }
 
@@ -93,11 +99,31 @@ namespace TaimisToolbench.Services
             items.RemoveRange(kept, items.Count - kept);
         }
 
-        private static void NameWearer(
+        /// <summary>
+        /// Records the dropped row's place on the armory row. Worn gear is
+        /// recorded as a wearer's name, which is what the armory line has
+        /// always printed. Anywhere else is recorded as the socket key
+        /// itself, because "Equipped" is not what a banked piece is.
+        /// </summary>
+        private static void NamePlace(
             List<SnapshotArmoryEquip> armoryEquipped, SnapshotItemEntry entry)
         {
-            if (armoryEquipped == null
-                || !AccountItemIndex.TryGetCharacterName(entry.Source, out string wearer)
+            if (armoryEquipped == null)
+            {
+                return;
+            }
+
+            if (!AccountItemIndex.IsWornGearPlace(entry.Source))
+            {
+                armoryEquipped.Add(new SnapshotArmoryEquip
+                {
+                    ItemId = entry.ItemId,
+                    Source = entry.Source,
+                });
+                return;
+            }
+
+            if (!AccountItemIndex.TryGetCharacterName(entry.Source, out string wearer)
                 || wearer.Length == 0)
             {
                 return;

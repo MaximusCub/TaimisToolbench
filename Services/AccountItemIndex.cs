@@ -27,12 +27,17 @@ namespace TaimisToolbench.Services
         public const string CharacterEquipmentSourcePrefix = "Equipped:";
 
         // One upgrade component or infusion sitting in a socket of one
-        // piece of worn gear, as "Socketed:<host item id>:<name>". The
-        // host id is what keeps two pieces on one character apart, so six
+        // piece of gear, as "Socketed:<host item id>:<container>", where
+        // the container is the plain source key of the gear itself: Bank,
+        // SharedInventory, "Character:<name>" or "Equipped:<name>". The
+        // host id is what keeps two pieces in one container apart, so six
         // copies of a rune across six armour slots stay six places rather
-        // than collapsing into one. The character name runs to the end of
-        // the key, which is what lets the filter and the search compare it
-        // in place the way they do for the two keys above.
+        // than collapsing into one.
+        //
+        // The container half is a whole source key, so a character named
+        // "Bank" carries its own prefix and can no more collide here than
+        // it can above. A character name still runs to the end of the key,
+        // which is what lets the filter and the search compare it in place.
         public const string SocketedSourcePrefix = "Socketed:";
 
         private static readonly IReadOnlyList<string> EmptySources = Array.Empty<string>();
@@ -134,40 +139,91 @@ namespace TaimisToolbench.Services
         /// </summary>
         public static int CharacterNameOffset(string source)
         {
-            if (source == null)
+            int container = ContainerOffset(source);
+            if (container < 0)
             {
                 return -1;
             }
 
-            if (source.StartsWith(CharacterSourcePrefix, StringComparison.Ordinal))
+            if (StartsAt(source, container, CharacterSourcePrefix))
             {
-                return CharacterSourcePrefix.Length;
+                return container + CharacterSourcePrefix.Length;
             }
 
-            if (source.StartsWith(CharacterEquipmentSourcePrefix, StringComparison.Ordinal))
+            if (StartsAt(source, container, CharacterEquipmentSourcePrefix))
             {
-                return CharacterEquipmentSourcePrefix.Length;
-            }
-
-            if (source.StartsWith(SocketedSourcePrefix, StringComparison.Ordinal))
-            {
-                int separator = source.IndexOf(':', SocketedSourcePrefix.Length);
-                return separator < 0 ? -1 : separator + 1;
+                return container + CharacterEquipmentSourcePrefix.Length;
             }
 
             return -1;
         }
 
         /// <summary>
-        /// The source key for one socketed item, built from the gear it
-        /// sits in and the character wearing that gear.
+        /// Where the container half of a source key begins: 0 for a plain
+        /// key, which is its own container, and the offset past the host id
+        /// for a socket key. -1 when a socket key carries no readable
+        /// container. Returned as an offset rather than a substring so
+        /// callers on the keystroke path allocate nothing.
         /// </summary>
-        public static string SocketedSource(int hostItemId, string characterName)
+        public static int ContainerOffset(string source)
+        {
+            if (source == null)
+            {
+                return -1;
+            }
+
+            if (!source.StartsWith(SocketedSourcePrefix, StringComparison.Ordinal))
+            {
+                return 0;
+            }
+
+            int separator = source.IndexOf(':', SocketedSourcePrefix.Length);
+            return separator < 0 ? -1 : separator + 1;
+        }
+
+        /// <summary>
+        /// True when the container half of <paramref name="source"/> is
+        /// exactly <paramref name="container"/>. A plain key is its own
+        /// container, so this is plain equality for one.
+        /// </summary>
+        public static bool ContainerIs(string source, string container)
+        {
+            int offset = ContainerOffset(source);
+            if (offset < 0 || container == null
+                || source.Length - offset != container.Length)
+            {
+                return false;
+            }
+
+            return string.CompareOrdinal(source, offset, container, 0, container.Length) == 0;
+        }
+
+        /// <summary>
+        /// The container half of a source key as its own string, or "" when
+        /// the key carries none. Allocates, so the keystroke path uses
+        /// <see cref="ContainerIs"/> instead.
+        /// </summary>
+        public static string ContainerSource(string source)
+        {
+            int offset = ContainerOffset(source);
+            if (offset < 0)
+            {
+                return "";
+            }
+
+            return offset == 0 ? source : source.Substring(offset);
+        }
+
+        /// <summary>
+        /// The source key for one socketed item, built from the gear it
+        /// sits in and the plain source key of wherever that gear is.
+        /// </summary>
+        public static string SocketedSource(int hostItemId, string containerSource)
         {
             return SocketedSourcePrefix
                 + hostItemId.ToString(CultureInfo.InvariantCulture)
                 + ":"
-                + (characterName ?? "");
+                + (containerSource ?? "");
         }
 
         /// <summary>
@@ -224,13 +280,38 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// True when the source key is gear worn on a character, rather than
-        /// that character's bag contents.
+        /// True when the source key is a stack of gear worn on a character,
+        /// rather than that character's bag contents.
+        /// <para>
+        /// False for a socket key, even one whose container is worn gear: a
+        /// socket row is not a worn stack, and
+        /// Services.EquippedRuneSetIndex decides where a rune id lives from
+        /// this answer. <see cref="IsWornGearPlace"/> is the broader
+        /// question.
+        /// </para>
         /// </summary>
         public static bool IsEquipmentSource(string source)
         {
             return source != null
                 && source.StartsWith(CharacterEquipmentSourcePrefix, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// True when the place a source key names is a character's worn
+        /// gear, whether the key is that gear's own stack or something
+        /// socketed into it.
+        /// </summary>
+        public static bool IsWornGearPlace(string source)
+        {
+            int container = ContainerOffset(source);
+            return container >= 0
+                && StartsAt(source, container, CharacterEquipmentSourcePrefix);
+        }
+
+        private static bool StartsAt(string source, int offset, string prefix)
+        {
+            return source.Length - offset >= prefix.Length
+                && string.CompareOrdinal(source, offset, prefix, 0, prefix.Length) == 0;
         }
 
         public static IReadOnlyList<string> GetPrioritizedSources(
@@ -289,15 +370,49 @@ namespace TaimisToolbench.Services
                 result.Add(SourceLegendaryArmory);
             }
 
-            // Priority 6: Remaining sources (other characters), sorted
+            // Priority 6: Remaining sources (other characters), then every
+            // socket, ordered by SpendRank and then ordinally.
             if (sourceSet.Count > 0)
             {
                 var remaining = sourceSet.ToList();
-                remaining.Sort(StringComparer.Ordinal);
+                remaining.Sort((a, b) =>
+                {
+                    int byRank = SpendRank(a).CompareTo(SpendRank(b));
+                    return byRank != 0 ? byRank : string.CompareOrdinal(a, b);
+                });
                 result.AddRange(remaining);
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// How reluctantly a source gives its copy up, within the bucket of
+        /// sources no earlier priority claimed. A loose copy anywhere is
+        /// spent before one that has to be pulled out of a piece of gear,
+        /// and a socket in stored gear is spent before one in gear a
+        /// character is wearing: pulling an upgrade out of a worn set
+        /// breaks something the player is using right now, and pulling one
+        /// out of a banked piece breaks nothing.
+        /// </summary>
+        private static int SpendRank(string source)
+        {
+            if (!IsSocketedSource(source))
+            {
+                return 0;
+            }
+
+            if (ContainerIs(source, SourceBank))
+            {
+                return 1;
+            }
+
+            if (ContainerIs(source, SourceSharedInventory))
+            {
+                return 2;
+            }
+
+            return IsWornGearPlace(source) ? 4 : 3;
         }
     }
 }
