@@ -43,7 +43,6 @@ namespace TaimisToolbench.Views
         private readonly Panel _bar;
         private readonly Panel _separator;
         private readonly FeedbackButton _refreshButton;
-        private readonly Label _caption;
         private readonly Label _readout;
         private readonly Label _status;
         private readonly LoadingSpinner _spinner;
@@ -89,19 +88,19 @@ namespace TaimisToolbench.Views
 
             // Measured, not banded: the word is wider at the Status tier
             // than the 60px band it used to be given, and the slider was
-            // seated off that band rather than off the word. Measured here
-            // rather than read back off an autosized Label, because a Blish
-            // Label recalculates its own width on the next layout pass and
-            // not inside the property that changes it.
+            // seated off that band rather than off the word. Measured beside
+            // an autosized Label rather than read back off one, which is
+            // LabelHelpers.CreateRightAlignedLabel's own shape: a Blish
+            // Label recalculates its width on the next layout pass, not
+            // inside the property that changes it.
             _captionWidth = (int)Math.Ceiling(
                 UiFonts.Status.MeasureString(OpacityCaption).Width);
-            _caption = new Label()
+            new Label()
             {
                 Text = OpacityCaption,
                 Font = UiFonts.Status,
-                AutoSizeWidth = false,
+                AutoSizeWidth = true,
                 AutoSizeHeight = true,
-                Size = new Point(_captionWidth, PopoutLayout.ToolbarHeight),
                 Location = new Point(PopoutToolbarLayout.CaptionX, CaptionY),
                 Parent = _bar,
             };
