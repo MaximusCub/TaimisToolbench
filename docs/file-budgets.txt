@@ -223,7 +223,7 @@ Services/PlanStripStatusBoard.cs                                                
 Services/PlanStripTickDecision.cs                                                       97
 Services/PlanStructuralValidator.cs                                                     602
 Services/PlanTableSorter.cs                                                             261
-Services/PlanViewModelBuilder.cs                                                        2224
+Services/PlanViewModelBuilder.cs                                                        2167
 Services/RankerPriorityCascade.cs                                                       364
 Services/RankerPriorityOrdering.cs                                                      183
 Services/RankerRarityAdoption.cs                                                        87
@@ -265,7 +265,7 @@ Services/SettingsCurrencyGridLayout.cs                                          
 Services/SettingsFormLayout.cs                                                          174
 Services/SettingsInputParser.cs                                                         239
 Services/SettingsSaveBarLayout.cs                                                       80
-Services/ShoppingColumnMath.cs                                                          450
+Services/ShoppingColumnMath.cs                                                          449
 Services/ShoppingRowTooltipFormatter.cs                                                 145
 Services/ShoppingSourceBadge.cs                                                         89
 Services/SnapshotCallRetry.cs                                                           142
@@ -339,7 +339,7 @@ Services/WindowSizing.cs                                                        
 Views/AboutTabContent.cs                                                                1000
 Views/ApiAccessDialog.cs                                                                231
 Views/AutocompleteTextBox.cs                                                            45
-Views/CraftingPlanView.cs                                                               5624
+Views/CraftingPlanView.cs                                                               5615
 Views/FocusRelease.cs                                                                   159
 Views/ItemInputRowStrip.cs                                                              465
 Views/ItemRowState.cs                                                                   39
@@ -397,7 +397,7 @@ Views/Rendering/TreeSectionController.cs                                        
 Views/Rendering/TreeToolbarCommands.cs                                                  81
 Views/Rendering/UiFonts.cs                                                              250
 Views/Rendering/GlyphFont.cs                                                            123
-Views/Rendering/IconWikiClick.cs                                                        130
+Views/Rendering/IconWikiClick.cs                                                        125
 Views/Rendering/UiMetrics.cs                                                            60
 Views/Rendering/UsedMaterialsSectionRenderer.cs                                         199
 Views/ResizableTabbedWindow.cs                                                          250
@@ -663,7 +663,7 @@ tests/TaimisToolbench.Tests/Services/SummarySectionLayoutMathTests.cs           
 tests/TaimisToolbench.Tests/Services/TableSortStateTests.cs                             198
 tests/TaimisToolbench.Tests/Services/GlyphButtonMetricsTests.cs                         143
 tests/TaimisToolbench.Tests/Services/GlyphFontDescriptorTests.cs                        332
-tests/TaimisToolbench.Tests/Services/IconStandardCallSiteTests.cs                       451
+tests/TaimisToolbench.Tests/Services/IconStandardCallSiteTests.cs                       422
 tests/TaimisToolbench.Tests/Services/IconWikiTargetTests.cs                             134
 tests/TaimisToolbench.Tests/Services/ItemTooltipStandardTests.cs                        225
 tests/TaimisToolbench.Tests/Services/RequiredRecipeSheetNamingTests.cs                  185
