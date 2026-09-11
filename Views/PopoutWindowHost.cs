@@ -94,7 +94,20 @@ namespace TaimisToolbench.Views
 
             foreach (var pair in _windows)
             {
-                pair.Value.Rebuild();
+                try
+                {
+                    pair.Value.Rebuild();
+                }
+                catch (Exception ex)
+                {
+                    // The plan tab draws the same plan through the same
+                    // renderers. A popout that cannot redraw must not stop
+                    // it, and must not take the other popout with it.
+                    LogFailure(
+                        ex,
+                        "Popout window could not be rebuilt",
+                        "Pop out window failed to redraw: ");
+                }
             }
         }
 
@@ -112,28 +125,95 @@ namespace TaimisToolbench.Views
             PopoutWindow window;
             if (_windows.TryGetValue(sectionType, out window))
             {
-                window.Show();
-                window.BringWindowToFront();
+                // Already the player's window whatever a raise does, so this
+                // path never discards it.
+                ShowAndRaise(window);
                 return;
             }
 
+            window = null;
             try
             {
                 window = Create(sectionType);
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "Popout window could not be opened");
-                ModuleLog.Shared.Write(
-                    ModuleLogLevel.Warn,
-                    "ui",
-                    "Pop out window failed to open: " + ex.GetType().Name + " - " + ex.Message);
+                Discard(window);
+                ReportOpenFailure(ex);
+                return;
+            }
+
+            if (!ShowAndRaise(window))
+            {
+                Discard(window);
                 return;
             }
 
             _windows[sectionType] = window;
-            window.Show();
-            window.BringWindowToFront();
+        }
+
+        /// <summary>
+        /// Puts a built window in front of the player. False when it could
+        /// not be shown, which is what tells a caller holding a brand new
+        /// one that it is not worth keeping.
+        /// </summary>
+        private static bool ShowAndRaise(PopoutWindow window)
+        {
+            try
+            {
+                window.Show();
+                window.BringWindowToFront();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                ReportOpenFailure(ex);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Says the press failed, on screen as well as in both logs. A
+        /// button that produces nothing at all reads as a missed click, so
+        /// the player retries rather than reporting it.
+        /// </summary>
+        private static void ReportOpenFailure(Exception ex)
+        {
+            LogFailure(
+                ex,
+                "Popout window could not be opened",
+                "Pop out window failed to open: ");
+            ScreenNotification.ShowNotification(
+                "Pop Out could not open the window. The Log tab says why.",
+                ScreenNotification.NotificationType.Warning,
+                null,
+                4);
+        }
+
+        private static void LogFailure(Exception ex, string summary, string userLine)
+        {
+            Logger.Warn(ex, summary);
+            ModuleLog.Shared.Write(
+                ModuleLogLevel.Warn,
+                "ui",
+                userLine + ex.GetType().Name + " - " + ex.Message);
+        }
+
+        private static void Discard(PopoutWindow window)
+        {
+            if (window == null)
+            {
+                return;
+            }
+
+            try
+            {
+                window.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Popout window that failed to open would not dispose");
+            }
         }
 
         private PopoutWindow Create(PlanSectionType sectionType)
@@ -154,6 +234,19 @@ namespace TaimisToolbench.Views
                 _getCurrencyFacts,
                 () => _settings.GetClampedPopoutOpacityPercent(sectionType),
                 percent => _settings.SetPopoutOpacityPercent(sectionType, percent));
+
+            // The constructor has already parented it to the sprite screen,
+            // so a build that throws leaves a child there. Dispose it before
+            // the throw travels on.
+            try
+            {
+                window.Initialize();
+            }
+            catch
+            {
+                Discard(window);
+                throw;
+            }
 
             var screen = GameService.Graphics.SpriteScreen;
             if (screen != null)

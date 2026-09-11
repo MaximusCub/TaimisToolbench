@@ -205,15 +205,26 @@ namespace TaimisToolbench.Views
             rowPanel.Opacity = ticked ? CheckedRowOpacity : 1f;
         }
 
+        /// <summary>
+        /// The last <paramref name="count"/> children, padded with nulls when
+        /// the parent holds fewer.
+        /// <para>
+        /// <c>ToArray</c> here is ControlCollection's own method, not the LINQ
+        /// extension, and this file imports no <c>System.Linq</c> so it cannot
+        /// be. Blish's ControlCollection throws InvalidOperationException from
+        /// <c>CopyTo</c>. Every LINQ materializer takes the ICollection fast
+        /// path into it, and so does <c>new List&lt;Control&gt;(children)</c>.
+        /// </para>
+        /// </summary>
         private static IReadOnlyList<Control> TrailingChildren(Container parent, int count)
         {
-            var all = new List<Control>(parent.Children);
+            var all = parent.Children.ToArray();
             var trailing = new List<Control>(count);
-            int first = all.Count - count;
+            int first = all.Length - count;
             for (int i = 0; i < count; i++)
             {
                 int index = first + i;
-                trailing.Add(index >= 0 && index < all.Count ? all[index] : null);
+                trailing.Add(index >= 0 && index < all.Length ? all[index] : null);
             }
 
             return trailing;

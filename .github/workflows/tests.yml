@@ -188,6 +188,32 @@ jobs:
             exit 1
           fi
 
+      - name: No BCL bulk copy of a Blish ControlCollection
+        shell: bash
+        run: |
+          # Blish's ControlCollection<T> implements ICollection<T> and then
+          # throws InvalidOperationException from CopyTo. Every BCL path that
+          # bulk-copies an ICollection<T> calls it: new List<Control>(children),
+          # OrderBy and Reverse through their internal buffer, and Cast<T>,
+          # which returns the source unchanged and hands it to whatever
+          # materializes next. The type carries its own ToArray and ToList and
+          # those are what a call site must use. All of it compiles, so nothing
+          # but this step catches one before a player does: a single
+          # new List<Control>(tableFlow.Children) made every Pop Out click in
+          # 0.3.1 throw during construction and open no window at all.
+          hits=$(git ls-files -z '*.cs' | xargs -0 -r grep -nE \
+            'new List<[A-Za-z0-9_.<>, ]*>\([A-Za-z0-9_.]*\.Children\)|\.Children\.(Cast<|Reverse\(\)|CopyTo\(|OrderBy)' \
+            | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(//|\*|/\*)' || true)
+          if [ -n "$hits" ]; then
+            echo "A Blish ControlCollection is being bulk-copied by the BCL."
+            echo "ControlCollection.CopyTo throws at runtime and the compiler"
+            echo "says nothing. Use the collection's own .ToArray() or .ToList(),"
+            echo "or enumerate it with foreach:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "No BCL bulk copy of a ControlCollection."
+
       - name: csproj Compile list matches disk
         shell: bash
         run: |
