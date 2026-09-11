@@ -278,12 +278,12 @@ Services/SnapshotFailureKind.cs                                                 
 Services/SnapshotFetchFailedException.cs                                                131
 Services/SnapshotHeaderLayout.cs                                                        209
 Services/SnapshotHelpers.cs                                                             79
-Services/SnapshotHoldLine.cs                                                            490
+Services/SnapshotHoldLine.cs                                                            657
 Services/SnapshotItemGridLayout.cs                                                      321
 Services/SnapshotIconWindow.cs                                                          185
 Services/SnapshotRefreshSlot.cs                                                         185
 Services/SnapshotResultLayout.cs                                                        90
-Services/SnapshotSearchResultBuilder.cs                                                 650
+Services/SnapshotSearchResultBuilder.cs                                                 653
 Services/SnapshotStore.cs                                                               98
 Services/SnapshotTableSorter.cs                                                         99
 Services/SocketedUpgradeIndex.cs                                                        146

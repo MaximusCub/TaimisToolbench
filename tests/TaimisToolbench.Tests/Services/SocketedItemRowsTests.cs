@@ -284,7 +284,7 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void TwoBankedPiecesEachPrintTheirOwnBankLabel()
+        public void TwoBankedPiecesShareOneBankLabel()
         {
             var items = new List<SnapshotItemEntry>
             {
@@ -297,10 +297,10 @@ namespace TaimisToolbench.Tests.Services
 
             var row = SearchOneRow(items, "Rage");
 
-            // One label over both would hide one of the two pieces.
+            // One bracket over both, because the place is the same place.
             Assert.Equal(2, row.TotalCount);
             Assert.Equal(
-                "Bank (in Dusk)  Bank (in Suun's Impaler)",
+                "Bank (in Dusk, Suun's Impaler)",
                 SnapshotHoldLine.Format(row.Breakdown));
         }
 
@@ -343,7 +343,7 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void TwoPiecesOnOneCharacterAreTwoPlacesOnTheLine()
+        public void TwoPiecesOnOneCharacterNameThatCharacterOnce()
         {
             var items = new List<SnapshotItemEntry>
             {
@@ -358,8 +358,8 @@ namespace TaimisToolbench.Tests.Services
 
             Assert.Equal(2, row.TotalCount);
             Assert.Equal(
-                "Equipped: Divineaxe (in Obsidian Heavy Breastplate), "
-                    + "Divineaxe (in Obsidian Heavy Helmet)",
+                "Equipped: Divineaxe (in Obsidian Heavy Breastplate, "
+                    + "Obsidian Heavy Helmet)",
                 SnapshotHoldLine.Format(row.Breakdown));
         }
 

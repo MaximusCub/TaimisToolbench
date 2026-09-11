@@ -59,8 +59,8 @@ namespace TaimisToolbench.Models
 
         /// <summary>
         /// Places holding gear that draws on this account-wide copy, each
-        /// already formatted as a whole phrase ("Bank (in Dusk)"). Null or
-        /// empty everywhere else.
+        /// already formatted as a whole phrase ("Bank (in Dusk,
+        /// Carcharias)"), one per place. Null or empty everywhere else.
         /// <para>
         /// The same rule as <see cref="EquippedBy"/>: these places hold
         /// none of the item themselves, so naming them must never add to a
