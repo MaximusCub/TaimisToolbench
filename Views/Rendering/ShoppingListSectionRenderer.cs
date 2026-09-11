@@ -27,12 +27,6 @@ namespace TaimisToolbench.Views.Rendering
         // Gap the name's ellipsis budget keeps before the Source column.
         private const int NameToQtyGap = 12;
 
-        // The name column's own x's live with the column arithmetic: NameX
-        // is the left end of the distributed track span, so the two cannot
-        // be defined apart.
-        private const int IconX = ShoppingColumnMath.IconX;
-        private const int NameX = ShoppingColumnMath.NameX;
-
         // Text anchor of the row's single reading line - see the identical
         // derivation note on UsedMaterialsSectionRenderer.RowTextY.
         private const int RowTextY = PlanContentHeightMath.IconRowIconY + 13;
@@ -99,7 +93,7 @@ namespace TaimisToolbench.Views.Rendering
             // per-row control creation this method already does.
             // The same pass measures the widest "Nx" amount string, the
             // widest source badge and the widest item NAME - the last of
-            // which sizes the Item column's own reserve, so the four data
+            // which sizes the Item column's own reserve, so the three data
             // columns divide everything it does not need.
             // Row ORDER only - the pre-scan sees the same rows either way,
             // so every column edge (and the row count PlanContentHeightMath
@@ -157,10 +151,10 @@ namespace TaimisToolbench.Views.Rendering
             // neighbouring column run under that header. The Source band
             // is floored for the mirror-image reason the right-aligned ones
             // are: it is LEFT-ruled, so an over-wide header would overhang
-            // to the RIGHT, into the Amount column beside it. The INK
+            // to the RIGHT, into the Each column beside it. The INK
             // widths stay separate - they are what each header centres
             // over, and the floor is exactly the difference.
-            int maxQtyWidth = Max(
+            int amountBandWidth = Max(
                 maxQtyInk, SortIndicator.BlockWidthFor(HeaderBands.Font, "Amount"));
             int sourceColumnWidth = Max(
                 maxSourceInk, SortIndicator.BlockWidthFor(HeaderBands.Font, "Source"));
@@ -171,8 +165,8 @@ namespace TaimisToolbench.Views.Rendering
             // never on panelWidth, so it does not need to re-run on resize
             // at all and no two rows can anchor the table differently.
             var scan = new ColumnScan(
-                maxEachWidth, maxTotalWidth, maxQtyWidth, sourceColumnWidth, maxNameWidth,
-                maxQtyInk, maxSourceInk);
+                maxEachWidth, maxTotalWidth, amountBandWidth, sourceColumnWidth, maxNameWidth,
+                maxSourceInk);
             CreateShoppingListHeaderRow(contentFlow, panelWidth, scan, rows.Count);
             for (int i = 0; i < rows.Count; i++)
             {
@@ -192,29 +186,33 @@ namespace TaimisToolbench.Views.Rendering
         {
             internal readonly int MaxEachWidth;
             internal readonly int MaxTotalWidth;
-            internal readonly int MaxQtyWidth;
+            internal readonly int AmountBandWidth;
             internal readonly int SourceColumnWidth;
             internal readonly int MaxNameWidth;
-            internal readonly int QtyInk;
             internal readonly int SourceInk;
 
             internal ColumnScan(
-                int maxEachWidth, int maxTotalWidth, int maxQtyWidth, int sourceColumnWidth,
-                int maxNameWidth, int qtyInk, int sourceInk)
+                int maxEachWidth, int maxTotalWidth, int amountBandWidth, int sourceColumnWidth,
+                int maxNameWidth, int sourceInk)
             {
                 MaxEachWidth = maxEachWidth;
                 MaxTotalWidth = maxTotalWidth;
-                MaxQtyWidth = maxQtyWidth;
+                AmountBandWidth = amountBandWidth;
                 SourceColumnWidth = sourceColumnWidth;
                 MaxNameWidth = maxNameWidth;
-                QtyInk = qtyInk;
                 SourceInk = sourceInk;
             }
+
+            /// <summary>Left edge of every row's icon frame this render.</summary>
+            internal int IconX => AmountLedRowMath.IconX(AmountBandWidth);
+
+            /// <summary>Left edge of every row's name this render.</summary>
+            internal int NameX => AmountLedRowMath.NameX(AmountBandWidth);
 
             internal ShoppingColumnMath.ColumnEdges EdgesFor(int panelWidth)
             {
                 return ShoppingColumnMath.ComputeEdgesForPanel(
-                    panelWidth, MaxEachWidth, MaxTotalWidth, MaxQtyWidth, SourceColumnWidth,
+                    panelWidth, MaxEachWidth, MaxTotalWidth, AmountBandWidth, SourceColumnWidth,
                     MaxNameWidth);
             }
         }
@@ -235,21 +233,24 @@ namespace TaimisToolbench.Views.Rendering
             var font = HeaderBands.Font;
             var color = HeaderBands.LabelColor;
 
-            // The Item column flexes and its cells rule left, so its header
-            // stays on that rule - at the icon its rows open with, not at
-            // the name beside it (Services/ColumnHeaderLabelMath). Source
-            // and Amount CENTRE over the INK their own cells cover, bounded
-            // by the columns either side of them and not by the band around
-            // that ink - see JustifiedColumnTracks.HeaderRoom. Every
-            // one of the five carries a persistent sort indicator, and the
-            // block width that covers it is what the placement below is
-            // handed, so a sort click moves no column.
+            // Amount heads a fixed band on the row's left inset, so its word
+            // takes the band's own centre line (Services/AmountLedRowMath) -
+            // the seat Used Materials and the Account Snapshot give it. The
+            // Item column flexes and its cells rule left, so its header stays
+            // on that rule - at the icon its rows open with, not at the name
+            // beside it (Services/ColumnHeaderLabelMath). Source CENTRES over
+            // the INK its own cells cover, bounded by the columns either side
+            // of it and not by the band around that ink - see
+            // JustifiedColumnTracks.HeaderRoom. Every one of the five carries
+            // a persistent sort indicator, and the block width that covers it
+            // is what the placement below is handed, so a sort click moves no
+            // column.
             var columns = new[]
             {
-                PlanTableColumn.Item, PlanTableColumn.Source, PlanTableColumn.Amount,
+                PlanTableColumn.Amount, PlanTableColumn.Item, PlanTableColumn.Source,
                 PlanTableColumn.Each, PlanTableColumn.Total,
             };
-            var titles = new[] { "Item", "Source", "Amount", "Each", "Total" };
+            var titles = new[] { "Amount", "Item", "Source", "Each", "Total" };
             var blocks = new SortableHeaderBlock[columns.Length];
             for (int i = 0; i < columns.Length; i++)
             {
@@ -258,15 +259,15 @@ namespace TaimisToolbench.Views.Rendering
                     _sortState.DirectionFor(columns[i]));
             }
 
-            int sourceHeaderWidth = blocks[1].Width;
-            int amountHeaderWidth = blocks[2].Width;
+            int sourceHeaderWidth = blocks[2].Width;
             int eachHeaderWidth = blocks[3].Width;
             int totalHeaderWidth = blocks[4].Width;
 
-            blocks[0].MoveTo(ColumnHeaderLabelMath.LabelX(NameX, IconX));
+            blocks[0].MoveTo(
+                AmountLedRowMath.AmountTextX(scan.AmountBandWidth, blocks[0].Width));
+            blocks[1].MoveTo(ColumnHeaderLabelMath.LabelX(scan.NameX, scan.IconX));
             PlaceDataHeaders(
-                blocks, scan, edges,
-                sourceHeaderWidth, amountHeaderWidth, eachHeaderWidth, totalHeaderWidth);
+                blocks, scan, edges, sourceHeaderWidth, eachHeaderWidth, totalHeaderWidth);
 
             // The hit area is each column's whole header CELL (see
             // SortableHeaderCells); the labels carry only the note.
@@ -296,11 +297,13 @@ namespace TaimisToolbench.Views.Rendering
                 flowBand.Resize(w);
                 PlaceDataHeaders(
                     blocks, scan, scan.EdgesFor(w),
-                    sourceHeaderWidth, amountHeaderWidth, eachHeaderWidth, totalHeaderWidth);
+                    sourceHeaderWidth, eachHeaderWidth, totalHeaderWidth);
 
-                // Every data column's x is width-derived - a track under
-                // distribution, the pinned right edge under the packed
-                // fallback - so their cells move with the panel.
+                // The three right-hand columns' x's are width-derived - a
+                // track under distribution, the pinned right edge under the
+                // packed fallback - so their cells move with the panel.
+                // Amount's does not, and its boundary is written from the
+                // same band either way.
                 ApplyHeaderBoundaries(plan, scan, w, boundaries);
                 plan.Sync(rowPanel.Width);
             });
@@ -310,20 +313,18 @@ namespace TaimisToolbench.Views.Rendering
         }
 
         /// <summary>
-        /// Seats the four data headers on their own columns - Source and
-        /// Amount over the ink their cells cover, Each and Total on the
-        /// edge those cells rule against. One method for the build and for
-        /// every resize tick, so the two cannot answer differently;
-        /// position only, and no measurement.
+        /// Seats the three distributed headers on their own columns -
+        /// Source over the ink its cells cover, Each and Total on the edge
+        /// those cells rule against. One method for the build and for every
+        /// resize tick, so the two cannot answer differently; position
+        /// only, and no measurement.
         /// </summary>
         private static void PlaceDataHeaders(
             SortableHeaderBlock[] blocks, ColumnScan scan, ShoppingColumnMath.ColumnEdges edges,
-            int sourceHeaderWidth, int amountHeaderWidth, int eachHeaderWidth, int totalHeaderWidth)
+            int sourceHeaderWidth, int eachHeaderWidth, int totalHeaderWidth)
         {
             var rooms = HeaderRoomsFor(edges, scan);
-            blocks[1].MoveTo(SourceHeaderX(edges, scan, sourceHeaderWidth, rooms.Source));
-            blocks[2].MoveTo(JustifiedColumnTracks.CenteredOverContentRightAligned(
-                edges.QtyRightEdge, scan.QtyInk, amountHeaderWidth, rooms.Amount));
+            blocks[2].MoveTo(SourceHeaderX(edges, scan, sourceHeaderWidth, rooms.Source));
 
             // Each and Total take their columns' own right edge rather than
             // centring over the ink: both are money, both right-align their
@@ -352,8 +353,7 @@ namespace TaimisToolbench.Views.Rendering
             ShoppingColumnMath.ColumnEdges edges, ColumnScan scan)
         {
             return ShoppingColumnMath.HeaderRoomsFor(
-                edges, NameToQtyGap, scan.SourceInk, scan.QtyInk,
-                scan.MaxEachWidth, scan.MaxTotalWidth);
+                edges, NameToQtyGap, scan.SourceInk, scan.MaxEachWidth, scan.MaxTotalWidth);
         }
 
         private static void ApplyHeaderBoundaries(
@@ -410,8 +410,8 @@ namespace TaimisToolbench.Views.Rendering
             string hintLine = row.HintText;
             var nameHandle = IconNameRowHelpers.DrawIconAndName(
                 rowPanel, row.ItemId,
-                IconX, PlanContentHeightMath.IconRowIconY, fullName, font,
-                edges.SourceX, 0, NameToQtyGap, NameX, RowTextY,
+                scan.IconX, PlanContentHeightMath.IconRowIconY, fullName, font,
+                edges.SourceX, 0, NameToQtyGap, scan.NameX, RowTextY,
                 ItemIconTier.BagSidebar, _getItemFacts,
                 () => string.IsNullOrEmpty(hintLine) ? null : new List<string> { hintLine });
             var nameLabel = nameHandle.NameLabel;
@@ -425,7 +425,10 @@ namespace TaimisToolbench.Views.Rendering
                     rowPanel, sourceTag, edges.SourceX, RowTextY, tagBorder, tagFill);
             }
 
-            var qtyLabel = LabelHelpers.WithDescenderClearance(
+            // scan.AmountBandWidth, not this row's own qtyWidth: the band
+            // is the whole column's, so a short "1x" row centres on the same
+            // line the widest row does.
+            LabelHelpers.WithDescenderClearance(
                 new Label()
                 {
                     Text = qtyText,
@@ -433,7 +436,8 @@ namespace TaimisToolbench.Views.Rendering
                     TextColor = new Color(200, 200, 200),
                     AutoSizeWidth = true,
                     AutoSizeHeight = true,
-                    Location = new Point(edges.QtyRightEdge - qtyWidth, RowTextY),
+                    Location = new Point(
+                        AmountLedRowMath.AmountTextX(scan.AmountBandWidth, qtyWidth), RowTextY),
                     Parent = rowPanel,
                 });
 
@@ -476,12 +480,11 @@ namespace TaimisToolbench.Views.Rendering
             // whose whole job is to answer "where do I get this?".
             LabelHelpers.ApplyTagTooltip(tagPanel, ShoppingSourceBadge.TooltipForRow(row));
 
-            // Source badge + qty + Each/Total cells reposition every drag
-            // tick (no MeasureString - the badge's width is data-fixed, and
+            // Source badge + Each/Total cells reposition every drag tick
+            // (no MeasureString - the badge's width is data-fixed, and
             // CoinCurrencyRenderer.RepositionValueCellRightAligned uses
-            // only cached segment text widths). The badge moved from the
-            // settle pass to here when it became a column: its x is
-            // width-derived now rather than trailing the name's ellipsis.
+            // only cached segment text widths). The amount is not among
+            // them: its band is on the row's left inset.
             //
             // IconRowDividerClearance, not 0 - ShoppingRowHeight (45)
             // absorbs the clearance pixel in its own derivation, keeping
@@ -498,7 +501,6 @@ namespace TaimisToolbench.Views.Rendering
                         tagPanel.Location = new Point(e.SourceX, RowTextY);
                     }
 
-                    qtyLabel.Location = new Point(e.QtyRightEdge - qtyWidth, RowTextY);
                     CoinCurrencyRenderer.RepositionValueCellRightAligned(eachCell, e.EachRightEdge, RowTextY);
                     CoinCurrencyRenderer.RepositionValueCellRightAligned(totalCell, e.TotalRightEdge, RowTextY);
                 });

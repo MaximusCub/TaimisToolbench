@@ -13,7 +13,7 @@ namespace TaimisToolbench.Tests.Services
     /// of word plus the sort indicator's gap and slot.
     /// </para>
     /// </summary>
-    public class UsedMaterialsColumnMathTests
+    public class AmountLedRowMathTests
     {
         private const int AmountBand = SnapshotItemGridLayout.AmountColumnFloor;
 
@@ -26,11 +26,11 @@ namespace TaimisToolbench.Tests.Services
         {
             // The Snapshot tab settled this column order first. A second
             // set of numbers here would drift from it silently.
-            Assert.Equal(SnapshotItemGridLayout.CellAmountX, UsedMaterialsColumnMath.AmountX);
+            Assert.Equal(SnapshotItemGridLayout.CellAmountX, AmountLedRowMath.AmountX);
             Assert.Equal(
-                SnapshotItemGridLayout.CellAmountGap, UsedMaterialsColumnMath.AmountToNameGap);
+                SnapshotItemGridLayout.CellAmountGap, AmountLedRowMath.AmountToNameGap);
             Assert.Equal(
-                SnapshotItemGridLayout.CellIconX(AmountBand), UsedMaterialsColumnMath.IconX(AmountBand));
+                SnapshotItemGridLayout.CellIconX(AmountBand), AmountLedRowMath.IconX(AmountBand));
         }
 
         [Fact]
@@ -39,11 +39,11 @@ namespace TaimisToolbench.Tests.Services
             // 8 inset, a 99px band, the 12px gap: the icon frame rules at
             // 119 and the name at 169, past the 42px tier-2 frame and the
             // 8px gap the Shopping List's rows keep.
-            Assert.Equal(119, UsedMaterialsColumnMath.IconX(AmountBand));
-            Assert.Equal(169, UsedMaterialsColumnMath.NameX(AmountBand));
+            Assert.Equal(119, AmountLedRowMath.IconX(AmountBand));
+            Assert.Equal(169, AmountLedRowMath.NameX(AmountBand));
             Assert.Equal(
-                ShoppingColumnMath.NameX - ShoppingColumnMath.IconX,
-                UsedMaterialsColumnMath.NameX(AmountBand) - UsedMaterialsColumnMath.IconX(AmountBand));
+                PlanRelayoutMath.IconLedRowNameX - PlanRelayoutMath.IconLedRowIconX,
+                AmountLedRowMath.NameX(AmountBand) - AmountLedRowMath.IconX(AmountBand));
         }
 
         [Fact]
@@ -55,13 +55,13 @@ namespace TaimisToolbench.Tests.Services
             // quantities closed the row: 1075px at the minimum window.
             int budget = PlanRelayoutMath.NameMaxWidthBeforeColumn(
                 PlanRelayoutMath.PinnedRightEdge(MinimumPanelWidth), 0, 0,
-                UsedMaterialsColumnMath.NameX(AmountBand));
+                AmountLedRowMath.NameX(AmountBand));
 
             Assert.Equal(1075, budget);
             Assert.Equal(
                 PlanRelayoutMath.NameMaxWidthBeforeColumn(
                     PlanRelayoutMath.PinnedRightEdge(MinimumPanelWidth), AmountBand,
-                    UsedMaterialsColumnMath.AmountToNameGap, ShoppingColumnMath.NameX),
+                    AmountLedRowMath.AmountToNameGap, PlanRelayoutMath.IconLedRowNameX),
                 budget);
         }
 
@@ -75,10 +75,10 @@ namespace TaimisToolbench.Tests.Services
                 200,
                 PlanRelayoutMath.NameMaxWidthBeforeColumn(
                     PlanRelayoutMath.PinnedRightEdge(MinimumPanelWidth + 200), 0, 0,
-                    UsedMaterialsColumnMath.NameX(AmountBand))
+                    AmountLedRowMath.NameX(AmountBand))
                 - PlanRelayoutMath.NameMaxWidthBeforeColumn(
                     PlanRelayoutMath.PinnedRightEdge(MinimumPanelWidth), 0, 0,
-                    UsedMaterialsColumnMath.NameX(AmountBand)));
+                    AmountLedRowMath.NameX(AmountBand)));
         }
 
         [Fact]
@@ -88,11 +88,11 @@ namespace TaimisToolbench.Tests.Services
             // both centre, and the word sits on their centre line rather
             // than beside them.
             Assert.Equal(
-                UsedMaterialsColumnMath.AmountX + ((AmountBand - 32) / 2),
-                UsedMaterialsColumnMath.AmountTextX(AmountBand, 32));
+                AmountLedRowMath.AmountX + ((AmountBand - 32) / 2),
+                AmountLedRowMath.AmountTextX(AmountBand, 32));
             Assert.Equal(
-                UsedMaterialsColumnMath.AmountX,
-                UsedMaterialsColumnMath.AmountTextX(AmountBand, AmountBand));
+                AmountLedRowMath.AmountX,
+                AmountLedRowMath.AmountTextX(AmountBand, AmountBand));
         }
 
         [Fact]
@@ -103,18 +103,18 @@ namespace TaimisToolbench.Tests.Services
             // the degradation if one ever measures wider than the band it
             // was scanned into.
             Assert.Equal(
-                UsedMaterialsColumnMath.AmountX,
-                UsedMaterialsColumnMath.AmountTextX(AmountBand, AmountBand + 40));
+                AmountLedRowMath.AmountX,
+                AmountLedRowMath.AmountTextX(AmountBand, AmountBand + 40));
         }
 
         [Fact]
         public void TheHeaderSplitSitsInTheGap_NotOnEitherColumnsInk()
         {
-            int split = UsedMaterialsColumnMath.HeaderSplitX(AmountBand);
+            int split = AmountLedRowMath.HeaderSplitX(AmountBand);
 
             Assert.Equal(113, split);
-            Assert.True(split > UsedMaterialsColumnMath.AmountX + AmountBand);
-            Assert.True(split < UsedMaterialsColumnMath.IconX(AmountBand));
+            Assert.True(split > AmountLedRowMath.AmountX + AmountBand);
+            Assert.True(split < AmountLedRowMath.IconX(AmountBand));
         }
 
         [Fact]
@@ -123,12 +123,12 @@ namespace TaimisToolbench.Tests.Services
             // No rows, so nothing was measured. The icon falls back onto
             // the inset plus the gap, and nothing lands at a negative x.
             Assert.Equal(
-                UsedMaterialsColumnMath.AmountX + UsedMaterialsColumnMath.AmountToNameGap,
-                UsedMaterialsColumnMath.IconX(0));
+                AmountLedRowMath.AmountX + AmountLedRowMath.AmountToNameGap,
+                AmountLedRowMath.IconX(0));
             Assert.Equal(
-                UsedMaterialsColumnMath.AmountX + UsedMaterialsColumnMath.AmountToNameGap,
-                UsedMaterialsColumnMath.IconX(-40));
-            Assert.True(UsedMaterialsColumnMath.AmountTextX(0, 20) >= 0);
+                AmountLedRowMath.AmountX + AmountLedRowMath.AmountToNameGap,
+                AmountLedRowMath.IconX(-40));
+            Assert.True(AmountLedRowMath.AmountTextX(0, 20) >= 0);
         }
     }
 }

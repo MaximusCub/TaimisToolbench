@@ -3854,6 +3854,15 @@ middle of the row empty. Each header centres over its band rather than
 sharing an edge with it; `JustifiedColumnTracks` carries the argument for
 why a shared edge is not enough.
 
+**`ShoppingColumnMath` - why Amount left the track grid.** The table read
+Item, Source, Amount, Each, Total, so a player scanning a shopping list met
+the count in the middle of the row while Used Materials and the Account
+Snapshot both put it first. Amount now heads the row in the fixed band on
+its left inset that `AmountLedRowMath` owns, and three tracks carry Source,
+Each and Total over what the Item column does not need. The plan tab's own
+Shopping List and the popout are the same renderer, so the two could not
+have been changed apart.
+
 **`SnapshotHeaderLayout` - what the shared row buys and costs.** The header
 used five sparse rows to say what four can, and the widest of them - the
 search row - was empty for everything right of the content-type dropdown.

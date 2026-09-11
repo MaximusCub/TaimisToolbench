@@ -97,11 +97,11 @@ namespace TaimisToolbench.Views.Rendering
             // starts where that band ends, so neither moves with the panel
             // and the width the closures are handed is unused.
             int itemHeaderX = ColumnHeaderLabelMath.LabelX(
-                UsedMaterialsColumnMath.NameX(maxQtyWidth),
-                UsedMaterialsColumnMath.IconX(maxQtyWidth));
+                AmountLedRowMath.NameX(maxQtyWidth),
+                AmountLedRowMath.IconX(maxQtyWidth));
             ColumnHeaderRowRenderer.CreateColumnHeaderRow(
                 contentFlow, panelWidth,
-                "Amount", UsedMaterialsColumnMath.AmountTextX(maxQtyWidth, amountHeaderWidth),
+                "Amount", AmountLedRowMath.AmountTextX(maxQtyWidth, amountHeaderWidth),
                 "Item", _sink,
                 onLeftClick: () => SortBy(PlanTableColumn.Amount),
                 onRightClick: () => SortBy(PlanTableColumn.Item),
@@ -111,7 +111,7 @@ namespace TaimisToolbench.Views.Rendering
                 // LEFT with its own icons, and the default would right-align
                 // it onto the panel's margin.
                 rightLabelXForWidth: w => itemHeaderX,
-                leftColumnEndForWidth: w => UsedMaterialsColumnMath.HeaderSplitX(maxQtyWidth),
+                leftColumnEndForWidth: w => AmountLedRowMath.HeaderSplitX(maxQtyWidth),
                 rowsHeight: () => rows.Count * PlanContentHeightMath.UsedMaterialRowHeight);
 
             for (int i = 0; i < rows.Count; i++)
@@ -143,8 +143,8 @@ namespace TaimisToolbench.Views.Rendering
             // maxQtyWidth, not this row's own qtyWidth: the Amount band is
             // the whole column's, so a short "1x" row must open its icon on
             // the same rule the widest row does.
-            int iconX = UsedMaterialsColumnMath.IconX(maxQtyWidth);
-            int nameX = UsedMaterialsColumnMath.NameX(maxQtyWidth);
+            int iconX = AmountLedRowMath.IconX(maxQtyWidth);
+            int nameX = AmountLedRowMath.NameX(maxQtyWidth);
             string fullName = row.Label ?? "";
 
             // Composed at HOVER time, not here: a plan restored from disk
@@ -169,7 +169,7 @@ namespace TaimisToolbench.Views.Rendering
                     AutoSizeWidth = true,
                     AutoSizeHeight = true,
                     Location = new Point(
-                        UsedMaterialsColumnMath.AmountTextX(maxQtyWidth, qtyWidth), RowTextY),
+                        AmountLedRowMath.AmountTextX(maxQtyWidth, qtyWidth), RowTextY),
                     Parent = rowPanel,
                 });
 

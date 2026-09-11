@@ -18,7 +18,7 @@ namespace TaimisToolbench.Tests.Services
         /// </summary>
         public static readonly object[][] IconColumns =
         {
-            new object[] { ShoppingColumnMath.NameX, ShoppingColumnMath.IconX },
+            new object[] { PlanRelayoutMath.IconLedRowNameX, PlanRelayoutMath.IconLedRowIconX },
             new object[]
             {
                 SnapshotItemGridLayout.CellTextX(SnapshotItemGridLayout.AmountColumnFloor),
@@ -103,7 +103,7 @@ namespace TaimisToolbench.Tests.Services
             const int amountBand = 60;
             const int nameToQtyGap = 12;
             int labelX = ColumnHeaderLabelMath.LabelX(
-                ShoppingColumnMath.NameX, ShoppingColumnMath.IconX);
+                PlanRelayoutMath.IconLedRowNameX, PlanRelayoutMath.IconLedRowIconX);
             int itemCellEnd = PlanRelayoutMath.HeaderSplitBeforeColumn(
                 PlanRelayoutMath.PinnedRightEdge(panelWidth), amountBand, nameToQtyGap);
 

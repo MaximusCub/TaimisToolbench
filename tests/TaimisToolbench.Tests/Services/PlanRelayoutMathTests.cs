@@ -803,9 +803,9 @@ namespace TaimisToolbench.Tests.Services
         [Fact]
         public void TableLeftHeaderX_IsTheIconGutter_NotTheNameBesideIt()
         {
-            Assert.Equal(ShoppingColumnMath.IconX, PlanRelayoutMath.TableLeftHeaderX);
+            Assert.Equal(PlanRelayoutMath.IconLedRowIconX, PlanRelayoutMath.TableLeftHeaderX);
             Assert.True(
-                PlanRelayoutMath.TableLeftHeaderX < ShoppingColumnMath.NameX,
+                PlanRelayoutMath.TableLeftHeaderX < PlanRelayoutMath.IconLedRowNameX,
                 "the rail is left of the name the tables' rows print");
             Assert.True(
                 PlanRelayoutMath.TableLeftHeaderX < TreeRowShapePlanner.NameColumnOffset,

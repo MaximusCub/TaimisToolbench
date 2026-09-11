@@ -12,11 +12,13 @@ namespace TaimisToolbench.Tests.Services
             // Small coin values (well under the fixed minimums) -> edges
             // fall back to the same minimums as the old fixed-width
             // geometry, so ordinary short lists render exactly as before.
-            var edges = ShoppingColumnMath.ComputeEdges(totalRightEdge: 792, maxEachWidth: 40, maxTotalWidth: 60);
+            var edges = ShoppingColumnMath.ComputeEdges(totalRightEdge: 700, maxEachWidth: 40, maxTotalWidth: 60);
 
-            Assert.Equal(792, edges.TotalRightEdge);
-            Assert.Equal(792 - 150 - 20, edges.EachRightEdge);
-            Assert.Equal(792 - 150 - 20 - 110 - 20, edges.QtyRightEdge);
+            Assert.False(edges.Distributed);
+            Assert.Equal(700, edges.TotalRightEdge);
+            Assert.Equal(700 - 150 - 20, edges.EachRightEdge);
+            Assert.Equal(150, edges.TotalBandWidth);
+            Assert.Equal(110, edges.EachBandWidth);
         }
 
         [Fact]
@@ -26,11 +28,12 @@ namespace TaimisToolbench.Tests.Services
             // "1234g 56s 78c") measure wider than the fixed minimums in
             // both the Each and Total columns - this is the Mystic Coin
             // row overflow ("2502x 02 26") from the user's capture.
-            var edges = ShoppingColumnMath.ComputeEdges(totalRightEdge: 792, maxEachWidth: 180, maxTotalWidth: 220);
+            var edges = ShoppingColumnMath.ComputeEdges(totalRightEdge: 700, maxEachWidth: 180, maxTotalWidth: 220);
 
-            Assert.Equal(792, edges.TotalRightEdge);
-            Assert.Equal(792 - 220 - 20, edges.EachRightEdge);
-            Assert.Equal(792 - 220 - 20 - 180 - 20, edges.QtyRightEdge);
+            Assert.False(edges.Distributed);
+            Assert.Equal(700, edges.TotalRightEdge);
+            Assert.Equal(700 - 220 - 20, edges.EachRightEdge);
+            Assert.Equal(700 - 220 - 20 - 180 - 20, edges.SourceX);
         }
 
         [Fact]
@@ -40,10 +43,10 @@ namespace TaimisToolbench.Tests.Services
             // all-currency shopping list) - the pre-scan yields 0 for that
             // column, and the fixed minimums keep it from collapsing to a
             // zero-width column.
-            var edges = ShoppingColumnMath.ComputeEdges(totalRightEdge: 792, maxEachWidth: 0, maxTotalWidth: 0);
+            var edges = ShoppingColumnMath.ComputeEdges(totalRightEdge: 700, maxEachWidth: 0, maxTotalWidth: 0);
 
-            Assert.Equal(792 - 150 - 20, edges.EachRightEdge);
-            Assert.Equal(792 - 150 - 20 - 110 - 20, edges.QtyRightEdge);
+            Assert.Equal(700 - 150 - 20, edges.EachRightEdge);
+            Assert.Equal(700 - 150 - 20 - 110 - 20, edges.SourceX);
         }
 
         [Fact]
@@ -52,10 +55,10 @@ namespace TaimisToolbench.Tests.Services
             // A list where only Total has wide values (e.g. large
             // quantities of a cheap item) must not widen Each too - the two
             // columns are sized independently.
-            var edges = ShoppingColumnMath.ComputeEdges(totalRightEdge: 792, maxEachWidth: 30, maxTotalWidth: 300);
+            var edges = ShoppingColumnMath.ComputeEdges(totalRightEdge: 700, maxEachWidth: 30, maxTotalWidth: 300);
 
-            Assert.Equal(792 - 300 - 20, edges.EachRightEdge);
-            Assert.Equal(792 - 300 - 20 - 110 - 20, edges.QtyRightEdge);
+            Assert.Equal(700 - 300 - 20, edges.EachRightEdge);
+            Assert.Equal(700 - 300 - 20 - 110 - 20, edges.SourceX);
         }
 
         [Theory]
@@ -63,39 +66,69 @@ namespace TaimisToolbench.Tests.Services
         [InlineData(792, 180, 220)]
         [InlineData(400, 300, 300)]
         [InlineData(200, 0, 0)]
-        public void OrderingInvariant_QtyLessThanEachLessThanTotal(
+        public void OrderingInvariant_SourceLessThanEachLessThanTotal(
             int totalRightEdge, int maxEachWidth, int maxTotalWidth)
         {
             var edges = ShoppingColumnMath.ComputeEdges(totalRightEdge, maxEachWidth, maxTotalWidth);
 
-            Assert.True(edges.QtyRightEdge < edges.EachRightEdge);
+            Assert.True(edges.SourceX < edges.EachRightEdge);
             Assert.True(edges.EachRightEdge < edges.TotalRightEdge);
+        }
+
+        // --- The Amount column reads before the item, on the row's own
+        // left inset, the way Used Materials and the Account Snapshot
+        // already read ---
+        [Fact]
+        public void TheAmountBandOpensTheRow_AndTheIconAndNameFollowIt()
+        {
+            var edges = ShoppingColumnMath.ComputeEdgesForPanel(
+                panelWidth: 1400, maxEachWidth: 0, maxTotalWidth: 0,
+                amountBandWidth: 79, sourceColumnWidth: 96);
+
+            Assert.Equal(79, edges.AmountBandWidth);
+            Assert.Equal(AmountLedRowMath.AmountX, AmountLedRowMath.AmountTextX(79, 79));
+            Assert.True(edges.IconX > AmountLedRowMath.AmountX);
+            Assert.True(edges.IconX < edges.NameX);
+            Assert.True(edges.NameX < edges.SourceX);
+        }
+
+        [Fact]
+        public void AWiderAmountBand_PushesTheItemColumnRight_AndNothingElse()
+        {
+            var narrow = ShoppingColumnMath.ComputeEdgesForPanel(1400, 0, 0, 60, 96);
+            var wide = ShoppingColumnMath.ComputeEdgesForPanel(1400, 0, 0, 100, 96);
+
+            Assert.Equal(40, wide.IconX - narrow.IconX);
+            Assert.Equal(40, wide.NameX - narrow.NameX);
+            Assert.Equal(narrow.TotalRightEdge, wide.TotalRightEdge);
+            Assert.Equal(narrow.NameColumnWidth, wide.NameColumnWidth);
         }
 
         // --- Source column (the badge stopped trailing the name and
         // became an aligned column inside the pinned right-hand block) ---
         [Fact]
-        public void SourceColumn_SitsOneGapAndOneAmountBandLeftOfTheAmountEdge()
+        public void SourceColumn_SitsOneGapAndOneEachBandLeftOfTheEachEdge()
         {
             var edges = ShoppingColumnMath.ComputeEdges(
-                totalRightEdge: 792, maxEachWidth: 40, maxTotalWidth: 60,
-                maxQtyWidth: 79, sourceColumnWidth: 96);
+                totalRightEdge: 700, maxEachWidth: 40, maxTotalWidth: 60,
+                amountBandWidth: 79, sourceColumnWidth: 96);
 
+            Assert.False(edges.Distributed);
             Assert.Equal(
-                edges.QtyRightEdge - 79 - ShoppingColumnMath.ColumnGap - 96,
+                edges.EachRightEdge - 110 - ShoppingColumnMath.ColumnGap - 96,
                 edges.SourceX);
         }
 
         [Fact]
-        public void SourceColumn_LeftEdgeIsTheNameBudgetsStop_NotTheAmountEdge()
+        public void SourceColumn_LeftEdgeIsTheNameBudgetsStop_NotTheEachEdge()
         {
-            // The name used to budget against QtyRightEdge with its OWN
+            // The name used to budget against the next column with its OWN
             // badge width subtracted, so no two rows' badges lined up. The
             // budget stops at one fixed x for the whole table now, and that
-            // x is strictly left of the Amount column.
-            var edges = ShoppingColumnMath.ComputeEdges(792, 40, 60, 79, 96);
+            // x is strictly left of the Each column.
+            var edges = ShoppingColumnMath.ComputeEdges(700, 40, 60, 79, 96);
 
-            Assert.True(edges.SourceX < edges.QtyRightEdge);
+            Assert.True(edges.SourceX < edges.EachRightEdge);
         }
 
         [Fact]
@@ -104,11 +137,10 @@ namespace TaimisToolbench.Tests.Services
             // The badge column widens into the NAME's space, never into
             // Amount/Each/Total - every one of those hangs off the pinned
             // right edge and is unaffected.
-            var narrow = ShoppingColumnMath.ComputeEdges(792, 40, 60, 79, 60);
-            var wide = ShoppingColumnMath.ComputeEdges(792, 40, 60, 79, 100);
+            var narrow = ShoppingColumnMath.ComputeEdges(700, 40, 60, 79, 60);
+            var wide = ShoppingColumnMath.ComputeEdges(700, 40, 60, 79, 100);
 
             Assert.Equal(narrow.SourceX - 40, wide.SourceX);
-            Assert.Equal(narrow.QtyRightEdge, wide.QtyRightEdge);
             Assert.Equal(narrow.EachRightEdge, wide.EachRightEdge);
             Assert.Equal(narrow.TotalRightEdge, wide.TotalRightEdge);
         }
@@ -122,7 +154,7 @@ namespace TaimisToolbench.Tests.Services
             // of it - and the Total column still ends on the pinned edge.
             var edges = ShoppingColumnMath.ComputeEdgesForPanel(
                 panelWidth: 1252, maxEachWidth: 40, maxTotalWidth: 60,
-                maxQtyWidth: 79, sourceColumnWidth: 96);
+                amountBandWidth: 79, sourceColumnWidth: 96);
             var wider = ShoppingColumnMath.ComputeEdgesForPanel(1452, 40, 60, 79, 96);
 
             Assert.True(edges.Distributed);
@@ -167,25 +199,22 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void ComputeEdgesForPanel_EveryDataColumnIsWiderThanTheOldSixTrackShare()
+        public void ComputeEdgesForPanel_EveryDataColumnIsWiderThanTheFourTrackShare()
         {
-            // The whole point of the change: four tracks over what the Item
-            // column does not need, rather than four of six over the whole
-            // row. At the module's own width that is 283px a column against
-            // the 222px the six-track split gave them.
+            // Amount left the track grid for the row's left inset, so the
+            // three columns that remain divide the same span four used to.
             var edges = ShoppingColumnMath.ComputeEdgesForPanel(1400, 0, 0, 79, 96);
-            int fullSpan = edges.TotalRightEdge - ShoppingColumnMath.NameX;
 
             Assert.True(edges.Distributed);
-            Assert.Equal(283, edges.TrackSpan / ShoppingColumnMath.DataColumnCount);
-            Assert.Equal(222, fullSpan / 6);
+            Assert.Equal(347, edges.TrackSpan / ShoppingColumnMath.DataColumnCount);
+            Assert.Equal(260, edges.TrackSpan / (ShoppingColumnMath.DataColumnCount + 1));
         }
 
         [Fact]
         public void ComputeEdgesForPanel_ALongNameGivesUpHeadroomBeforeTheDataColumnsGiveUpRoom()
         {
             // Names long enough to eat the row: the reserve is capped at
-            // whatever four full data tracks leave, so the tracks land
+            // whatever three full data tracks leave, so the tracks land
             // exactly on their own floor (widest band plus the gap) rather
             // than below it.
             var edges = ShoppingColumnMath.ComputeEdgesForPanel(1400, 0, 0, 79, 96, 2000);
@@ -206,17 +235,16 @@ namespace TaimisToolbench.Tests.Services
         {
             var edges = ShoppingColumnMath.ComputeEdges(
                 totalRightEdge: 792, maxEachWidth: 180, maxTotalWidth: 40,
-                maxQtyWidth: 79, sourceColumnWidth: 96);
+                amountBandWidth: 79, sourceColumnWidth: 96);
 
             // Measured where it beats the floor, floored where it does not.
             Assert.Equal(180, edges.EachBandWidth);
             Assert.Equal(150, edges.TotalBandWidth);
-            Assert.Equal(79, edges.QtyBandWidth);
+            Assert.Equal(79, edges.AmountBandWidth);
             Assert.Equal(96, edges.SourceBandWidth);
 
             // And each band ends exactly on its column's own edge, which is
             // what makes centring a header in it centre it over the cells.
-            Assert.Equal(edges.QtyRightEdge - 79, edges.QtyBandX);
             Assert.Equal(edges.EachRightEdge - 180, edges.EachBandX);
             Assert.Equal(edges.TotalRightEdge - 150, edges.TotalBandX);
         }
@@ -230,11 +258,11 @@ namespace TaimisToolbench.Tests.Services
             // and the two axes are not the same line.
             var edges = ShoppingColumnMath.ComputeEdgesForPanel(
                 panelWidth: 1000, maxEachWidth: 0, maxTotalWidth: 0,
-                maxQtyWidth: 79, sourceColumnWidth: 96);
+                amountBandWidth: 79, sourceColumnWidth: 96);
             const int headerWidth = 44;
             const int totalInk = 100;
 
-            var rooms = ShoppingColumnMath.HeaderRoomsFor(edges, 12, 60, 79, 100, totalInk);
+            var rooms = ShoppingColumnMath.HeaderRoomsFor(edges, 12, 60, 100, totalInk);
             int headerX = JustifiedColumnTracks.CenteredOverContentRightAligned(
                 edges.TotalRightEdge, totalInk, headerWidth, rooms.Total);
 
@@ -343,7 +371,7 @@ namespace TaimisToolbench.Tests.Services
 
             Assert.Equal(fromEdge.TotalRightEdge, fromPanel.TotalRightEdge);
             Assert.Equal(fromEdge.EachRightEdge, fromPanel.EachRightEdge);
-            Assert.Equal(fromEdge.QtyRightEdge, fromPanel.QtyRightEdge);
+            Assert.Equal(fromEdge.SourceX, fromPanel.SourceX);
         }
 
         [Fact]
@@ -354,57 +382,52 @@ namespace TaimisToolbench.Tests.Services
             // absorbs the whole increase. Both widths are below the
             // distribution threshold.
             var narrow = ShoppingColumnMath.ComputeEdgesForPanel(700, 0, 0, 79, 96);
-            var wide = ShoppingColumnMath.ComputeEdgesForPanel(900, 0, 0, 79, 96);
+            var wide = ShoppingColumnMath.ComputeEdgesForPanel(800, 0, 0, 79, 96);
 
             Assert.False(narrow.Distributed);
             Assert.False(wide.Distributed);
-            Assert.Equal(200, wide.TotalRightEdge - narrow.TotalRightEdge);
-            Assert.Equal(200, wide.EachRightEdge - narrow.EachRightEdge);
-            Assert.Equal(200, wide.QtyRightEdge - narrow.QtyRightEdge);
-            Assert.Equal(200, wide.SourceX - narrow.SourceX);
+            Assert.Equal(100, wide.TotalRightEdge - narrow.TotalRightEdge);
+            Assert.Equal(100, wide.EachRightEdge - narrow.EachRightEdge);
+            Assert.Equal(100, wide.SourceX - narrow.SourceX);
         }
 
         [Fact]
         public void ComputeEdgesForPanel_Distributed_SharesTheIncreaseAcrossTheTracks()
         {
             // Distributed, only Total still tracks the panel edge by the
-            // whole increase - it is the pinned column. The Item column no
-            // longer takes a share at all: its reserve is its own longest
-            // name, so all 400px of panel goes to the four data tracks,
-            // 100px each. A band centred on track i takes i whole tracks
-            // plus half of its own track's growth - Each on track 2 moves
-            // 250, Amount on track 1 by 150, Source's LEFT edge on track 0
-            // by 50.
+            // whole increase - it is the pinned column. The Item column
+            // takes no share at all: its reserve is its own longest name,
+            // so all 400px of panel goes to the three data tracks. A band
+            // centred on track i takes i whole tracks plus half of its own
+            // track's growth.
             var narrow = ShoppingColumnMath.ComputeEdgesForPanel(1400, 0, 0, 79, 96);
             var wide = ShoppingColumnMath.ComputeEdgesForPanel(1800, 0, 0, 79, 96);
 
             Assert.True(narrow.Distributed);
             Assert.True(wide.Distributed);
             Assert.Equal(400, wide.TotalRightEdge - narrow.TotalRightEdge);
-            Assert.Equal(250, wide.EachRightEdge - narrow.EachRightEdge);
-            Assert.Equal(150, wide.QtyRightEdge - narrow.QtyRightEdge);
-            Assert.Equal(50, wide.SourceX - narrow.SourceX);
+            Assert.Equal(200, wide.EachRightEdge - narrow.EachRightEdge);
+            Assert.Equal(67, wide.SourceX - narrow.SourceX);
         }
 
         [Fact]
         public void ComputeEdgesForPanel_Distributed_PutsTheDataColumnsOneTrackApart()
         {
-            // The law: the Item column takes its own reserve off NameX,
-            // then four equal tracks carry Source, Amount, Each and Total
-            // to the pinned right edge - each of the first three bands
-            // CENTRED on the track it owns. Doubled rather than halved so a
+            // The law: the Item column takes its own reserve off the name
+            // rule, then three equal tracks carry Source, Each and Total to
+            // the pinned right edge - each of the first two bands CENTRED
+            // on the track it owns. Doubled rather than halved so a
             // half-track stays an integer.
             var edges = ShoppingColumnMath.ComputeEdgesForPanel(1400, 0, 0, 79, 96);
             int span = edges.TrackSpan;
 
             Assert.True(edges.Distributed);
-            Assert.Equal(ShoppingColumnMath.NameX + edges.NameColumnWidth, edges.DataStartX);
+            Assert.Equal(edges.NameX + edges.NameColumnWidth, edges.DataStartX);
             Assert.Equal(edges.TotalRightEdge - edges.DataStartX, span);
 
             int[] bandCentres = new[]
             {
                 edges.SourceX + (edges.SourceBandWidth / 2),
-                edges.QtyRightEdge - (edges.QtyBandWidth / 2),
                 edges.EachRightEdge - (edges.EachBandWidth / 2),
             };
             for (int i = 0; i < bandCentres.Length; i++)
@@ -437,7 +460,7 @@ namespace TaimisToolbench.Tests.Services
             Assert.True(distributed.Distributed);
             Assert.False(packed.Distributed);
             Assert.True(
-                distributed.SourceX < packed.QtyRightEdge - 300,
+                distributed.SourceX < packed.EachRightEdge - 300,
                 "the Source column leaves the right-hand block entirely");
         }
 
@@ -448,20 +471,21 @@ namespace TaimisToolbench.Tests.Services
             // there is nothing to distribute, and spreading anyway would
             // overlap the columns. On a narrow panel a legible cramped
             // table beats an evenly spaced illegible one.
-            var edges = ShoppingColumnMath.ComputeEdgesForPanel(900, 0, 0, 79, 96);
+            var edges = ShoppingColumnMath.ComputeEdgesForPanel(800, 0, 0, 79, 96);
 
             Assert.False(edges.Distributed);
             Assert.Equal(0, edges.TrackSpan);
             Assert.Equal(0, edges.DataStartX);
             Assert.Equal(edges.TotalRightEdge - 150 - ShoppingColumnMath.ColumnGap, edges.EachRightEdge);
-            Assert.Equal(edges.EachRightEdge - 110 - ShoppingColumnMath.ColumnGap, edges.QtyRightEdge);
+            Assert.Equal(
+                edges.EachRightEdge - 110 - ShoppingColumnMath.ColumnGap - 96, edges.SourceX);
         }
 
         [Fact]
         public void ComputeEdges_AWideBandDropsTheTableBackToThePackedStack()
         {
             // The reserve decides the regime: a Total band wide enough that
-            // six equal tracks can no longer each hold one packs the table
+            // the equal tracks can no longer each hold one packs the table
             // even at a width that would otherwise distribute.
             var distributed = ShoppingColumnMath.ComputeEdgesForPanel(1400, 0, 0, 79, 96);
             var packed = ShoppingColumnMath.ComputeEdgesForPanel(1400, 0, 900, 79, 96);
@@ -477,18 +501,17 @@ namespace TaimisToolbench.Tests.Services
             // The Item column flexes up to the Source column's left edge,
             // measured exactly as CreateShoppingRow budgets it
             // (NameToQtyGap 12, no trailing band of its own). It takes only
-            // half of the Source track's share of a wider panel now - 50px
-            // of a 400px increase - because its RESERVE is its own longest
-            // name and the other 350 goes to the data columns. That is the
-            // trade the change makes.
+            // half of the Source track's share of a wider panel now,
+            // because its RESERVE is its own longest name and the rest goes
+            // to the data columns. That is the trade the change makes.
             int narrow = PlanRelayoutMath.NameMaxWidthBeforeColumn(
                 ShoppingColumnMath.ComputeEdgesForPanel(1400, 0, 0, 79, 96).SourceX,
-                0, 12, ShoppingColumnMath.NameX);
+                0, 12, AmountLedRowMath.NameX(79));
             int wide = PlanRelayoutMath.NameMaxWidthBeforeColumn(
                 ShoppingColumnMath.ComputeEdgesForPanel(1800, 0, 0, 79, 96).SourceX,
-                0, 12, ShoppingColumnMath.NameX);
+                0, 12, AmountLedRowMath.NameX(79));
 
-            Assert.Equal(50, wide - narrow);
+            Assert.Equal(67, wide - narrow);
             Assert.True(narrow > 200, $"name budget {narrow} at the module's own widths");
         }
 
@@ -499,22 +522,21 @@ namespace TaimisToolbench.Tests.Services
         public void HeaderCellBoundaries_Packed_SplitTheGapsBetweenTheColumns()
         {
             var edges = ShoppingColumnMath.ComputeEdgesForPanel(
-                panelWidth: 900, maxEachWidth: 0, maxTotalWidth: 0,
-                maxQtyWidth: 79, sourceColumnWidth: 90);
+                panelWidth: 800, maxEachWidth: 0, maxTotalWidth: 0,
+                amountBandWidth: 79, sourceColumnWidth: 90);
             Assert.False(edges.Distributed);
 
             var boundaries = new int[4];
             ShoppingColumnMath.HeaderCellBoundaries(edges, 12, boundaries);
 
-            // Item ends just before the source badges begin...
-            Assert.Equal(edges.SourceX - 6, boundaries[0]);
+            // Amount ends where the icon column opens, a fixed x...
+            Assert.Equal(AmountLedRowMath.HeaderSplitX(79), boundaries[0]);
+
+            // ...Item ends just before the source badges begin...
+            Assert.Equal(edges.SourceX - 6, boundaries[1]);
 
             // ...and every other is the middle of the columns' own gap.
-            Assert.Equal(edges.SourceX + 90 + 10, boundaries[1]);
-
-            // The same boundary from the other side.
-            Assert.Equal((edges.QtyRightEdge - 79) - 10, boundaries[1]);
-            Assert.Equal(edges.QtyRightEdge + 10, boundaries[2]);
+            Assert.Equal(edges.SourceX + 90 + 10, boundaries[2]);
             Assert.Equal(edges.EachRightEdge + 10, boundaries[3]);
 
             for (int i = 1; i < boundaries.Length; i++)
@@ -531,32 +553,35 @@ namespace TaimisToolbench.Tests.Services
             // the Item cell reaches the Source column's own track.
             var edges = ShoppingColumnMath.ComputeEdgesForPanel(
                 panelWidth: 1400, maxEachWidth: 0, maxTotalWidth: 0,
-                maxQtyWidth: 79, sourceColumnWidth: 90);
+                amountBandWidth: 79, sourceColumnWidth: 90);
             Assert.True(edges.Distributed);
 
             var boundaries = new int[4];
             ShoppingColumnMath.HeaderCellBoundaries(edges, 12, boundaries);
 
-            for (int i = 0; i < boundaries.Length; i++)
+            // Amount heads a fixed band, so its cell ends at a fixed x.
+            Assert.Equal(AmountLedRowMath.HeaderSplitX(79), boundaries[0]);
+
+            for (int i = 1; i < boundaries.Length; i++)
             {
                 Assert.Equal(
                     edges.DataStartX
-                        + (edges.TrackSpan * i / ShoppingColumnMath.DataColumnCount),
+                        + (edges.TrackSpan * (i - 1) / ShoppingColumnMath.DataColumnCount),
                     boundaries[i]);
             }
 
-            // The Item cell is everything before the first track, which is
-            // exactly its own reserve.
-            Assert.Equal(edges.DataStartX, boundaries[0]);
+            // The Item cell is everything between Amount's end and the
+            // first track, which is exactly its own reserve.
+            Assert.Equal(edges.DataStartX, boundaries[1]);
 
             // The Item cell still covers the whole name column: the name's
             // own budget stops before the boundary, not past it.
-            int nameRightEdge = ShoppingColumnMath.NameX
+            int nameRightEdge = edges.NameX
                 + PlanRelayoutMath.NameMaxWidthBeforeColumn(
-                    edges.SourceX, 0, 12, ShoppingColumnMath.NameX);
+                    edges.SourceX, 0, 12, edges.NameX);
 
-            Assert.True(boundaries[0] < nameRightEdge);
-            Assert.True(boundaries[0] < edges.SourceX);
+            Assert.True(boundaries[1] < nameRightEdge);
+            Assert.True(boundaries[1] < edges.SourceX);
 
             for (int i = 1; i < boundaries.Length; i++)
             {
@@ -590,18 +615,15 @@ namespace TaimisToolbench.Tests.Services
         {
             var edges = ShoppingColumnMath.ComputeEdgesForPanel(
                 panelWidth: 1000, maxEachWidth: 0, maxTotalWidth: 0,
-                maxQtyWidth: 79, sourceColumnWidth: 96);
-            var rooms = ShoppingColumnMath.HeaderRoomsFor(edges, 12, 60, 20, 40, 100);
+                amountBandWidth: 79, sourceColumnWidth: 96);
+            var rooms = ShoppingColumnMath.HeaderRoomsFor(edges, 12, 60, 40, 100);
 
             Assert.True(rooms.Source.Width > edges.SourceBandWidth);
-            Assert.True(rooms.Amount.Width > edges.QtyBandWidth);
             Assert.True(rooms.Each.Width > 40);
 
             // Adjacent rooms are a gutter apart and never overlap.
             Assert.Equal(
-                JustifiedColumnTracks.HeaderGutter, rooms.Amount.Left - rooms.Source.Right);
-            Assert.Equal(
-                JustifiedColumnTracks.HeaderGutter, rooms.Each.Left - rooms.Amount.Right);
+                JustifiedColumnTracks.HeaderGutter, rooms.Each.Left - rooms.Source.Right);
             Assert.Equal(
                 JustifiedColumnTracks.HeaderGutter, rooms.Total.Left - rooms.Each.Right);
 
@@ -610,21 +632,20 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void HeaderRooms_NarrowAmountColumn_CentresTheHeaderRatherThanRightAligningIt()
+        public void AmountHeader_CentresOnItsOwnBand_WhateverTheQuantitiesMeasure()
         {
             // A list every row of which is "1x": 12px of ink under a 60px
-            // "Amount". The band clamp answered that by pinning the word's
-            // right edge to the quantities' - right-alignment.
-            var edges = ShoppingColumnMath.ComputeEdgesForPanel(
-                panelWidth: 1000, maxEachWidth: 0, maxTotalWidth: 0,
-                maxQtyWidth: 12, sourceColumnWidth: 96);
-            var rooms = ShoppingColumnMath.HeaderRoomsFor(edges, 12, 60, 12, 40, 100);
+            // "Amount". The band is floored at the header block, so the
+            // word takes the band's own centre line and the quantities
+            // under it take the same one.
+            const int band = 60;
 
-            int x = JustifiedColumnTracks.CenteredOverContentRightAligned(
-                edges.QtyRightEdge, 12, 60, rooms.Amount);
-
-            Assert.Equal(2 * edges.QtyRightEdge - 12, 2 * x + 60);
-            Assert.NotEqual(edges.QtyRightEdge - 60, x);
+            Assert.Equal(
+                AmountLedRowMath.AmountX,
+                AmountLedRowMath.AmountTextX(band, band));
+            Assert.Equal(
+                AmountLedRowMath.AmountTextX(band, band) + (band / 2),
+                AmountLedRowMath.AmountTextX(band, 12) + (12 / 2));
         }
 
         // --- Each and Total headers take their columns' right edge ---
@@ -637,8 +658,8 @@ namespace TaimisToolbench.Tests.Services
             // here rather than measured - BitmapFont is Blish-bound.
             var edges = ShoppingColumnMath.ComputeEdgesForPanel(
                 panelWidth: 1252, maxEachWidth: 40, maxTotalWidth: 200,
-                maxQtyWidth: 79, sourceColumnWidth: 96, maxNameWidth: 300);
-            var rooms = ShoppingColumnMath.HeaderRoomsFor(edges, 12, 96, 79, 40, 200);
+                amountBandWidth: 79, sourceColumnWidth: 96, maxNameWidth: 300);
+            var rooms = ShoppingColumnMath.HeaderRoomsFor(edges, 12, 96, 40, 200);
 
             int each = JustifiedColumnTracks.RightAlignedOverContent(
                 edges.EachRightEdge, 68, rooms.Each);
@@ -657,8 +678,8 @@ namespace TaimisToolbench.Tests.Services
             // short of the edge its coin runs rule against.
             var edges = ShoppingColumnMath.ComputeEdgesForPanel(
                 panelWidth: 1252, maxEachWidth: 40, maxTotalWidth: 200,
-                maxQtyWidth: 79, sourceColumnWidth: 96, maxNameWidth: 300);
-            var rooms = ShoppingColumnMath.HeaderRoomsFor(edges, 12, 96, 79, 40, 200);
+                amountBandWidth: 79, sourceColumnWidth: 96, maxNameWidth: 300);
+            var rooms = ShoppingColumnMath.HeaderRoomsFor(edges, 12, 96, 40, 200);
 
             Assert.Equal(
                 -14,
