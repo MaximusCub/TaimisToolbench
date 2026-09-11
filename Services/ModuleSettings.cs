@@ -138,33 +138,33 @@ namespace TaimisToolbench.Services
             var hidden = settings.AddSubCollection(
                 HiddenCollectionKey, renderInUi: false, lazyLoaded: false, displayNameFunc: null);
 
-            ModalDialogX = DefineHidden(settings, hidden, ModuleSettingText.ModalDialogX, -1);
-            ModalDialogY = DefineHidden(settings, hidden, ModuleSettingText.ModalDialogY, -1);
+            ModalDialogX = Define(settings, hidden, ModuleSettingText.ModalDialogX, -1);
+            ModalDialogY = Define(settings, hidden, ModuleSettingText.ModalDialogY, -1);
 
-            PopoutShoppingListOpacityPercent = DefineHidden(
+            PopoutShoppingListOpacityPercent = Define(
                 settings, hidden, ModuleSettingText.PopoutShoppingListOpacityPercent, PopoutOpacity.DefaultPercent);
-            PopoutCraftingStepsOpacityPercent = DefineHidden(
+            PopoutCraftingStepsOpacityPercent = Define(
                 settings, hidden, ModuleSettingText.PopoutCraftingStepsOpacityPercent, PopoutOpacity.DefaultPercent);
 
-            CurrencyValuationsJson = DefineHidden(
+            CurrencyValuationsJson = Define(
                 settings, hidden, ModuleSettingText.CurrencyValuationsJson, string.Empty);
-            ValueOwnMaterials = DefineHidden(settings, hidden, ModuleSettingText.ValueOwnMaterials, true);
-            ScrollDiagnosticsEnabled = DefineHidden(
+            ValueOwnMaterials = Define(settings, hidden, ModuleSettingText.ValueOwnMaterials, true);
+            ScrollDiagnosticsEnabled = Define(
                 settings, hidden, ModuleSettingText.ScrollDiagnosticsEnabled, false);
 
-            HomesteadFiberTier = Define(settings, ModuleSettingText.HomesteadFiberTier, 0);
-            HomesteadMetalTier = Define(settings, ModuleSettingText.HomesteadMetalTier, 0);
-            HomesteadWoodTier = Define(settings, ModuleSettingText.HomesteadWoodTier, 0);
+            HomesteadFiberTier = Define(settings, hidden, ModuleSettingText.HomesteadFiberTier, 0);
+            HomesteadMetalTier = Define(settings, hidden, ModuleSettingText.HomesteadMetalTier, 0);
+            HomesteadWoodTier = Define(settings, hidden, ModuleSettingText.HomesteadWoodTier, 0);
 
-            LogMaxSizeBytes = Define(settings, ModuleSettingText.LogMaxSizeBytes, 2 * 1024 * 1024);
-            LogRetentionDays = Define(settings, ModuleSettingText.LogRetentionDays, 14);
-            LogDiagnosticsEnabled = Define(settings, ModuleSettingText.LogDiagnosticsEnabled, false);
+            LogMaxSizeBytes = Define(settings, hidden, ModuleSettingText.LogMaxSizeBytes, 2 * 1024 * 1024);
+            LogRetentionDays = Define(settings, hidden, ModuleSettingText.LogRetentionDays, 14);
+            LogDiagnosticsEnabled = Define(settings, hidden, ModuleSettingText.LogDiagnosticsEnabled, false);
 
-            PlanHistoryMaxEntries = Define(settings, ModuleSettingText.PlanHistoryMaxEntries, 25);
+            PlanHistoryMaxEntries = Define(settings, hidden, ModuleSettingText.PlanHistoryMaxEntries, 25);
             SnapshotRefreshIntervalMinutes = Define(
-                settings, ModuleSettingText.SnapshotRefreshIntervalMinutes, 10);
+                settings, hidden, ModuleSettingText.SnapshotRefreshIntervalMinutes, 10);
             ClickSoundVolumePercent = Define(
-                settings, ModuleSettingText.ClickSoundVolumePercent, ClickSoundVolume.DefaultPercent);
+                settings, hidden, ModuleSettingText.ClickSoundVolumePercent, ClickSoundVolume.DefaultPercent);
         }
 
         // Blish renders every SettingEntry a module defines into its own
@@ -175,7 +175,21 @@ namespace TaimisToolbench.Services
         // is fixed for the life of the module.
         private const string HiddenCollectionKey = "Internal";
 
+        /// <summary>
+        /// Defines one setting where its descriptor says it belongs: the root
+        /// collection when Blish's panel may draw it, the non-rendered
+        /// sub-collection when it may not.
+        /// </summary>
         private static SettingEntry<T> Define<T>(
+            SettingCollection root, SettingCollection hidden,
+            ModuleSettingText.Descriptor descriptor, T defaultValue)
+        {
+            return descriptor.ShownInBlishPanel
+                ? DefineIn(root, descriptor, defaultValue)
+                : DefineHidden(root, hidden, descriptor, defaultValue);
+        }
+
+        private static SettingEntry<T> DefineIn<T>(
             SettingCollection collection, ModuleSettingText.Descriptor descriptor, T defaultValue)
         {
             return collection.DefineSetting(
@@ -186,22 +200,19 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// Defines a setting into the non-rendered sub-collection, carrying
-        /// any value already saved under the old top-level key across.
-        /// <para>
-        /// A sub-collection is a nested JSON object, so moving a setting
-        /// into one moves where its value is stored even though the key is
-        /// unchanged. Without this, a player who had dragged a dialog or set
-        /// a pop-out opacity would silently get the default back. The
-        /// top-level copy is undefined afterwards so the file does not keep
-        /// a second, stale figure for the same setting.
-        /// </para>
+        /// any value already saved under the old top-level key across. A
+        /// sub-collection is a nested JSON object, so the value moves even
+        /// though the key does not; without this, a player who had set a log
+        /// size or a click volume gets the default back. The top-level copy
+        /// is undefined afterwards, so no stale second figure is left behind.
+        /// See docs/blish-settings-panel.md for the storage shape.
         /// </summary>
         private static SettingEntry<T> DefineHidden<T>(
             SettingCollection root, SettingCollection hidden,
             ModuleSettingText.Descriptor descriptor, T defaultValue)
         {
             bool alreadyMoved = hidden.ContainsSetting(descriptor.Key);
-            var entry = Define(hidden, descriptor, defaultValue);
+            var entry = DefineIn(hidden, descriptor, defaultValue);
 
             if (!alreadyMoved && root.TryGetSetting(descriptor.Key, out SettingEntry<T> legacy))
             {
@@ -399,9 +410,9 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// Clamped popout opacity for actual use - same contract as the
-        /// clamped accessors above. Blish's own Manage Modules panel writes
-        /// these entries unvalidated, so the floor has to be applied on the
-        /// way out and not only by the slider that normally sets them.
+        /// clamped accessors above. A hand-edited settings file can hold any
+        /// figure, so the floor is applied on the way out and not only by the
+        /// slider that normally sets them.
         /// </summary>
         public int GetClampedPopoutOpacityPercent(PlanSectionType sectionType)
         {
