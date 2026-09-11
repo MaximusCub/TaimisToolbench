@@ -24,15 +24,12 @@ namespace TaimisToolbench.Views.Rendering
     // demands, the merchants a recipe sheet is sold by - arrives as a
     // PlanNoteSegment list rather than one string, because Blish's Label
     // draws one string in one colour with no underline. The view spends one
-    // label per segment RUN on each line, places each at the measured width
-    // of that line's own prefix, and rules a 2px quad under the linked ones.
-    // Which runs are links, and what each opens, are decided in
-    // Services (NoteSegmentWrap, MissingRecipeNoteText,
-    // VendorRequirementNoticeText) where a test can reach them.
-    //
-    // 2px, never 1: Blish applies the GW2 UI scale as a real GPU matrix, so
-    // a 1px quad can rasterize to zero physical pixels - the same defect
-    // LabelHelpers.CreateRowDivider derives its own thickness from.
+    // label per segment RUN on each line, places each where
+    // NoteRunLayout puts it, and rules a line under the linked ones
+    // at NotesSectionLayoutMath's thickness. Which runs are links, and what
+    // each opens, are decided in Services (NoteSegmentWrap,
+    // MissingRecipeNoteText, VendorRequirementNoticeText) where a test can
+    // reach them.
     //
     // RenderValueCellRightAligned/RepositionValueCellRightAligned are the
     // same helpers that give every shopping/tree value cell, drawn ONLY
@@ -102,7 +99,13 @@ namespace TaimisToolbench.Views.Rendering
         /// link a link.</summary>
         private static readonly Color LinkColor = new Color(114, 178, 255);
 
-        private const int UnderlineHeight = 2;
+        /// <summary>The rule's own colour - the link's, at the ink alpha
+        /// NotesSectionLayoutMath derives.</summary>
+        private static readonly Color UnderlineColor =
+            LinkColor * NotesSectionLayoutMath.LinkUnderlineInkAlpha;
+
+        private const int UnderlineHeight =
+            NotesSectionLayoutMath.LinkUnderlineThickness;
 
         /// <summary>
         /// Renders every note row and returns the section body height that
@@ -140,6 +143,7 @@ namespace TaimisToolbench.Views.Rendering
         {
             var font = UiFonts.Body;
             var measure = LabelHelpers.MeasureWith(font);
+            var advance = TextAdvanceMath.AdvanceWith(measure);
             var segments = row.NoteSegments
                 ?? new List<PlanNoteSegment> { PlanNoteSegment.Plain(row.Label ?? "") };
 
@@ -153,12 +157,20 @@ namespace TaimisToolbench.Views.Rendering
                 ? LabelHelpers.EllipsizeToWidth(
                     font, row.NoteSubject, NotesSectionLayoutMath.SubjectMaxWidth(panelWidth))
                 : "";
+            string subjectLabel = hasIcon
+                ? NotesSectionLayoutMath.SubjectLabel(subject)
+                : "";
+
+            // The advance, not the measured right edge: NameToNoteGap is a
+            // gap between two runs of text, and the separator's box is two
+            // pixels wider than its advance.
+            int subjectWidth = hasIcon ? advance(subjectLabel) : 0;
             int restX = hasIcon ? NotesSectionLayoutMath.NameX : NotesSectionLayoutMath.LabelX;
             int firstTextX = hasIcon
-                ? restX + measure(subject) + NotesSectionLayoutMath.NameToNoteGap
+                ? restX + subjectWidth + NotesSectionLayoutMath.NameToNoteGap
                 : restX;
 
-            var wrapped = WrapAt(segments, panelWidth, coinCellWidth, subject, hasIcon, measure);
+            var wrapped = WrapAt(segments, panelWidth, coinCellWidth, subjectWidth, hasIcon, measure);
             var linePanels = new List<Panel>(wrapped.Lines.Count);
             var plainLabels = new List<Label>();
             CoinCurrencyRenderer.ValueCellHandle coinHandle = null;
@@ -186,7 +198,7 @@ namespace TaimisToolbench.Views.Rendering
 
                     plainLabels.Add(LabelHelpers.WithDescenderClearance(new Label()
                     {
-                        Text = subject,
+                        Text = subjectLabel,
                         Font = font,
                         TextColor = Color.White,
                         AutoSizeWidth = true,
@@ -206,7 +218,7 @@ namespace TaimisToolbench.Views.Rendering
 
                 DrawLine(
                     linePanel, wrapped.Lines[i], isFirst ? firstTextX : restX, textY, font,
-                    measure, plainLabels);
+                    advance, plainLabels);
 
                 linePanels.Add(linePanel);
                 AssertLineFits(linePanel, rowHeight);
@@ -242,7 +254,10 @@ namespace TaimisToolbench.Views.Rendering
                     ? LabelHelpers.EllipsizeToWidth(
                         font, row.NoteSubject, NotesSectionLayoutMath.SubjectMaxWidth(w))
                     : "";
-                var rewrapped = WrapAt(segments, w, coinCellWidth, newSubject, hasIcon, measure);
+                int newSubjectWidth = hasIcon
+                    ? advance(NotesSectionLayoutMath.SubjectLabel(newSubject))
+                    : 0;
+                var rewrapped = WrapAt(segments, w, coinCellWidth, newSubjectWidth, hasIcon, measure);
 
                 if (!string.Equals(newSubject, subject, StringComparison.Ordinal)
                     || !LineTexts(rewrapped).SequenceEqual(builtLines, StringComparer.Ordinal))
@@ -260,11 +275,11 @@ namespace TaimisToolbench.Views.Rendering
         /// </summary>
         private static NoteSegmentWrap.WrappedNote WrapAt(
             IReadOnlyList<PlanNoteSegment> segments, int panelWidth, int coinCellWidth,
-            string subject, bool hasIcon, Func<string, int> measure)
+            int subjectWidth, bool hasIcon, Func<string, int> measure)
         {
             int first = hasIcon
                 ? NotesSectionLayoutMath.SubjectFirstLineBudget(
-                    panelWidth, coinCellWidth, measure(subject))
+                    panelWidth, coinCellWidth, subjectWidth)
                 : NotesSectionLayoutMath.TextBudget(panelWidth, coinCellWidth);
             int rest = hasIcon
                 ? NotesSectionLayoutMath.SubjectRestBudget(panelWidth)
@@ -295,23 +310,18 @@ namespace TaimisToolbench.Views.Rendering
         }
 
         /// <summary>
-        /// One wrapped line's runs, laid left to right. Each run is placed
-        /// at the measured width of the line's own PREFIX rather than at a
-        /// running sum of per-run widths: Blish tracks its fonts at minus
-        /// one pixel, so the two differ by a pixel per join and a sentence
-        /// of several runs would drift visibly apart.
+        /// One wrapped line's runs, laid left to right at the positions
+        /// NoteRunLayout computes. Every run is drawn in the SAME face as
+        /// the sentence around it; a link differs by colour and by its rule
+        /// alone.
         /// </summary>
         private static void DrawLine(
             Panel linePanel, IReadOnlyList<PlanNoteSegment> pieces, int startX, int y,
-            BitmapFont font, Func<string, int> measure, List<Label> plainLabels)
+            BitmapFont font, Func<string, int> advance, List<Label> plainLabels)
         {
-            string prefix = "";
-            foreach (var piece in pieces)
+            foreach (var run in NoteRunLayout.Place(pieces, startX, advance))
             {
-                int x = startX + measure(prefix);
-                int width = measure(prefix + piece.Text) - measure(prefix);
-                prefix += piece.Text;
-
+                var piece = run.Piece;
                 var label = LabelHelpers.WithDescenderClearance(new Label()
                 {
                     Text = piece.Text,
@@ -319,7 +329,7 @@ namespace TaimisToolbench.Views.Rendering
                     TextColor = piece.IsLink ? LinkColor : Color.White,
                     AutoSizeWidth = true,
                     AutoSizeHeight = true,
-                    Location = new Point(x, y),
+                    Location = new Point(run.X, y),
                     Parent = linePanel,
                 });
 
@@ -336,9 +346,9 @@ namespace TaimisToolbench.Views.Rendering
                 // class's DEBUG assert polices.
                 new ClippedPanel()
                 {
-                    Size = new Point(width, UnderlineHeight),
-                    Location = new Point(x, y + label.Height - UnderlineHeight),
-                    BackgroundColor = LinkColor,
+                    Size = new Point(run.Width, UnderlineHeight),
+                    Location = new Point(run.X, y + label.Height - UnderlineHeight),
+                    BackgroundColor = UnderlineColor,
                     Parent = linePanel,
                 };
 

@@ -45,6 +45,42 @@ namespace TaimisToolbench.Services
         public const int NameToNoteGap = 12;
 
         /// <summary>
+        /// What parts the subject's name from the note beside it. Without
+        /// it the two read as one run of prose that changes subject with no
+        /// mark: "Gift of the Hylek The vendor who sells this item ...".
+        /// </summary>
+        public const string SubjectSeparator = ":";
+
+        /// <summary>
+        /// The subject's name as it is DRAWN. The name is ellipsized first
+        /// and the separator appended after, so a name too long for its
+        /// third of the column still shows the mark that parts it from the
+        /// note.
+        /// </summary>
+        public static string SubjectLabel(string subject)
+        {
+            return string.IsNullOrEmpty(subject) ? "" : subject + SubjectSeparator;
+        }
+
+        /// <summary>
+        /// Thickness of the rule under a link, in logical pixels. Two, not
+        /// one: Blish applies the GW2 UI scale as a real GPU matrix, so a
+        /// 1px quad rasterizes to floor(0.81) = 0 physical pixels at the
+        /// smallest shipped scale and vanishes (KNOWN-ISSUES #23), which is
+        /// the same floor LabelHelpers.CreateRowDivider sits on.
+        /// </summary>
+        public const int LinkUnderlineThickness = 2;
+
+        /// <summary>
+        /// How much of the link colour the rule carries. The fineness a
+        /// hyperlink wants is one pixel of ink, and thickness may not drop
+        /// below two, so the rule spends the same ink over two rows
+        /// instead: alpha times thickness is 1. Alpha changes no geometry,
+        /// so the rule still covers a physical pixel at every scale.
+        /// </summary>
+        public const float LinkUnderlineInkAlpha = 1f / LinkUnderlineThickness;
+
+        /// <summary>
         /// Height of a note's FIRST line when that note has an icon: the
         /// icon-led band every plan table row draws in, without the row
         /// rule's own pixels, because the Notes section draws no rules.

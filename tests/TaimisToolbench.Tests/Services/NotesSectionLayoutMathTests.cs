@@ -235,6 +235,38 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void SubjectLabel_PartsTheNameFromTheNote()
+        {
+            Assert.Equal("Gift of the Hylek:", NotesSectionLayoutMath.SubjectLabel("Gift of the Hylek"));
+
+            // The name is ellipsized before the separator is appended, so
+            // a name too long for its third of the column keeps the mark.
+            Assert.Equal("Gift of the H...:", NotesSectionLayoutMath.SubjectLabel("Gift of the H..."));
+        }
+
+        [Fact]
+        public void SubjectLabel_NoName_IsEmpty()
+        {
+            Assert.Equal("", NotesSectionLayoutMath.SubjectLabel(null));
+            Assert.Equal("", NotesSectionLayoutMath.SubjectLabel(""));
+        }
+
+        /// <summary>
+        /// The rule under a link may not thin below two logical pixels -
+        /// one can rasterize to nothing at the GW2 UI scale - so it spends
+        /// one pixel of ink over two rows instead.
+        /// </summary>
+        [Fact]
+        public void LinkUnderline_LaysDownOnePixelOfInkOverTwoRows()
+        {
+            Assert.True(NotesSectionLayoutMath.LinkUnderlineThickness >= 2);
+            Assert.Equal(
+                1f,
+                NotesSectionLayoutMath.LinkUnderlineInkAlpha
+                    * NotesSectionLayoutMath.LinkUnderlineThickness);
+        }
+
+        [Fact]
         public void SubjectMaxWidth_HoldsTheFloorOnAPathologicallyNarrowPanel()
         {
             Assert.Equal(
