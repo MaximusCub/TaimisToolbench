@@ -32,7 +32,19 @@ namespace TaimisToolbench.Services
         /// currency table, the Snapshot wallet rows).
         /// </summary>
         public const int CoinIconSize = CurrencyIconTiers.WalletBarIconSize;
-        public const int CoinLabelIconGap = 2;
+
+        /// <summary>
+        /// Gap between a number and the icon that marks it, applied from
+        /// the number's MEASURED width - the right edge of its last glyph
+        /// box, which is one column past the last column that draws (every
+        /// Menomonia region's first and last column is fully transparent).
+        /// So the drawn gap is this plus one: 4 logical pixels, one wider
+        /// than the game's own 3 at bar tier (CurrencyIconTiers). The extra
+        /// pixel is deliberate and is the whole of this constant's job;
+        /// matching the game exactly reads as the number touching its icon.
+        /// </summary>
+        public const int CoinLabelIconGap = 3;
+
         public const int CoinSegmentGap = 6;
 
         /// <summary>

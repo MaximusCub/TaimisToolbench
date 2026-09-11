@@ -34,6 +34,24 @@ namespace TaimisToolbench.Tests.Services
         }
 
         /// <summary>
+        /// The name and the note are two runs on one row, and the row
+        /// reads as one sentence. Without the separator the subject runs
+        /// straight into the note's own first word.
+        /// </summary>
+        [Fact]
+        public void TheNameAndTheNote_ReadAsOneSentence()
+        {
+            var section = NotesFor(CoinOffer("a", "Aveline", 100));
+
+            var row = Assert.Single(section.Rows);
+
+            Assert.Equal(
+                "Recipe: Gift of Light: Missing Recipe. Buy from Aveline",
+                NotesSectionLayoutMath.SubjectLabel(row.NoteSubject)
+                    + " " + PlanNoteSegment.Join(row.NoteSegments));
+        }
+
+        /// <summary>
         /// The note says where to buy and nothing about the price. The
         /// price is the Required Recipes row's own Cost cell, where the
         /// coin half rides CoinValue and the barter half SheetBarterItems,

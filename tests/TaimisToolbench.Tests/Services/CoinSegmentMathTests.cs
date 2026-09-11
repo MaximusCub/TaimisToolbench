@@ -427,8 +427,8 @@ namespace TaimisToolbench.Tests.Services
         public void TotalCurrencySegmentsWidth_MultipleSegments_GapBetweenNotAfter()
         {
             // Pins the gap arithmetic exactly (1 gap for 2 segments):
-            // 30 + 2 + 18 = 50 for the first, 10 + 2 + 18 = 30 for the
-            // second, plus a single 6px segmentGap between them = 86.
+            // 30 + 3 + 18 = 51 for the first, 10 + 3 + 18 = 31 for the
+            // second, plus a single 6px segmentGap between them = 88.
             // The 18 is CurrencyIconTiers.WalletBarIconSize, which
             // CoinIconSize now is.
             var segments = new List<CoinSegmentMath.CurrencySegmentSpec>
@@ -442,7 +442,7 @@ namespace TaimisToolbench.Tests.Services
                 (10 + LabelIconGap + IconSize) +
                 SegmentGap;
             Assert.Equal(expected, CoinSegmentMath.TotalCurrencySegmentsWidth(segments));
-            Assert.Equal(86, expected);
+            Assert.Equal(88, expected);
         }
 
         [Fact]

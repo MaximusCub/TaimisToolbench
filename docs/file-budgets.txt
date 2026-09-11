@@ -122,7 +122,7 @@ Services/CharacterPagePlan.cs                                                   
 Services/CharacterRecordProjection.cs                                                   248
 Services/CharacterSnapshotCollector.cs                                                  195
 Services/ClickSoundVolume.cs                                                            90
-Services/CoinSegmentMath.cs                                                             337
+Services/CoinSegmentMath.cs                                                             349
 Services/ColumnBoardLayout.cs                                                           130
 Services/ColumnHeaderLabelMath.cs                                                       43
 Services/CompetencyOpportunityCalculator.cs                                             83
@@ -195,7 +195,7 @@ Services/ModuleSettings.cs                                                      
 Services/MultiItemHeaderLayout.cs                                                       137
 Services/MultiItemHeaderTooltipComposer.cs                                              67
 Services/MysticForgeRecipeData.cs                                                       211
-Services/NotesSectionLayoutMath.cs                                                      178
+Services/NotesSectionLayoutMath.cs                                                      214
 Services/OwnedMaterialsForceBuyPrePass.cs                                               128
 Services/PanelChromeMath.cs                                                             132
 Services/PhaseOrdinalGuard.cs                                                           40
@@ -372,7 +372,7 @@ Views/Rendering/IconControls.cs                                                 
 Views/Rendering/IconNameRowHelpers.cs                                                   182
 Views/Rendering/InlineSpinner.cs                                                        65
 Views/Rendering/LabelHelpers.cs                                                         273
-Views/Rendering/NotesSectionRenderer.cs                                                 513
+Views/Rendering/NotesSectionRenderer.cs                                                 523
 Views/Rendering/OutlineFramePanel.cs                                                    59
 Views/Rendering/PillColors.cs                                                           151
 Views/Rendering/PlanHeaderRenderer.cs                                                   322
@@ -517,6 +517,7 @@ tests/TaimisToolbench.Tests/Services/LogLineFormatTests.cs                      
 tests/TaimisToolbench.Tests/Services/LogRowLayoutTests.cs                               161
 tests/TaimisToolbench.Tests/Services/LogToolbarLayoutTests.cs                           168
 tests/TaimisToolbench.Tests/Services/LogViewFloorTests.cs                               49
+tests/TaimisToolbench.Tests/Services/MissingRecipeSheetSourceCalculatorTests.cs         309
 tests/TaimisToolbench.Tests/Services/ModuleLogStoreTests.cs                             309
 tests/TaimisToolbench.Tests/Services/ModuleLogTests.cs                                  503
 tests/TaimisToolbench.Tests/Services/MultiItemHeaderLayoutTests.cs                      179
@@ -525,7 +526,7 @@ tests/TaimisToolbench.Tests/Services/MultiItemPlanTests.cs                      
 tests/TaimisToolbench.Tests/Services/MysticForgeIntegrationTests.cs                     696
 tests/TaimisToolbench.Tests/Services/MysticForgeRecipeDataTests.cs                      633
 tests/TaimisToolbench.Tests/Services/MysticForgeSeedStalenessTests.cs                   480
-tests/TaimisToolbench.Tests/Services/NotesSectionLayoutMathTests.cs                     249
+tests/TaimisToolbench.Tests/Services/NotesSectionLayoutMathTests.cs                     281
 tests/TaimisToolbench.Tests/Services/OwnedMaterialsForceBuyPrePassTests.cs              178
 tests/TaimisToolbench.Tests/Services/OwnedStockBadgeCoverageTests.cs                    243
 tests/TaimisToolbench.Tests/Services/PanelChromeMathTests.cs                            317
@@ -695,7 +696,7 @@ tests/TaimisToolbench.Tests/Services/VendorCurrencyTradeUpRoutingTests.cs       
 tests/TaimisToolbench.Tests/Services/VendorCapNoticeAgreementTests.cs                   124
 tests/TaimisToolbench.Tests/Services/VendorOfferLocationsTests.cs                       113
 tests/TaimisToolbench.Tests/Services/VendorOfferStoreTests.cs                           576
-tests/TaimisToolbench.Tests/Services/VendorRequirementNoticeTests.cs                    453
+tests/TaimisToolbench.Tests/Services/VendorRequirementNoticeTests.cs                    461
 tests/TaimisToolbench.Tests/Services/VendorUnlockRecipeTests.cs                         233
 tests/TaimisToolbench.Tests/Services/WheelDeltaSanitizerTests.cs                        183
 tests/TaimisToolbench.Tests/Services/WikiLinkBuilderTests.cs                            228

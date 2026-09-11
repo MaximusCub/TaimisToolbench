@@ -134,6 +134,14 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(GatedItemId, row.ItemId);
             Assert.Equal("Exalted Helm", row.NoteSubject);
 
+            // The name and the note are two runs on one row, and the row
+            // reads as one sentence.
+            Assert.Equal(
+                "Exalted Helm: The vendor who sells this item requires the Supply Line "
+                + "Management achievement. Your account does not have it.",
+                NotesSectionLayoutMath.SubjectLabel(row.NoteSubject)
+                    + " " + PlanNoteSegment.Join(row.NoteSegments));
+
             // The achievement's own NAME is the link, and the kind word
             // beside it is not.
             Assert.Equal(3, row.NoteSegments.Count);

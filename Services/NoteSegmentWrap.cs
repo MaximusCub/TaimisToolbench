@@ -13,8 +13,8 @@ namespace TaimisToolbench.Services
     /// of per-piece widths. Blish tracks its fonts at minus one pixel, so
     /// measure("a") + measure("b") overstates measure("ab") by a pixel per
     /// join, and a sentence of ten pieces would reserve ten pixels it never
-    /// draws. The renderer places each piece at the measured width of the
-    /// line's own prefix for the same reason.
+    /// draws. <see cref="NoteRunLayout"/> places each piece from the whole
+    /// prefix for the same reason.
     /// </para>
     /// <para>
     /// A line is a list of pieces, each carrying the link of the segment it

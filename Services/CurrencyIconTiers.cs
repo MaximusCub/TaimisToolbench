@@ -16,8 +16,8 @@ namespace TaimisToolbench.Services
     /// the baseline; a gold, silver or copper coin instead seats its ART on
     /// the number's ink bottom - see <see cref="VerticalAlignmentRule"/>. The
     /// measured gap between the last glyph pixel and the icon box is 5px at
-    /// list tier and 3px at bar tier, which CoinSegmentMath.CoinLabelIconGap
-    /// approximates. Derivation: docs/ARCHITECTURE.md section S1.3.
+    /// list tier and 3px at bar tier; the module draws 4 at bar tier on
+    /// purpose - CoinSegmentMath.CoinLabelIconGap, docs/ARCHITECTURE.md S1.3.
     /// </para>
     /// </summary>
     internal static class CurrencyIconTiers
