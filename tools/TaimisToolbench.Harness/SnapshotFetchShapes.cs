@@ -273,6 +273,9 @@ namespace TaimisToolbench.Harness
                     Infusions = SocketedIds(item.Infusions),
                     SkinId = SkinIdOf(item.Skin),
                 });
+
+                SocketedItemRows.AddFor(
+                    rows, item.Id, source, item.Count, item.Upgrades, item.Infusions);
             }
         }
 
@@ -324,7 +327,7 @@ namespace TaimisToolbench.Harness
                     {
                         part.ArmoryItemIds.Add(item.Id);
                         SocketedItemRows.AddFor(
-                            part.Items, item.Id, characterName, 1,
+                            part.Items, item.Id, source, 1,
                             item.Upgrades, item.Infusions);
                     }
 
@@ -342,7 +345,7 @@ namespace TaimisToolbench.Harness
                 });
 
                 SocketedItemRows.AddFor(
-                    part.Items, item.Id, characterName, 1,
+                    part.Items, item.Id, source, 1,
                     item.Upgrades, item.Infusions);
             }
         }

@@ -172,7 +172,8 @@ namespace TaimisToolbench.Harness
 
         private static string ArmoryKey(SnapshotArmoryEquip entry)
         {
-            return entry.ItemId.ToString(CultureInfo.InvariantCulture) + "|" + entry.CharacterName;
+            return entry.ItemId.ToString(CultureInfo.InvariantCulture)
+                + "|" + entry.CharacterName + "|" + entry.Source;
         }
 
         private static string DisciplineKey(SnapshotCharacterDiscipline entry)

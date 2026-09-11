@@ -238,32 +238,41 @@ jobs:
           fi
           echo "$rows rows built from an account item; all record sockets and skin."
 
-      - name: Every worn slot turns its sockets into rows of their own
+      - name: Every stack turns its sockets into rows of their own
         shell: bash
         run: |
           # A rune or infusion held only on its host stack's socket lists is
           # searchable nowhere and counted nowhere, so a plan needing one
           # tells the player to buy another. The armory branch is the worse
           # half: it drops the slot outright, and dropped its sockets with
-          # it. Both projections are Gw2Sharp-bound and no test may touch
-          # Gw2Sharp (repo invariant), so this is what holds the two calls
-          # in place. What the rows then mean is SocketedItemRowsTests.
+          # it. These projections are Gw2Sharp-bound and no test may touch
+          # Gw2Sharp (repo invariant), so this is what holds the calls in
+          # place. What the rows then mean is SocketedItemRowsTests.
           python3 - <<'PY'
           import sys
 
           FILES = ('Services/CharacterRecordProjection.cs',
+                   'Services/Gw2AccountSnapshotService.cs',
                    'tools/TaimisToolbench.Harness/SnapshotFetchShapes.cs')
           CALL = 'SocketedItemRows.AddFor('
+          RECORD = 'SocketedIds(item.Upgrades),'
           DROP = 'part.ArmoryItemIds.Add(item.Id);'
 
           bad = []
           for path in FILES:
               text = open(path, encoding='utf-8').read()
-              if text.count(CALL) < 2:
-                  bad.append('%s calls %s %d times; the slot it keeps and the '
-                             'slot the armory fills each need one.'
-                             % (path, CALL, text.count(CALL)))
+              records = text.count(RECORD)
+              calls = text.count(CALL)
+              if calls < records:
+                  bad.append('%s records sockets on %d stack sources but turns '
+                             'them into rows %d times. A stack whose sockets '
+                             'reach the snapshot must also make rows of them.'
+                             % (path, records, calls))
                   continue
+
+              if DROP not in text:
+                  continue
+
               start = text.index(DROP)
               branch = text[start:text.index('continue;', start)]
               if CALL not in branch:
@@ -274,8 +283,7 @@ jobs:
           if bad:
               print('\n'.join(bad))
               sys.exit(1)
-          print('Both equipment projections record what is socketed into every '
-                'slot they see.')
+          print('Every stack projection records what is socketed into it.')
           PY
 
       - name: Live docs cite source paths that exist
