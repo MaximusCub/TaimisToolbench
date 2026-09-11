@@ -25,6 +25,7 @@ namespace TaimisToolbench.Tests.Services
         private const int Sigil = 24615;
         private const int Infusion = 49431;
         private const int LegendaryRune = 100147;
+        private const int Striders = 48084;
 
         private const string Bank = AccountItemIndex.SourceBank;
         private const string Shared = AccountItemIndex.SourceSharedInventory;
@@ -363,6 +364,150 @@ namespace TaimisToolbench.Tests.Services
                 SnapshotHoldLine.Format(row.Breakdown));
         }
 
+        // ---- One name per character ----
+        [Fact]
+        public void ARuneInSevenPiecesOnOneCharacterNamesThatCharacterOnce()
+        {
+            // Shapes from the owner's capture of 2026-09-11: Superior Rune
+            // of the Pack across Oso Grueso's six Zojja's pieces and its
+            // aquatic helm.
+            var items = new List<SnapshotItemEntry>();
+            foreach (var piece in PackSet())
+            {
+                items.Add(Named(piece.Key, piece.Value, 1, Worn("Oso Grueso")));
+                SocketedItemRows.AddFor(
+                    items, piece.Key, Worn("Oso Grueso"), 1, new[] { Rune }, null);
+            }
+
+            Name(items, Rune, "Superior Rune of the Pack");
+
+            var row = SearchOneRow(items, "Rune of the Pack");
+
+            Assert.Equal(7, row.TotalCount);
+            Assert.Equal(
+                "Equipped: Oso Grueso (in Zojja's Striders, Zojja's Guise, "
+                    + "Zojja's Grips, Zojja's Visage, Zojja's Leggings, "
+                    + "Zojja's Shoulderguard, Wegloop's Air Mask)",
+                SnapshotHoldLine.Format(row.Breakdown));
+        }
+
+        [Fact]
+        public void TwoCharactersWearingTheSameRuneEachGetTheirOwnPieceList()
+        {
+            var items = new List<SnapshotItemEntry>
+            {
+                Named(Helm, "Obsidian Heavy Helmet", 1, Worn("Divineaxe")),
+                Named(Coat, "Obsidian Heavy Breastplate", 1, Worn("Divineaxe")),
+                Named(Striders, "Zojja's Striders", 1, Worn("Oso Grueso")),
+            };
+            SocketedItemRows.AddFor(items, Helm, Worn("Divineaxe"), 1, new[] { Rune }, null);
+            SocketedItemRows.AddFor(items, Coat, Worn("Divineaxe"), 1, new[] { Rune }, null);
+            SocketedItemRows.AddFor(
+                items, Striders, Worn("Oso Grueso"), 1, new[] { Rune }, null);
+            Name(items, Rune, "Superior Rune of the Pack");
+
+            var row = SearchOneRow(items, "Rune of the Pack");
+
+            Assert.Equal(3, row.TotalCount);
+            Assert.Equal(
+                "Equipped: Divineaxe (in Obsidian Heavy Breastplate, "
+                    + "Obsidian Heavy Helmet), Oso Grueso (in Zojja's Striders)",
+                SnapshotHoldLine.Format(row.Breakdown));
+        }
+
+        [Fact]
+        public void AGroupHoldingOnePerPieceItNamesPrintsNoCount()
+        {
+            // Three names and three copies say the same thing twice, so the
+            // line says it once. The loose stack beside them does not, so
+            // every place on that line takes its count back.
+            var items = new List<SnapshotItemEntry>
+            {
+                Named(Helm, "Obsidian Heavy Helmet", 1, Worn("Divineaxe")),
+                Named(Coat, "Obsidian Heavy Breastplate", 1, Worn("Divineaxe")),
+            };
+            SocketedItemRows.AddFor(items, Helm, Worn("Divineaxe"), 1, new[] { Rune }, null);
+            SocketedItemRows.AddFor(items, Coat, Worn("Divineaxe"), 1, new[] { Rune }, null);
+            Name(items, Rune, "Superior Rune of the Pack");
+
+            Assert.Equal(
+                "Equipped: Divineaxe (in Obsidian Heavy Breastplate, "
+                    + "Obsidian Heavy Helmet)",
+                SnapshotHoldLine.Format(SearchOneRow(items, "Rune of the Pack").Breakdown));
+
+            items.Add(Named(Rune, "Superior Rune of the Pack", 5, Bank));
+
+            Assert.Equal(
+                "Equipped: Divineaxe (in Obsidian Heavy Breastplate, "
+                    + "Obsidian Heavy Helmet) (2)  Bank (5)",
+                SnapshotHoldLine.Format(SearchOneRow(items, "Rune of the Pack").Breakdown));
+        }
+
+        [Fact]
+        public void ARuneTheCharacterOwnsOutrightIsItsOwnPlaceBesideItsSockets()
+        {
+            // The equipment endpoint reports a rune a character owns but has
+            // fitted into nothing as an equipment entry of its own. That is
+            // a real copy, and it holds no gear, so it never joins the
+            // bracket naming the pieces beside it.
+            var items = new List<SnapshotItemEntry>
+            {
+                Named(Rune, "Superior Rune of the Defender", 1, Worn("Divineaxe")),
+                Named(Helm, "Obsidian Heavy Helmet", 1, Worn("Divineaxe")),
+            };
+            SocketedItemRows.AddFor(items, Helm, Worn("Divineaxe"), 1, new[] { Rune }, null);
+
+            var row = SearchOneRow(items, "Defender");
+
+            Assert.Equal(2, row.TotalCount);
+            Assert.Equal(
+                "Equipped: Divineaxe, Divineaxe (in Obsidian Heavy Helmet)",
+                SnapshotHoldLine.Format(row.Breakdown));
+        }
+
+        [Fact]
+        public void ARuneReportedOnItsOwnSurvivesTheArmorySettlement()
+        {
+            // The suppression rule drops socket rows alone. A rune the
+            // character owns outright is not one, so it keeps its row even
+            // while the armory holds the gear it sits beside.
+            var items = new List<SnapshotItemEntry>
+            {
+                Named(Rune, "Superior Rune of the Defender", 1, Worn("Divineaxe")),
+                Named(Helm, "Obsidian Heavy Helmet", 1, AccountItemIndex.SourceLegendaryArmory),
+            };
+
+            SocketedItemRows.SettleArmoryOwned(
+                items, new List<SnapshotArmoryEquip>(), new HashSet<int> { Helm });
+
+            Assert.Equal(2, items.Count);
+            Assert.Equal(
+                "Equipped: Divineaxe",
+                SnapshotHoldLine.Format(SearchOneRow(items, "Defender").Breakdown));
+        }
+
+        [Fact]
+        public void ASnapshotFromBeforeTheKeyCarriedItsPlaceStillNamesOnePlaceOnce()
+        {
+            // Builds before the socket key carried the whole container key
+            // wrote the bare character name there. Those rows read as one
+            // unrecognized place, which is what a refresh replaces.
+            var items = new List<SnapshotItemEntry>
+            {
+                Named(Helm, "Obsidian Heavy Helmet", 1, Worn("Divineaxe")),
+                Named(Coat, "Obsidian Heavy Breastplate", 1, Worn("Divineaxe")),
+                Named(Rune, "Superior Rune of the Pack", 1, "Socketed:101544:Divineaxe"),
+                Named(Rune, "Superior Rune of the Pack", 1, "Socketed:101521:Divineaxe"),
+            };
+
+            var row = SearchOneRow(items, "Rune of the Pack");
+
+            Assert.Equal(2, row.TotalCount);
+            Assert.Equal(
+                "Divineaxe (in Obsidian Heavy Breastplate, Obsidian Heavy Helmet)",
+                SnapshotHoldLine.Format(row.Breakdown));
+        }
+
         [Fact]
         public void ThePlaceIsNamedWithoutTheGearWhenTheCaptureCannotNameIt()
         {
@@ -672,6 +817,25 @@ namespace TaimisToolbench.Tests.Services
         private static string Bags(string characterName)
         {
             return AccountItemIndex.CharacterSourcePrefix + characterName;
+        }
+
+        /// <summary>
+        /// Seven pieces of one character's gear, by the ids and names the
+        /// owner's capture of 2026-09-11 carried, in the order the hold line
+        /// reads them out.
+        /// </summary>
+        private static List<KeyValuePair<int, string>> PackSet()
+        {
+            return new List<KeyValuePair<int, string>>
+            {
+                new KeyValuePair<int, string>(48084, "Zojja's Striders"),
+                new KeyValuePair<int, string>(48085, "Zojja's Guise"),
+                new KeyValuePair<int, string>(48086, "Zojja's Grips"),
+                new KeyValuePair<int, string>(48087, "Zojja's Visage"),
+                new KeyValuePair<int, string>(48088, "Zojja's Leggings"),
+                new KeyValuePair<int, string>(48089, "Zojja's Shoulderguard"),
+                new KeyValuePair<int, string>(79838, "Wegloop's Air Mask"),
+            };
         }
 
         private static List<SnapshotItemEntry> SixPieceSet(string characterName)

@@ -649,7 +649,7 @@ tests/TaimisToolbench.Tests/Services/SnapshotSearchResultBuilderTests.cs        
 tests/TaimisToolbench.Tests/Services/SnapshotSerializationTests.cs                      283
 tests/TaimisToolbench.Tests/Services/SnapshotStoreTests.cs                              545
 tests/TaimisToolbench.Tests/Services/SnapshotTableSorterTests.cs                        147
-tests/TaimisToolbench.Tests/Services/SocketedItemRowsTests.cs                           773
+tests/TaimisToolbench.Tests/Services/SocketedItemRowsTests.cs                           937
 tests/TaimisToolbench.Tests/Services/SocketedUpgradeTests.cs                            321
 tests/TaimisToolbench.Tests/Services/SortIndicatorLayoutTests.cs                        151
 tests/TaimisToolbench.Tests/Services/SourceFilterFlowLayoutTests.cs                     127
