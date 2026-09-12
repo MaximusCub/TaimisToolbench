@@ -47,8 +47,8 @@ namespace TaimisToolbench.Tests.Services
 
             Assert.Equal(
                 "Recipe: Gift of Light: Missing Recipe. Buy from Aveline",
-                NotesSectionLayoutMath.SubjectLabel(row.NoteSubject)
-                    + " " + PlanNoteSegment.Join(row.NoteSegments));
+                NotesSectionLayoutMath.SubjectRun(row.NoteSubject)
+                    + PlanNoteSegment.Join(row.NoteSegments));
         }
 
         /// <summary>
