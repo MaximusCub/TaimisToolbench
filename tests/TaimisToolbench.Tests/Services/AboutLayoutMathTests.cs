@@ -205,5 +205,78 @@ namespace TaimisToolbench.Tests.Services
             // nothing clips there either.
             Assert.True(AboutLayoutMath.ColumnWidth(narrowScreenPanel) >= AboutLayoutMath.FactsMinWidth);
         }
+
+        // The longest bulleted line the Credits section ships, measured by
+        // summing xAdvance over the shipped Menomonia 16 regular glyph table
+        // (Content/fonts/menomonia/menomonia-16-regular.xnb). The
+        // wrapper has no hanging indent, so a bullet that wraps loses its
+        // alignment; this is the number the measure has to clear.
+        private const int LongestCreditBulletPx = 355;
+
+        [Fact]
+        public void TheMeasureClearsTheLongestCreditBullet_AtEveryWidthTheTabReaches()
+        {
+            int narrowScreenPanel =
+                WindowSizing.TabPanelWidthFor(WindowSizing.NarrowScreenFloorWidth)
+                    - WindowSizing.ScrollbarAllowance;
+
+            Assert.Equal(784, narrowScreenPanel);
+            Assert.Equal(1232, FloorPanelWidth);
+
+            // Stacked on the narrowest client, and in two columns at the
+            // window minimum, the prose still gets the whole measure.
+            Assert.Equal(
+                AboutLayoutMath.ProseMeasure,
+                AboutLayoutMath.TextBudget(AboutLayoutMath.ColumnWidth(narrowScreenPanel)));
+            Assert.Equal(
+                AboutLayoutMath.ProseMeasure,
+                AboutLayoutMath.TextBudget(AboutLayoutMath.ColumnWidth(FloorPanelWidth)));
+
+            Assert.True(
+                LongestCreditBulletPx < AboutLayoutMath.ProseMeasure,
+                $"the longest bullet is {LongestCreditBulletPx}px against a "
+                    + $"{AboutLayoutMath.ProseMeasure}px measure");
+        }
+
+        [Fact]
+        public void SubheadingGeometry_ResolvesToItsShippedPixels()
+        {
+            Assert.Equal(32, AboutLayoutMath.SubheadingBandHeight);
+            Assert.Equal(4, AboutLayoutMath.SubheadingTitleY);
+            Assert.Equal(20, AboutLayoutMath.SectionGap);
+            Assert.Equal(8, AboutLayoutMath.SubsectionGap);
+        }
+
+        [Fact]
+        public void TheSubheadingBand_SeatsTheDescendersOfItsOwn20ptFace()
+        {
+            int lowestInk =
+                AboutLayoutMath.SubheadingTitleY + TypeRampMetrics.ColumnHeaderInk.LowestInk;
+
+            Assert.True(
+                lowestInk <= AboutLayoutMath.SubheadingBandHeight,
+                $"20pt ink reaches y={lowestInk} in a {AboutLayoutMath.SubheadingBandHeight}px band");
+        }
+
+        [Fact]
+        public void TheSubheadingBand_IsShorterThanASectionBand_ButStillTallerThanItsFace()
+        {
+            Assert.True(
+                AboutLayoutMath.SubheadingBandHeight
+                    < PlanContentHeightMath.SectionHeaderRowHeight);
+            Assert.True(
+                TypeRampMetrics.ColumnHeaderInk.LineHeight
+                    <= AboutLayoutMath.SubheadingBandHeight);
+        }
+
+        // The whole point of the Credits group: three subsections separated
+        // by less than the tab puts between sections read as one section.
+        // Equal gaps would make them three peers.
+        [Fact]
+        public void SubsectionsSitCloserTogetherThanSectionsDo()
+        {
+            Assert.True(AboutLayoutMath.SubsectionGap < AboutLayoutMath.SectionGap);
+            Assert.True(AboutLayoutMath.SubsectionGap > 0);
+        }
     }
 }
