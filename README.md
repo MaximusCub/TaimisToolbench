@@ -207,15 +207,10 @@ process, all of it checkable from this repository:
 - **The repo's other rules are enforced by CI, not memory.** The `invariants`
   job in [`tests.yml`](.github/workflows/tests.yml) fails the build on
   non-ASCII characters in source, a `.cs` file missing its `<Compile Include>`
-  entry, a doc or comment citing a file that does not exist, a broken
-  relative markdown link, and any source file growing past its pinned line
-  budget ([`docs/file-budgets.txt`](docs/file-budgets.txt) - a ratchet
-  introduced after one decomposed view quietly grew back past its
-  pre-refactor size with nothing watching). Comment length is ratcheted the
-  same way ([`docs/comment-budgets.txt`](docs/comment-budgets.txt)), because
-  a line budget cannot tell a 50-line comment from 50 lines of code. A file
-  with no entry in the line budgets is not exempt: it is held to the default
-  that file declares, checked by `FileLineBudgetTests` in the test job.
+  entry, a doc or comment citing a file that does not exist, and a broken
+  relative markdown link. Comment length is ratcheted per file
+  ([`docs/comment-budgets.txt`](docs/comment-budgets.txt)): a file may not
+  gain over-length comment blocks beyond its pinned count.
 - **UI changes are checked in the running game**, not asserted from a diff, and
   what was actually observed is recorded: each milestone record under
   [`dev/records/`](dev/records/) ends in an explicit `Gate:` line - PASS,
