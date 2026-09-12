@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -119,7 +120,7 @@ namespace TaimisToolbench.Tests.Services.Recipes
         {
             return recipe.Ingredients
                 .Select(i => i.Type + ":" + i.Id + "x" + i.Count)
-                .OrderBy(s => s, System.StringComparer.Ordinal)
+                .OrderBy(s => s, StringComparer.Ordinal)
                 .ToList();
         }
 
