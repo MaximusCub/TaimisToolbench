@@ -512,7 +512,7 @@ namespace TaimisToolbench.Views
                 Enabled = false,
                 Parent = _addPanel,
             };
-            TooltipFacility.ApplyPlain(_addButton, "Add this item to the bottom of your priority list.");
+            TooltipFacility.ApplyPlain(_addButton, "Add this item to the bottom of your wishlist.");
             _addButton.Click += (_, __) => AddPendingItem();
 
             // The comparison mode is a two-option, mutually exclusive
@@ -1125,7 +1125,7 @@ namespace TaimisToolbench.Views
             _refreshButton.Enabled = !_isRefreshing && Entries.Count > 0;
             TooltipFacility.ApplyPlain(_refreshButton, Entries.Count > 0
                 ? "Recalculate every row. Each item is solved twice, so the first analysis of a session can take a while."
-                : "Add an item to your list first.");
+                : "Add an item to your wishlist first.");
 
             UpdateColumnHeaderTooltips();
             RebuildCaptions(barWidth);
@@ -1245,7 +1245,7 @@ namespace TaimisToolbench.Views
 
         private static readonly string[] EmptyStateLines =
         {
-            "Nothing on your priority list yet.",
+            "Nothing on your wishlist yet.",
             "",
             "Add the items you are working toward, in the order you want to finish them. The Ranker then answers a question the Crafting Plan tab cannot: given that everything above it already has first claim on your materials, your currencies and your daily crafts, how close is each one really?",
             "",
@@ -1545,7 +1545,7 @@ namespace TaimisToolbench.Views
             }
 
             row.Remove = CreateRemoveButton(
-                row.Panel, bands.RemoveX, "Remove this item from your list.");
+                row.Panel, bands.RemoveX, "Remove this item from your wishlist.");
             row.Remove.Enabled = !_isRefreshing;
             row.Remove.Click += (_, __) => RemoveRow(rowIndex);
 
@@ -2245,7 +2245,7 @@ namespace TaimisToolbench.Views
             {
                 return independent
                     ? "You have enough coin for what is left of this item, measured against your full account."
-                    : "You have enough coin for what is left of this item, after paying for everything above it on the list.";
+                    : "You have enough coin for what is left of this item, after paying for everything above it on the wishlist.";
             }
 
             return "You are " + CoinSegmentMath.GameStyleText(metrics.ShortfallCoin) +
@@ -2566,11 +2566,11 @@ namespace TaimisToolbench.Views
                 // re-searched it is the surprising outcome.
                 Entries[existing].Quantity = quantity;
                 InvalidateAfterChangeAt(existing);
-                SetStatus($"{Entries[existing].Name} is already on your list - quantity updated to {quantity}.", isError: false);
+                SetStatus($"{Entries[existing].Name} is already on your wishlist - quantity updated to {quantity}.", isError: false);
             }
             else if (Entries.Count >= RankerWatchlistLimits.MaxEntries)
             {
-                SetStatus($"Your list is full ({RankerWatchlistLimits.MaxEntries} items). Remove one to add another.", isError: false);
+                SetStatus($"Your wishlist is full ({RankerWatchlistLimits.MaxEntries} items). Remove one to add another.", isError: false);
                 return;
             }
             else
@@ -2663,7 +2663,7 @@ namespace TaimisToolbench.Views
         {
             if (_store != null && !_store.Save(_watchlist))
             {
-                SetStatus("Your list could not be saved - see the Log tab.", isError: true);
+                SetStatus("Your wishlist could not be saved - see the Log tab.", isError: true);
             }
         }
 
