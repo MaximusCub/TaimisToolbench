@@ -37,7 +37,7 @@ namespace TaimisToolbench.Tests.Services
         [Fact]
         public void LabelFloor_HoldsEveryFactLabelTheTabShips()
         {
-            Assert.Equal(6, AboutLayoutMath.FactLabels.Count);
+            Assert.Equal(5, AboutLayoutMath.FactLabels.Count);
 
             foreach (string label in AboutLayoutMath.FactLabels)
             {

@@ -208,6 +208,8 @@
     <Compile Include="Services\MultiItemHeaderLayout.cs" />
     <Compile Include="Services\MultiItemHeaderTooltipComposer.cs" />
     <Compile Include="Services\NoteRunLayout.cs" />
+    <Compile Include="Services\AboutTabText.cs" />
+    <Compile Include="Services\LinkPhraseSpans.cs" />
     <Compile Include="Services\TextAdvanceMath.cs" />
     <Compile Include="Services\NoteSegmentWrap.cs" />
     <Compile Include="Services\NotesSectionLayoutMath.cs" />
@@ -336,6 +338,8 @@
     <Compile Include="Views\Rendering\ItemIconTooltip.cs" />
     <Compile Include="Views\Rendering\ItemStatWarmer.cs" />
     <Compile Include="Views\Rendering\LabelHelpers.cs" />
+    <Compile Include="Views\Rendering\LinkRunStyle.cs" />
+    <Compile Include="Views\Rendering\LinkedTextRenderer.cs" />
     <Compile Include="Views\Rendering\CoinCurrencyRenderer.cs" />
     <Compile Include="Views\Rendering\RichTooltipSurface.cs" />
     <Compile Include="Views\Rendering\TooltipFacility.cs" />

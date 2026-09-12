@@ -18,9 +18,9 @@ namespace TaimisToolbench.Views
     /// <summary>
     /// The About tab: static, mostly-derived information about the module
     /// itself - name, version, author/contributors, source URL, the Blish
-    /// HUD version it targets, this repo's own license, a Blish HUD MIT
-    /// credit line, and the module's data directory (which a user needs
-    /// when attaching snapshot.json/status.json to a bug report).
+    /// HUD version it targets, this repo's own license, and the module's
+    /// data directory (which a user needs when attaching
+    /// snapshot.json/status.json to a bug report).
     /// <para>
     /// Manifest fields are read live from ModuleParameters.Manifest, with a
     /// hand-parse of the packaged manifest.json as the fallback. Version
@@ -46,28 +46,11 @@ namespace TaimisToolbench.Views
         private const string NotAvailableText = "Not available";
         private const string BlishHudDependencyNamespace = "bh.blishhud";
 
-        // The Blish HUD MIT-license credit line, verified against
-        // Blish HUD's own repo. Kept as its own constant (not folded into the
-        // "Built with:" row) because "Built with:" reports the live
-        // SemVer.Range this module targets - a distinct, manifest-derived
-        // value - while this is fixed attribution text.
-        private const string BlishHudCreditLine = "Built on Blish HUD (MIT License) - github.com/blish-hud/Blish-HUD";
-
         // The GW2/ArenaNet fan-content disclaimer. This exact wording is
         // approved - ship the literal string as-is, do not derive or
         // reword it.
         private const string ArenaNetDisclaimerText =
             "Taimi's Toolbench is a fan-made tool and is not affiliated with, endorsed by, or supported by ArenaNet or NCSOFT. Guild Wars 2 and all associated trademarks are the property of NCSOFT Corporation. All game data comes from the official Guild Wars 2 API.";
-
-        // The gw2efficiency design-reference credit. Like
-        // ArenaNetDisclaimerText, this exact wording is
-        // approved for the "Licenses & Attributions"
-        // section. Ship this literal string as-is - do not derive it from
-        // other constants or otherwise reword it, since the approval covers
-        // this exact text (including the Patreon/PayPal URLs, which render
-        // as plain text - no hyperlink control exists in this file).
-        private const string Gw2EfficiencyCreditText =
-            "The crafting logic in this module - how it weighs craft versus buy, prices materials, values Mystic Clovers, and models vendor purchases - is built to follow the publicly observable approach of gw2efficiency (gw2efficiency.com), the Guild Wars 2 companion site created by David Reess (queicherius), Saskia Van Leeuwen, and Ecmel Tugcu, with help from their open-source contributors. Where gw2efficiency has published its methods as open-source code, such as the MIT-licensed recipe-calculation and recipe-nesting libraries, those served as a valuable design reference; this module ships its own independent implementation and never calls gw2efficiency at runtime. gw2efficiency does the hard, ongoing work of keeping tools like this accurate and free for the whole community, so if this module has saved you time or gold, please consider supporting the original team via Patreon (https://www.patreon.com/gw2efficiency) or PayPal (https://paypal.me/devoxa). We are grateful for the trail they blazed.";
 
         // Manual fallback for the "Built with Blish HUD" note, only ever
         // shown if BOTH the live Dependencies read (ReadBlishHudDependencyRange)
@@ -92,6 +75,17 @@ namespace TaimisToolbench.Views
         // 22, not 20: a wrapped line sits at y=2 and its lowest Font16 ink
         // is y=23.
         private const int ProseLineHeight = 22;
+
+        // The distance a Label puts between successive lines of one
+        // wrapped paragraph. ProseLineHeight above is the BOX such a
+        // paragraph is given, which is two pixels looser - so a block drawn
+        // line by line has to use this, or its leading would not match the
+        // paragraph beside it.
+        private static readonly int ProseLinePitch = TypeRampMetrics.BodyInk.LineHeight;
+
+        /// <summary>Gap between one paragraph of a block and the next -
+        /// half a line, so the break reads without opening a hole.</summary>
+        private static readonly int ProseParagraphGap = ProseLinePitch / 2;
 
         /// <summary>Gap between one block on the board and the next.</summary>
         private const int BlockGap = 20;
@@ -139,6 +133,11 @@ namespace TaimisToolbench.Views
             public Label ValueLabel;
             public string ValueText;
             public TextBox ValueBox;
+
+            /// <summary>The runs a linked value draws, and the panel they
+            /// are rebuilt into when the column width moves.</summary>
+            public IReadOnlyList<PlanNoteSegment> ValueSegments;
+            public Panel ValueRuns;
         }
 
         /// <summary>A titled block of prose: the 38px band every other
@@ -151,6 +150,11 @@ namespace TaimisToolbench.Views
             public Panel Rule;
             public Label Body;
             public string BodyText;
+
+            /// <summary>A block whose words carry links is drawn as runs
+            /// rather than as one Label - see CreateLinkedProseBlock.</summary>
+            public IReadOnlyList<IReadOnlyList<PlanNoteSegment>> Paragraphs;
+            public Panel BodyHost;
         }
 
         private readonly List<FactRow> _factRows = new List<FactRow>();
@@ -244,26 +248,29 @@ namespace TaimisToolbench.Views
 
             _factsBlock = CreateProseBlock("Module", null);
 
-            // Trailing colons dropped from all six: inside a two-column
+            // Trailing colons dropped from all five: inside a two-column
             // table with a rule, a colon on every label is punctuation doing
             // a column's job.
-            AddFactRow(AboutLayoutMath.SourceLabel, string.IsNullOrWhiteSpace(info.Url) ? NotAvailableText : info.Url, copyable: true);
+            AddLinkedFactRow(
+                AboutLayoutMath.SourceLabel,
+                string.IsNullOrWhiteSpace(info.Url) ? NotAvailableText : info.Url,
+                AboutTabText.SourceValue(info.Url, NotAvailableText));
             AddFactRow(AboutLayoutMath.AuthorLabel, info.AuthorDisplay ?? NotAvailableText);
-            AddFactRow(AboutLayoutMath.BuiltWithLabel, $"Blish HUD {info.BlishVersionRange ?? FallbackBlishHudVersionRange}");
 
-            // "License" (this project's own license) and the Blish HUD
-            // credit are two separate, differently-sourced rows and are
-            // deliberately kept side by side rather than merged: "License"
-            // is this repo's own MIT license, while "Credits" is d1's
-            // already-verified Blish HUD MIT-license credit line, carried
-            // over unchanged. Do not collapse these into one row or drop
-            // either without updating this comment.
+            string blishRange = info.BlishVersionRange ?? FallbackBlishHudVersionRange;
+            AddLinkedFactRow(
+                AboutLayoutMath.BuiltWithLabel,
+                $"Blish HUD {blishRange} ({AboutTabText.SourceLinkWord})",
+                AboutTabText.BuiltWithValue(blishRange));
+
             AddFactRow(AboutLayoutMath.LicenseLabel, "MIT (see LICENSE in the repo)");
-            AddFactRow(AboutLayoutMath.CreditsLabel, BlishHudCreditLine, copyable: true);
-            AddFactRow(AboutLayoutMath.DataDirectoryLabel, string.IsNullOrWhiteSpace(_dataDirectoryPath) ? NotAvailableText : _dataDirectoryPath, copyable: true);
+            AddCopyableFactRow(
+                AboutLayoutMath.DataDirectoryLabel,
+                string.IsNullOrWhiteSpace(_dataDirectoryPath) ? NotAvailableText : _dataDirectoryPath);
 
             CreateProseBlock("Disclaimer", ArenaNetDisclaimerText);
-            CreateProseBlock("gw2efficiency", Gw2EfficiencyCreditText);
+            CreateLinkedProseBlock(
+                AboutTabText.CreditsSectionTitle, AboutTabText.CreditParagraphs());
 
             ApplyLayout(ContentWidth(container), measureText: true);
 
@@ -396,6 +403,26 @@ namespace TaimisToolbench.Views
             return block;
         }
 
+        /// <summary>
+        /// A prose block whose words carry links. Its body is a panel of
+        /// per-run labels rather than one Label, because Blish's Label
+        /// draws one string in one colour with no underline.
+        /// </summary>
+        private ProseBlock CreateLinkedProseBlock(
+            string title, IReadOnlyList<IReadOnlyList<PlanNoteSegment>> paragraphs)
+        {
+            var block = CreateProseBlock(title, null);
+            block.Paragraphs = paragraphs;
+            block.BodyHost = new Panel()
+            {
+                Size = new Point(AboutLayoutMath.FactsMinWidth, 0),
+                Parent = block.Panel,
+            };
+
+            _proseBlocks.Add(block);
+            return block;
+        }
+
         private static Label CreateProseLabel(Panel parent)
         {
             return new Label()
@@ -409,7 +436,12 @@ namespace TaimisToolbench.Views
             };
         }
 
-        private void AddFactRow(string label, string value, bool copyable = false)
+        /// <summary>
+        /// The shell of one fact row - its panel and its label - with the
+        /// value left to the caller, which is the only part that differs
+        /// between a plain, a copyable and a linked value.
+        /// </summary>
+        private FactRow CreateFactRow(string label, string value)
         {
             var row = new FactRow
             {
@@ -432,40 +464,61 @@ namespace TaimisToolbench.Views
                 Parent = row.Panel,
             };
 
-            if (copyable)
-            {
-                // Plain TextBox, not a click-to-launch-browser button (d1
-                // Feature 2: no precedent anywhere in this codebase, and no
-                // confirmed-safe way to launch an external process from
-                // inside the GW2 overlay sandbox). TextBox natively
-                // supports select-all/copy (TextInputBase.HandleCopy), so
-                // this is already "selectable/copyable" with no extra
-                // control needed - the field is never read back or
-                // persisted, so a user editing it in-place is harmless and
-                // resets on the next tab visit anyway.
-                row.ValueBox = new TextBox()
-                {
-                    Text = value,
-                    Size = new Point(AboutLayoutMath.ValueFloor, InputHeight),
-                    Location = new Point(Inset, RowInputY),
-                    Parent = row.Panel,
-                }.ReleaseOnDispose().ReleaseOnEnter();
-            }
-            else
-            {
-                row.ValueLabel = new Label()
-                {
-                    Font = UiFonts.Body,
-                    Text = value,
-                    AutoSizeWidth = false,
-                    AutoSizeHeight = true,
-                    TextColor = InfoTextColor,
-                    Location = new Point(Inset, RowLabelY),
-                    Parent = row.Panel,
-                };
-            }
-
             _factRows.Add(row);
+            return row;
+        }
+
+        private void AddFactRow(string label, string value)
+        {
+            var row = CreateFactRow(label, value);
+            row.ValueLabel = new Label()
+            {
+                Font = UiFonts.Body,
+                Text = value,
+                AutoSizeWidth = false,
+                AutoSizeHeight = true,
+                TextColor = InfoTextColor,
+                Location = new Point(Inset, RowLabelY),
+                Parent = row.Panel,
+            };
+        }
+
+        /// <summary>
+        /// A fact the user has to be able to select and copy - the data
+        /// directory, which goes into a bug report. A plain TextBox, since
+        /// TextInputBase.HandleCopy already gives select-all/copy; the
+        /// field is never read back, so an in-place edit is harmless and
+        /// resets on the next tab visit.
+        /// </summary>
+        private void AddCopyableFactRow(string label, string value)
+        {
+            var row = CreateFactRow(label, value);
+            row.ValueBox = new TextBox()
+            {
+                Text = value,
+                Size = new Point(AboutLayoutMath.ValueFloor, InputHeight),
+                Location = new Point(Inset, RowInputY),
+                Parent = row.Panel,
+            }.ReleaseOnDispose().ReleaseOnEnter();
+        }
+
+        /// <summary>
+        /// A fact whose value carries a link. The runs are rebuilt from
+        /// <paramref name="segments"/> every time the column is measured,
+        /// since a link's underline spans the run's own advance and both
+        /// move with the width.
+        /// </summary>
+        private void AddLinkedFactRow(
+            string label, string value, IReadOnlyList<PlanNoteSegment> segments)
+        {
+            var row = CreateFactRow(label, value);
+            row.ValueSegments = segments;
+            row.ValueRuns = new Panel()
+            {
+                Size = new Point(AboutLayoutMath.ValueFloor, RowHeight),
+                Location = new Point(Inset, 0),
+                Parent = row.Panel,
+            };
         }
 
         /// <summary>
@@ -612,6 +665,16 @@ namespace TaimisToolbench.Views
                     row.ValueBox.Location = new Point(valueX, RowInputY);
                     row.ValueBox.Width = AboutLayoutMath.CopyBoxWidth(columnWidth, labelBand);
                 }
+                else if (row.ValueRuns != null)
+                {
+                    int runBudget = AboutLayoutMath.ValueMaxWidth(columnWidth, labelBand);
+                    row.ValueRuns.Location = new Point(valueX, 0);
+                    row.ValueRuns.Size = new Point(runBudget, RowHeight);
+                    if (measureText)
+                    {
+                        DrawLinkedValue(row, runBudget);
+                    }
+                }
                 else
                 {
                     int budget = AboutLayoutMath.ValueMaxWidth(columnWidth, labelBand);
@@ -655,9 +718,58 @@ namespace TaimisToolbench.Views
                         block.Body, block.BodyText, 0,
                         SectionHeaderRowHeight + TitleToContentGap, columnWidth, measureText);
             }
+            else if (block.BodyHost != null)
+            {
+                height += TitleToContentGap
+                    + LayoutLinkedProse(
+                        block, SectionHeaderRowHeight + TitleToContentGap, columnWidth,
+                        measureText);
+            }
 
             block.Panel.Size = new Point(columnWidth, height);
             return y + height;
+        }
+
+        /// <summary>
+        /// One fact's linked value, rebuilt at the width it now has. Capped
+        /// at one line: a fact row is a fixed-height row, so an over-long
+        /// value ellipsizes and the row's hover carries the whole of it.
+        /// </summary>
+        private static void DrawLinkedValue(FactRow row, int budget)
+        {
+            row.ValueRuns.ClearChildren();
+            bool truncated = LinkedTextRenderer.DrawEllipsizedLine(
+                row.ValueRuns, row.ValueSegments, 0, RowLabelY, budget, UiFonts.Body,
+                InfoTextColor, row.ValueText);
+
+            TooltipFacility.ApplyPlain(row.Panel, truncated ? row.ValueText : null);
+        }
+
+        /// <summary>
+        /// A linked block's paragraphs, wrapped and drawn as runs. At
+        /// measureText false the runs keep the wrap they already have and
+        /// only the host moves, the same split every other block on this
+        /// tab uses.
+        /// </summary>
+        private static int LayoutLinkedProse(
+            ProseBlock block, int y, int columnWidth, bool measureText)
+        {
+            int budget = AboutLayoutMath.TextBudget(columnWidth);
+            block.BodyHost.Location = new Point(Inset, y);
+
+            if (!measureText)
+            {
+                block.BodyHost.Width = budget;
+                return block.BodyHost.Height;
+            }
+
+            block.BodyHost.ClearChildren();
+            int height = LinkedTextRenderer.DrawParagraphs(
+                block.BodyHost, block.Paragraphs, budget, ProseLinePitch, ProseParagraphGap,
+                UiFonts.Body, InfoTextColor);
+
+            block.BodyHost.Size = new Point(budget, height);
+            return height;
         }
 
         // Gap between a section's title band and its first content row -

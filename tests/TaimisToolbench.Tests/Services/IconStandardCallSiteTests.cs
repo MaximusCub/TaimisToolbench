@@ -282,7 +282,8 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(
                 new[]
                 {
-                    "Acquisition", "ItemPage", "None", "RecipeSheet", "SheetPageAcquisition",
+                    "Acquisition", "ExternalPage", "ItemPage", "None", "RecipeSheet",
+                    "SheetPageAcquisition",
                 },
                 page.ToArray());
         }
