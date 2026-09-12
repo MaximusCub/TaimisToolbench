@@ -7,9 +7,9 @@ the running version.
 
 ## 0.4.0 - 2026-09-12
 
-Legendary gear finally tells you what is socketed into it, the Shopping
-List and the Crafting Steps get windows of their own, and the account
-snapshot refreshes in a fraction of the time it used to take.
+The runes and infusions in your legendary gear now count as items you
+own, the Shopping List and the Crafting Steps get windows of their own,
+and the account snapshot refreshes in a fraction of the time it took.
 
 ### Added
 - **Socketed runes and infusions show up as their own rows.** Upgrades
@@ -27,13 +27,6 @@ snapshot refreshes in a fraction of the time it used to take.
 - **Required Recipes gained Cost and Sold By columns.** Each missing
   recipe sheet shows its live price and the merchant who actually sells
   it, with the same detail written into Plan Notes.
-- **Item tooltips read what is in a stack.** They show the upgrades and
-  infusions socketed into it, its empty upgrade slots, the base item under
-  a transmuted skin, and the rune bonuses a character has active.
-- **The Account Snapshot says where you hold each item.** Hovering a row
-  gives the full line: which characters wear it, which bags and bank tabs
-  hold it, and which characters an item in the Legendary Armory is
-  equipped on.
 - **A gated vendor now says what it wants.** When a merchant needs an
   achievement, mastery or other unlock before it will trade, the plan says
   so instead of quoting a price you cannot pay.
@@ -57,7 +50,6 @@ snapshot refreshes in a fraction of the time it used to take.
   styled so they read as clickable.
 - **The About tab was rebuilt**, with a new description of the module, a
   Credits section broken into subsections, and links that work.
-- **The Snapshot tab is now the Account Snapshot tab.**
 - **The Shopping List reads amount first.** Amount sits at the far left and
   the Each and Total figures are right-aligned under their headers.
 - **The plan tells you when your account data is overdue for a refresh**,
