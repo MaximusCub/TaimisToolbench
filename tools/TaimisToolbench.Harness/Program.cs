@@ -173,8 +173,7 @@ namespace TaimisToolbench.Harness
                             // documents <0|1|2> as the only valid values - reject
                             // out-of-range input here with a usage error instead
                             // of letting the exception crash the tool, mirroring
-                            // ModuleSettings.ClampTier / SettingsInputParser.
-                            // TryParseTier's reject-invalid discipline.
+                            // ModuleSettings.ClampTier's own 0-2 range.
                             if (homesteadTier < 0 || homesteadTier > 2)
                             {
                                 Console.Error.WriteLine(

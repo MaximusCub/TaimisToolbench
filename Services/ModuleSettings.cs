@@ -226,8 +226,8 @@ namespace TaimisToolbench.Services
         /// <summary>
         /// Reads the persisted Homestead Refinement efficiency tiers.
         /// Values outside 0-2 (possible only via a hand-edited settings
-        /// file, since the Settings tab and SettingsInputParser reject
-        /// them) are clamped rather than thrown - a corrupt/out-of-range
+        /// file, since the Settings tab offers the three valid choices and
+        /// nothing else) are clamped rather than thrown - a corrupt/out-of-range
         /// persisted value must never crash plan generation. See
         /// HomesteadEfficiencyTiers' own constructor for why clamping
         /// happens here rather than there: that constructor fails loudly by
@@ -260,8 +260,8 @@ namespace TaimisToolbench.Services
         }
 
         // Mirrors SettingsInputParser.TryParseLogMaxSizeMb's own 1-1000 MB
-        // bound (same deliberate duplication as ClampTier/TryParseTier's
-        // shared 0-2 range above, and for the same reason). A persisted
+        // bound (same deliberate duplication as ClampTier's own 0-2 range
+        // above, and for the same reason). A persisted
         // value outside this range is reachable only via a hand-edited
         // settings.json - the Settings tab's own parser rejects it before
         // it is ever assigned - but ModuleLogStore.AppendLine's self-trim

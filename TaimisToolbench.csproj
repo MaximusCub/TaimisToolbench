@@ -413,6 +413,7 @@
     <Compile Include="Services\SettingsCurrencyGridLayout.cs" />
     <Compile Include="Services\ColumnBoardLayout.cs" />
     <Compile Include="Services\SettingsFormLayout.cs" />
+    <Compile Include="Services\HomesteadTierOptions.cs" />
     <Compile Include="Services\SettingsSaveBarLayout.cs" />
     <Compile Include="Services\LogGutterLayout.cs" />
     <Compile Include="Services\LogToolbarLayout.cs" />

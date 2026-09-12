@@ -95,56 +95,6 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(0, value);
         }
 
-        [Theory]
-        [InlineData("0", 0)]
-        [InlineData("1", 1)]
-        [InlineData("2", 2)]
-        [InlineData("  1  ", 1)]
-        public void TryParseTier_ValidTier_ReturnsTrueWithValue(string text, int expected)
-        {
-            bool ok = SettingsInputParser.TryParseTier(text, out int tier);
-
-            Assert.True(ok);
-            Assert.Equal(expected, tier);
-        }
-
-        [Theory]
-        [InlineData(null)]
-        [InlineData("")]
-        [InlineData("   ")]
-        public void TryParseTier_NullOrBlank_ReturnsFalseWithZero(string text)
-        {
-            bool ok = SettingsInputParser.TryParseTier(text, out int tier);
-
-            Assert.False(ok);
-            Assert.Equal(0, tier);
-        }
-
-        [Theory]
-        [InlineData("-1")]
-        [InlineData("3")]
-        [InlineData("150")]
-        public void TryParseTier_OutOfRange_ReturnsFalse(string text)
-        {
-            bool ok = SettingsInputParser.TryParseTier(text, out int tier);
-
-            Assert.False(ok);
-            Assert.Equal(0, tier);
-        }
-
-        [Theory]
-        [InlineData("1.5")]
-        [InlineData("+1")]
-        [InlineData("abc")]
-        [InlineData("1 1")]
-        public void TryParseTier_MalformedText_ReturnsFalse(string text)
-        {
-            bool ok = SettingsInputParser.TryParseTier(text, out int tier);
-
-            Assert.False(ok);
-            Assert.Equal(0, tier);
-        }
-
         // --- TryParseLogMaxSizeMb (log system) ---
         [Theory]
         [InlineData("1", 1)]
