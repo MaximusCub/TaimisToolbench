@@ -267,6 +267,19 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void LicenseValue_IsTheLicenceNameAsOneLinkToTheLicenceFile()
+        {
+            var only = Assert.Single(AboutTabText.LicenseValue());
+
+            Assert.True(only.IsLink);
+            Assert.Equal("MIT", only.Text);
+            Assert.Equal(AboutTabText.LicenseUrl, only.Link.BuildUrl());
+            Assert.Equal(
+                "https://github.com/MaximusCub/TaimisToolbench/blob/master/LICENSE",
+                only.Link.BuildUrl());
+        }
+
+        [Fact]
         public void SourceValue_FallsBackToPlainTextWhenThereIsNoUrlToOpen()
         {
             var missing = Assert.Single(AboutTabText.SourceValue(null, "Not available"));

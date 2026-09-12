@@ -267,7 +267,10 @@ namespace TaimisToolbench.Views
                 $"Blish HUD {blishRange} ({AboutTabText.SourceLinkWord})",
                 AboutTabText.BuiltWithValue(blishRange));
 
-            AddFactRow(AboutLayoutMath.LicenseLabel, "MIT (see LICENSE in the repo)");
+            AddLinkedFactRow(
+                AboutLayoutMath.LicenseLabel,
+                AboutTabText.LicenseName,
+                AboutTabText.LicenseValue());
             AddCopyableFactRow(
                 AboutLayoutMath.DataDirectoryLabel,
                 string.IsNullOrWhiteSpace(_dataDirectoryPath) ? NotAvailableText : _dataDirectoryPath);

@@ -38,6 +38,17 @@ namespace TaimisToolbench.Services
         public const string ThirdPartyNoticesUrl =
             "https://github.com/MaximusCub/TaimisToolbench/blob/master/ref/THIRD-PARTY-NOTICES.txt";
 
+        /// <summary>
+        /// The module's own licence file, in its repository. Pinned to
+        /// master for the same reason as the notices link above.
+        /// </summary>
+        public const string LicenseUrl =
+            "https://github.com/MaximusCub/TaimisToolbench/blob/master/LICENSE";
+
+        /// <summary>The whole value of the "License" row, and the word it
+        /// hangs the licence file link on.</summary>
+        public const string LicenseName = "MIT";
+
         /// <summary>The word the "Built with" row hangs the Blish HUD
         /// repository link on. The brackets around it are plain text.</summary>
         public const string SourceLinkWord = "source";
@@ -158,6 +169,18 @@ namespace TaimisToolbench.Services
             return new[]
             {
                 PlanNoteSegment.Plain(string.IsNullOrWhiteSpace(url) ? fallbackText ?? "" : url),
+            };
+        }
+
+        /// <summary>
+        /// The "License" row's value: the licence name as one link to the
+        /// licence file in the module's repository.
+        /// </summary>
+        public static IReadOnlyList<PlanNoteSegment> LicenseValue()
+        {
+            return new[]
+            {
+                PlanNoteSegment.Linked(LicenseName, IconWikiTarget.ExternalPage(LicenseUrl)),
             };
         }
 
