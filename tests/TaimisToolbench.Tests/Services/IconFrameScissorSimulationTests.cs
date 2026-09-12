@@ -6,17 +6,21 @@ using Xunit;
 namespace TaimisToolbench.Tests.Services
 {
     /// <summary>
-    /// The icon-frame edge-vanishing proof, executable. A frame's bottom
-    /// edge is a band of ItemIconTiers.PaintedFrameThickness logical pixels,
-    /// and this sweeps whether that band reaches the screen at every GW2 UI
-    /// scale and every vertical position a window can be dragged to.
-    ///
-    /// The paint model is the one RowDividerScissorSimulationTests
-    /// transcribes from the decompiled Blish HUD 1.3.0 binary, applied to a
-    /// frame quad instead of a divider quad and run through the containers a
-    /// framed icon sits in. Its sources, and the rule that a model must
-    /// reproduce a measured defect before it is trusted with the shipped
-    /// geometry, are docs/ARCHITECTURE.md section V.26.
+    /// The icon-frame clipping proof, executable. A container hands its
+    /// children a clip that has been through a floor/ceil round trip in
+    /// each direction, and that round trip can leave the clip short of the
+    /// container's own bottom edge. This sweeps whether the clip a framed
+    /// icon is handed still covers the whole frame, at every GW2 UI scale
+    /// and every vertical position a window can be dragged to.
+    /// <para>
+    /// The clip model is the one RowDividerScissorSimulationTests
+    /// transcribes from the decompiled Blish HUD 1.3.0 binary. Its sources
+    /// are docs/ARCHITECTURE.md section V.26.
+    /// </para>
+    /// <para>
+    /// Sub-pixel rasterization of the frame's own quad is deliberately not
+    /// modelled here, and the reason is docs/ARCHITECTURE.md section S1.3.
+    /// </para>
     /// </summary>
     public class IconFrameScissorSimulationTests
     {
@@ -31,7 +35,9 @@ namespace TaimisToolbench.Tests.Services
 
         /// <summary>Enclosing containers whose own bottom edge coincides
         /// with the row's, swept from none to two. Each one costs the clip
-        /// another floor/ceil round trip at that shared edge.</summary>
+        /// another floor/ceil round trip at that shared edge. Two is the
+        /// depth the module ships; the clearance below is not proven at
+        /// three.</summary>
         private const int MaxFlushAncestors = 2;
 
         // --- The model (see class doc for the decompiled sources) ---
@@ -58,13 +64,13 @@ namespace TaimisToolbench.Tests.Services
         }
 
         /// <summary>
-        /// Physical scanlines the frame's bottom edge paints for a row at
-        /// absolute logical y <paramref name="rowY"/>, under
-        /// <paramref name="flushAncestors"/> containers that stop
+        /// Logical pixels of the icon frame that the clip reaching it does
+        /// not cover, for a row at absolute logical y <paramref name="rowY"/>
+        /// under <paramref name="flushAncestors"/> containers that stop
         /// <c>shape.TrailingClearance</c> below the row.
         /// </summary>
-        private static int BottomEdgeScanlines(
-            IconFrameShape shape, int thickness, float uiScale, int rowY, int flushAncestors)
+        private static int ClipShortfall(
+            IconFrameShape shape, float uiScale, int rowY, int flushAncestors)
         {
             // The scrolling viewport above it all, generous below the row.
             Propagate(
@@ -77,44 +83,17 @@ namespace TaimisToolbench.Tests.Services
                         rowY - (32 * depth), rowY + shape.RowHeight + shape.TrailingClearance,
                         uiScale, ref clipTop, ref clipHeight))
                 {
-                    return 0;
+                    return shape.FrameSize;
                 }
             }
 
             if (!Descend(rowY, rowY + shape.RowHeight, uiScale, ref clipTop, ref clipHeight))
             {
-                return 0;
+                return shape.FrameSize;
             }
 
             int frameBottom = rowY + shape.IconY + shape.FrameSize;
-            int clippedTop = Math.Max(clipTop, rowY + shape.IconY);
-            int clippedBottom = Math.Min(clipTop + clipHeight, frameBottom);
-            if (clippedBottom <= clippedTop)
-            {
-                return 0;
-            }
-
-            ScaleInterval(
-                clippedTop, clippedBottom - clippedTop, uiScale,
-                out int scissorTop, out int scissorHeight);
-            int scissorBottom = scissorTop + scissorHeight;
-
-            // The edge's own quad, rasterized by the centre-in rule the
-            // divider proof uses, then scissor-tested.
-            float quadTop = (frameBottom - thickness) * uiScale;
-            float quadBottom = frameBottom * uiScale;
-            int covered = 0;
-            for (int scanline = (int)Math.Floor(quadTop); scanline <= (int)Math.Ceiling(quadBottom); scanline++)
-            {
-                float centre = scanline + 0.5f;
-                if (quadTop <= centre && centre < quadBottom
-                    && scissorTop <= scanline && scanline < scissorBottom)
-                {
-                    covered++;
-                }
-            }
-
-            return covered;
+            return Math.Max(0, frameBottom - (clipTop + clipHeight));
         }
 
         /// <summary>One step down the container chain: intersect the
@@ -135,21 +114,36 @@ namespace TaimisToolbench.Tests.Services
             return true;
         }
 
-        private static int VanishCount(IconFrameShape shape, int thickness, float uiScale)
+        /// <summary>Vertical positions, of <see cref="Phases"/>, where the
+        /// clip lands inside the frame.</summary>
+        private static int ClippedCount(IconFrameShape shape, float uiScale, int flushAncestors)
         {
             int count = 0;
-            for (int flush = 0; flush <= MaxFlushAncestors; flush++)
+            for (int rowY = 0; rowY < Phases; rowY++)
             {
-                for (int rowY = 0; rowY < Phases; rowY++)
+                if (ClipShortfall(shape, uiScale, rowY, flushAncestors) > 0)
                 {
-                    if (BottomEdgeScanlines(shape, thickness, uiScale, rowY, flush) == 0)
-                    {
-                        count++;
-                    }
+                    count++;
                 }
             }
 
             return count;
+        }
+
+        /// <summary>Deepest the clip reaches into the frame, over every
+        /// swept position and container depth.</summary>
+        private static int WorstShortfall(IconFrameShape shape, float uiScale)
+        {
+            int worst = 0;
+            for (int flush = 0; flush <= MaxFlushAncestors; flush++)
+            {
+                for (int rowY = 0; rowY < Phases; rowY++)
+                {
+                    worst = Math.Max(worst, ClipShortfall(shape, uiScale, rowY, flush));
+                }
+            }
+
+            return worst;
         }
 
         /// <summary>One surface's framed-icon geometry: the row box, where
@@ -169,6 +163,11 @@ namespace TaimisToolbench.Tests.Services
                 FrameSize = frameSize;
                 TrailingClearance = trailingClearance;
             }
+        }
+
+        private static IconFrameShape WithoutClearance(IconFrameShape shape)
+        {
+            return new IconFrameShape(shape.RowHeight, shape.IconY, shape.FrameSize, 0);
         }
 
         private static readonly IconFrameShape SnapshotItemCell = new IconFrameShape(
@@ -230,54 +229,47 @@ namespace TaimisToolbench.Tests.Services
 
         // --- Model validation against the reported defect ---
         [Fact]
-        public void ModelReproducesTheReportedFrameWithNoBottomEdge()
+        public void ModelReproducesTheClipLandingInsideTheLastRowsFrame()
         {
-            // A search returning one Snapshot item drew a frame open at the
-            // bottom: the art was whole and the edge below it was gone. At
-            // the frame's RESERVED thickness the edge misses on 10.3% of
-            // vertical positions at UI Size Normal and 42.0% at Small, and
-            // the screenshot was a Normal-scale window. A model that cannot
-            // reproduce that has no authority over the geometry below.
-            Assert.Equal(1545, VanishCount(SnapshotItemCell, ItemIconTiers.FrameBorder, 0.897f));
-            Assert.Equal(6300, VanishCount(SnapshotItemCell, ItemIconTiers.FrameBorder, 0.81f));
+            // A search returning one Snapshot item drew a frame cut off at
+            // the bottom. The result panel is sized to its content, so its
+            // bottom edge sat on the last row's, and the clip it handed
+            // down reached two logical pixels into that row's icon frame.
+            // With no container ending on the row's edge the clip covers
+            // the frame at every position, which is why the fault showed on
+            // a short result list and nowhere else. A model that cannot
+            // reproduce both halves has no authority over the geometry
+            // below.
+            var flushPanel = WithoutClearance(SnapshotItemCell);
 
-            // At and above 1.0 a logical pixel covers a physical one, so no
-            // reader at UI Size Large or Larger ever saw this.
-            Assert.Equal(0, VanishCount(SnapshotItemCell, ItemIconTiers.FrameBorder, 1.0f));
-            Assert.Equal(0, VanishCount(SnapshotItemCell, ItemIconTiers.FrameBorder, 1.103f));
+            Assert.Equal(0, ClippedCount(flushPanel, 0.81f, 0));
+            Assert.Equal(500, ClippedCount(flushPanel, 0.81f, 1));
+            Assert.Equal(900, ClippedCount(flushPanel, 0.81f, 2));
+            Assert.Equal(2, WorstShortfall(flushPanel, 0.81f));
         }
 
         [Fact]
         public void TheTrailingClearanceIsWhatSavesTheLastSnapshotRow()
         {
-            // Why SnapshotResultLayout.TrailingClearance exists. The item
-            // cell keeps one logical pixel below its frame, which is not
-            // enough on its own: with the result panel's bottom edge on the
-            // last row's, the painted thickness still misses at UI Size
-            // Small. This is the assertion that keeps the clearance from
-            // being read as slack and simplified away.
-            var flushPanel = new IconFrameShape(
-                SnapshotItemGridLayout.ItemRowHeight,
-                SnapshotItemGridLayout.ItemIconY,
-                ItemIconTiers.FrameSize(ItemIconTier.BagSlot),
-                0);
-
-            Assert.True(
-                VanishCount(flushPanel, ItemIconTiers.PaintedFrameThickness, 0.81f) > 0);
+            // Why SnapshotResultLayout.TrailingClearance exists. Stated as
+            // the pixel being present AND doing work, so that zeroing the
+            // constant fails here rather than passing on an empty sweep.
+            Assert.True(SnapshotResultLayout.TrailingClearance > 0);
+            Assert.True(WorstShortfall(WithoutClearance(SnapshotItemCell), 0.81f) > 0);
         }
 
         // --- The proof over the shipped geometry ---
         [Theory]
         [MemberData(nameof(ShippedIconFrameNames))]
-        public void EveryShippedIconFrameKeepsItsBottomEdgeAtEveryUiScale(string name)
+        public void EveryShippedIconFrameSitsWhollyInsideItsClip(string name)
         {
             var shape = ShippedShapes()[name];
 
             foreach (float scale in UiScales)
             {
                 Assert.True(
-                    VanishCount(shape, ItemIconTiers.PaintedFrameThickness, scale) == 0,
-                    name + " loses its frame edge at UI scale " + scale.ToString());
+                    WorstShortfall(shape, scale) == 0,
+                    name + " is clipped at UI scale " + scale.ToString());
             }
         }
     }

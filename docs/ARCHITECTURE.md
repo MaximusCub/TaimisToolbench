@@ -3366,32 +3366,38 @@ currency tiers above were; the tooltip header icon's 34x34 was not. The same
 frame proves it: a currency tooltip capture shows the game's header icon at
 34 physical pixels beside the module's own 34-unit frame painted at 31, which
 puts that capture at 0.897. So the tier holds 34 / 0.897 = 38, which paints
-the game's 34 at "Normal" and its 38 at "Large".
+the game's 34 at "Normal" and its 38 at "Large", and the art inside it
+is 36.
 
-**The frame is reserved at one pixel and painted at two**, decided
-2026-09-12. `ItemIconTiers.FrameBorder` is the term every `FrameSize` is
-built from, and the measured art windows above are what fix it at 1. But a
-1px band is 0.897 physical pixels at GW2 UI Size "Normal", and the GPU
-covers a scanline only when the scanline's centre falls inside the band, so
-the band misses entirely on 10.3% of the vertical positions a window can
-take and on 42.0% at "Small". A reader sees an icon with one edge of its
-frame gone and reads the icon as cut off, which is how this was reported.
-`ItemIconTiers.PaintedFrameThickness` is 2 for the reason
-`PlanContentHeightMath.RowDividerHeight` is: `floor(2 * 0.81) = 1` covers a
-scanline at every shipped scale. The extra pixel comes out of the ART, so
-every `FrameSize` and every layout built on one is unchanged, and the art
-inside the tooltip header's 38 is 34 rather than 36. The sweep is
+**The frame is painted at one pixel, and the last row is what needed
+fixing**, decided 2026-09-12. A framed icon on the Snapshot tab was reported
+cut off at the bottom when a search returned one result. The first diagnosis
+was sub-pixel: a 1px band is 0.897 physical pixels at GW2 UI Size "Normal",
+the GPU covers a scanline only when the scanline's centre falls inside the
+band, so the band was said to miss on 10.3% of vertical positions. The frame
+was widened to 2px on that reading. The reading was wrong, and the test it
+failed is that it predicts the fault at random vertical positions on every
+icon in the module, all the time. That has never been seen. The fault
+appeared on one result and only there.
+
+The cause is the container clip. A container hands its children a clip that
+has been through a floor/ceil round trip in each direction, and the round
+trip can leave that clip up to two logical pixels short of the container's
+own bottom edge. The Snapshot result panel is sized to its content, so its
+bottom edge sat exactly on the last row's, and the short clip reached into
+that row's icon frame. Only the last row can be hit, which is why a
+one-result search made it obvious.
+
+`SnapshotResultLayout.TrailingClearance` moves the panel's bottom edge one
+logical pixel past the last row. The sweep is
 `tests/TaimisToolbench.Tests/Services/IconFrameScissorSimulationTests.cs`,
-over the same paint model as section V.26's divider proof.
-
-Thickness alone is not sufficient where a row's own container ends on the
-row's bottom edge. That container hands its children a clip that has been
-through one floor/ceil round trip and can sit up to two logical pixels
-high, which reaches into the last row's frame. The Snapshot tab's result
-panel is sized to its content and so ended exactly there;
-`SnapshotResultLayout.TrailingClearance` moves its bottom edge one pixel
-past the last row. The sweep covers that case at zero clearance and fails
-on it, so the pixel cannot be read as slack and dropped.
+over the clip half of the paint model in section V.26. At the shipped 1px
+frame it reproduces the defect with the clearance at zero - 1400 of 15000
+swept positions at UI Size "Small", none of them without a container ending
+on the row's edge - and reports zero clipped positions for every shipped
+framed icon at all four scales with the clearance in place. It does not
+model quad rasterization, because that is the premise above that the field
+record contradicts.
 
 ### S1.4 Item tooltips: what the API says and what the game shows
 
