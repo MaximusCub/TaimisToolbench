@@ -291,7 +291,7 @@ Services/SocketedUpgradeView.cs                                                 
 Services/SolveResult.cs                                                                 21
 Services/SolverDecision.cs                                                              124
 Services/SortIndicatorLayout.cs                                                         101
-Services/SourceFilterFlowLayout.cs                                                      85
+Services/SourceFilterFlowLayout.cs                                                      162
 Services/StaticItemSearchProvider.cs                                                    42
 Services/StatusStore.cs                                                                 73
 Services/StatusText.cs                                                                  589
@@ -345,7 +345,7 @@ Views/ItemInputRowStrip.cs                                                      
 Views/ItemRowState.cs                                                                   39
 Views/LogTabContent.cs                                                                  1538
 Views/MainThreadMarshal.cs                                                              141
-Views/MainView.cs                                                                       3354
+Views/MainView.cs                                                                       3695
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    428
@@ -657,7 +657,7 @@ tests/TaimisToolbench.Tests/Services/SnapshotTableSorterTests.cs                
 tests/TaimisToolbench.Tests/Services/SocketedItemRowsTests.cs                           937
 tests/TaimisToolbench.Tests/Services/SocketedUpgradeTests.cs                            321
 tests/TaimisToolbench.Tests/Services/SortIndicatorLayoutTests.cs                        151
-tests/TaimisToolbench.Tests/Services/SourceFilterFlowLayoutTests.cs                     127
+tests/TaimisToolbench.Tests/Services/SourceFilterFlowLayoutTests.cs                     231
 tests/TaimisToolbench.Tests/Services/StatusStoreTests.cs                                116
 tests/TaimisToolbench.Tests/Services/StatusTextTests.cs                                 693
 tests/TaimisToolbench.Tests/Services/StatusUpdateGuardTests.cs                          33
