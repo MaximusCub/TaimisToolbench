@@ -92,8 +92,10 @@ namespace TaimisToolbench.Services
         /// will happily launch a local executable, a UNC path, or a
         /// file:/custom-scheme handler. Guarding at the launch site keeps the
         /// safety property here rather than in every present and future caller.
+        /// Internal so a link can ask, before it draws, whether the url it
+        /// carries is one this class would open.
         /// </summary>
-        private static bool IsLaunchable(string url)
+        internal static bool IsLaunchable(string url)
         {
             return !string.IsNullOrEmpty(url)
                 && url.StartsWith("https://", StringComparison.Ordinal);

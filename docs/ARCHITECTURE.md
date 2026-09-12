@@ -1876,10 +1876,21 @@ The subsections below are ordered by file, top-level `Views/` first, then
 
 The About tab is the same shape as `LogTabContent`: one
 `FlowPanel(CanScroll)`, a `Build(Container)` that populates it once, and no
-relayout registry. Nothing on it is interactive beyond plain
-selectable/copyable text, so there is no state worth keeping "sticky"
-across a tab revisit and the rebuild-per-visit cost buys correctness for
-free. `MainView` carries the cross-cutting note on that rebuild policy.
+relayout registry. Nothing on it is interactive beyond the data
+directory text box and the links in its credit copy and fact table, so
+there is no state worth keeping "sticky" across a tab revisit and the
+rebuild-per-visit cost buys correctness for free. `MainView` carries the
+cross-cutting note on that rebuild policy.
+
+The credit block and the "Source" and "Built with" rows draw one Label
+per run rather than one Label per paragraph, because a Blish `Label`
+draws one string in one colour with no underline. Which words are links
+is decided in `Services/LinkPhraseSpans.cs` and `Services/AboutTabText.cs`;
+`Services/NoteSegmentWrap.cs` and `Services/NoteRunLayout.cs` wrap and
+place the runs, the same two the Plan tab's Notes section uses, so a link
+phrase that straddles a wrap point keeps its target on both lines.
+`Views/Rendering/LinkedTextRenderer.cs` draws them and
+`Views/Rendering/LinkRunStyle.cs` holds the one style both surfaces share.
 
 The manifest read cannot fail under normal operation: `ModuleParameters.Manifest`
 is the exact object Blish HUD itself already parsed and validated in order

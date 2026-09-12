@@ -93,20 +93,6 @@ namespace TaimisToolbench.Views.Rendering
                 ?? throw new ArgumentNullException(nameof(getCurrencyFacts));
         }
 
-        /// <summary>The colour and the rule that say a run of text opens a
-        /// page. One channel would not be enough: the section already
-        /// spends colour on de-emphasis, so the underline is what makes a
-        /// link a link.</summary>
-        private static readonly Color LinkColor = new Color(114, 178, 255);
-
-        /// <summary>The rule's own colour - the link's, at the ink alpha
-        /// NotesSectionLayoutMath derives.</summary>
-        private static readonly Color UnderlineColor =
-            LinkColor * NotesSectionLayoutMath.LinkUnderlineInkAlpha;
-
-        private const int UnderlineHeight =
-            NotesSectionLayoutMath.LinkUnderlineThickness;
-
         /// <summary>
         /// Renders every note row and returns the section body height that
         /// was actually built - see this class's doc comment for why the
@@ -312,53 +298,19 @@ namespace TaimisToolbench.Views.Rendering
         }
 
         /// <summary>
-        /// One wrapped line's runs, laid left to right at the positions
-        /// NoteRunLayout computes. <paramref name="prefix"/> is the text
-        /// the caller already drew at <paramref name="startX"/> - the
-        /// subject's name on a note's first line, empty on every other
-        /// line. Every run is drawn in the SAME face as the sentence around
-        /// it; a link differs by colour and by its rule alone.
+        /// One wrapped line's runs, in the module's one link style.
+        /// A note draws its plain words white, and hands them back so the
+        /// row's full-text hover can be put on each.
+        /// <paramref name="prefix"/> is the text the caller already drew at
+        /// <paramref name="startX"/> - the subject's name on a note's first
+        /// line, empty on every other line.
         /// </summary>
         private static void DrawLine(
             Panel linePanel, IReadOnlyList<PlanNoteSegment> pieces, int startX, string prefix,
             int y, BitmapFont font, Func<string, int> advance, List<Label> plainLabels)
         {
-            foreach (var run in NoteRunLayout.Place(pieces, startX, advance, prefix))
-            {
-                var piece = run.Piece;
-                var label = LabelHelpers.WithDescenderClearance(new Label()
-                {
-                    Text = piece.Text,
-                    Font = font,
-                    TextColor = piece.IsLink ? LinkColor : Color.White,
-                    AutoSizeWidth = true,
-                    AutoSizeHeight = true,
-                    Location = new Point(run.X, y),
-                    Parent = linePanel,
-                });
-
-                if (!piece.IsLink)
-                {
-                    plainLabels.Add(label);
-                    continue;
-                }
-
-                // Inside the label's own box, over the descender
-                // clearance rather than below it: a 28px line row has
-                // exactly that much slack, and a rule drawn past it would
-                // be clipped and would break the height contract this
-                // class's DEBUG assert polices.
-                new ClippedPanel()
-                {
-                    Size = new Point(run.Width, UnderlineHeight),
-                    Location = new Point(run.X, y + label.Height - UnderlineHeight),
-                    BackgroundColor = UnderlineColor,
-                    Parent = linePanel,
-                };
-
-                TooltipFacility.ApplyPlain(label, piece.Link.Hint);
-                IconWikiClick.ApplyToLink(label, piece.Link);
-            }
+            LinkedTextRenderer.DrawLine(
+                linePanel, pieces, startX, y, font, Color.White, advance, plainLabels, prefix);
         }
 
         private int CreatePlainNote(PlanRowViewModel row, FlowPanel parent, int panelWidth)

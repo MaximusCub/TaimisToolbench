@@ -1,9 +1,11 @@
 namespace TaimisToolbench.Services
 {
     /// <summary>
-    /// The wiki page an icon's right-click opens, and the sentence that
-    /// tells the reader it can. One value carries both, so the affordance
-    /// and the link can never disagree about whether there is a page.
+    /// The page a right-click opens, and the sentence that tells the
+    /// reader it can. One value carries both, so the affordance and the
+    /// link can never disagree about whether there is a page. Almost every
+    /// target is a wiki page named by its subject; <see cref="ExternalPage"/>
+    /// is the exception and carries a whole url.
     /// <para>
     /// Every hovering icon factory on <c>Views/Rendering/ItemIconTooltip</c>
     /// requires one. The line itself is written by
@@ -28,13 +30,19 @@ namespace TaimisToolbench.Services
         public const string AcquisitionHintText =
             "Right-click to see how to get this on the wiki.";
 
+        /// <summary>The affordance on a link that leaves the wiki.</summary>
+        public const string ExternalHintText =
+            "Right-click to open this page in a browser.";
+
         private readonly string _title;
         private readonly IconWikiPage _page;
+        private readonly string _externalUrl;
 
-        private IconWikiTarget(string title, IconWikiPage page)
+        private IconWikiTarget(string title, IconWikiPage page, string externalUrl = null)
         {
             _title = title;
             _page = page;
+            _externalUrl = externalUrl;
         }
 
         /// <summary>
@@ -45,7 +53,15 @@ namespace TaimisToolbench.Services
         /// </summary>
         public bool HasPage
         {
-            get { return _page != IconWikiPage.None && WikiLinkBuilder.HasWikiPage(_title); }
+            get
+            {
+                if (_page == IconWikiPage.External)
+                {
+                    return WikiLinkLauncher.IsLaunchable(_externalUrl);
+                }
+
+                return _page != IconWikiPage.None && WikiLinkBuilder.HasWikiPage(_title);
+            }
         }
 
         /// <summary>What the second box says about the right-click, or null
@@ -57,6 +73,11 @@ namespace TaimisToolbench.Services
                 if (!HasPage)
                 {
                     return null;
+                }
+
+                if (_page == IconWikiPage.External)
+                {
+                    return ExternalHintText;
                 }
 
                 bool acquisition = _page == IconWikiPage.Acquisition
@@ -80,6 +101,8 @@ namespace TaimisToolbench.Services
 
             switch (_page)
             {
+                case IconWikiPage.External:
+                    return _externalUrl;
                 case IconWikiPage.Acquisition:
                     return WikiLinkBuilder.BuildItemAcquisitionUrl(_title);
                 case IconWikiPage.RecipeSheet:
@@ -89,6 +112,18 @@ namespace TaimisToolbench.Services
                 default:
                     return WikiLinkBuilder.BuildItemPageUrl(_title);
             }
+        }
+
+        /// <summary>
+        /// A page that is not on the wiki, given as a whole url because it
+        /// has no wiki title to build one from - the About tab's credit
+        /// links and the Blish HUD repository. A url the launcher will not
+        /// open renders as plain text, the same way a missing wiki page
+        /// does.
+        /// </summary>
+        public static IconWikiTarget ExternalPage(string url)
+        {
+            return new IconWikiTarget(null, IconWikiPage.External, url);
         }
 
         /// <summary>The subject's own page, for an item or a wallet
@@ -151,6 +186,7 @@ namespace TaimisToolbench.Services
         private enum IconWikiPage
         {
             None,
+            External,
             ItemPage,
             Acquisition,
             RecipeSheet,
