@@ -1146,7 +1146,7 @@ namespace TaimisToolbench.Views
         }
 
         /// <summary>
-        /// Adds the dim heading that opens one filter set. It is a flow cell
+        /// Adds the heading that opens one filter set. It is a flow cell
         /// like the checkboxes, so the flow places it and the set's first
         /// box lands beside it.
         /// </summary>
