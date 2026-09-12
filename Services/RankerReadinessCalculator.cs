@@ -218,11 +218,32 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// What a currency shortfall chip's "N short" is measured against.
+        /// A currency line's held-over-needed pair, in the Crafting Plan
+        /// tab's "HAVE x/y NEEDED" shape: what you hold, a slash, what this
+        /// item still needs.
+        /// <para>
+        /// The numerator is capped at the denominator. A wallet holding more
+        /// than the item needs would otherwise read as a fraction above one,
+        /// which is not what the line is asking.
+        /// </para>
+        /// </summary>
+        public static string ShortfallText(RankerCurrencyShortfall shortfall)
+        {
+            if (shortfall == null)
+            {
+                return null;
+            }
+
+            HeldOverNeeded(shortfall, out long held, out long needed);
+            return FormatAmount(held) + "/" + FormatAmount(needed);
+        }
+
+        /// <summary>
+        /// What a currency line's held-over-needed pair is measured against.
         /// <para>
         /// In Cascade mode <see cref="RankerCurrencyShortfall.Held"/> is the
         /// wallet left after the higher-priority rows took theirs, not the
-        /// account balance, so the bare chip states a number the wallet does
+        /// account balance, so the bare pair states a number the wallet does
         /// not show. The coin chip carries the same qualifier in its own
         /// hover.
         /// </para>
@@ -235,12 +256,32 @@ namespace TaimisToolbench.Services
                 return null;
             }
 
-            string amount = shortfall.Short.ToString("N0", CultureInfo.InvariantCulture);
-            string name = string.IsNullOrEmpty(currencyName) ? "this currency" : currencyName;
+            HeldOverNeeded(shortfall, out long held, out long needed);
+
+            // The line already carries the currency's icon and name, so an
+            // unresolved id drops the word rather than substituting one.
+            string named = string.IsNullOrEmpty(currencyName) ? "" : " " + currencyName;
+            string have = "You have " + FormatAmount(held) + " of the " + FormatAmount(needed)
+                + named + " this item still needs, ";
             return mode == RankerMode.Independent
-                ? "You are " + amount + " " + name + " short for this item, measured against your full wallet."
-                : "You are " + amount + " " + name +
-                  " short for this item, counting what the higher-priority items above it would already have spent.";
+                ? have + "measured against your full wallet."
+                : have + "counting what the higher-priority items above it would already have spent.";
+        }
+
+        /// <summary>
+        /// The pair both the line and its hover state. Held is capped at
+        /// Needed and both are floored at zero, so one clamp serves both.
+        /// </summary>
+        private static void HeldOverNeeded(
+            RankerCurrencyShortfall shortfall, out long held, out long needed)
+        {
+            needed = Math.Max(0, shortfall.Needed);
+            held = Math.Min(Math.Max(0, shortfall.Held), needed);
+        }
+
+        private static string FormatAmount(long value)
+        {
+            return value.ToString("N0", CultureInfo.InvariantCulture);
         }
 
         public static string GateLabel(RankerGate gate)

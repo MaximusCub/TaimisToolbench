@@ -721,7 +721,7 @@ namespace TaimisToolbench.Views
             "Show the five categories under each row - materials, currencies, time gates, disciplines and recipes - as the bars the Ready figure is blended from, along with the notes that explain them. Off by default so more rows fit on screen.";
 
         private const string CurrenciesTooltip =
-            "List the currencies each row is still short of, and by how much. The Currencies category says how close you are; this says which currency.";
+            "List the currencies each row needs, and how much of each you hold. The Currencies category says how close you are; this says which currency.";
 
         /// <summary>
         /// A display choice, not a measurement one: nothing is recomputed and
@@ -1897,7 +1897,7 @@ namespace TaimisToolbench.Views
                     shortfallLabel = new Label
                     {
                         Font = UiFonts.Caption,
-                        Text = ShortfallText(shortfall),
+                        Text = RankerReadinessCalculator.ShortfallText(shortfall),
                         TextColor = ValueTextColor,
                         AutoSizeWidth = true,
                         AutoSizeHeight = true,
@@ -1906,9 +1906,9 @@ namespace TaimisToolbench.Views
                     };
 
                     // In Cascade mode Held is the wallet after the rows above
-                    // took theirs, so the bare "N short" beside it is not
-                    // measured against the account. The coin chip states that
-                    // in its own hover; this is the currency half of it.
+                    // took theirs, so the bare held-over-needed pair beside it
+                    // is not measured against the account. The coin chip states
+                    // that in its own hover; this is the currency half of it.
                     TooltipFacility.ApplyPlain(
                         shortfallLabel,
                         RankerReadinessCalculator.ShortfallTooltip(shortfall, fullName, Mode));
@@ -2300,16 +2300,6 @@ namespace TaimisToolbench.Views
             }
 
             return null;
-        }
-
-        /// <summary>
-        /// What a currency line still owes. Full coverage never reaches here
-        /// - it draws the shared marker instead of a word - so this only
-        /// ever formats a real shortfall.
-        /// </summary>
-        private static string ShortfallText(RankerCurrencyShortfall shortfall)
-        {
-            return shortfall.Short.ToString("N0", CultureInfo.InvariantCulture) + " short";
         }
 
         private IReadOnlyList<string> BuildNotes(RankerRowMetrics metrics)
