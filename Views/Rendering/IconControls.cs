@@ -277,17 +277,6 @@ namespace TaimisToolbench.Views.Rendering
             int iconSize, int borderThickness, string plainText, bool deferArt, out Panel artSquare)
         {
             int frameSize = iconSize + borderThickness * 2;
-
-            // The box stays what the tier reserved; the frame inside it is
-            // drawn at ItemIconTiers.PaintedFrameThickness and the art is
-            // inset to match, so the extra pixel comes out of the picture
-            // and no layout moves. A box too narrow to carry the frame
-            // gives up frame, not art: the alternative is a 0x0 control
-            // that Blish still lays out and hovers.
-            int artInset = Math.Min(
-                ItemIconTiers.PaintedFrameThickness, Math.Max(0, (frameSize - 1) / 2));
-            int artSize = frameSize - (2 * artInset);
-
             // A PLATE for an item, a border RING for a currency. Which one
             // is the frame's own statement (ItemIconFrame.IsOutline), not
             // this method's, so no call site can pick the wrong shape for
@@ -296,7 +285,7 @@ namespace TaimisToolbench.Views.Rendering
                 ? new OutlineFramePanel()
                 {
                     BorderColor = frame.Color,
-                    BorderThickness = artInset,
+                    BorderThickness = borderThickness,
                 }
                 : new ClippedPanel() { BackgroundColor = frame.Color };
             panel.Size = new Point(frameSize, frameSize);
@@ -304,7 +293,7 @@ namespace TaimisToolbench.Views.Rendering
             panel.Parent = parent;
 
             var square = CreateUnframedIcon(
-                panel, iconUrl, artInset, artInset, artSize, plainText, deferArt);
+                panel, iconUrl, borderThickness, borderThickness, iconSize, plainText, deferArt);
             artSquare = HasArt(iconUrl) ? square : null;
             TooltipFacility.ApplyPlain(panel, ResolveTooltip(iconUrl, plainText));
             return panel;

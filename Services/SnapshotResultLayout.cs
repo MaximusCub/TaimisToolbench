@@ -17,9 +17,10 @@ namespace TaimisToolbench.Services
         /// <summary>
         /// Height kept clear below the last row, so the result panel's own
         /// bottom edge never coincides with a row's. A container hands its
-        /// children a clip that has been through one floor/ceil round trip
-        /// and can sit up to two logical pixels high, which lands inside
-        /// the last row's icon frame when the two edges share a y. See
+        /// children a clip that has been through a floor/ceil round trip in
+        /// each direction, and that clip can fall up to two logical pixels
+        /// short of the container's own bottom edge. When the two edges
+        /// share a y it lands inside the last row's icon frame. See
         /// tests/TaimisToolbench.Tests/Services/IconFrameScissorSimulationTests.cs.
         /// </summary>
         public const int TrailingClearance = 1;
