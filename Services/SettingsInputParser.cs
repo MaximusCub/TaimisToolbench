@@ -48,40 +48,6 @@ namespace TaimisToolbench.Services
             return true;
         }
 
-        /// <summary>
-        /// Attempts to parse <paramref name="text"/> as a Homestead
-        /// Refinement efficiency tier: exactly "0",
-        /// "1", or "2" (optionally with surrounding whitespace). Returns
-        /// false (with <paramref name="tier"/> set to 0) for null, blank,
-        /// non-numeric, or any integer outside 0-2 - mirrors
-        /// HomesteadEfficiencyTiers' own constructor range so a value that
-        /// parses here is always safe to hand to it.
-        /// </summary>
-        public static bool TryParseTier(string text, out int tier)
-        {
-            tier = 0;
-
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                return false;
-            }
-
-            string trimmed = text.Trim();
-
-            if (!int.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out int parsed))
-            {
-                return false;
-            }
-
-            if (parsed < 0 || parsed > 2)
-            {
-                return false;
-            }
-
-            tier = parsed;
-            return true;
-        }
-
         // The Settings tab
         // accepts a human-friendly MB value for LogMaxSizeBytes ("2", not a
         // raw byte count) and converts here. 1-1000 MB is a generous but
@@ -96,8 +62,8 @@ namespace TaimisToolbench.Services
         /// Attempts to parse <paramref name="text"/> as a positive integer
         /// megabyte value (1-1000) and converts it to a byte count. Returns
         /// false (with <paramref name="maxSizeBytes"/> set to 0) for null,
-        /// blank, non-numeric, or out-of-range input - mirrors TryParseTier's
-        /// own shape.
+        /// blank, non-numeric, or out-of-range input - mirrors
+        /// TryParseCopperValue's own shape.
         /// </summary>
         public static bool TryParseLogMaxSizeMb(string text, out long maxSizeBytes)
         {

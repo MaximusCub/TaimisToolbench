@@ -155,6 +155,9 @@ namespace TaimisToolbench.Views
 
             /// <summary>A Checkbox standing in for the name, no cluster.</summary>
             Checkbox,
+
+            /// <summary>A Dropdown over a fixed option list, no tag slot.</summary>
+            Dropdown,
         }
 
         /// <summary>
@@ -171,6 +174,8 @@ namespace TaimisToolbench.Views
             public string NameText;
 
             public TextBox Input;
+
+            public Dropdown Selector;
 
             // The row's ONE tag slot, shared by two labels at the same spot:
             // the unit hint, replaced by the validation error while the
@@ -270,14 +275,13 @@ namespace TaimisToolbench.Views
 
         // One row per Homestead Refinement material
         // family. MaterialItemId is internal-only bookkeeping (never
-        // displayed - see MaterialLabel) used solely to route the parsed
+        // displayed - see MaterialLabel) used solely to route the chosen
         // tier back to the right ModuleSettings entry.
         private class HomesteadTierRow
         {
             public int MaterialItemId;
             public string MaterialLabel;
-            public TextBox Input;
-            public FormRow Form;
+            public Dropdown Selector;
         }
 
         private readonly ModuleSettings _settings;
@@ -689,7 +693,7 @@ namespace TaimisToolbench.Views
             {
                 state.AddText(
                     SettingsFormState.HomesteadTierKey(row.MaterialItemId),
-                    row.Input?.Text);
+                    row.Selector?.SelectedItem);
             }
 
             // Captured through null-conditionals rather than skipped when
@@ -1099,6 +1103,12 @@ namespace TaimisToolbench.Views
                     row.Error.Location = new Point(tagX, RowLabelY);
                     break;
 
+                case FormRowKind.Dropdown:
+                    row.Selector.Location = new Point(
+                        SettingsFormLayout.DropdownX(columnWidth),
+                        PlanRelayoutMath.CenterX(RowHeight, SettingsFormLayout.DropdownHeight));
+                    break;
+
                 case FormRowKind.Volume:
                     row.Slider.Location =
                         new Point(SettingsFormLayout.VolumeSliderX(columnWidth), RowLabelY);
@@ -1258,6 +1268,55 @@ namespace TaimisToolbench.Views
             {
                 row.DescriptionLabel = CreateWrappedLabel(section.Panel);
             }
+
+            section.Rows.Add(row);
+            return row;
+        }
+
+        /// <summary>
+        /// One settings row whose value is picked from a fixed list: a
+        /// flexing name and a dropdown pinned to the column's right edge.
+        /// A dropdown cannot hold a value that will not parse, so the row
+        /// has no tag slot and no error label.
+        /// </summary>
+        private FormRow AddDropdownRow(SectionBlock section, string name, IEnumerable<string> options)
+        {
+            var row = new FormRow
+            {
+                Kind = FormRowKind.Dropdown,
+                NameText = name,
+                ClusterWidth = SettingsFormLayout.DropdownWidth,
+            };
+
+            row.Panel = new Panel()
+            {
+                Size = new Point(SettingsFormLayout.SettingsFormMinColumnWidth, RowHeight),
+                Parent = section.Panel,
+            };
+
+            row.NameLabel = new Label()
+            {
+                Font = UiFonts.Body,
+                Text = name,
+                AutoSizeWidth = false,
+                AutoSizeHeight = true,
+                Location = new Point(NameColumnX, RowLabelY),
+                Parent = row.Panel,
+            };
+
+            row.Selector = new Dropdown()
+            {
+                Size = new Point(
+                    SettingsFormLayout.DropdownWidth, SettingsFormLayout.DropdownHeight),
+                Parent = row.Panel,
+            };
+
+            foreach (string option in options)
+            {
+                row.Selector.Items.Add(option);
+            }
+
+            row.Selector.ValueChanged += (_, __) => RefreshDirtyState();
 
             section.Rows.Add(row);
             return row;
@@ -1452,39 +1511,34 @@ namespace TaimisToolbench.Views
         }
 
         /// <summary>
-        /// Three per-material efficiency
-        /// tier rows (Fiber/Metal/Wood), each an integer 0/1/2 entered as
-        /// text and validated on Save - same TextBox+Save shape as the
-        /// Vendor Cost Valuations section above (a plain Checkbox's immediate-
-        /// apply pattern doesn't fit a 3-valued integer, and no Dropdown/
-        /// stepper control is otherwise used in this codebase's Views).
-        /// Labels name the material family only - no raw item/vendor ids
-        /// are ever displayed (repo invariant).
+        /// Three per-material rows (Fiber/Metal/Wood), each a dropdown over
+        /// the three upgrade states and saved with the rest of the tab. The
+        /// setting is entered by hand because no account endpoint reports
+        /// which of these upgrades have been bought. Labels name the
+        /// material family only - no raw item/vendor ids are ever displayed
+        /// (repo invariant).
         /// </summary>
         private void BuildHomesteadRefinementSection()
         {
             var section = BeginSection(
                 "Homestead Refinement",
-                "Efficiency upgrades owned per material (0 = none, 1 = one upgrade, 2 = both).",
+                "Which Homestead Refinement efficiency upgrades you have bought.",
                 "Raises how much Refined Homestead material each trade produces.");
 
             AddHomesteadTierRow(section, Gw2Constants.RefinedHomesteadFiberItemId, "Fiber (Farm)");
             AddHomesteadTierRow(section, Gw2Constants.RefinedHomesteadMetalItemId, "Metal (Metal Forge)");
             AddHomesteadTierRow(section, Gw2Constants.RefinedHomesteadWoodItemId, "Wood (Lumber Mill)");
-
-            BandSectionTagSlot(section);
         }
 
         private void AddHomesteadTierRow(SectionBlock section, int materialItemId, string materialLabel)
         {
-            var form = AddInputRow(section, materialLabel, "tier (0-2)", "Must be 0, 1, or 2", null);
+            var form = AddDropdownRow(section, materialLabel, HomesteadTierOptions.All);
 
             _homesteadRows.Add(new HomesteadTierRow
             {
                 MaterialItemId = materialItemId,
                 MaterialLabel = materialLabel,
-                Input = form.Input,
-                Form = form,
+                Selector = form.Selector,
             });
         }
 
@@ -1494,58 +1548,43 @@ namespace TaimisToolbench.Views
 
             foreach (var row in _homesteadRows)
             {
-                row.Input.Text = tiers.GetTier(row.MaterialItemId).ToString(CultureInfo.InvariantCulture);
-                SetRowError(row.Form, "");
+                row.Selector.SelectedItem =
+                    HomesteadTierOptions.TextForTier(tiers.GetTier(row.MaterialItemId));
             }
         }
 
-        private int SaveHomesteadTiers()
+        /// <summary>
+        /// Writes the three dropdowns to their settings entries. Every
+        /// option maps to a tier in range, so this section has no rejected
+        /// rows and reports no invalid count.
+        /// </summary>
+        private void SaveHomesteadTiers()
         {
-            int invalidCount = 0;
-            var parsedTiers = new Dictionary<int, int>();
-
             foreach (var row in _homesteadRows)
             {
-                SetRowError(row.Form, "");
+                int tier = HomesteadTierOptions.TierForText(row.Selector.SelectedItem);
 
-                if (SettingsInputParser.TryParseTier(row.Input.Text, out int tier))
+                if (row.MaterialItemId == Gw2Constants.RefinedHomesteadFiberItemId)
                 {
-                    parsedTiers[row.MaterialItemId] = tier;
+                    _settings.HomesteadFiberTier.Value = tier;
                 }
-                else
+                else if (row.MaterialItemId == Gw2Constants.RefinedHomesteadMetalItemId)
                 {
-                    // Left out of this save entirely - whatever was
-                    // previously persisted for this material is preserved,
-                    // matching the currency valuation Save button's
-                    // "invalid rows are not saved" contract.
-                    SetRowError(row.Form, row.Form.ErrorText);
-                    invalidCount++;
+                    _settings.HomesteadMetalTier.Value = tier;
+                }
+                else if (row.MaterialItemId == Gw2Constants.RefinedHomesteadWoodItemId)
+                {
+                    _settings.HomesteadWoodTier.Value = tier;
                 }
             }
-
-            if (parsedTiers.TryGetValue(Gw2Constants.RefinedHomesteadFiberItemId, out int fiberTier))
-            {
-                _settings.HomesteadFiberTier.Value = fiberTier;
-            }
-
-            if (parsedTiers.TryGetValue(Gw2Constants.RefinedHomesteadMetalItemId, out int metalTier))
-            {
-                _settings.HomesteadMetalTier.Value = metalTier;
-            }
-
-            if (parsedTiers.TryGetValue(Gw2Constants.RefinedHomesteadWoodItemId, out int woodTier))
-            {
-                _settings.HomesteadWoodTier.Value = woodTier;
-            }
-
-            return invalidCount;
         }
 
         /// <summary>
         /// One "Diagnostics" checkbox (idiom (a),
         /// immediate-apply - matches ValueOwnMaterials above) plus two
-        /// TextBox+Save rows (idiom (b) - matches the Homestead section
-        /// above) for the log file's size cap and retention window. This is
+        /// TextBox+Save rows (idiom (b) - matches the Vendor Cost
+        /// Valuations rows) for the log file's size cap and retention
+        /// window. This is
         /// the ONE diagnostics toggle for the whole module per the
         /// tab-roadmap-proposal synthesis (Section 2.1) - no separate
         /// ScrollDiagnosticsEnabled checkbox is added alongside it.
@@ -2733,14 +2772,14 @@ namespace TaimisToolbench.Views
         /// <summary>
         /// Persists every section - currency valuations, Homestead tiers,
         /// logging policy, snapshot refresh interval - in place of the four
-        /// per-section Save buttons. Each section keeps its own per-row
-        /// error labels and its own "invalid rows are left as previously
-        /// persisted" contract; only the confirmation is shared.
+        /// per-section Save buttons. Each text-entry section keeps its own
+        /// per-row error labels and its own "invalid rows are left as
+        /// previously persisted" contract; only the confirmation is shared.
         /// </summary>
         public SaveOutcome SaveAll()
         {
             bool valuationsSaved = SaveValuations(out int invalidCount);
-            invalidCount += SaveHomesteadTiers();
+            SaveHomesteadTiers();
             invalidCount += SaveLoggingSettings();
             invalidCount += SaveSnapshotSettings();
 
