@@ -614,23 +614,21 @@ fully region-mapped with KNOWN-ISSUES anchor comments at each region head.
 
 The file then grew back past its own pre-decomposition baseline - 5,281
 lines on 2026-08-25, +2,156 in the 33 days after the decomposition
-landed - with nothing in CI to notice. Its current size is the entry in
-`docs/file-budgets.txt`, which CI enforces, rather than a number restated
-here that goes stale the moment the file moves; it was 5,185 against the
-~4,802 above when this paragraph was last checked. `Views/Rendering/` holds
-about 12,100 lines across 46 files, so the split of plan-tab code is roughly
-70% outside the view -
+landed. It was 5,615 lines on 2026-09-12, against the ~4,802 above.
+`Views/Rendering/` holds about 13,700 lines across 50 files, so the split
+of plan-tab code is roughly 70% outside the view -
 a ratio that can move in either direction, unlike the one-off before/after
 figure. Both numbers, and the date, so a later reader can re-run the two
 commands rather than take a characterization on trust.
 
-Two things changed on that date so the regrowth cannot repeat quietly.
-`docs/file-budgets.txt` pins every tracked `.cs` file to its size that
-day and a CI step fails when a file exceeds its entry, so growth now
-costs a visible line in a checked-in file rather than nothing. And the
-view's `#region` markers, which had numbered eight responsibilities but
+Nothing in CI measures the file's length. A per-file line budget was tried
+between 2026-08-25 and 2026-09-12 and removed: every entry was set to the
+file's size on the day it was raised, so the gate was set by the same
+commit it was meant to gate. Growth is caught at review, not by a counter.
+On 2026-08-25 the view's `#region` markers were renamed. They had
+numbered eight responsibilities but
 shipped twenty-three disjoint blocks with eleven headers reading
-"(continued)", were renamed: each marker now names its own block and no
+"(continued)". Each marker now names its own block and no
 two names repeat. The numbering went rather than the code, because making
 it true would mean reordering exactly the scroll/wheel/ticker machinery
 the WP-26 cut above is about.
