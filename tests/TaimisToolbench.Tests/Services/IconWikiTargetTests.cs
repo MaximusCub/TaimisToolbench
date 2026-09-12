@@ -124,6 +124,36 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void ExternalPage_OpensTheUrlItWasGivenAndNamesTheGesture()
+        {
+            var target = IconWikiTarget.ExternalPage("https://gw2efficiency.com");
+
+            Assert.True(target.HasPage);
+            Assert.Equal(IconWikiTarget.ExternalHintText, target.Hint);
+            Assert.Equal("https://gw2efficiency.com", target.BuildUrl());
+        }
+
+        /// <summary>
+        /// The launcher opens https and nothing else, and an external
+        /// target answers with the same rule rather than a second copy of
+        /// it. A target that fails it draws as plain text.
+        /// </summary>
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("http://gw2efficiency.com")]
+        [InlineData("file:///C:/Windows/System32/cmd.exe")]
+        [InlineData("C:\\Windows\\System32\\cmd.exe")]
+        public void ExternalPage_OpensNothingItCannotLaunch(string url)
+        {
+            var target = IconWikiTarget.ExternalPage(url);
+
+            Assert.False(target.HasPage);
+            Assert.Null(target.Hint);
+            Assert.Null(target.BuildUrl());
+        }
+
+        [Fact]
         public void AnApostropheIsEncodedTheWayTheWikiExpects()
         {
             Assert.Equal(

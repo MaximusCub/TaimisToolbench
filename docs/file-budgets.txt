@@ -302,7 +302,7 @@ Services/TableSortState.cs                                                      
 Services/TransmutedNameIndex.cs                                                         215
 Services/UiGlyphs.cs                                                                    124
 Services/GlyphFontDescriptor.cs                                                         316
-Services/IconWikiTarget.cs                                                              176
+Services/IconWikiTarget.cs                                                              212
 Services/PlanAccountRefresh.cs                                                          48
 Services/PlanItemIds.cs                                                                 73
 Services/ItemTooltipFacts.cs                                                            160
@@ -333,7 +333,7 @@ Services/VendorOfferLocations.cs                                                
 Services/VendorOfferStore.cs                                                            218
 Services/WheelDeltaSanitizer.cs                                                         92
 Services/WikiLinkBuilder.cs                                                             177
-Services/WikiLinkLauncher.cs                                                           171
+Services/WikiLinkLauncher.cs                                                           173
 Services/WindowPlacement.cs                                                             106
 Services/WindowSizing.cs                                                                298
 Views/AboutTabContent.cs                                                                1000
@@ -665,8 +665,8 @@ tests/TaimisToolbench.Tests/Services/SummarySectionLayoutMathTests.cs           
 tests/TaimisToolbench.Tests/Services/TableSortStateTests.cs                             198
 tests/TaimisToolbench.Tests/Services/GlyphButtonMetricsTests.cs                         143
 tests/TaimisToolbench.Tests/Services/GlyphFontDescriptorTests.cs                        332
-tests/TaimisToolbench.Tests/Services/IconStandardCallSiteTests.cs                       422
-tests/TaimisToolbench.Tests/Services/IconWikiTargetTests.cs                             134
+tests/TaimisToolbench.Tests/Services/IconStandardCallSiteTests.cs                       423
+tests/TaimisToolbench.Tests/Services/IconWikiTargetTests.cs                             164
 tests/TaimisToolbench.Tests/Services/ItemTooltipStandardTests.cs                        225
 tests/TaimisToolbench.Tests/Services/RequiredRecipeSheetNamingTests.cs                  185
 tests/TaimisToolbench.Tests/Services/SecondTooltipBoxTests.cs                           123

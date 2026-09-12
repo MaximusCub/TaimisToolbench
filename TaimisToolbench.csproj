@@ -208,6 +208,8 @@
     <Compile Include="Services\MultiItemHeaderLayout.cs" />
     <Compile Include="Services\MultiItemHeaderTooltipComposer.cs" />
     <Compile Include="Services\NoteRunLayout.cs" />
+    <Compile Include="Services\AboutTabText.cs" />
+    <Compile Include="Services\LinkPhraseSpans.cs" />
     <Compile Include="Services\TextAdvanceMath.cs" />
     <Compile Include="Services\NoteSegmentWrap.cs" />
     <Compile Include="Services\NotesSectionLayoutMath.cs" />
