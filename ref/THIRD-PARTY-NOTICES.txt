@@ -46,10 +46,8 @@ a table of default decision-only currency valuations. The first block of that
 table is adapted from @gw2efficiency/recipe-calculation,
 src/static/currencyDecisionPrices.ts
 (https://github.com/gw2efficiency/recipe-calculation), used under the MIT
-License. Entries were dropped or restated where this module needed a
-different value; that file records each change. The second block of that
-table is this repository's own work and carries no upstream claim. No other
-part of this module is derived from gw2efficiency.
+License. That file marks where the adapted block ends; the rest of the
+table is this repository's own work and carries no upstream claim.
 
 gw2efficiency recipe-calculation
 Copyright (c) 2016 queicherius (David Reess)
