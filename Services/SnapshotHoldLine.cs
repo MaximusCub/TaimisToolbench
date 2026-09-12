@@ -87,9 +87,7 @@ namespace TaimisToolbench.Services
 
             if (AccountItemIndex.TryGetCharacterName(rawSource, out string characterName))
             {
-                location.Category = AccountItemIndex.IsWornGearPlace(rawSource)
-                    ? SnapshotHoldCategory.Equipped
-                    : SnapshotHoldCategory.Bags;
+                location.Category = CharacterPlaceOf(rawSource);
                 location.CharacterName = characterName;
                 return location;
             }
@@ -122,6 +120,24 @@ namespace TaimisToolbench.Services
             }
 
             return location;
+        }
+
+        /// <summary>
+        /// Which of a character's three places a source key names. Gear the
+        /// character is wearing and gear parked in one of its other saved
+        /// equipment templates are separate categories, because "Equipped"
+        /// over both told a player they were wearing a spare set.
+        /// </summary>
+        private static SnapshotHoldCategory CharacterPlaceOf(string rawSource)
+        {
+            if (AccountItemIndex.IsWornGearPlace(rawSource))
+            {
+                return SnapshotHoldCategory.Equipped;
+            }
+
+            return AccountItemIndex.IsTemplateGearPlace(rawSource)
+                ? SnapshotHoldCategory.EquipmentTemplate
+                : SnapshotHoldCategory.Bags;
         }
 
         /// <summary>
@@ -641,6 +657,7 @@ namespace TaimisToolbench.Services
                 case SnapshotHoldCategory.SharedInventory: return "Shared Inventory";
                 case SnapshotHoldCategory.Bags: return "Bags";
                 case SnapshotHoldCategory.Equipped: return "Equipped";
+                case SnapshotHoldCategory.EquipmentTemplate: return "Equipment Templates";
                 case SnapshotHoldCategory.Bank: return "Bank";
                 case SnapshotHoldCategory.MaterialStorage: return "Material Storage";
                 case SnapshotHoldCategory.LegendaryArmory: return "Legendary Armory";
