@@ -41,6 +41,27 @@ namespace TaimisToolbench.Services
 
         public const int ProseMeasure = 560;
 
+        /// <summary>
+        /// Band a subsection heading draws in, and where its label sits in
+        /// that band. A section's own band is 38 because it ends in a 2px
+        /// rule; a subheading draws no rule, so it takes the plan tables'
+        /// 20pt column-header band instead of inventing a third tier.
+        /// </summary>
+        public const int SubheadingBandHeight = PlanContentHeightMath.ColumnHeaderRowHeight;
+
+        public const int SubheadingTitleY = PlanContentHeightMath.ColumnHeaderLabelY;
+
+        /// <summary>Gap between one top-level block of the document and the
+        /// next.</summary>
+        public const int SectionGap = 20;
+
+        /// <summary>
+        /// Gap above a subsection. Smaller than <see cref="SectionGap"/>,
+        /// which is the only thing making three subsections read as one
+        /// section rather than as three peers.
+        /// </summary>
+        public const int SubsectionGap = 8;
+
         public const string SourceLabel = "Source";
         public const string AuthorLabel = "Author";
         public const string BuiltWithLabel = "Built with";

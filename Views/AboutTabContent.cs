@@ -88,7 +88,7 @@ namespace TaimisToolbench.Views
         private static readonly int ProseParagraphGap = ProseLinePitch / 2;
 
         /// <summary>Gap between one block on the board and the next.</summary>
-        private const int BlockGap = 20;
+        private const int BlockGap = AboutLayoutMath.SectionGap;
 
         // The ramp's section-title band, named once in PlanContentHeightMath
         // and aliased here rather than re-derived.
@@ -150,6 +150,10 @@ namespace TaimisToolbench.Views
             public Panel Rule;
             public Label Body;
             public string BodyText;
+
+            /// <summary>A block that belongs to the section above it: a
+            /// 20pt heading, no rule, and the narrower gap above.</summary>
+            public bool IsSubsection;
 
             /// <summary>A block whose words carry links is drawn as runs
             /// rather than as one Label - see CreateLinkedProseBlock.</summary>
@@ -269,8 +273,20 @@ namespace TaimisToolbench.Views
                 string.IsNullOrWhiteSpace(_dataDirectoryPath) ? NotAvailableText : _dataDirectoryPath);
 
             CreateProseBlock("Disclaimer", ArenaNetDisclaimerText);
+
+            // Credits is a heading over the three subsections below it and
+            // carries no body of its own, so it is placed in the flow here
+            // rather than by CreateProseBlock's body branch.
+            _proseBlocks.Add(CreateProseBlock(AboutTabText.CreditsSectionTitle, null));
             CreateLinkedProseBlock(
-                AboutTabText.CreditsSectionTitle, AboutTabText.CreditParagraphs());
+                AboutTabText.Gw2EfficiencySubheading, AboutTabText.CreditParagraphs(),
+                subsection: true);
+            CreateLinkedProseBlock(
+                AboutTabText.BlishHudSubheading, AboutTabText.BlishHudParagraphs(),
+                subsection: true);
+            CreateLinkedProseBlock(
+                AboutTabText.OpenSourceSubheading, AboutTabText.OpenSourceParagraphs(),
+                subsection: true);
 
             ApplyLayout(ContentWidth(container), measureText: true);
 
@@ -362,14 +378,21 @@ namespace TaimisToolbench.Views
             };
         }
 
-        private ProseBlock CreateProseBlock(string title, string body)
+        private static int BandHeight(bool subsection)
         {
+            return subsection ? AboutLayoutMath.SubheadingBandHeight : SectionHeaderRowHeight;
+        }
+
+        private ProseBlock CreateProseBlock(string title, string body, bool subsection = false)
+        {
+            int band = BandHeight(subsection);
             var block = new ProseBlock
             {
                 BodyText = body,
+                IsSubsection = subsection,
                 Panel = new Panel()
                 {
-                    Size = new Point(AboutLayoutMath.FactsMinWidth, SectionHeaderRowHeight),
+                    Size = new Point(AboutLayoutMath.FactsMinWidth, band),
                     Parent = _documentPanel,
                 },
             };
@@ -377,22 +400,29 @@ namespace TaimisToolbench.Views
             block.TitleLabel = new Label()
             {
                 Text = title,
-                Font = UiFonts.SectionTitle,
+                Font = subsection ? UiFonts.ColumnHeader : UiFonts.SectionTitle,
                 AutoSizeWidth = true,
                 AutoSizeHeight = true,
-                Location = new Point(Inset, SectionHeaderTitleY),
+                Location = new Point(
+                    Inset,
+                    subsection ? AboutLayoutMath.SubheadingTitleY : SectionHeaderTitleY),
                 Parent = block.Panel,
             };
 
             // These two headings were the only SectionTitle bands in the
-            // module drawing no rule.
-            block.Rule = new Panel()
+            // module drawing no rule. A subheading draws none either way:
+            // the rule is what marks a top-level section, so one under each
+            // subheading would make three peers of what has to read as one.
+            if (!subsection)
             {
-                Size = new Point(AboutLayoutMath.FactsMinWidth, 2),
-                Location = new Point(0, SectionHeaderRowHeight - 3),
-                BackgroundColor = SectionDividerColor,
-                Parent = block.Panel,
-            };
+                block.Rule = new Panel()
+                {
+                    Size = new Point(AboutLayoutMath.FactsMinWidth, 2),
+                    Location = new Point(0, SectionHeaderRowHeight - 3),
+                    BackgroundColor = SectionDividerColor,
+                    Parent = block.Panel,
+                };
+            }
 
             if (body != null)
             {
@@ -409,9 +439,10 @@ namespace TaimisToolbench.Views
         /// draws one string in one colour with no underline.
         /// </summary>
         private ProseBlock CreateLinkedProseBlock(
-            string title, IReadOnlyList<IReadOnlyList<PlanNoteSegment>> paragraphs)
+            string title, IReadOnlyList<IReadOnlyList<PlanNoteSegment>> paragraphs,
+            bool subsection = false)
         {
-            var block = CreateProseBlock(title, null);
+            var block = CreateProseBlock(title, null, subsection);
             block.Paragraphs = paragraphs;
             block.BodyHost = new Panel()
             {
@@ -608,7 +639,9 @@ namespace TaimisToolbench.Views
             {
                 if (i > 0)
                 {
-                    rightY += BlockGap;
+                    rightY += _proseBlocks[i].IsSubsection
+                        ? AboutLayoutMath.SubsectionGap
+                        : BlockGap;
                 }
 
                 rightY = LayoutProseBlock(_proseBlocks[i], rightX, rightY, columnWidth, measureText);
@@ -708,22 +741,25 @@ namespace TaimisToolbench.Views
         private int LayoutProseBlock(ProseBlock block, int x, int y, int columnWidth, bool measureText)
         {
             block.Panel.Location = new Point(x, y);
-            block.Rule.Size = new Point(columnWidth, 2);
+            if (block.Rule != null)
+            {
+                block.Rule.Size = new Point(columnWidth, 2);
+            }
 
-            int height = SectionHeaderRowHeight;
+            int band = BandHeight(block.IsSubsection);
+            int height = band;
             if (block.Body != null)
             {
                 height += TitleToContentGap
                     + LayoutProse(
-                        block.Body, block.BodyText, 0,
-                        SectionHeaderRowHeight + TitleToContentGap, columnWidth, measureText);
+                        block.Body, block.BodyText, 0, band + TitleToContentGap,
+                        columnWidth, measureText);
             }
             else if (block.BodyHost != null)
             {
                 height += TitleToContentGap
                     + LayoutLinkedProse(
-                        block, SectionHeaderRowHeight + TitleToContentGap, columnWidth,
-                        measureText);
+                        block, band + TitleToContentGap, columnWidth, measureText);
             }
 
             block.Panel.Size = new Point(columnWidth, height);
