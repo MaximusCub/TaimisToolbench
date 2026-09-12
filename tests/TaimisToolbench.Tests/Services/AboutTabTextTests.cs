@@ -56,6 +56,17 @@ namespace TaimisToolbench.Tests.Services
             Assert.Contains("Ecmel Tugcu", thanks);
         }
 
+        // gw2efficiency's maintainer restricts their recipe and crafting
+        // DATA, not the approach, so the sentence names custom data.
+        [Fact]
+        public void TheCreditCopy_SaysWhatItRunsIndependentlyOf()
+        {
+            Assert.Contains(
+                "runs completely independently of their libraries, custom data or APIs,"
+                    + " but reimplements similar approaches.",
+                PlanNoteSegment.Join(AboutTabText.CreditParagraphs()[0]));
+        }
+
         [Fact]
         public void EveryParagraph_RejoinsToTheTextItWasSplitFrom()
         {
@@ -264,6 +275,19 @@ namespace TaimisToolbench.Tests.Services
             Assert.True(only.IsLink);
             Assert.Equal("https://github.com/MaximusCub/TaimisToolbench", only.Text);
             Assert.Equal(only.Text, only.Link.BuildUrl());
+        }
+
+        [Fact]
+        public void LicenseValue_IsTheLicenceNameAsOneLinkToTheLicenceFile()
+        {
+            var only = Assert.Single(AboutTabText.LicenseValue());
+
+            Assert.True(only.IsLink);
+            Assert.Equal("MIT", only.Text);
+            Assert.Equal(AboutTabText.LicenseUrl, only.Link.BuildUrl());
+            Assert.Equal(
+                "https://github.com/MaximusCub/TaimisToolbench/blob/master/LICENSE",
+                only.Link.BuildUrl());
         }
 
         [Fact]
