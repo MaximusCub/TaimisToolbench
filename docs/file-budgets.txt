@@ -282,7 +282,7 @@ Services/SnapshotHoldLine.cs                                                    
 Services/SnapshotItemGridLayout.cs                                                      343
 Services/SnapshotIconWindow.cs                                                          185
 Services/SnapshotRefreshSlot.cs                                                         185
-Services/SnapshotResultLayout.cs                                                        90
+Services/SnapshotResultLayout.cs                                                        105
 Services/SnapshotSearchResultBuilder.cs                                                 661
 Services/SnapshotStore.cs                                                               98
 Services/SnapshotTableSorter.cs                                                         99
@@ -494,6 +494,7 @@ tests/TaimisToolbench.Tests/Services/Gw2RecipeApiClientHttpTests.cs             
 tests/TaimisToolbench.Tests/Services/Gw2RecipeApiClientParseTests.cs                    248
 tests/TaimisToolbench.Tests/Services/HeaderCellMathTests.cs                             221
 tests/TaimisToolbench.Tests/Services/IconFrameGeometryTests.cs                          127
+tests/TaimisToolbench.Tests/Services/IconFrameScissorSimulationTests.cs                 284
 tests/TaimisToolbench.Tests/Services/InlineSpinnerLayoutTests.cs                        141
 tests/TaimisToolbench.Tests/Services/InventoryReducerTests.cs                           1775
 tests/TaimisToolbench.Tests/Services/ItemDescriptionSanitizerTests.cs                   155
@@ -648,7 +649,7 @@ tests/TaimisToolbench.Tests/Services/SnapshotHoldLineTests.cs                   
 tests/TaimisToolbench.Tests/Services/SnapshotItemGridLayoutTests.cs                     427
 tests/TaimisToolbench.Tests/Services/SnapshotIconWindowTests.cs                         279
 tests/TaimisToolbench.Tests/Services/SnapshotRefreshSlotTests.cs                        335
-tests/TaimisToolbench.Tests/Services/SnapshotResultLayoutTests.cs                       94
+tests/TaimisToolbench.Tests/Services/SnapshotResultLayoutTests.cs                       99
 tests/TaimisToolbench.Tests/Services/SnapshotSearchResultBuilderTests.cs                1332
 tests/TaimisToolbench.Tests/Services/SnapshotSerializationTests.cs                      283
 tests/TaimisToolbench.Tests/Services/SnapshotStoreTests.cs                              545
