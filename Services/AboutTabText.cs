@@ -38,12 +38,23 @@ namespace TaimisToolbench.Services
         public const string ThirdPartyNoticesUrl =
             "https://github.com/MaximusCub/TaimisToolbench/blob/master/ref/THIRD-PARTY-NOTICES.txt";
 
+        /// <summary>
+        /// The module's own licence file, in its repository. Pinned to
+        /// master for the same reason as the notices link above.
+        /// </summary>
+        public const string LicenseUrl =
+            "https://github.com/MaximusCub/TaimisToolbench/blob/master/LICENSE";
+
+        /// <summary>The whole value of the "License" row, and the word it
+        /// hangs the licence file link on.</summary>
+        public const string LicenseName = "MIT";
+
         /// <summary>The word the "Built with" row hangs the Blish HUD
         /// repository link on. The brackets around it are plain text.</summary>
         public const string SourceLinkWord = "source";
 
         public const string CreditParagraph1 =
-            "This module was both inspired by and built upon the great work of the gw2efficiency team. Much of the hardest parts of crafting optimization that this module solves follow the same solutions this team of talented community contributors have created. Taimi's Toolbench runs completely independently of their libraries or APIs, but reimplements logic following their approach.";
+            "This module was both inspired by and built upon the great work of the gw2efficiency team. Much of the hardest parts of crafting optimization that this module solves follow the same solutions this team of talented community contributors have created. Taimi's Toolbench runs completely independently of their libraries, custom data or APIs, but reimplements similar approaches.";
 
         public const string CreditParagraph2 =
             "If you enjoy this module, consider checking out gw2efficiency.com, supporting them via their Patreon or directly via their PayPal.";
@@ -158,6 +169,18 @@ namespace TaimisToolbench.Services
             return new[]
             {
                 PlanNoteSegment.Plain(string.IsNullOrWhiteSpace(url) ? fallbackText ?? "" : url),
+            };
+        }
+
+        /// <summary>
+        /// The "License" row's value: the licence name as one link to the
+        /// licence file in the module's repository.
+        /// </summary>
+        public static IReadOnlyList<PlanNoteSegment> LicenseValue()
+        {
+            return new[]
+            {
+                PlanNoteSegment.Linked(LicenseName, IconWikiTarget.ExternalPage(LicenseUrl)),
             };
         }
 
