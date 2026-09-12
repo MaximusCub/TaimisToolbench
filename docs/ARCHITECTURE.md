@@ -621,10 +621,11 @@ a ratio that can move in either direction, unlike the one-off before/after
 figure. Both numbers, and the date, so a later reader can re-run the two
 commands rather than take a characterization on trust.
 
-Nothing in CI measures the file's length. A per-file line budget was tried
-between 2026-08-25 and 2026-09-12 and removed: every entry was set to the
-file's size on the day it was raised, so the gate was set by the same
-commit it was meant to gate. Growth is caught at review, not by a counter.
+Nothing in CI measures the file's length. A per-file line budget ran from
+2026-08-25 to 2026-09-12 and was removed. Every entry was set to the file's
+size on the day it was raised. The gate was set by the commit it gated.
+Growth is caught at review, not by a counter.
+
 On 2026-08-25 the view's `#region` markers were renamed. They had
 numbered eight responsibilities but
 shipped twenty-three disjoint blocks with eleven headers reading
