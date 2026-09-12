@@ -99,7 +99,7 @@ Models/SnapshotCharacterDiscipline.cs                                           
 Models/SnapshotHoldLocation.cs                                                          84
 Models/SnapshotItemEntry.cs                                                             80
 Models/SnapshotSearchRow.cs                                                             58
-Models/SnapshotSourceFilter.cs                                                          47
+Models/SnapshotSourceFilter.cs                                                          48
 Models/SnapshotWalletEntry.cs                                                           13
 Models/SocketedUpgradeIds.cs                                                            35
 Models/TimegatedItem.cs                                                                 37
@@ -114,7 +114,7 @@ Properties/AssemblyInfo.cs                                                      
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
 Services/AccountDataSource.cs                                                           117
-Services/AccountItemIndex.cs                                                            450
+Services/AccountItemIndex.cs                                                            489
 Services/AchievementBitDedupPrePass.cs                                                  197
 Services/AcquisitionHintService.cs                                                      75
 Services/BoundedConcurrency.cs                                                          51
@@ -283,7 +283,7 @@ Services/SnapshotItemGridLayout.cs                                              
 Services/SnapshotIconWindow.cs                                                          185
 Services/SnapshotRefreshSlot.cs                                                         185
 Services/SnapshotResultLayout.cs                                                        90
-Services/SnapshotSearchResultBuilder.cs                                                 661
+Services/SnapshotSearchResultBuilder.cs                                                 692
 Services/SnapshotStore.cs                                                               98
 Services/SnapshotTableSorter.cs                                                         99
 Services/SocketedUpgradeIndex.cs                                                        146
@@ -485,6 +485,7 @@ tests/TaimisToolbench.Tests/Services/DisciplinesColumnMathTests.cs              
 tests/TaimisToolbench.Tests/Services/EquipmentTemplatePlaceTests.cs                     351
 tests/TaimisToolbench.Tests/Services/EquippedRuneSetTests.cs                            217
 tests/TaimisToolbench.Tests/Services/ExcessCraftOutputCalculatorTests.cs                345
+tests/TaimisToolbench.Tests/Services/FilterSetTests.cs                                  307
 tests/TaimisToolbench.Tests/Services/FirstLoadSnapshotGateTests.cs                      153
 tests/TaimisToolbench.Tests/Services/GridLawGoldenTests.cs                              100
 tests/TaimisToolbench.Tests/Services/Gw2ApiClient404Tests.cs                            213

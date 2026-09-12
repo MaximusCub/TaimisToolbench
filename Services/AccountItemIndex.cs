@@ -6,6 +6,25 @@ using TaimisToolbench.Models;
 
 namespace TaimisToolbench.Services
 {
+    /// <summary>
+    /// The character-held places an AccountItemIndex source key can name.
+    /// A key that names no character is <see cref="None"/>.
+    /// </summary>
+    internal enum CharacterPlaceKind
+    {
+        None = 0,
+
+        /// <summary>A character's bag contents.</summary>
+        Bags,
+
+        /// <summary>The gear a character is wearing right now.</summary>
+        Equipped,
+
+        /// <summary>Gear in a character's other saved equipment
+        /// templates.</summary>
+        TemplateGear,
+    }
+
     internal class AccountItemIndex
     {
         public const string SourceMaterialStorage = "MaterialStorage";
@@ -143,28 +162,48 @@ namespace TaimisToolbench.Services
         /// </summary>
         public static int CharacterNameOffset(string source)
         {
+            int nameOffset;
+            CharacterPlaceOf(source, out nameOffset);
+            return nameOffset;
+        }
+
+        /// <summary>
+        /// Which character-held place a source key names, plus where that
+        /// character's name starts in it. The kind is
+        /// <see cref="CharacterPlaceKind.None"/> with an offset of -1 when
+        /// the key belongs to no character. One pass over the key, because
+        /// the Snapshot tab's filter asks both questions about every source
+        /// of every item on each keystroke.
+        /// </summary>
+        public static CharacterPlaceKind CharacterPlaceOf(string source, out int nameOffset)
+        {
+            nameOffset = -1;
+
             int container = ContainerOffset(source);
             if (container < 0)
             {
-                return -1;
+                return CharacterPlaceKind.None;
             }
 
             if (StartsAt(source, container, CharacterSourcePrefix))
             {
-                return container + CharacterSourcePrefix.Length;
+                nameOffset = container + CharacterSourcePrefix.Length;
+                return CharacterPlaceKind.Bags;
             }
 
             if (StartsAt(source, container, CharacterEquipmentSourcePrefix))
             {
-                return container + CharacterEquipmentSourcePrefix.Length;
+                nameOffset = container + CharacterEquipmentSourcePrefix.Length;
+                return CharacterPlaceKind.Equipped;
             }
 
             if (StartsAt(source, container, CharacterTemplateSourcePrefix))
             {
-                return container + CharacterTemplateSourcePrefix.Length;
+                nameOffset = container + CharacterTemplateSourcePrefix.Length;
+                return CharacterPlaceKind.TemplateGear;
             }
 
-            return -1;
+            return CharacterPlaceKind.None;
         }
 
         /// <summary>
