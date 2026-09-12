@@ -3352,7 +3352,32 @@ currency tiers above were; the tooltip header icon's 34x34 was not. The same
 frame proves it: a currency tooltip capture shows the game's header icon at
 34 physical pixels beside the module's own 34-unit frame painted at 31, which
 puts that capture at 0.897. So the tier holds 34 / 0.897 = 38, which paints
-the game's 34 at "Normal" and its 38 at "Large", and the art inside it is 36.
+the game's 34 at "Normal" and its 38 at "Large".
+
+**The frame is reserved at one pixel and painted at two**, decided
+2026-09-12. `ItemIconTiers.FrameBorder` is the term every `FrameSize` is
+built from, and the measured art windows above are what fix it at 1. But a
+1px band is 0.897 physical pixels at GW2 UI Size "Normal", and the GPU
+covers a scanline only when the scanline's centre falls inside the band, so
+the band misses entirely on 10.3% of the vertical positions a window can
+take and on 42.0% at "Small". A reader sees an icon with one edge of its
+frame gone and reads the icon as cut off, which is how this was reported.
+`ItemIconTiers.PaintedFrameThickness` is 2 for the reason
+`PlanContentHeightMath.RowDividerHeight` is: `floor(2 * 0.81) = 1` covers a
+scanline at every shipped scale. The extra pixel comes out of the ART, so
+every `FrameSize` and every layout built on one is unchanged, and the art
+inside the tooltip header's 38 is 34 rather than 36. The sweep is
+`tests/TaimisToolbench.Tests/Services/IconFrameScissorSimulationTests.cs`,
+over the same paint model as section V.26's divider proof.
+
+Thickness alone is not sufficient where a row's own container ends on the
+row's bottom edge. That container hands its children a clip that has been
+through one floor/ceil round trip and can sit up to two logical pixels
+high, which reaches into the last row's frame. The Snapshot tab's result
+panel is sized to its content and so ended exactly there;
+`SnapshotResultLayout.TrailingClearance` moves its bottom edge one pixel
+past the last row. The sweep covers that case at zero clearance and fails
+on it, so the pixel cannot be read as slack and dropped.
 
 ### S1.4 Item tooltips: what the API says and what the game shows
 

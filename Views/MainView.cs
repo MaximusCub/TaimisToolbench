@@ -384,20 +384,13 @@ namespace TaimisToolbench.Views
         // The treatment the plan tables give a quantity column.
         private static readonly Color AmountTextColor = new Color(200, 200, 200);
 
-        // 56, not 52. An item cell stacks a name line at y=4 and a
-        // breakdown line under it; at Font16 the name's line box ends at
-        // y=24, so the breakdown moved from y=24 to y=26 and its lowest ink
-        // from y=43 to y=47. 56 keeps the 9px of bottom slack the 52px cell
-        // had. The wallet cell is unchanged: it is ICON-driven (a 32px icon
-        // at y=2 plus 2), and its single Font16 line's ink (y=27) still sits
-        // well inside 36.
-        private const int ItemRowHeight = 56;
-        private const int WalletRowHeight = 36;
-
-        // Top of each run's icon frame inside its cell. The Amount column
-        // centres on the frame these place, so both numbers are named once.
-        private const int ItemIconY = 1;
-        private const int WalletIconY = 2;
+        // The cell heights and icon tops live in SnapshotItemGridLayout with
+        // the rest of this grid's placement arithmetic, so the icon-frame
+        // scissor sweep can read the numbers the tab actually ships.
+        private const int ItemRowHeight = SnapshotItemGridLayout.ItemRowHeight;
+        private const int WalletRowHeight = SnapshotItemGridLayout.WalletRowHeight;
+        private const int ItemIconY = SnapshotItemGridLayout.ItemIconY;
+        private const int WalletIconY = SnapshotItemGridLayout.WalletIconY;
 
         // Y of each run's Amount text: its capital ink centred on the icon
         // frame beside it, not on the cell. The two runs differ because

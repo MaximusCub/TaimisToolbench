@@ -21,6 +21,28 @@ namespace TaimisToolbench.Services
     internal static class SnapshotItemGridLayout
     {
         /// <summary>
+        /// Height of one item cell. 56, not 52. An item cell stacks a name
+        /// line at y=4 and a breakdown line under it; at Font16 the name's
+        /// line box ends at y=24, so the breakdown sits at y=26 and its
+        /// lowest ink at y=47. 56 keeps the 9px of bottom slack the 52px
+        /// cell had.
+        /// </summary>
+        public const int ItemRowHeight = 56;
+
+        /// <summary>Height of one wallet cell. ICON-driven (a 32px frame at
+        /// <see cref="WalletIconY"/> plus 2), and its single Font16 line's
+        /// ink (y=27) still sits well inside it.</summary>
+        public const int WalletRowHeight = 36;
+
+        /// <summary>Top of an item cell's icon frame. The Amount column
+        /// centres on the frame this places.</summary>
+        public const int ItemIconY = 1;
+
+        /// <summary>Top of a wallet cell's icon frame - see
+        /// <see cref="ItemIconY"/>.</summary>
+        public const int WalletIconY = 2;
+
+        /// <summary>
         /// Left edge of a cell's content, which is the Amount column: the
         /// amount reads before the name, so a long name pushes nothing away
         /// from where a short one puts it.

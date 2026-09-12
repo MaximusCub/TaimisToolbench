@@ -77,11 +77,11 @@ namespace TaimisToolbench.Services
     /// <para>
     /// Art sizes below EXCLUDE the module's own rarity frame, so the frame
     /// lands inside the measured window: 52+2 = 54 against the game's 54-56,
-    /// 40+2 = 42 against 39-40 plus its border. That derivation is why the
-    /// frame is 1px at every tier - a 2px frame would put tier 1 at 56, the
-    /// top of the measured window rather than inside it - and why the
-    /// thickness is a property of the tier here rather than a number each
-    /// call site chooses.
+    /// 40+2 = 42 against 39-40 plus its border. That derivation fixes
+    /// <see cref="FrameBorder"/> at 1 per side and so fixes
+    /// <see cref="FrameSize"/>; what the frame is PAINTED at is
+    /// <see cref="PaintedFrameThickness"/>, which is a different number and
+    /// says why.
     /// </para>
     /// <para>Measurements: docs/ARCHITECTURE.md section S1.3.</para>
     /// </summary>
@@ -107,11 +107,30 @@ namespace TaimisToolbench.Services
         public const int BagSidebarIconSize = 40;
 
         /// <summary>
-        /// The rarity frame, at every tier. See the derivation above: the
-        /// measured art windows already account for one pixel of module
-        /// frame on each side.
+        /// The room a frame RESERVES on each side, at every tier. See the
+        /// derivation above: the measured art windows already account for
+        /// one pixel of module frame on each side. This is the term
+        /// <see cref="FrameSize"/> is built from, so every layout that
+        /// reserves an icon box reserves the same box it always did.
         /// </summary>
         public const int FrameBorder = 1;
+
+        /// <summary>
+        /// The thickness a frame is PAINTED at. 2, not
+        /// <see cref="FrameBorder"/>: Blish applies the GW2 UI scale as a
+        /// GPU matrix, so a 1px band covers 0.897 physical pixels at UI Size
+        /// Normal and rasterizes to no scanline at all on about 10% of the
+        /// vertical positions a window can take (40% at UI Size Small). A
+        /// reader sees a frame with one edge missing and reads the icon as
+        /// cut off. 2px covers at least one scanline at every shipped scale.
+        /// <para>
+        /// The extra pixel comes out of the ART, not out of the reserved
+        /// box, so <see cref="FrameSize"/> and every layout built on it are
+        /// unchanged. The sweep that proves it is
+        /// tests/TaimisToolbench.Tests/Services/IconFrameScissorSimulationTests.cs.
+        /// </para>
+        /// </summary>
+        public const int PaintedFrameThickness = 2;
 
         /// <summary>Art size, in logical pixels, of one tier's icon.</summary>
         public static int ArtSize(ItemIconTier tier)
@@ -160,7 +179,8 @@ namespace TaimisToolbench.Services
             }
         }
 
-        /// <summary>Rarity-frame thickness of one tier's icon.</summary>
+        /// <summary>Room one tier's rarity frame reserves on each side. What
+        /// it is drawn at is <see cref="PaintedFrameThickness"/>.</summary>
         public static int BorderThickness(ItemIconTier tier)
         {
             // Uniform across tiers today, and asked for by tier rather than

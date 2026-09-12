@@ -66,18 +66,23 @@ namespace TaimisToolbench.Tests.Services
         {
             var itemsOnly = Compute(items: 1, wallet: 0);
 
-            Assert.Equal(TitleBand + HeaderBand + ItemRow, itemsOnly.TotalHeight);
+            Assert.Equal(
+                TitleBand + HeaderBand + ItemRow + SnapshotResultLayout.TrailingClearance,
+                itemsOnly.TotalHeight);
         }
 
         [Fact]
         public void TotalHeight_CoversTheLastRowOfTheLastSection()
         {
-            // Nothing auto-sizes here: a short total clips its last row.
+            // Nothing auto-sizes here: a short total clips its last row. The
+            // total also clears the last row by TrailingClearance, so the
+            // panel's bottom edge and a row's never share a y.
             var layout = Compute(items: 3, wallet: 1);
 
             int walletBottom = layout.Wallet.HeaderY + HeaderBand + layout.Wallet.Grid.Height;
 
-            Assert.Equal(walletBottom, layout.TotalHeight);
+            Assert.Equal(
+                walletBottom + SnapshotResultLayout.TrailingClearance, layout.TotalHeight);
             Assert.True(layout.TotalHeight > layout.Wallet.Grid.Cells[0].Y);
         }
 

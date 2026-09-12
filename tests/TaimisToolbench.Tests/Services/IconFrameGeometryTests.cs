@@ -68,7 +68,7 @@ namespace TaimisToolbench.Tests.Services
         public void AListTierCurrencyFrame_PaintsTheRingAndNothingInsideIt()
         {
             const int frameSize = CurrencyIconTiers.WalletListIconSize;
-            const int thickness = ItemIconTiers.FrameBorder;
+            const int thickness = ItemIconTiers.PaintedFrameThickness;
             var painted = PaintedPixels(frameSize, frameSize, thickness);
 
             for (int x = 0; x < frameSize; x++)

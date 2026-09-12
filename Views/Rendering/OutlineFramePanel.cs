@@ -15,7 +15,7 @@ namespace TaimisToolbench.Views.Rendering
     /// <para>
     /// The ring is four <c>DrawOnCtrl</c> calls inside ONE control rather
     /// than four child Panels. Four children per icon would triple the
-    /// control count of every inline coin run and give the 1px edges their
+    /// control count of every inline coin run and give the edges their
     /// own hover, which Blish would resolve in preference to the frame's.
     /// </para>
     /// <para>
