@@ -6,7 +6,7 @@ namespace TaimisToolbench.Models
     /// <summary>
     /// Which account-inventory sources the Snapshot tab's search/filter row
     /// should include (dev/proposals/d1-snapshot-about-settings.md Feature
-    /// 1). The four storage locations default to true (show everything),
+    /// 1). The storage locations default to true (show everything),
     /// matching the pre-search-box tab's implicit no-filter behavior.
     /// <para>
     /// Characters are carried as an EXCLUSION set of bare character names (no
@@ -32,6 +32,15 @@ namespace TaimisToolbench.Models
         public bool SharedInventory { get; set; } = true;
 
         public bool LegendaryArmory { get; set; } = true;
+
+        /// <summary>
+        /// Gear parked in a character's saved equipment templates, which no
+        /// character checkbox can hide on its own: unchecking the character
+        /// hides that character's bags and worn gear with it. Cuts across
+        /// the roster, so it is a location boolean rather than part of
+        /// <see cref="UncheckedCharacters"/>.
+        /// </summary>
+        public bool EquipmentTemplates { get; set; } = true;
 
         public HashSet<string> UncheckedCharacters { get; set; } = new HashSet<string>(StringComparer.Ordinal);
     }

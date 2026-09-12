@@ -563,8 +563,8 @@ namespace TaimisToolbench.Services
         /// controls' own all-checked default), as is a character whose name
         /// is absent from SnapshotSourceFilter.UncheckedCharacters. A raw
         /// source string that matches none of the known shapes
-        /// (Bank/MaterialStorage/SharedInventory/LegendaryArmory, or either
-        /// character encoding) is shown regardless -
+        /// (Bank/MaterialStorage/SharedInventory/LegendaryArmory, or any of
+        /// the three character encodings) is shown regardless -
         /// failing open rather than silently hiding real inventory data
         /// the module does not yet recognize (KNOWN-ISSUES #31's "never
         /// silently mask data" posture); there is no such source today.
@@ -584,6 +584,14 @@ namespace TaimisToolbench.Services
             int characterNameOffset = AccountItemIndex.CharacterNameOffset(rawSource);
             if (characterNameOffset >= 0)
             {
+                // Tested before the roster, because this checkbox is what
+                // hides a spare set without hiding the character holding it.
+                if (!filter.EquipmentTemplates
+                    && AccountItemIndex.IsTemplateGearPlace(rawSource))
+                {
+                    return false;
+                }
+
                 var excluded = filter.UncheckedCharacters;
                 if (excluded == null || excluded.Count == 0)
                 {

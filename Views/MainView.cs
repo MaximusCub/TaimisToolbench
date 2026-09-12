@@ -99,6 +99,7 @@ namespace TaimisToolbench.Views
         private bool _materialStorageEnabled = true;
         private bool _sharedInventoryEnabled = true;
         private bool _legendaryArmoryEnabled = true;
+        private bool _equipmentTemplatesEnabled = true;
 
         // Exclusion set, keyed by character name: absent means checked, so
         // a character new in a fresh snapshot defaults to visible. Stale
@@ -947,6 +948,11 @@ namespace TaimisToolbench.Views
             AddSourceCheckbox("Material Storage", _materialStorageEnabled, isChecked => _materialStorageEnabled = isChecked);
             AddSourceCheckbox("Shared Inventory", _sharedInventoryEnabled, isChecked => _sharedInventoryEnabled = isChecked);
             AddSourceCheckbox("Legendary Armory", _legendaryArmoryEnabled, isChecked => _legendaryArmoryEnabled = isChecked);
+
+            // Cuts across the roster: gear parked in a template a character
+            // is not using is still that character's, so no per-character
+            // box can hide it without hiding their bags too.
+            AddSourceCheckbox("Equipment Templates", _equipmentTemplatesEnabled, isChecked => _equipmentTemplatesEnabled = isChecked);
 
             // A master toggle earns its place only once there is more than
             // one character to cascade to.
@@ -2095,6 +2101,7 @@ namespace TaimisToolbench.Views
                     MaterialStorage = _materialStorageEnabled,
                     SharedInventory = _sharedInventoryEnabled,
                     LegendaryArmory = _legendaryArmoryEnabled,
+                    EquipmentTemplates = _equipmentTemplatesEnabled,
                     UncheckedCharacters = new HashSet<string>(_uncheckedCharacters, StringComparer.Ordinal),
                 };
 

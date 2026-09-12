@@ -18,13 +18,16 @@ namespace TaimisToolbench.Services
         // source carries the account's real, already-deduplicated count.
         public const string SourceLegendaryArmory = "LegendaryArmory";
 
-        // A character's bag contents are stored as "Character:<name>" and the
-        // gear worn on that character as "Equipped:<name>" (see
-        // Gw2AccountSnapshotService). Both prefixes contain a colon, which no
-        // GW2 character name may contain, so a character named e.g. "Bank"
-        // can never collide with a storage-location source key.
+        // A character's bag contents are stored as "Character:<name>", the
+        // gear it is wearing right now as "Equipped:<name>" and the gear
+        // sitting in its other saved equipment templates as
+        // "Template:<name>" (see Services.CharacterRecordProjection). Every
+        // prefix contains a colon, which no GW2 character name may contain,
+        // so a character named e.g. "Bank" can never collide with a
+        // storage-location source key.
         public const string CharacterSourcePrefix = "Character:";
         public const string CharacterEquipmentSourcePrefix = "Equipped:";
+        public const string CharacterTemplateSourcePrefix = "Template:";
 
         // One upgrade component or infusion sitting in a socket of one
         // piece of gear, as "Socketed:<host item id>:<container>", where
@@ -131,9 +134,10 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// Where a character's name starts inside a source key, or -1 when
-        /// the key does not belong to a character. Both character encodings
-        /// answer here, so a caller never tests a prefix itself and can
-        /// never handle bags while forgetting worn gear. Returns an offset
+        /// the key does not belong to a character. All three character
+        /// encodings answer here, so a caller never tests a prefix itself
+        /// and can never handle bags while forgetting worn or stored gear.
+        /// Returns an offset
         /// rather than the name so callers on the keystroke path can compare
         /// in place without allocating a substring.
         /// </summary>
@@ -153,6 +157,11 @@ namespace TaimisToolbench.Services
             if (StartsAt(source, container, CharacterEquipmentSourcePrefix))
             {
                 return container + CharacterEquipmentSourcePrefix.Length;
+            }
+
+            if (StartsAt(source, container, CharacterTemplateSourcePrefix))
+            {
+                return container + CharacterTemplateSourcePrefix.Length;
             }
 
             return -1;
@@ -308,6 +317,20 @@ namespace TaimisToolbench.Services
                 && StartsAt(source, container, CharacterEquipmentSourcePrefix);
         }
 
+        /// <summary>
+        /// True when the place a source key names is gear parked in a saved
+        /// equipment template the character is not using, whether the key is
+        /// that gear's own stack or something socketed into it. Mutually
+        /// exclusive with <see cref="IsWornGearPlace"/>: the wire reports a
+        /// slot under exactly one of the two.
+        /// </summary>
+        public static bool IsTemplateGearPlace(string source)
+        {
+            int container = ContainerOffset(source);
+            return container >= 0
+                && StartsAt(source, container, CharacterTemplateSourcePrefix);
+        }
+
         private static bool StartsAt(string source, int offset, string prefix)
         {
             return source.Length - offset >= prefix.Length
@@ -334,15 +357,24 @@ namespace TaimisToolbench.Services
                 result.Add(SourceMaterialStorage);
             }
 
-            // Priority 2: Active character, bags before worn gear. Callers
-            // pass the bare character name; index sources carry one of the
-            // two character encodings.
+            // Priority 2: Active character, bags first, then gear parked in
+            // a template it is not using, then the gear it is wearing.
+            // Stripping a spare set costs the player nothing right now;
+            // stripping what is on their back does. Callers pass the bare
+            // character name; index sources carry one of the three
+            // character encodings.
             if (!string.IsNullOrEmpty(activeCharacterName))
             {
                 string activeBags = CharacterSourcePrefix + activeCharacterName;
                 if (sourceSet.Remove(activeBags))
                 {
                     result.Add(activeBags);
+                }
+
+                string activeStored = CharacterTemplateSourcePrefix + activeCharacterName;
+                if (sourceSet.Remove(activeStored))
+                {
+                    result.Add(activeStored);
                 }
 
                 string activeEquipped = CharacterEquipmentSourcePrefix + activeCharacterName;

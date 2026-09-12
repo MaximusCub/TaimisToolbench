@@ -312,6 +312,7 @@ namespace TaimisToolbench.Harness
             }
 
             string source = AccountItemIndex.CharacterEquipmentSourcePrefix + characterName;
+            string stored = AccountItemIndex.CharacterTemplateSourcePrefix + characterName;
             foreach (var item in equipment)
             {
                 if (item == null)
@@ -334,18 +335,22 @@ namespace TaimisToolbench.Harness
                     continue;
                 }
 
+                string place = EquipmentLocationPolicy.IsStoredInTemplate(location)
+                    ? stored
+                    : source;
+
                 part.Items.Add(new SnapshotItemEntry
                 {
                     ItemId = item.Id,
                     Count = 1,
-                    Source = source,
+                    Source = place,
                     Upgrades = SocketedIds(item.Upgrades),
                     Infusions = SocketedIds(item.Infusions),
                     SkinId = SkinIdOf(item.Skin),
                 });
 
                 SocketedItemRows.AddFor(
-                    part.Items, item.Id, source, 1,
+                    part.Items, item.Id, place, 1,
                     item.Upgrades, item.Infusions);
             }
         }

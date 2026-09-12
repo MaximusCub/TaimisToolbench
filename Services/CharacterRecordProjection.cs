@@ -87,9 +87,10 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// What this character is wearing, plus what its saved equipment
-        /// tabs hold, as one entry per physical item under the
-        /// "Equipped:&lt;name&gt;" source, which is not the source its bags
-        /// use. Ids drawn from the account-wide Legendary Armory are named
+        /// tabs hold, as one entry per physical item. Gear in the active
+        /// tab lands under "Equipped:&lt;name&gt;" and gear in any other tab
+        /// under "Template:&lt;name&gt;"; neither is the source its bags use.
+        /// Ids drawn from the account-wide Legendary Armory are named
         /// on the part instead, and never counted
         /// (Models.SnapshotArmoryEquip). What is socketed into a slot
         /// becomes a row of its own either way
@@ -114,6 +115,7 @@ namespace TaimisToolbench.Services
             }
 
             string equipped = AccountItemIndex.CharacterEquipmentSourcePrefix + characterName;
+            string stored = AccountItemIndex.CharacterTemplateSourcePrefix + characterName;
 
             foreach (var item in equipment)
             {
@@ -141,14 +143,18 @@ namespace TaimisToolbench.Services
                     continue;
                 }
 
+                // Worn gear and stored gear get their own source encodings
+                // so the snapshot can tell them apart from each other and
+                // from this same character's bags.
+                string place = EquipmentLocationPolicy.IsStoredInTemplate(location)
+                    ? stored
+                    : equipped;
+
                 part.Items.Add(new SnapshotItemEntry
                 {
                     ItemId = item.Id,
                     Count = 1,
-
-                    // Worn gear gets its own source encoding so the snapshot
-                    // can tell it apart from this same character's bags.
-                    Source = equipped,
+                    Source = place,
                     Upgrades = SocketedIds(item.Upgrades),
                     Infusions = SocketedIds(item.Infusions),
                     SkinId = SkinIdOf(item.Skin),
@@ -159,7 +165,7 @@ namespace TaimisToolbench.Services
                 // their own, which is the only shape search and the plan's
                 // owned-stock reader can see.
                 SocketedItemRows.AddFor(
-                    part.Items, item.Id, equipped, 1,
+                    part.Items, item.Id, place, 1,
                     item.Upgrades, item.Infusions);
             }
         }

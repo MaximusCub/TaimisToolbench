@@ -12,10 +12,11 @@ namespace TaimisToolbench.Models
         SharedInventory = 0,
         Bags = 1,
         Equipped = 2,
-        Bank = 3,
-        MaterialStorage = 4,
-        LegendaryArmory = 5,
-        Unknown = 6,
+        EquipmentTemplate = 3,
+        Bank = 4,
+        MaterialStorage = 5,
+        LegendaryArmory = 6,
+        Unknown = 7,
     }
 
     /// <summary>
@@ -30,8 +31,9 @@ namespace TaimisToolbench.Models
         public SnapshotHoldCategory Category { get; set; }
 
         /// <summary>
-        /// The character holding the item, for Bags and Equipped. Empty for
-        /// the account-wide categories, which name no character.
+        /// The character holding the item, for Bags, Equipped and
+        /// EquipmentTemplate. Empty for the account-wide categories, which
+        /// name no character.
         /// </summary>
         public string CharacterName { get; set; } = "";
 

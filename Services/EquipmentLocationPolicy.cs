@@ -33,6 +33,17 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// Whether the slot sits in a saved equipment template the
+        /// character is not currently using. The wire says so directly:
+        /// "Equipped" is the active tab and "Armory" is an inactive one, so
+        /// the item's tab list is not needed to tell the two apart.
+        /// </summary>
+        public static bool IsStoredInTemplate(string rawLocation)
+        {
+            return Is(rawLocation, "Armory");
+        }
+
+        /// <summary>
         /// Whether the character is wearing an account-wide Legendary
         /// Armory copy in this slot right now. A saved template it is not
         /// wearing answers false: the reader asked who has the item
