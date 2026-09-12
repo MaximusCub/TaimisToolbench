@@ -95,11 +95,11 @@ namespace TaimisToolbench.Views
         // switch lives here and is read back in when Build() reruns.
         private string _lastSearchText = "";
         private string _lastFilterSelection = "All";
-        private bool _bankEnabled = true;
-        private bool _materialStorageEnabled = true;
-        private bool _sharedInventoryEnabled = true;
-        private bool _legendaryArmoryEnabled = true;
-        private bool _equipmentTemplatesEnabled = true;
+
+        // One flag per location checkbox, indexed by LocationFilter. An
+        // array rather than seven fields because a shift-click reads and
+        // rewrites the whole set in one go.
+        private readonly bool[] _locationEnabled = NewLocationState();
 
         // Exclusion set, keyed by character name: absent means checked, so
         // a character new in a fresh snapshot defaults to visible. Stale
@@ -109,6 +109,54 @@ namespace TaimisToolbench.Views
         // Roster driving the per-character checkboxes, rebuilt once per
         // snapshot alongside _accountItemIndex/_itemsById.
         private List<string> _characterNames = new List<string>();
+
+        /// <summary>
+        /// The Snapshot tab's location filter set, in the order its
+        /// checkboxes appear. Indexes <see cref="_locationEnabled"/> and
+        /// <see cref="LocationLabels"/>, so the three stay in step.
+        /// </summary>
+        private enum LocationFilter
+        {
+            Bank = 0,
+            Bags,
+            MaterialStorage,
+            LegendaryArmory,
+            EquipmentTemplates,
+            Equipped,
+            SharedInventory,
+        }
+
+        /// <summary>
+        /// Which of the two filter sets a checkbox belongs to. A shift-click
+        /// rewrites the clicked box's own set and leaves the other alone.
+        /// </summary>
+        private enum FilterSet
+        {
+            Locations = 0,
+            Characters,
+        }
+
+        private static readonly string[] LocationLabels =
+        {
+            "Bank",
+            "Bags",
+            "Material Storage",
+            "Legendary Armory",
+            "Equipment Templates",
+            "Equipped",
+            "Shared Inventory",
+        };
+
+        private static bool[] NewLocationState()
+        {
+            var state = new bool[LocationLabels.Length];
+            for (int i = 0; i < state.Length; i++)
+            {
+                state[i] = true;
+            }
+
+            return state;
+        }
 
         // Set while a master-toggle cascade (or a master read-back) is
         // writing Checked on other checkboxes, so their own CheckedChanged
@@ -225,7 +273,10 @@ namespace TaimisToolbench.Views
         // row back. Past the bound the row scrolls instead of growing (see
         // ApplyTopRegionLayout), so no checkbox becomes unreachable, and the
         // result list always keeps MinContentHeight.
-        private const int SourceFilterMaxRows = 4;
+        // Six, not the four it was while the run held one set: the two sets
+        // each start on a row of their own now, so four rows can hide a
+        // whole set behind the scrollbar on a window of ordinary width.
+        private const int SourceFilterMaxRows = 6;
         private const int SourceFilterMaxRowsHeight = SourceFilterTopPad
             + (SourceFilterMaxRows * SourceFilterCellHeight)
             + ((SourceFilterMaxRows - 1) * SourceFilterRowGapY)
@@ -309,6 +360,13 @@ namespace TaimisToolbench.Views
         private Label _resultLineLabel;
         private int _coinBlockWidth;
         private string _resultLineText = "";
+
+        // The two filter sets' headings. Dim, so the heading never reads as
+        // one more option beside the boxes it introduces.
+        private const string LocationsCaption = "Locations";
+        private const string CharactersCaption = "Characters";
+        private const int FilterSetCaptionGap = 10;
+        private static readonly Color FilterSetCaptionColor = new Color(150, 150, 150);
 
         private const string CoinCaption = "Coin";
         private const int CoinCaptionGap = 8;
@@ -413,14 +471,25 @@ namespace TaimisToolbench.Views
 
         private TextBox _searchBox;
         private Dropdown _filterDropdown;
+        private Checkbox _locationsMasterCheckbox;
         private Checkbox _charactersMasterCheckbox;
 
-        // Every source checkbox in flow order (the three storage locations,
-        // the All Characters master, then one per character) - the single
-        // list ApplyTopRegionLayout measures and positions. Not readonly:
-        // Build swaps in fresh lists rather than clearing these in place,
-        // see there.
-        private List<Checkbox> _sourceFilterCells = new List<Checkbox>();
+        // Every control in the source-filter run, in flow order: the
+        // Locations caption, its All master and its seven boxes, then the
+        // Characters caption, its All Characters master and one box per
+        // character. Captions are Labels, so the list is typed on the base
+        // control - ApplyTopRegionLayout only reads Width and writes
+        // Location. Not readonly: Build swaps in fresh lists rather than
+        // clearing these in place, see there.
+        private List<Control> _sourceFilterCells = new List<Control>();
+
+        // How many of those controls each filter set contributed, in the
+        // same order. SourceFilterFlowLayout.LayoutGroups starts each set on
+        // a row of its own, which is what separates them on screen.
+        private List<int> _sourceFilterGroupSizes = new List<int>();
+
+        // Parallel to LocationLabels by construction (built in one loop).
+        private List<Checkbox> _locationCheckboxes = new List<Checkbox>();
 
         // Parallel to _characterNames by construction (built in one loop).
         private List<Checkbox> _characterCheckboxes = new List<Checkbox>();
@@ -727,8 +796,8 @@ namespace TaimisToolbench.Views
             // below, not here: they are account-driven (so they must be
             // rebuilt on every SetSnapshot too, from the main thread) and
             // keeping the single creation path means the two entry points
-            // cannot drift. The three fields holding the OUTGOING panel's
-            // checkboxes are dropped here rather than in that tail: until
+            // cannot drift. The fields holding the OUTGOING panel's
+            // controls are dropped here rather than in that tail: until
             // it lands, a resize on the main thread would otherwise flow
             // controls belonging to a panel this method has already
             // replaced. Fresh lists rather than Clear() - the main thread
@@ -742,8 +811,11 @@ namespace TaimisToolbench.Views
             // Build anyway: ApplyTopRegionLayout flows zero cells to the
             // single-row height, SetAllCharactersChecked bounds-checks the
             // parallel list, and OnCharacterToggled null-checks the master.
-            _sourceFilterCells = new List<Checkbox>();
+            _sourceFilterCells = new List<Control>();
+            _sourceFilterGroupSizes = new List<int>();
+            _locationCheckboxes = new List<Checkbox>();
             _characterCheckboxes = new List<Checkbox>();
+            _locationsMasterCheckbox = null;
             _charactersMasterCheckbox = null;
             _lastFlowWidth = -1;
 
@@ -919,13 +991,19 @@ namespace TaimisToolbench.Views
         }
 
         /// <summary>
-        /// Disposes and recreates every source-filter checkbox from the
-        /// current roster, restoring each one's session-sticky checked state
-        /// (see <see cref="_uncheckedCharacters"/>), then re-flows the row.
+        /// Disposes and recreates the whole source-filter run from the
+        /// current roster, restoring each box's session-sticky checked state
+        /// (see <see cref="_locationEnabled"/> and
+        /// <see cref="_uncheckedCharacters"/>), then re-flows the row.
         /// Main-thread only, like every other control mutation here: both
         /// call sites are <c>Build</c>'s marshaled tail and
         /// <see cref="SetSnapshot"/> (itself only reached from
         /// Module.Update's tick or a marshaled refresh tail).
+        /// <para>
+        /// Two sets are built, locations then characters, each behind its
+        /// own caption. The characters set is omitted entirely when the
+        /// snapshot knows no characters yet.
+        /// </para>
         /// </summary>
         private void RebuildSourceFilterRow()
         {
@@ -940,34 +1018,58 @@ namespace TaimisToolbench.Views
             }
 
             _sourceFilterCells.Clear();
+            _sourceFilterGroupSizes.Clear();
+            _locationCheckboxes.Clear();
             _characterCheckboxes.Clear();
+            _locationsMasterCheckbox = null;
             _charactersMasterCheckbox = null;
             _lastFlowWidth = -1;
 
-            AddSourceCheckbox("Bank", _bankEnabled, isChecked => _bankEnabled = isChecked);
-            AddSourceCheckbox("Material Storage", _materialStorageEnabled, isChecked => _materialStorageEnabled = isChecked);
-            AddSourceCheckbox("Shared Inventory", _sharedInventoryEnabled, isChecked => _sharedInventoryEnabled = isChecked);
-            AddSourceCheckbox("Legendary Armory", _legendaryArmoryEnabled, isChecked => _legendaryArmoryEnabled = isChecked);
+            AddSetCaption(LocationsCaption);
+            _locationsMasterCheckbox = AddSourceCheckbox(
+                "All", AllLocationsChecked(), SetAllLocationsChecked, FilterSet.Locations, -1);
 
-            // Cuts across the roster: gear parked in a template a character
-            // is not using is still that character's, so no per-character
-            // box can hide it without hiding their bags too.
-            AddSourceCheckbox("Equipment Templates", _equipmentTemplatesEnabled, isChecked => _equipmentTemplatesEnabled = isChecked);
-
-            // A master toggle earns its place only once there is more than
-            // one character to cascade to.
-            if (_characterNames.Count > 1)
+            for (int i = 0; i < LocationLabels.Length; i++)
             {
-                _charactersMasterCheckbox = AddSourceCheckbox("All Characters", AllCharactersChecked(), SetAllCharactersChecked);
+                int index = i;
+                _locationCheckboxes.Add(AddSourceCheckbox(
+                    LocationLabels[i],
+                    _locationEnabled[i],
+                    isChecked => OnLocationToggled(index, isChecked),
+                    FilterSet.Locations,
+                    index));
             }
 
-            foreach (string name in _characterNames)
+            _sourceFilterGroupSizes.Add(_sourceFilterCells.Count);
+
+            int beforeCharacters = _sourceFilterCells.Count;
+            if (_characterNames.Count > 0)
             {
-                _characterCheckboxes.Add(AddSourceCheckbox(
-                    name,
-                    !_uncheckedCharacters.Contains(name),
-                    isChecked => OnCharacterToggled(name, isChecked)));
+                AddSetCaption(CharactersCaption);
+
+                // A master toggle earns its place only once there is more
+                // than one character to cascade to.
+                if (_characterNames.Count > 1)
+                {
+                    _charactersMasterCheckbox = AddSourceCheckbox(
+                        "All Characters", AllCharactersChecked(), SetAllCharactersChecked,
+                        FilterSet.Characters, -1);
+                }
+
+                for (int i = 0; i < _characterNames.Count; i++)
+                {
+                    string name = _characterNames[i];
+                    int index = i;
+                    _characterCheckboxes.Add(AddSourceCheckbox(
+                        name,
+                        !_uncheckedCharacters.Contains(name),
+                        isChecked => OnCharacterToggled(name, isChecked),
+                        FilterSet.Characters,
+                        index));
+                }
             }
+
+            _sourceFilterGroupSizes.Add(_sourceFilterCells.Count - beforeCharacters);
 
             ApplyTopRegionLayout();
         }
@@ -1010,8 +1112,17 @@ namespace TaimisToolbench.Views
         /// and wires its click to <paramref name="onChanged"/> plus a single
         /// content rebuild. Location is a placeholder until
         /// <see cref="ApplyTopRegionLayout"/> flows the row.
+        /// <para>
+        /// <paramref name="indexInSet"/> is the box's position within
+        /// <paramref name="set"/>, or -1 for that set's All master. A member
+        /// box answers a shift-click with
+        /// <see cref="ApplyShiftClick"/> instead of its own handler; a
+        /// master always runs its own handler, so shift-clicking All is a
+        /// plain All click.
+        /// </para>
         /// </summary>
-        private Checkbox AddSourceCheckbox(string text, bool isChecked, Action<bool> onChanged)
+        private Checkbox AddSourceCheckbox(
+            string text, bool isChecked, Action<bool> onChanged, FilterSet set, int indexInSet)
         {
             var checkbox = new Checkbox()
             {
@@ -1029,12 +1140,153 @@ namespace TaimisToolbench.Views
                     return;
                 }
 
+                if (indexInSet >= 0 && ShiftHeld())
+                {
+                    ApplyShiftClick(set, indexInSet);
+                    RebuildContent();
+                    return;
+                }
+
                 onChanged(checkbox.Checked);
                 RebuildContent();
             };
 
             _sourceFilterCells.Add(checkbox);
             return checkbox;
+        }
+
+        /// <summary>
+        /// Adds the dim heading that opens one filter set. It is a flow cell
+        /// like the checkboxes, so the flow places it and the set's first
+        /// box lands beside it.
+        /// </summary>
+        private void AddSetCaption(string text)
+        {
+            var label = new Label()
+            {
+                Font = UiFonts.Caption,
+                Text = text,
+                TextColor = FilterSetCaptionColor,
+                VerticalAlignment = VerticalAlignment.Middle,
+                Size = new Point(MeasureCaptionWidth(text), SourceFilterCellHeight),
+                Location = new Point(0, SourceFilterTopPad),
+                Parent = _sourceFilterPanel,
+            };
+
+            _sourceFilterCells.Add(label);
+        }
+
+        /// <summary>
+        /// True while a shift key is down. Blish's Checkbox reports no
+        /// modifier state on CheckedChanged, so the keyboard handler is
+        /// asked directly, during the click that raised the event.
+        /// </summary>
+        private static bool ShiftHeld()
+        {
+            var keyboard = GameService.Input?.Keyboard;
+            if (keyboard == null)
+            {
+                return false;
+            }
+
+            return (keyboard.ActiveModifiers & Microsoft.Xna.Framework.Input.ModifierKeys.Shift)
+                == Microsoft.Xna.Framework.Input.ModifierKeys.Shift;
+        }
+
+        /// <summary>
+        /// Applies <see cref="FilterSetToggle.ShiftClick"/> to one filter
+        /// set: the clicked box alone, or everything but it when it was
+        /// already alone. Writes the set's state and its checkboxes, leaves
+        /// the other set untouched, and refreshes that set's All master.
+        /// <para>
+        /// The clicked control has already toggled itself by the time this
+        /// runs, so the state passed in is rebuilt from the fields, which
+        /// still hold what the user saw.
+        /// </para>
+        /// </summary>
+        private void ApplyShiftClick(FilterSet set, int clickedIndex)
+        {
+            if (set == FilterSet.Locations)
+            {
+                ApplyLocationStates(FilterSetToggle.ShiftClick(_locationEnabled, clickedIndex));
+                return;
+            }
+
+            // One read of each field: Build may swap in fresh lists at any
+            // point, and a bound taken from the old list must not index the
+            // new one.
+            var names = _characterNames;
+            var current = new List<bool>(names.Count);
+            for (int i = 0; i < names.Count; i++)
+            {
+                current.Add(!_uncheckedCharacters.Contains(names[i]));
+            }
+
+            ApplyCharacterStates(names, FilterSetToggle.ShiftClick(current, clickedIndex));
+        }
+
+        private void ApplyLocationStates(IReadOnlyList<bool> states)
+        {
+            var boxes = _locationCheckboxes;
+
+            _suppressSourceFilterEvents = true;
+            try
+            {
+                for (int i = 0; i < _locationEnabled.Length && i < states.Count; i++)
+                {
+                    _locationEnabled[i] = states[i];
+                    if (i < boxes.Count)
+                    {
+                        boxes[i].Checked = states[i];
+                    }
+                }
+
+                var master = _locationsMasterCheckbox;
+                if (master != null)
+                {
+                    master.Checked = AllLocationsChecked();
+                }
+            }
+            finally
+            {
+                _suppressSourceFilterEvents = false;
+            }
+        }
+
+        private void ApplyCharacterStates(IReadOnlyList<string> names, IReadOnlyList<bool> states)
+        {
+            var boxes = _characterCheckboxes;
+
+            _suppressSourceFilterEvents = true;
+            try
+            {
+                for (int i = 0; i < names.Count && i < states.Count; i++)
+                {
+                    if (states[i])
+                    {
+                        _uncheckedCharacters.Remove(names[i]);
+                    }
+                    else
+                    {
+                        _uncheckedCharacters.Add(names[i]);
+                    }
+
+                    if (i < boxes.Count)
+                    {
+                        boxes[i].Checked = states[i];
+                    }
+                }
+
+                var master = _charactersMasterCheckbox;
+                if (master != null)
+                {
+                    master.Checked = AllCharactersChecked();
+                }
+            }
+            finally
+            {
+                _suppressSourceFilterEvents = false;
+            }
         }
 
         private static int MeasureCheckboxWidth(string text)
@@ -1046,6 +1298,74 @@ namespace TaimisToolbench.Views
             var font = UiFonts.Caption;
             int textWidth = (int)Math.Ceiling(font.MeasureString(text ?? "").Width);
             return textWidth + CheckboxChromeWidth;
+        }
+
+        private static int MeasureCaptionWidth(string text)
+        {
+            int textWidth = (int)Math.Ceiling(UiFonts.Caption.MeasureString(text ?? "").Width);
+            return textWidth + FilterSetCaptionGap;
+        }
+
+        /// <summary>
+        /// True while at least one of the three character-held locations is
+        /// ticked. With all three off no character can hold a visible row,
+        /// whatever the character set says.
+        /// </summary>
+        private bool AnyCharacterPlaceShown()
+        {
+            return _locationEnabled[(int)LocationFilter.Bags]
+                || _locationEnabled[(int)LocationFilter.Equipped]
+                || _locationEnabled[(int)LocationFilter.EquipmentTemplates];
+        }
+
+        private bool AllLocationsChecked()
+        {
+            for (int i = 0; i < _locationEnabled.Length; i++)
+            {
+                if (!_locationEnabled[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void SetAllLocationsChecked(bool isChecked)
+        {
+            var states = new bool[_locationEnabled.Length];
+            for (int i = 0; i < states.Length; i++)
+            {
+                states[i] = isChecked;
+            }
+
+            ApplyLocationStates(states);
+        }
+
+        private void OnLocationToggled(int index, bool isChecked)
+        {
+            if (index < 0 || index >= _locationEnabled.Length)
+            {
+                return;
+            }
+
+            _locationEnabled[index] = isChecked;
+
+            // Read once: Build may null the field between the guard and the
+            // write (see its own comment).
+            var master = _locationsMasterCheckbox;
+            if (master != null)
+            {
+                _suppressSourceFilterEvents = true;
+                try
+                {
+                    master.Checked = AllLocationsChecked();
+                }
+                finally
+                {
+                    _suppressSourceFilterEvents = false;
+                }
+            }
         }
 
         private bool AllCharactersChecked()
@@ -1066,33 +1386,15 @@ namespace TaimisToolbench.Views
             // One read of the field, not one per iteration: Build may swap
             // in a fresh empty list at any point (see its own comment), and
             // a bound taken from the old list must not index the new one.
-            var checkboxes = _characterCheckboxes;
+            var names = _characterNames;
 
-            _suppressSourceFilterEvents = true;
-            try
+            var states = new bool[names.Count];
+            for (int i = 0; i < states.Length; i++)
             {
-                for (int i = 0; i < _characterNames.Count; i++)
-                {
-                    string name = _characterNames[i];
-                    if (isChecked)
-                    {
-                        _uncheckedCharacters.Remove(name);
-                    }
-                    else
-                    {
-                        _uncheckedCharacters.Add(name);
-                    }
+                states[i] = isChecked;
+            }
 
-                    if (i < checkboxes.Count)
-                    {
-                        checkboxes[i].Checked = isChecked;
-                    }
-                }
-            }
-            finally
-            {
-                _suppressSourceFilterEvents = false;
-            }
+            ApplyCharacterStates(names, states);
         }
 
         private void OnCharacterToggled(string characterName, bool isChecked)
@@ -1138,10 +1440,50 @@ namespace TaimisToolbench.Views
             return panelWidth < SourceFilterX ? panelWidth : SourceFilterX;
         }
 
-        private static SourceFilterFlowResult Flow(IReadOnlyList<int> cellWidths, int availableWidth)
+        private static SourceFilterFlowResult Flow(
+            IReadOnlyList<IReadOnlyList<int>> groups, int availableWidth)
         {
-            return SourceFilterFlowLayout.Layout(
-                cellWidths, availableWidth, SourceFilterCellHeight, SourceFilterCellGapX, SourceFilterRowGapY);
+            return SourceFilterFlowLayout.LayoutGroups(
+                groups, availableWidth, SourceFilterCellHeight, SourceFilterCellGapX, SourceFilterRowGapY);
+        }
+
+        /// <summary>
+        /// The measured width of each control in the run, split into the
+        /// groups <see cref="_sourceFilterGroupSizes"/> records. Any control
+        /// past the recorded sizes becomes a trailing group of its own, so a
+        /// mismatch between the two lists costs a row break rather than an
+        /// unplaced control.
+        /// </summary>
+        private static List<IReadOnlyList<int>> GroupedCellWidths(
+            IReadOnlyList<Control> cells, IReadOnlyList<int> groupSizes)
+        {
+            var groups = new List<IReadOnlyList<int>>();
+            int cursor = 0;
+
+            for (int g = 0; g < groupSizes.Count && cursor < cells.Count; g++)
+            {
+                int size = groupSizes[g];
+                var widths = new List<int>(size > 0 ? size : 0);
+                for (int i = 0; i < size && cursor < cells.Count; i++, cursor++)
+                {
+                    widths.Add(cells[cursor].Width);
+                }
+
+                groups.Add(widths);
+            }
+
+            if (cursor < cells.Count)
+            {
+                var tail = new List<int>(cells.Count - cursor);
+                for (; cursor < cells.Count; cursor++)
+                {
+                    tail.Add(cells[cursor].Width);
+                }
+
+                groups.Add(tail);
+            }
+
+            return groups;
         }
 
         /// <summary>
@@ -1182,16 +1524,11 @@ namespace TaimisToolbench.Views
                     // so the count and the indexer below must come from the
                     // same list.
                     var cells = _sourceFilterCells;
-
-                    var widths = new List<int>(cells.Count);
-                    foreach (var checkbox in cells)
-                    {
-                        widths.Add(checkbox.Width);
-                    }
+                    var groups = GroupedCellWidths(cells, _sourceFilterGroupSizes);
 
                     var placement = SnapshotHeaderLayout.PlaceSourceFilterRun(
                         w, SourceFilterX, SearchRowHeight, SearchToFilterGapY, sharesSearchRow: true);
-                    var flow = Flow(widths, placement.Width);
+                    var flow = Flow(groups, placement.Width);
 
                     // Sharing the search row halves the width the run flows
                     // into; a run that wraps there would hide filters behind
@@ -1201,7 +1538,7 @@ namespace TaimisToolbench.Views
                     {
                         placement = SnapshotHeaderLayout.PlaceSourceFilterRun(
                             w, SourceFilterX, SearchRowHeight, SearchToFilterGapY, sharesSearchRow: false);
-                        flow = Flow(widths, placement.Width);
+                        flow = Flow(groups, placement.Width);
                     }
 
                     int cap = placement.SharesSearchRow ? sharedCap : ownRowCap;
@@ -1213,11 +1550,12 @@ namespace TaimisToolbench.Views
                     bool scroll = height > cap;
                     if (scroll)
                     {
-                        flow = Flow(widths, placement.Width - SourceFilterScrollbarAllowance);
+                        flow = Flow(groups, placement.Width - SourceFilterScrollbarAllowance);
                         height = SourceFilterTopPad + flow.TotalHeight + SourceFilterBottomPad;
                     }
 
-                    for (int i = 0; i < cells.Count; i++)
+                    int placed = cells.Count < flow.Cells.Count ? cells.Count : flow.Cells.Count;
+                    for (int i = 0; i < placed; i++)
                     {
                         cells[i].Location = new Point(flow.Cells[i].X, SourceFilterTopPad + flow.Cells[i].Y);
                     }
@@ -2097,11 +2435,13 @@ namespace TaimisToolbench.Views
                 // side would otherwise silently re-check the user's boxes.
                 var sourceFilter = new SnapshotSourceFilter
                 {
-                    Bank = _bankEnabled,
-                    MaterialStorage = _materialStorageEnabled,
-                    SharedInventory = _sharedInventoryEnabled,
-                    LegendaryArmory = _legendaryArmoryEnabled,
-                    EquipmentTemplates = _equipmentTemplatesEnabled,
+                    Bank = _locationEnabled[(int)LocationFilter.Bank],
+                    Bags = _locationEnabled[(int)LocationFilter.Bags],
+                    MaterialStorage = _locationEnabled[(int)LocationFilter.MaterialStorage],
+                    LegendaryArmory = _locationEnabled[(int)LocationFilter.LegendaryArmory],
+                    EquipmentTemplates = _locationEnabled[(int)LocationFilter.EquipmentTemplates],
+                    Equipped = _locationEnabled[(int)LocationFilter.Equipped],
+                    SharedInventory = _locationEnabled[(int)LocationFilter.SharedInventory],
                     UncheckedCharacters = new HashSet<string>(_uncheckedCharacters, StringComparer.Ordinal),
                 };
 
@@ -2161,7 +2501,8 @@ namespace TaimisToolbench.Views
                     // matching does not exist for the Wallet filter above,
                     // so the hint would be an offer this tab cannot keep.
                     string hint = SnapshotSearchResultBuilder.ShortQueryCharacterHint(
-                        trimmedSearch, _characterNames, _uncheckedCharacters);
+                        trimmedSearch, _characterNames, _uncheckedCharacters,
+                        AnyCharacterPlaceShown());
                     if (hint != null)
                     {
                         message += "\n" + hint;
