@@ -168,7 +168,7 @@ Services/IconFrameGeometry.cs                                                   
 Services/InlineSpinnerLayout.cs                                                         111
 Services/InventoryReducer.cs                                                            383
 Services/ItemDescriptionSanitizer.cs                                                    204
-Services/ItemIconTiers.cs                                                               185
+Services/ItemIconTiers.cs                                                               205
 Services/ItemInputGridLayout.cs                                                         321
 Services/ItemMetadataService.cs                                                         327
 Services/ItemRarityResolution.cs                                                        78
@@ -279,10 +279,10 @@ Services/SnapshotFetchFailedException.cs                                        
 Services/SnapshotHeaderLayout.cs                                                        209
 Services/SnapshotHelpers.cs                                                             79
 Services/SnapshotHoldLine.cs                                                            668
-Services/SnapshotItemGridLayout.cs                                                      321
+Services/SnapshotItemGridLayout.cs                                                      343
 Services/SnapshotIconWindow.cs                                                          185
 Services/SnapshotRefreshSlot.cs                                                         185
-Services/SnapshotResultLayout.cs                                                        90
+Services/SnapshotResultLayout.cs                                                        105
 Services/SnapshotSearchResultBuilder.cs                                                 661
 Services/SnapshotStore.cs                                                               98
 Services/SnapshotTableSorter.cs                                                         99
@@ -345,7 +345,7 @@ Views/ItemInputRowStrip.cs                                                      
 Views/ItemRowState.cs                                                                   39
 Views/LogTabContent.cs                                                                  1538
 Views/MainThreadMarshal.cs                                                              141
-Views/MainView.cs                                                                       3354
+Views/MainView.cs                                                                       3347
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    428
@@ -368,7 +368,7 @@ Views/Rendering/HeaderCellPlan.cs                                               
 Views/Rendering/HoverChainResync.cs                                                     75
 Views/Rendering/ISectionRelayoutSink.cs                                                 86
 Views/Rendering/ITreePlanHost.cs                                                        105
-Views/Rendering/IconControls.cs                                                         477
+Views/Rendering/IconControls.cs                                                         488
 Views/Rendering/IconNameRowHelpers.cs                                                   182
 Views/Rendering/InlineSpinner.cs                                                        65
 Views/Rendering/LabelHelpers.cs                                                         273
@@ -494,6 +494,7 @@ tests/TaimisToolbench.Tests/Services/Gw2RecipeApiClientHttpTests.cs             
 tests/TaimisToolbench.Tests/Services/Gw2RecipeApiClientParseTests.cs                    248
 tests/TaimisToolbench.Tests/Services/HeaderCellMathTests.cs                             221
 tests/TaimisToolbench.Tests/Services/IconFrameGeometryTests.cs                          127
+tests/TaimisToolbench.Tests/Services/IconFrameScissorSimulationTests.cs                 284
 tests/TaimisToolbench.Tests/Services/InlineSpinnerLayoutTests.cs                        141
 tests/TaimisToolbench.Tests/Services/InventoryReducerTests.cs                           1775
 tests/TaimisToolbench.Tests/Services/ItemDescriptionSanitizerTests.cs                   155
@@ -648,7 +649,7 @@ tests/TaimisToolbench.Tests/Services/SnapshotHoldLineTests.cs                   
 tests/TaimisToolbench.Tests/Services/SnapshotItemGridLayoutTests.cs                     427
 tests/TaimisToolbench.Tests/Services/SnapshotIconWindowTests.cs                         279
 tests/TaimisToolbench.Tests/Services/SnapshotRefreshSlotTests.cs                        335
-tests/TaimisToolbench.Tests/Services/SnapshotResultLayoutTests.cs                       94
+tests/TaimisToolbench.Tests/Services/SnapshotResultLayoutTests.cs                       99
 tests/TaimisToolbench.Tests/Services/SnapshotSearchResultBuilderTests.cs                1332
 tests/TaimisToolbench.Tests/Services/SnapshotSerializationTests.cs                      283
 tests/TaimisToolbench.Tests/Services/SnapshotStoreTests.cs                              545

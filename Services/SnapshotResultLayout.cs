@@ -14,6 +14,16 @@ namespace TaimisToolbench.Services
         /// starts flush, under the coin row's own gap.</summary>
         public const int SectionGapY = 8;
 
+        /// <summary>
+        /// Height kept clear below the last row, so the result panel's own
+        /// bottom edge never coincides with a row's. A container hands its
+        /// children a clip that has been through one floor/ceil round trip
+        /// and can sit up to two logical pixels high, which lands inside
+        /// the last row's icon frame when the two edges share a y. See
+        /// tests/TaimisToolbench.Tests/Services/IconFrameScissorSimulationTests.cs.
+        /// </summary>
+        public const int TrailingClearance = 1;
+
         public readonly struct Section
         {
             /// <summary>False when the run has no rows: the whole section -
@@ -66,6 +76,11 @@ namespace TaimisToolbench.Services
 
             var wallet = Stack(
                 walletCount, gridWidth, walletRowHeight, titleBandHeight, headerBandHeight, ref y);
+
+            if (items.Present || wallet.Present)
+            {
+                y += TrailingClearance;
+            }
 
             return new Result(items, wallet, y);
         }
