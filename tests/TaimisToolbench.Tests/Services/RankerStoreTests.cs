@@ -319,7 +319,7 @@ namespace TaimisToolbench.Tests.Services
         public void Save_ToAnUnwritablePath_ReportsFailureRatherThanThrowing()
         {
             // A file where the directory should be: every Save path under it
-            // fails, which is the "your list could not be saved" case the view
+            // fails, which is the "your wishlist could not be saved" case the view
             // surfaces rather than losing the tab.
             string blocked = Path.Combine(_temp.Path, "blocked");
             File.WriteAllText(blocked, "not a directory");
