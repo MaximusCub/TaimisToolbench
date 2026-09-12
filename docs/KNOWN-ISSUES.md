@@ -307,7 +307,9 @@ fixed during this work: a zeroed-but-mismatched-source node could leave a
 standalone zero-cost ghost row in the plan (general `PlanSolver.Collect`
 guard added), and new achievement/merchant recipe ids adjacent to the
 Mystic Forge id range could NRE on a cold cache miss (fixed with a real
-membership check).
+membership check). The seed rows that exercised the dedup pass were
+removed later, so the pass ships with no data to act on; the code and both
+latent-bug fixes stand.
 
 ### 27. Ignore-pill click status label (FIXED in M37, closes #22)
 

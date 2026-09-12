@@ -1170,13 +1170,17 @@ behavior itself.
 two-part mechanism (`initialTreeChecks` plus `calculateTreeQuantity`'s
 `achievement_bit` check -
 [`docs/research/m37-r3-achievement-dedup.md`](research/m37-r3-achievement-dedup.md)
-sections 1.1/1.2) for a small handful of real recipes: the WvW "Infinite
-[siege weapon] Blueprint" achievement rewards, whose ingredients name a
-specific achievement *bit* - a one-time reward item that must never be
-counted twice just because it also happens to be needed directly
-elsewhere in the same plan. The rule itself is ported 1:1 from the
-ground-truth gw2e unit test quoted in that report (section 1.4) and is
-stated in the class's own doc comment.
+sections 1.1/1.2). It fires on an ingredient that names a specific
+achievement *bit* - a one-time reward item that must never be counted
+twice just because it also happens to be needed directly elsewhere in the
+same plan. The rule itself is ported 1:1 from the ground-truth gw2e unit
+test quoted in that report (section 1.4) and is stated in the class's own
+doc comment.
+
+No shipped recipe carries an `achievementBit` today. The rows that did
+were removed from `ref/recipes_seed.json`, so the pass is a no-op walk
+over every plan the seed can produce. It stays because the field survives
+in the schema and the recipe overlay cache can still carry one.
 
 **Zeroing clears `Recipes`, not just `Quantity`.** Unlike gw2e's nested
 tree - which stores a small per-edge ratio and resolves every absolute
@@ -3888,10 +3892,15 @@ them. A row that pays one is ranked as though that cost is not there.
 MEASURED over the shipped corpus, planning 30 legendaries and gifts through
 the real pipeline against `ref/vendor_offers.json`: 15 of the 30 pay at
 least one barter item cost, over 50 barter lines and 26 distinct items.
-Aurora pays 11 distinct items. Gift of Dedication and Infinite Trebuchet
-Blueprint pay 4 each with no coin bill at all. Only 5 of the 26 items carry
-a curated decision value in `Models/BarterItemDecisionDefaults.cs`, so
-valuing the class into Materials would leave most of the bill uncounted.
+Aurora pays 11 distinct items. Gift of Dedication pays 4 with no coin bill
+at all. Only 5 of the 26 items carry a curated decision value in
+`Models/BarterItemDecisionDefaults.cs`, so valuing the class into Materials
+would leave most of the bill uncounted.
+
+These counts were measured before `ref/recipes_seed.json` dropped the
+Infinite Trebuchet Blueprint chain. That root was one of the 30 and no
+longer plans, so read the figures as an upper bound until someone
+re-measures.
 
 The gap is real and undisclosed. A sixth gate was written for it and taken
 back out: the headline is five gates by decision. Anyone reopening this

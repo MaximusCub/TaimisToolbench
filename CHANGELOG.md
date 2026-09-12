@@ -73,6 +73,14 @@ recipe cache stops forgetting what it already knows.
   instead of stalling the status line, and closing the module no longer
   pulls objects out from under work still in flight.
 
+### Removed
+- **Four recipes are gone from the shipped seed data.** They described the
+  Infinite Trebuchet Blueprint and the three WvW items that unlock it, and
+  they came from a third party's recipe data rather than from the official
+  GW2 API or the wiki. Three of the four items are still priced, because
+  `ref/vendor_offers.json` already carries the same vendor offers. The
+  Infinite Trebuchet Blueprint itself now shows UNKNOWN.
+
 ### Internal
 - The style gate (StyleCop analyzers, warnings as errors) now covers
   every project in the solution; CI enforces the repo invariants that

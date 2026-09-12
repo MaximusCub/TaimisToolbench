@@ -26,12 +26,7 @@ namespace TaimisToolbench.Models
         /// ids ref/mystic_forge_recipes.json assigns to Mystic Forge
         /// recipes (moot in practice - the wrapper's own step is never
         /// collected into a plan at all, see PlanSolver.Collect - but kept
-        /// numerically distinct anyway). Note: PlanResultBuilder no longer
-        /// uses a bare `recipeId &lt; 0` sign check to identify Mystic
-        /// Forge recipes (a real id-space collision with the
-        /// achievement/merchant seed recipes, ref/recipes_seed.json ids
-        /// -1592..-1595, made that unsound) - it now checks the recipe's
-        /// own declared Disciplines instead.
+        /// numerically distinct anyway).
         /// </summary>
         public const int MultiItemWrapperRecipeId = int.MinValue;
 
