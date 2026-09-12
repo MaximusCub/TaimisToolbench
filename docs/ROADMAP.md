@@ -33,13 +33,11 @@
 
   The decomposition itself did not stay done. `CraftingPlanView` was
   ~2,802 lines when the wave closed on 2026-07-23 and 5,281 lines by
-  2026-08-25 - past the ~4,802-line baseline the refactor started from -
-  because nothing in CI measured it and this document said the problem
-  was solved. That is fixed at the source rather than by editing the
-  claim: `docs/file-budgets.txt` plus the line-budget step in
-  `.github/workflows/tests.yml` now fail on growth in any tracked `.cs`
-  file. Read the measured figure in ARCHITECTURE.md section 5, not a
-  status word here.
+  2026-08-25 - past the ~4,802-line baseline the refactor started from.
+  It was 5,615 lines on 2026-09-12. Nothing in CI measures it. A per-file
+  line budget was tried and removed. Each entry was raised to the file's
+  current size by the same commit that grew the file. Read the measured
+  figure in ARCHITECTURE.md section 5, not a status word here.
 - **M39 - core tabs shipped.** Snapshot search/filter, the Log tab (with
   the JSONL log store and rotation), the Settings tab, and the About tab
   all landed and are in normal use - see the README's "Tabs" section for
