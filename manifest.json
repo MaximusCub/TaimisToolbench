@@ -5,7 +5,7 @@
   "package": "TaimisToolbench.dll",
   "manifest_version": 1,
 
-  "description": "A crafting-plan solver: decides whether to craft, buy on the Trading Post, buy from a vendor, or use what you already own for every ingredient in a recipe tree, with live prices.",
+  "description": "Taimi's Toolbench aims to be your ultimate in-game crafting companion. Plan the most efficient way to craft anything from simple items to legendaries, taking into account your inventory, materials, recipes, achievements and more. A crafting ranker helps you find out which items on your wishlist you're closest to completing, or your progress against a list of items you want to craft in priority order. An account snapshot tool allows you to quickly search any item across your entire account and pop-out windows for your shopping list and crafting steps let you keep that info handy in game while you craft, play or shop.",
   "dependencies": {
     "bh.blishhud": ">=1.3.0"
   },
