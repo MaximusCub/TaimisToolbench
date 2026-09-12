@@ -228,7 +228,7 @@ namespace TaimisToolbench.Tests.Services
             int first = NotesSectionLayoutMath.SubjectFirstLineBudget(LivePanelWidth, 0, 100);
             int rest = NotesSectionLayoutMath.SubjectRestBudget(LivePanelWidth);
 
-            Assert.Equal(rest - 100 - NotesSectionLayoutMath.NameToNoteGap, first);
+            Assert.Equal(rest - 100, first);
             Assert.True(
                 NotesSectionLayoutMath.SubjectFirstLineBudget(LivePanelWidth, 60, 100) < first,
                 "a coin cell has to narrow the first line it sits on");
@@ -249,6 +249,71 @@ namespace TaimisToolbench.Tests.Services
         {
             Assert.Equal("", NotesSectionLayoutMath.SubjectLabel(null));
             Assert.Equal("", NotesSectionLayoutMath.SubjectLabel(""));
+        }
+
+        /// <summary>
+        /// The run the note's own text is placed after. It ends in ONE
+        /// space, so the gap after the name is a space character rather
+        /// than a gap between two cells.
+        /// </summary>
+        [Fact]
+        public void SubjectRun_EndsInOneSpace()
+        {
+            Assert.Equal(
+                "Gift of the Hylek: ", NotesSectionLayoutMath.SubjectRun("Gift of the Hylek"));
+            Assert.Equal(
+                NotesSectionLayoutMath.SubjectLabel("Gift of the Hylek") + " ",
+                NotesSectionLayoutMath.SubjectRun("Gift of the Hylek"));
+            Assert.Equal("", NotesSectionLayoutMath.SubjectRun(null));
+            Assert.Equal("", NotesSectionLayoutMath.SubjectRun(""));
+        }
+
+        /// <summary>
+        /// Two faces seated on one note line land on one baseline. A box
+        /// top would not: a label's box is its own face's line box, and the
+        /// two faces put their letters at different depths inside it.
+        /// </summary>
+        [Fact]
+        public void TheSubjectLine_SeatsEveryFaceOnOneBaseline()
+        {
+            int body = TypeRampMetrics.BaselineAlignedY(
+                TypeRampMetrics.BodyInk, NotesSectionLayoutMath.SubjectLineBaseline);
+            int caption = TypeRampMetrics.BaselineAlignedY(
+                TypeRampMetrics.CaptionInk, NotesSectionLayoutMath.SubjectLineBaseline);
+
+            Assert.Equal(
+                NotesSectionLayoutMath.SubjectLineBaseline,
+                body + TypeRampMetrics.BodyInk.BaselineY);
+            Assert.Equal(
+                body + TypeRampMetrics.BodyInk.BaselineY,
+                caption + TypeRampMetrics.CaptionInk.BaselineY);
+            Assert.True(
+                caption > body,
+                "a shorter face has to drop to meet the same baseline, not share a box top");
+        }
+
+        /// <summary>
+        /// Both seats keep their own line's descenders inside the row that
+        /// line is built at - the height contract NotesSectionRenderer's
+        /// own DEBUG assert polices at run time.
+        /// </summary>
+        [Fact]
+        public void LineSeats_KeepTheirDescendersInsideTheirRows()
+        {
+            Assert.True(
+                TypeRampMetrics.InkBottom(
+                    TypeRampMetrics.BodyInk,
+                    TypeRampMetrics.BaselineAlignedY(
+                        TypeRampMetrics.BodyInk, NotesSectionLayoutMath.SubjectLineBaseline))
+                    <= NotesSectionLayoutMath.IconLineHeight,
+                "a note's first line draws inside the icon band");
+            Assert.True(
+                TypeRampMetrics.InkBottom(
+                    TypeRampMetrics.BodyInk,
+                    TypeRampMetrics.BaselineAlignedY(
+                        TypeRampMetrics.BodyInk, NotesSectionLayoutMath.TextLineBaseline))
+                    <= PlanContentHeightMath.FallbackTextRowHeight,
+                "a note's text lines draw inside a plain text row");
         }
 
         /// <summary>

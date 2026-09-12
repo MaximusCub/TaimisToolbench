@@ -79,6 +79,8 @@ namespace TaimisToolbench.Tests.Services
             return pen;
         }
 
+        private const string SubjectName = "Exalted Helm:";
+        private const string SubjectRun = SubjectName + " ";
         private const string Lead = "The vendor requires the ";
         private const string Link = "Supply Line Management";
         private const string Tail = " achievement.";
@@ -150,6 +152,61 @@ namespace TaimisToolbench.Tests.Services
             var placed = NoteRunLayout.Place(Line(), 0, TextAdvanceMath.AdvanceWith(Measure));
 
             Assert.Equal(Pen(Lead + Link) - Pen(Lead), placed[1].Width);
+        }
+
+        /// <summary>
+        /// A note that names an item opens with that name, which the
+        /// renderer draws itself. The note's own runs carry on from the pen
+        /// the name ends on, so the row reads as one sentence rather than
+        /// as a name in one cell and a note in another.
+        /// </summary>
+        [Fact]
+        public void Place_APrefixPutsTheNoteOnTheNamesOwnPen()
+        {
+            var placed = NoteRunLayout.Place(
+                Line(), 58, TextAdvanceMath.AdvanceWith(Measure), SubjectRun);
+
+            Assert.Equal(58 + Pen(SubjectRun), placed[0].X);
+            Assert.Equal(58 + Pen(SubjectRun + Lead), placed[1].X);
+            Assert.Equal(58 + Pen(SubjectRun + Lead + Link), placed[2].X);
+        }
+
+        /// <summary>
+        /// The reported defect: the note stood a fixed 12px gap from the
+        /// name, against 6px for a space in the body face, and the two read
+        /// as separate cells.
+        /// </summary>
+        [Fact]
+        public void Place_TheGapAfterTheNameIsOneSpace()
+        {
+            var advance = TextAdvanceMath.AdvanceWith(Measure);
+            var placed = NoteRunLayout.Place(Line(), 0, advance, SubjectRun);
+
+            int afterTheName = placed[0].X - advance(SubjectName);
+            int betweenTwoWords = advance("The vendor") - advance("The") - advance("vendor");
+
+            Assert.Equal(Pen(" "), afterTheName);
+            Assert.Equal(betweenTwoWords, afterTheName);
+        }
+
+        /// <summary>
+        /// Every line after the first carries no name, and lands exactly
+        /// where it landed before there was a prefix to carry.
+        /// </summary>
+        [Fact]
+        public void Place_NoPrefix_PlacesEveryRunAtTheLineStart()
+        {
+            var advance = TextAdvanceMath.AdvanceWith(Measure);
+            var plain = NoteRunLayout.Place(Line(), 40, advance);
+            var empty = NoteRunLayout.Place(Line(), 40, advance, "");
+            var none = NoteRunLayout.Place(Line(), 40, advance, null);
+
+            for (int i = 0; i < plain.Count; i++)
+            {
+                Assert.Equal(plain[i].X, empty[i].X);
+                Assert.Equal(plain[i].Width, empty[i].Width);
+                Assert.Equal(plain[i].X, none[i].X);
+            }
         }
 
         [Fact]

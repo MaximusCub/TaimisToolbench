@@ -139,8 +139,8 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(
                 "Exalted Helm: The vendor who sells this item requires the Supply Line "
                 + "Management achievement. Your account does not have it.",
-                NotesSectionLayoutMath.SubjectLabel(row.NoteSubject)
-                    + " " + PlanNoteSegment.Join(row.NoteSegments));
+                NotesSectionLayoutMath.SubjectRun(row.NoteSubject)
+                    + PlanNoteSegment.Join(row.NoteSegments));
 
             // The achievement's own NAME is the link, and the kind word
             // beside it is not.
