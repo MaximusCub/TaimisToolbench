@@ -7,14 +7,20 @@ namespace TaimisToolbench.Services
     /// (Blish-free, unit-testable). The view draws these runs; it does not
     /// decide them.
     /// <para>
-    /// The three credit paragraphs are approved copy. Ship the literal
-    /// strings as-is: do not derive them from other constants, reword them,
-    /// or re-wrap them.
+    /// Every credit paragraph is approved copy. Ship the literal strings
+    /// as-is: do not derive them from other constants, reword them, or
+    /// re-wrap them.
     /// </para>
     /// </summary>
     internal static class AboutTabText
     {
-        public const string CreditsSectionTitle = "Credits - gw2efficiency";
+        public const string CreditsSectionTitle = "Credits";
+
+        public const string Gw2EfficiencySubheading = "gw2efficiency";
+
+        public const string BlishHudSubheading = "Blish HUD";
+
+        public const string OpenSourceSubheading = "Open source libraries";
 
         public const string Gw2EfficiencyUrl = "https://gw2efficiency.com";
 
@@ -23,6 +29,14 @@ namespace TaimisToolbench.Services
         public const string Gw2EfficiencyPayPalUrl = "https://paypal.me/devoxa";
 
         public const string BlishHudSourceUrl = "https://github.com/blish-hud/Blish-HUD";
+
+        /// <summary>
+        /// The licence texts of every shipped library, in the module's own
+        /// repository. Pinned to master rather than to a branch, so the
+        /// link keeps working once the file lands there.
+        /// </summary>
+        public const string ThirdPartyNoticesUrl =
+            "https://github.com/MaximusCub/TaimisToolbench/blob/master/ref/THIRD-PARTY-NOTICES.txt";
 
         /// <summary>The word the "Built with" row hangs the Blish HUD
         /// repository link on. The brackets around it are plain text.</summary>
@@ -36,6 +50,30 @@ namespace TaimisToolbench.Services
 
         public const string CreditParagraph3 =
             "A big thank you to David Reess (queicherius), Saskia Van Leeuwen, Ecmel Tugcu and their open-source contributors.";
+
+        public const string BlishHudParagraph =
+            "Taimi's Toolbench runs inside Blish HUD, the Guild Wars 2 overlay it is built on. Blish HUD is MIT licensed and made by the Blish HUD team.";
+
+        public const string OpenSourceIntro =
+            "This module ships these libraries unchanged, with thanks to the people who wrote them.";
+
+        public const string OpenSourceLicenceNote =
+            "All are MIT licensed, except MonoGame, which uses the Microsoft Public License. The full licence texts are in our third-party notices file.";
+
+        /// <summary>
+        /// One shipped library per line, each already carrying its bullet.
+        /// U+2022 is one of the punctuation marks Menomonia actually carries;
+        /// a geometric marker would draw nothing and advance nothing - see
+        /// CLAUDE.md, "Escaping a codepoint does not make it render".
+        /// </summary>
+        public static readonly IReadOnlyList<string> OpenSourceLibraryLines = new[]
+        {
+            "\u2022 Gw2Sharp, by Archomeda",
+            "\u2022 Json.NET, by James Newton-King",
+            "\u2022 MonoGame, by The MonoGame Team",
+            "\u2022 MonoGame.Extended, by Dylan Wilson",
+            "\u2022 Seven .NET libraries, by the .NET Foundation",
+        };
 
         /// <summary>
         /// The four linked phrases of the credit copy. "gw2efficiency.com"
@@ -51,7 +89,18 @@ namespace TaimisToolbench.Services
             new LinkPhrase("their PayPal", Gw2EfficiencyPayPalUrl),
         };
 
-        /// <summary>The credit block, one segment list per paragraph.</summary>
+        private static readonly IReadOnlyList<LinkPhrase> BlishHudPhrases = new[]
+        {
+            new LinkPhrase("Blish HUD team", BlishHudSourceUrl),
+        };
+
+        private static readonly IReadOnlyList<LinkPhrase> OpenSourcePhrases = new[]
+        {
+            new LinkPhrase("third-party notices file", ThirdPartyNoticesUrl),
+        };
+
+        /// <summary>The gw2efficiency credit, one segment list per
+        /// paragraph.</summary>
         public static IReadOnlyList<IReadOnlyList<PlanNoteSegment>> CreditParagraphs()
         {
             return new[]
@@ -60,6 +109,37 @@ namespace TaimisToolbench.Services
                 LinkPhraseSpans.Split(CreditParagraph2, CreditPhrases),
                 LinkPhraseSpans.Split(CreditParagraph3, CreditPhrases),
             };
+        }
+
+        /// <summary>The Blish HUD credit, one paragraph.</summary>
+        public static IReadOnlyList<IReadOnlyList<PlanNoteSegment>> BlishHudParagraphs()
+        {
+            return new[]
+            {
+                LinkPhraseSpans.Split(BlishHudParagraph, BlishHudPhrases),
+            };
+        }
+
+        /// <summary>
+        /// The shipped-library credit: an intro, one paragraph per library
+        /// so each bullet gets a line of its own, then the licence note.
+        /// The bullets go through the same phrase table as the prose, which
+        /// is what proves a library name is not silently linked.
+        /// </summary>
+        public static IReadOnlyList<IReadOnlyList<PlanNoteSegment>> OpenSourceParagraphs()
+        {
+            var paragraphs = new List<IReadOnlyList<PlanNoteSegment>>
+            {
+                LinkPhraseSpans.Split(OpenSourceIntro, OpenSourcePhrases),
+            };
+
+            foreach (string line in OpenSourceLibraryLines)
+            {
+                paragraphs.Add(LinkPhraseSpans.Split(line, OpenSourcePhrases));
+            }
+
+            paragraphs.Add(LinkPhraseSpans.Split(OpenSourceLicenceNote, OpenSourcePhrases));
+            return paragraphs;
         }
 
         /// <summary>
