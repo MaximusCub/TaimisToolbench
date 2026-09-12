@@ -5,6 +5,87 @@ matching `v<version>` git tag on the release commit, so any two shipped
 builds can be compared with `git diff v0.2.0..v0.2.1`. The About tab shows
 the running version.
 
+## 0.4.0 - 2026-09-12
+
+Legendary gear finally tells you what is socketed into it, the Shopping
+List and the Crafting Steps get windows of their own, and the account
+snapshot refreshes in a fraction of the time it used to take.
+
+### Added
+- **Socketed runes and infusions show up as their own rows.** Upgrades
+  fitted into equipped legendary gear were invisible to the Account
+  Snapshot before; each now gets a row that reads
+  `Equipped: <character> (<item>)`, so a rune sitting in a weapon counts
+  as one you own.
+- **Pop-out windows for the Shopping List and the Crafting Steps.** Either
+  section opens in its own window that you can move, resize and sort
+  independently. Ticks carry across, the window survives the main one
+  closing, and it remembers its opacity.
+- **Equipment templates count as a storage location.** Gear held only in a
+  template is no longer missed, and a legendary shared by several
+  templates is still counted once.
+- **Required Recipes gained Cost and Sold By columns.** Each missing
+  recipe sheet shows its live price and the merchant who actually sells
+  it, with the same detail written into Plan Notes.
+- **Item tooltips read what is in a stack.** They show the upgrades and
+  infusions socketed into it, its empty upgrade slots, the base item under
+  a transmuted skin, and the rune bonuses a character has active.
+- **The Account Snapshot says where you hold each item.** Hovering a row
+  gives the full line: which characters wear it, which bags and bank tabs
+  hold it, and which characters an item in the Legendary Armory is
+  equipped on.
+- **A gated vendor now says what it wants.** When a merchant needs an
+  achievement, mastery or other unlock before it will trade, the plan says
+  so instead of quoting a price you cannot pay.
+
+### Changed
+- **The Account Snapshot refreshes in 6 to 8 seconds** instead of about 36.
+  The fetch now runs its account-wide calls, its characters and its lookups
+  in parallel rather than one at a time, and it only loads the icons you
+  can actually see before filling in the rest.
+- **The snapshot filters are two sets, Locations and Characters.** Each set
+  has its own All checkbox. Shift-clicking a box isolates it within its
+  set, and shift-clicking it again inverts that set.
+- **The module's settings moved into its own Settings tab.** Blish's
+  settings panel now carries one line and a button that opens the tab.
+- **Homestead Refinement settings are dropdowns** rather than numbers you
+  type.
+- **The Crafting Ranker's saved list is your wishlist.** Its currency lines
+  now read what you hold over what you need, for example "1,000/1,500",
+  instead of telling you only how far short you are.
+- **Crafting Plan notes carry item icons, names and links**, with the links
+  styled so they read as clickable.
+- **The About tab was rebuilt**, with a new description of the module, a
+  Credits section broken into subsections, and links that work.
+- **The Snapshot tab is now the Account Snapshot tab.**
+- **The Shopping List reads amount first.** Amount sits at the far left and
+  the Each and Total figures are right-aligned under their headers.
+- **The plan tells you when your account data is overdue for a refresh**,
+  and raises the stale-data notice once per outage rather than on every
+  Generate.
+
+### Fixed
+- Right-clicking an item opened two wiki tabs. It opens one.
+- The Crafting Ranker's recipe completion percentage was wrong. It now
+  scores the same recipes the plan lists, and a gate it could not measure
+  reports as unscored instead of 100%.
+- Generate Plan pressed straight after opening the module failed with a
+  refresh error. It now waits for the game to hand the module its API key.
+- A character whose gear failed to load no longer costs you that
+  character's items; the snapshot says which character it could not read
+  rather than quietly reporting less than you own.
+- A lone search result no longer has the bottom of its item icon clipped.
+- Pop Out could throw before its window was built and open nothing at all.
+- The Shopping List no longer shows a per-unit price for a row that has
+  none.
+
+### Removed
+- **Four recipes came out of the shipped seed data.** They described the
+  Infinite Trebuchet Blueprint and the three WvW items that unlock it, and
+  they did not come from the official GW2 API or the wiki. Three of the
+  four items are still priced from the shipped vendor offers. The Infinite
+  Trebuchet Blueprint now shows UNKNOWN.
+
 ## 0.3.0 - 2026-08-26
 
 Two new tabs land - a craftability ranker and a plan history - and the
@@ -72,14 +153,6 @@ recipe cache stops forgetting what it already knows.
 - A game-build lookup that hangs at startup is abandoned and retried
   instead of stalling the status line, and closing the module no longer
   pulls objects out from under work still in flight.
-
-### Removed
-- **Four recipes are gone from the shipped seed data.** They described the
-  Infinite Trebuchet Blueprint and the three WvW items that unlock it, and
-  they came from a third party's recipe data rather than from the official
-  GW2 API or the wiki. Three of the four items are still priced, because
-  `ref/vendor_offers.json` already carries the same vendor offers. The
-  Infinite Trebuchet Blueprint itself now shows UNKNOWN.
 
 ### Internal
 - The style gate (StyleCop analyzers, warnings as errors) now covers
