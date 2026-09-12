@@ -2,14 +2,18 @@
 
 [![tests](https://github.com/MaximusCub/TaimisToolbench/actions/workflows/tests.yml/badge.svg)](https://github.com/MaximusCub/TaimisToolbench/actions/workflows/tests.yml)
 
-A [Blish HUD](https://blishhud.com/) module built around one thing: a crafting-plan
-**solver** that answers "what's the cheapest way to get N of this item" for Guild
-Wars 2, node by node, the way [gw2efficiency](https://gw2efficiency.com)'s crafting
-calculator does. Type in an item, and the module walks its full recipe tree and
-decides - for every single ingredient, not just the top-level item - whether to
-craft it, buy it off the Trading Post, buy it from a vendor, or use what you
-already own, then lets you override any of those decisions by hand and see the
-total cost update live.
+A [Blish HUD](https://blishhud.com/) module that aims to be your in-game crafting
+companion for Guild Wars 2: plan the most efficient way to craft anything from
+simple items to legendaries, rank a wishlist by how close you are to finishing
+each item, search your whole account for an item, and keep your shopping list and
+crafting steps in a pop-out window while you play. At its core is a crafting-plan
+**solver** that answers "what's the cheapest way to get N of this item", node by
+node, the way [gw2efficiency](https://gw2efficiency.com)'s crafting calculator
+does. Type in an item, and the module walks its full recipe tree and decides -
+for every single ingredient, not just the top-level item - whether to craft it,
+buy it off the Trading Post, buy it from a vendor, or use what you already own,
+then lets you override any of those decisions by hand and see the total cost
+update live.
 
 This is not an inventory viewer with a calculator bolted on. The solver is the
 product; the account-data tab exists to feed it (and to let you search/inspect
