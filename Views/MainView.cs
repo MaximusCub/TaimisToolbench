@@ -354,24 +354,21 @@ namespace TaimisToolbench.Views
         // available width changes.
         private const int SourceFilterX = FilterDropdownX + FilterDropdownWidth + 20;
 
-        // Dim caption ahead of the wallet coin total, so the row reads as a
+        // Caption ahead of the wallet coin total, so the row reads as a
         // labelled figure rather than a stray unlabelled list row.
         private Panel _coinBlockPanel;
         private Label _resultLineLabel;
         private int _coinBlockWidth;
         private string _resultLineText = "";
 
-        // The two filter sets' headings. Dim, so the heading never reads as
-        // one more option beside the boxes it introduces.
+        // The two filter sets' headings, each above the boxes it introduces.
         private const string LocationsCaption = "Locations";
         private const string CharactersCaption = "Characters";
         private const int FilterSetCaptionGap = 10;
-        private static readonly Color FilterSetCaptionColor = new Color(150, 150, 150);
 
         private const string CoinCaption = "Coin";
         private const int CoinCaptionGap = 8;
         private const int CoinCaptionY = 2;
-        private static readonly Color CoinCaptionColor = new Color(130, 130, 130);
 
         // Same rule under every section heading in the module - see
         // SettingsTabContent's own AddSectionHeader.
@@ -1159,7 +1156,7 @@ namespace TaimisToolbench.Views
             {
                 Font = UiFonts.Caption,
                 Text = text,
-                TextColor = FilterSetCaptionColor,
+                TextColor = Color.White,
                 VerticalAlignment = VerticalAlignment.Middle,
                 Size = new Point(MeasureCaptionWidth(text), SourceFilterCellHeight),
                 Location = new Point(0, SourceFilterTopPad),
@@ -3625,7 +3622,7 @@ namespace TaimisToolbench.Views
         // inter-segment gap 6; label then icon to its right) is now the
         // exact same CoinSegmentMath-driven code CraftingPlanView's coin
         // cells use, not just a matching copy of it.
-        // The dim "Coin" caption is built here rather than once at
+        // The "Coin" caption is built here rather than once at
         // construction because this method disposes every child of
         // _coinPanel on each refresh; a caption parked outside that cycle
         // would be destroyed by the first snapshot update.
@@ -3646,14 +3643,11 @@ namespace TaimisToolbench.Views
             var captionFont = UiFonts.Body;
             var digitFont = UiFonts.CoinDigits;
 
-            // Body, not the digits' own face: this was the one text on the
-            // tab both smaller AND greyer than what it labels. One channel
-            // of de-emphasis, not two.
             new Label()
             {
                 Text = CoinCaption,
                 Font = captionFont,
-                TextColor = CoinCaptionColor,
+                TextColor = Color.White,
                 AutoSizeWidth = true,
                 AutoSizeHeight = true,
                 Location = new Point(0, CoinCaptionY),
