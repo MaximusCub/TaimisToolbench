@@ -178,6 +178,7 @@
     <Compile Include="Services\UiSpacing.cs" />
     <Compile Include="Services\AmountLedRowMath.cs" />
     <Compile Include="Services\TradingPostMath.cs" />
+    <Compile Include="Services\FilterSetToggle.cs" />
     <Compile Include="Services\FirstLoadSnapshotGate.cs" />
     <Compile Include="Services\ScrollAnchorMath.cs" />
     <Compile Include="Services\ClipCutoffMath.cs" />
