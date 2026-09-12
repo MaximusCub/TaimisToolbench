@@ -16,18 +16,13 @@ namespace MysticForgeSeeder
         /// from here, so the generated block occupies (-inf, RecipeIdBase]
         /// no matter how many recipes the wiki grows.
         /// <para>
-        /// ref/recipes_seed.json holds negative-id recipes from two
-        /// unrelated producers - this generated forge block, and rows
-        /// hand-authored directly into the seed (currently the four
-        /// Merchant/achievement rows at -1592..-1595) that
-        /// TaimisToolbench.RecipeSeeder's Step 5a carries forward. They
-        /// merge into one dictionary keyed by recipe id, so an overlap
-        /// silently replaces a hand-authored row with a forge one. The two
-        /// producers therefore own disjoint halves of the negative id
-        /// space: hand-authored rows take [-99999, -1], the generated block
-        /// takes RecipeIdBase and below.
-        /// tests/TaimisToolbench.Tests/Services/Recipes/MysticForgeSeedIdSpaceTests
-        /// fails the build if the shipped data ever breaches it.
+        /// Recipe id sign carries provenance in ref/recipes_seed.json: the
+        /// official API serves positive ids only, so every negative id is
+        /// this block. Starting below RecipeIdBase leaves [-99999, -1]
+        /// empty, which is what makes a stray id there detectable as a row
+        /// no generator wrote.
+        /// tests/TaimisToolbench.Tests/Services/Recipes/SeedProvenanceTests
+        /// fails the build if the shipped data ever breaches that.
         /// </para>
         /// </summary>
         private const int RecipeIdBase = -100000;
