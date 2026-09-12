@@ -66,6 +66,19 @@ namespace TaimisToolbench.Services
         public const int WidestClusterWidth =
             SliderWidth + SliderToReadoutGap + ReadoutWidth + ReadoutToTestGap + TestButtonWidth;
 
+        // The Homestead Refinement rows' dropdown. Fixed width, like the
+        // slider above: only the name flexes. Sized to hold its longest
+        // option, "Both upgrades", at the upper-bound-per-character rule,
+        // plus the control's own arrow band on the right.
+        public const int DropdownOptionRunChars = 13;
+        public const int DropdownTextPad = 10;
+        public const int DropdownArrowBand = 26;
+        public const int DropdownHeight = SettingsRowHeight;
+
+        public const int DropdownWidth =
+            DropdownTextPad + (DropdownOptionRunChars * SnapshotItemGridLayout.MaxCharWidthPx)
+            + DropdownArrowBand;
+
         /// <summary>
         /// Narrowest board column a settings section fits in, term by term:
         /// the left pad, a 22-character name floor, the name-to-control gap,
@@ -118,6 +131,12 @@ namespace TaimisToolbench.Services
         public static int InputClusterWidth(int tagBandWidth)
         {
             return InputWidth + InputToTagGap + (tagBandWidth > 0 ? tagBandWidth : 0);
+        }
+
+        /// <summary>Left edge of a dropdown row's control.</summary>
+        public static int DropdownX(int columnWidth)
+        {
+            return ClusterRightEdge(columnWidth) - DropdownWidth;
         }
 
         public static int TestButtonX(int columnWidth)

@@ -10,6 +10,15 @@ namespace TaimisToolbench.Services
 
         public SettingEntry<int> ModalDialogY { get; private set; }
 
+        // How far a popout window is faded over the game, per popout. Two
+        // entries rather than one, because a player who wants the shopping
+        // list solid while they stand at a vendor may still want the
+        // crafting steps ghosted beside it. PopoutOpacity owns the floor
+        // that stops either reaching zero.
+        public SettingEntry<int> PopoutShoppingListOpacityPercent { get; private set; }
+
+        public SettingEntry<int> PopoutCraftingStepsOpacityPercent { get; private set; }
+
         // User-provided coin valuations for the non-coin currencies (karma,
         // laurels, ...) and untradeable barter items a vendor takes, stored
         // as JSON (see CurrencyValuationSerializer for the shape). The
@@ -126,82 +135,99 @@ namespace TaimisToolbench.Services
 
         public ModuleSettings(SettingCollection settings)
         {
-            ModalDialogX = settings.DefineSetting(
-                "ModalDialogX", -1,
-                () => "Modal Dialog X",
-                () => "Horizontal position of the modal dialog");
+            var hidden = settings.AddSubCollection(
+                HiddenCollectionKey, renderInUi: false, lazyLoaded: false, displayNameFunc: null);
 
-            ModalDialogY = settings.DefineSetting(
-                "ModalDialogY", -1,
-                () => "Modal Dialog Y",
-                () => "Vertical position of the modal dialog");
+            ModalDialogX = Define(settings, hidden, ModuleSettingText.ModalDialogX, -1);
+            ModalDialogY = Define(settings, hidden, ModuleSettingText.ModalDialogY, -1);
 
-            CurrencyValuationsJson = settings.DefineSetting(
-                "CurrencyValuationsJson", string.Empty,
-                () => "Vendor Cost Valuations",
-                () => "User-provided coin values for non-coin currencies and barter items (JSON)");
+            PopoutShoppingListOpacityPercent = Define(
+                settings, hidden, ModuleSettingText.PopoutShoppingListOpacityPercent, PopoutOpacity.DefaultPercent);
+            PopoutCraftingStepsOpacityPercent = Define(
+                settings, hidden, ModuleSettingText.PopoutCraftingStepsOpacityPercent, PopoutOpacity.DefaultPercent);
 
-            ValueOwnMaterials = settings.DefineSetting(
-                "ValueOwnMaterials", true,
-                () => "Value own materials",
-                () => "Force-buy items where buying beats crafting from fresh components by more than 15%, and value owned materials at their sell opportunity cost instead of treating them as free");
+            CurrencyValuationsJson = Define(
+                settings, hidden, ModuleSettingText.CurrencyValuationsJson, string.Empty);
+            ValueOwnMaterials = Define(settings, hidden, ModuleSettingText.ValueOwnMaterials, true);
+            ScrollDiagnosticsEnabled = Define(
+                settings, hidden, ModuleSettingText.ScrollDiagnosticsEnabled, false);
 
-            HomesteadFiberTier = settings.DefineSetting(
-                "HomesteadFiberTier", 0,
-                () => "Homestead Fiber efficiency tier",
-                () => "Farm refinement efficiency upgrades owned (0, 1, or 2)");
+            HomesteadFiberTier = Define(settings, hidden, ModuleSettingText.HomesteadFiberTier, 0);
+            HomesteadMetalTier = Define(settings, hidden, ModuleSettingText.HomesteadMetalTier, 0);
+            HomesteadWoodTier = Define(settings, hidden, ModuleSettingText.HomesteadWoodTier, 0);
 
-            HomesteadMetalTier = settings.DefineSetting(
-                "HomesteadMetalTier", 0,
-                () => "Homestead Metal efficiency tier",
-                () => "Metal Forge refinement efficiency upgrades owned (0, 1, or 2)");
+            LogMaxSizeBytes = Define(settings, hidden, ModuleSettingText.LogMaxSizeBytes, 2 * 1024 * 1024);
+            LogRetentionDays = Define(settings, hidden, ModuleSettingText.LogRetentionDays, 14);
+            LogDiagnosticsEnabled = Define(settings, hidden, ModuleSettingText.LogDiagnosticsEnabled, false);
 
-            HomesteadWoodTier = settings.DefineSetting(
-                "HomesteadWoodTier", 0,
-                () => "Homestead Wood efficiency tier",
-                () => "Lumber Mill refinement efficiency upgrades owned (0, 1, or 2)");
+            PlanHistoryMaxEntries = Define(settings, hidden, ModuleSettingText.PlanHistoryMaxEntries, 25);
+            SnapshotRefreshIntervalMinutes = Define(
+                settings, hidden, ModuleSettingText.SnapshotRefreshIntervalMinutes, 10);
+            ClickSoundVolumePercent = Define(
+                settings, hidden, ModuleSettingText.ClickSoundVolumePercent, ClickSoundVolume.DefaultPercent);
+        }
 
-            ScrollDiagnosticsEnabled = settings.DefineSetting(
-                "ScrollDiagnosticsEnabled", false,
-                () => "Scroll diagnostics",
-                () => "Log scroll machinery events for debugging");
+        // Blish renders every SettingEntry a module defines into its own
+        // Manage Modules panel, and offers exactly one way to opt out: a
+        // sub-collection whose RenderInUi is false, which
+        // Blish_HUD.Settings.UI.Views.SettingView.FromType skips whole. The
+        // key names a real JSON object inside the module's settings, so it
+        // is fixed for the life of the module.
+        private const string HiddenCollectionKey = "Internal";
 
-            LogMaxSizeBytes = settings.DefineSetting(
-                "LogMaxSizeBytes", 2 * 1024 * 1024,
-                () => "Log max size (bytes)",
-                () => "Maximum size of the module log file on disk before old entries are trimmed");
+        /// <summary>
+        /// Defines one setting where its descriptor says it belongs: the root
+        /// collection when Blish's panel may draw it, the non-rendered
+        /// sub-collection when it may not.
+        /// </summary>
+        private static SettingEntry<T> Define<T>(
+            SettingCollection root, SettingCollection hidden,
+            ModuleSettingText.Descriptor descriptor, T defaultValue)
+        {
+            return descriptor.ShownInBlishPanel
+                ? DefineIn(root, descriptor, defaultValue)
+                : DefineHidden(root, hidden, descriptor, defaultValue);
+        }
 
-            LogRetentionDays = settings.DefineSetting(
-                "LogRetentionDays", 14,
-                () => "Log retention (days)",
-                () => "Number of days of module log history to keep on disk");
+        private static SettingEntry<T> DefineIn<T>(
+            SettingCollection collection, ModuleSettingText.Descriptor descriptor, T defaultValue)
+        {
+            return collection.DefineSetting(
+                descriptor.Key, defaultValue,
+                () => descriptor.DisplayName,
+                () => descriptor.Description);
+        }
 
-            LogDiagnosticsEnabled = settings.DefineSetting(
-                "LogDiagnosticsEnabled", false,
-                () => "Diagnostics logging",
-                () => "Log fine-grained diagnostic events (including scroll machinery) to the Log tab and file");
+        /// <summary>
+        /// Defines a setting into the non-rendered sub-collection, carrying
+        /// any value already saved under the old top-level key across. A
+        /// sub-collection is a nested JSON object, so the value moves even
+        /// though the key does not; without this, a player who had set a log
+        /// size or a click volume gets the default back. The top-level copy
+        /// is undefined afterwards, so no stale second figure is left behind.
+        /// See docs/blish-settings-panel.md for the storage shape.
+        /// </summary>
+        private static SettingEntry<T> DefineHidden<T>(
+            SettingCollection root, SettingCollection hidden,
+            ModuleSettingText.Descriptor descriptor, T defaultValue)
+        {
+            bool alreadyMoved = hidden.ContainsSetting(descriptor.Key);
+            var entry = DefineIn(hidden, descriptor, defaultValue);
 
-            PlanHistoryMaxEntries = settings.DefineSetting(
-                "PlanHistoryMaxEntries", 25,
-                () => "Plan history entries kept",
-                () => "How many previously-generated plans the Plan History tab keeps. Pinned entries are never removed.");
+            if (!alreadyMoved && root.TryGetSetting(descriptor.Key, out SettingEntry<T> legacy))
+            {
+                entry.Value = legacy.Value;
+            }
 
-            SnapshotRefreshIntervalMinutes = settings.DefineSetting(
-                "SnapshotRefreshIntervalMinutes", 10,
-                () => "Snapshot refresh interval (minutes)",
-                () => "How long a cached account snapshot may sit before an automatic background refresh is triggered");
-
-            ClickSoundVolumePercent = settings.DefineSetting(
-                "ClickSoundVolumePercent", ClickSoundVolume.DefaultPercent,
-                () => "Click volume",
-                () => "How loud this module's own click plays when you press its buttons, rows and pills (0 = off, 100 = loudest). Checkboxes keep Blish HUD's own click sound.");
+            root.UndefineSetting(descriptor.Key);
+            return entry;
         }
 
         /// <summary>
         /// Reads the persisted Homestead Refinement efficiency tiers.
         /// Values outside 0-2 (possible only via a hand-edited settings
-        /// file, since the Settings tab and SettingsInputParser reject
-        /// them) are clamped rather than thrown - a corrupt/out-of-range
+        /// file, since the Settings tab offers the three valid choices and
+        /// nothing else) are clamped rather than thrown - a corrupt/out-of-range
         /// persisted value must never crash plan generation. See
         /// HomesteadEfficiencyTiers' own constructor for why clamping
         /// happens here rather than there: that constructor fails loudly by
@@ -234,8 +260,8 @@ namespace TaimisToolbench.Services
         }
 
         // Mirrors SettingsInputParser.TryParseLogMaxSizeMb's own 1-1000 MB
-        // bound (same deliberate duplication as ClampTier/TryParseTier's
-        // shared 0-2 range above, and for the same reason). A persisted
+        // bound (same deliberate duplication as ClampTier's own 0-2 range
+        // above, and for the same reason). A persisted
         // value outside this range is reachable only via a hand-edited
         // settings.json - the Settings tab's own parser rejects it before
         // it is ever assigned - but ModuleLogStore.AppendLine's self-trim
@@ -380,6 +406,29 @@ namespace TaimisToolbench.Services
         public int GetClampedClickSoundVolumePercent()
         {
             return ClickSoundVolume.Clamp(ClickSoundVolumePercent.Value);
+        }
+
+        /// <summary>
+        /// Clamped popout opacity for actual use - same contract as the
+        /// clamped accessors above. A hand-edited settings file can hold any
+        /// figure, so the floor is applied on the way out and not only by the
+        /// slider that normally sets them.
+        /// </summary>
+        public int GetClampedPopoutOpacityPercent(PlanSectionType sectionType)
+        {
+            return PopoutOpacity.Clamp(EntryFor(sectionType).Value);
+        }
+
+        public void SetPopoutOpacityPercent(PlanSectionType sectionType, int percent)
+        {
+            EntryFor(sectionType).Value = PopoutOpacity.Clamp(percent);
+        }
+
+        private SettingEntry<int> EntryFor(PlanSectionType sectionType)
+        {
+            return sectionType == PlanSectionType.CraftingSteps
+                ? PopoutCraftingStepsOpacityPercent
+                : PopoutShoppingListOpacityPercent;
         }
 
         /// <summary>

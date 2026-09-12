@@ -71,15 +71,32 @@ namespace TaimisToolbench.Services
         /// affects every source using it, regardless of what else also
         /// failed), then PartialFailure (some sources succeeded), then
         /// NetworkOrApiDown (a total failure with a known network/API
-        /// cause), then Unknown.
+        /// cause), then IncompleteCharacters (every source read, a
+        /// character not), then Unknown.
         /// </summary>
         public static SnapshotFailureClassification Classify(
             IReadOnlyList<string> failedSourceExceptionTypeNames,
             int failedSourceCount,
             int totalSourceCount)
         {
-            var kind = ClassifyKind(failedSourceExceptionTypeNames, failedSourceCount, totalSourceCount);
-            return new SnapshotFailureClassification(kind, failedSourceCount, totalSourceCount);
+            return Classify(failedSourceExceptionTypeNames, failedSourceCount, totalSourceCount, 0);
+        }
+
+        /// <summary>
+        /// The same, for a fetch that also reports characters it could not
+        /// read in full. A failed source outranks that: it is the bigger
+        /// fact, and the character failures usually share its cause.
+        /// </summary>
+        public static SnapshotFailureClassification Classify(
+            IReadOnlyList<string> failedSourceExceptionTypeNames,
+            int failedSourceCount,
+            int totalSourceCount,
+            int incompleteCharacterCount)
+        {
+            var kind = ClassifyKind(
+                failedSourceExceptionTypeNames, failedSourceCount, totalSourceCount, incompleteCharacterCount);
+            return new SnapshotFailureClassification(
+                kind, failedSourceCount, totalSourceCount, incompleteCharacterCount);
         }
 
         /// <summary>
@@ -98,7 +115,8 @@ namespace TaimisToolbench.Services
                 return Classify(
                     fetchFailed.FailedSourceExceptionTypeNames,
                     fetchFailed.FailedSourceCount,
-                    fetchFailed.TotalSourceCount);
+                    fetchFailed.TotalSourceCount,
+                    fetchFailed.IncompleteCharacterNames.Count);
             }
 
             string[] typeNames = exception != null
@@ -110,7 +128,8 @@ namespace TaimisToolbench.Services
         private static SnapshotFailureKind ClassifyKind(
             IReadOnlyList<string> failedSourceExceptionTypeNames,
             int failedSourceCount,
-            int totalSourceCount)
+            int totalSourceCount,
+            int incompleteCharacterCount)
         {
             if (ContainsAny(failedSourceExceptionTypeNames, ApiAccessExceptionTypeNames))
             {
@@ -125,6 +144,11 @@ namespace TaimisToolbench.Services
             if (ContainsAny(failedSourceExceptionTypeNames, NetworkOrApiDownExceptionTypeNames))
             {
                 return SnapshotFailureKind.NetworkOrApiDown;
+            }
+
+            if (failedSourceCount == 0 && incompleteCharacterCount > 0)
+            {
+                return SnapshotFailureKind.IncompleteCharacters;
             }
 
             return SnapshotFailureKind.Unknown;

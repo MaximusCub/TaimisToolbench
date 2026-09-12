@@ -476,15 +476,17 @@ namespace TaimisToolbench.Views.Rendering
 
                 _treeHeaderRelayout = ColumnHeaderRowRenderer.CreateColumnHeaderRow(
                     treeFlow, panelWidth, "Item", PlanRelayoutMath.TableLeftHeaderX, CostHeaderText, _sink,
-                    middleLabel: SourceHeaderText,
-                    middleXForWidth: w =>
+                    middleHeaders: new[]
                     {
-                        var edges = headerEdgesFor(w);
-                        PlanRelayoutMath.ComputeTreeHeaderRooms(
-                            edges, _sourceHeaderInkWidth, headerCostWidths.WidestRowRunWidth,
-                            out var sourceRoom, out _);
-                        return TreePillRunLayout.HeaderX(
-                            edges.PillColX, _sourceHeaderInkWidth, sourceHeaderWidth, sourceRoom);
+                        new ColumnHeaderRowRenderer.MiddleHeader(SourceHeaderText, w =>
+                        {
+                            var edges = headerEdgesFor(w);
+                            PlanRelayoutMath.ComputeTreeHeaderRooms(
+                                edges, _sourceHeaderInkWidth, headerCostWidths.WidestRowRunWidth,
+                                out var sourceRoom, out _);
+                            return TreePillRunLayout.HeaderX(
+                                edges.PillColX, _sourceHeaderInkWidth, sourceHeaderWidth, sourceRoom);
+                        }),
                     },
                     rightXForWidth: w => headerEdgesFor(w).CostRightEdge,
                     rightLabelXForWidth: w =>
@@ -734,7 +736,13 @@ namespace TaimisToolbench.Views.Rendering
         // IsBestPathPreset must come from which
         // control fired this call, not be inferred from the resulting
         // _nodeOverrides count - see StatusText.ForOverrideResolve for why.
-        private void ApplyOverridesAndResolve(bool isBestPathPreset = false)
+        //
+        // anchorNodeId names the row a pill click landed on, so the
+        // restore can hold that row still even at scroll offset zero,
+        // where the host will not anchor on the cursor alone. Null for
+        // the toolbar presets, which act on the whole tree at once and
+        // name no row.
+        private void ApplyOverridesAndResolve(bool isBestPathPreset = false, int? anchorNodeId = null)
         {
             // Edit since the move: this used to return silently on a
             // missing solve context, which made EVERY local change - a pill
@@ -760,7 +768,7 @@ namespace TaimisToolbench.Views.Rendering
                 _host.SetLastDebugLog(result.DebugLog);
                 var vm = _vmBuilder.Build(result);
                 _host.CurrentPlan = vm;
-                _host.PreserveScrollAcross(() => _host.RenderPlanAfterResolve(vm));
+                _host.PreserveScrollAcross(() => _host.RenderPlanAfterResolve(vm), anchorNodeId);
                 // The click that got us here came from a cursor that has
                 // not moved, and the render just replaced controls under
                 // it - see HoverChainResync.
@@ -1040,13 +1048,46 @@ namespace TaimisToolbench.Views.Rendering
             // panels have no tint/filter property, so a translucent black
             // overlay approximates gw2e's grayscale+opacity filter).
             int iconX = shape.IconX;
-            ItemIconFrame frame = dimmed
-                ? ItemIconFrame.Explicit(new Color(60, 60, 60))
-                : ItemIconFrame.ForRarity(node.Rarity);
+
+            // A currency row goes to the currency entry point, which
+            // resolves its whole tooltip from the id. It used to draw
+            // through the item path, so the Recipe Tree showed a bare name
+            // where the Settings grid showed the game's full box.
+            Panel iconFrame;
             var hover = TreeRowHover(node, captionText);
-            var iconFrame = IconControls.CreateItemIcon(
-                rowPanel, node.IconUrl, frame, iconX, PlanContentHeightMath.TreeRowIconPad,
-                ItemIconTier.BagSidebar, hover);
+            if (TreeRowTooltipComposer.RowSubjectIsACurrency(node))
+            {
+                var currencyTips = TreeRowTooltipComposer.BuildExtraTooltipContent(
+                    node, captionText, _host.CurrentPlan);
+                iconFrame = IconControls.CreateCurrencyIcon(
+                    rowPanel, node.ItemId, iconX, PlanContentHeightMath.TreeRowIconPad,
+                    ItemIconTier.BagSidebar, _host.CurrencyFactsFor, () => currencyTips);
+            }
+            else if (dimmed || !TreeRowTooltipComposer.RowIdIsAnItemId(node))
+            {
+                // Two rows the id cannot answer for. A dimmed reference
+                // branch takes a frame the rarity palette has no colour
+                // for. A synthesized row - a guild upgrade, an
+                // unrecognized ingredient - has a name the item store
+                // never held, so only the node knows it.
+                iconFrame = IconControls.CreateItemIconFromCapture(
+                    rowPanel, node.IconUrl,
+                    dimmed
+                        ? ItemIconFrame.Explicit(new Color(60, 60, 60))
+                        : ItemIconFrame.ForRarity(node.Rarity),
+                    iconX, PlanContentHeightMath.TreeRowIconPad,
+                    ItemIconTier.BagSidebar, hover);
+            }
+            else
+            {
+                var itemTips = TreeRowTooltipComposer.BuildExtraTooltipContent(
+                    node, captionText, _host.CurrentPlan);
+                iconFrame = IconControls.DrawItemIcon(
+                    rowPanel, node.ItemId, iconX, PlanContentHeightMath.TreeRowIconPad,
+                    ItemIconTier.BagSidebar, _host.ItemFactsFor,
+                    () => itemTips);
+            }
+
             Panel iconScrim = null;
             if (dimmed)
             {
@@ -1169,8 +1210,6 @@ namespace TaimisToolbench.Views.Rendering
             handle.QtyLabel = qtyLabel;
             handle.NameLabel = nameLabel;
 
-            WireWikiLinkContextAction(rowPanel, node);
-
             StampRowIcon(iconFrame, iconScrim, hover);
 
             // Decision pill column: one pill per feasible source (direct
@@ -1211,76 +1250,6 @@ namespace TaimisToolbench.Views.Rendering
                 node, parent, panelWidth, depth, shape, rowPanel, arrowLabel, handle);
 
             RegisterRowResizeHandlers(handle, rowPanel, childFlow, nameFont);
-        }
-
-        /// <summary>
-        /// The row's right-click-to-wiki context action, wired only for
-        /// names that can resolve to a page - see WikiLinkBuilder's
-        /// SentinelNames for the ones that never can.
-        /// </summary>
-        private static void WireWikiLinkContextAction(Panel rowPanel, CraftingTreeNode node)
-        {
-            // This module's only external-URL launch - a context action
-            // (right-click), not a visible icon. Every tree
-            // row gets this, item leaf or internal node alike - a wiki page
-            // that does not exist for an internal-only concept (e.g. a
-            // synthesized cost-component "currency" name) just 404s rather
-            // than crashing anything; WikiLinkBuilder.HasWikiPage/
-            // BuildItemPageUrl additionally suppress the affordance
-            // entirely for the known placeholder names (see
-            // WikiLinkBuilder's SentinelNames), which never resolve to a
-            // real page at all.
-            //
-            // Fix-pass (render-path allocation): HasWikiPage is a cheap
-            // non-whitespace + not-a-placeholder-name check - the actual
-            // URL (Trim + Replace + Uri.EscapeDataString, a closure, and a
-            // delegate) is built lazily inside the press/release handlers
-            // below instead of eagerly for every tree row on every build
-            // and every lazy expand, since most rows are never
-            // right-clicked at all.
-            //
-            // Fix-pass (right-click-as-camera-drag): GW2's own right-drag
-            // is the camera-rotate gesture, and firing on button-DOWN alone
-            // (the previous behavior) meant a drag begun over this row -
-            // input Blish otherwise swallows here today - opened the
-            // browser and yanked focus out of a fullscreen game the
-            // instant the button went down, with no way to abort. Firing
-            // on RightMouseButtonReleased alone is NOT a fix: Blish routes
-            // the release event to whichever row is under the cursor at
-            // release time, so a drag that started on a DIFFERENT row
-            // would open THIS row's page instead. Pairing press+release on
-            // this SAME rowPanel closes that: press arms a per-row flag,
-            // and only this row's own Released handler (which only fires
-            // when the release also lands on this row) can consume it.
-            // MouseLeft additionally disarms the flag the moment the
-            // cursor leaves this row after a press, so a drag that starts
-            // here, wanders off, and is released back over this row later
-            // (from an unrelated gesture) cannot replay a stale arm.
-            //
-            // Unlike RenderChildContainer's caret handler, this one does
-            // not exclude clicks landing on a pill (this method never sees
-            // them). Intentional and harmless: decision pills carry no
-            // right-click meaning, so a right-click that lands on one
-            // still falls through to this row's wiki-link handler rather
-            // than doing nothing.
-            if (WikiLinkBuilder.HasWikiPage(node.Name))
-            {
-                // Which page a row opens is decided by
-                // TreeRowTooltipComposer.BuildWikiUrl, the same Blish-free
-                // class that writes the tooltip line naming the affordance.
-                string wikiUrl = TreeRowTooltipComposer.BuildWikiUrl(node);
-                bool wikiLinkArmed = false;
-                rowPanel.RightMouseButtonPressed += (_, __) => wikiLinkArmed = true;
-                rowPanel.MouseLeft += (_, __) => wikiLinkArmed = false;
-                rowPanel.RightMouseButtonReleased += (_, __) =>
-                {
-                    if (wikiLinkArmed)
-                    {
-                        wikiLinkArmed = false;
-                        WikiLinkLauncher.Open(wikiUrl);
-                    }
-                };
-        }
         }
 
         /// <summary>
@@ -1499,7 +1468,7 @@ namespace TaimisToolbench.Views.Rendering
                 handle.RowPanel, node.SubtreeCost.Value, currencyAmounts,
                 TreeCostColumnMath.ComputeRowEdges(
                     costRightEdge, handle.ColumnWidths, handle.RowDrawsCurrency),
-                TreeRowTextY, UiFonts.Body, dimmed ? 0.35f : 1f);
+                TreeRowTextY, UiFonts.Body, _host.CurrencyFactsFor, dimmed ? 0.35f : 1f);
         }
 
         /// <summary>
@@ -1777,6 +1746,20 @@ namespace TaimisToolbench.Views.Rendering
             // comment and docs/ARCHITECTURE.md section 5's STANDING RULE.
             var extraContent = TreeRowTooltipComposer.BuildExtraTooltipContent(
                 node, captionText, _host.CurrentPlan);
+
+            if (TreeRowTooltipComposer.RowSubjectIsACurrency(node))
+            {
+                // Resolved from the currency id, so this row shows the same
+                // box the Settings grid and the Total Cost table show.
+                int currencyId = node.ItemId;
+                System.Func<int, CurrencyTooltipFacts> facts = _host.CurrencyFactsFor;
+                return ItemIconTooltip.ForCurrency(
+                    node.Name ?? "",
+                    () => facts(currencyId),
+                    () => extraContent,
+                    TreeRowTooltipComposer.WikiTargetFor(node));
+            }
+
             var identity = ItemTooltipIdentity.ForItem(node.Name ?? "", node.IconUrl, node.Rarity);
             var getStatBlock = _getItemStatBlock;
 
@@ -1787,10 +1770,9 @@ namespace TaimisToolbench.Views.Rendering
             // ItemMetadataService.GetCachedStatBlock, which never fetches.
             return ItemIconTooltip.Composed(
                 identity,
-                () => ItemRowTooltipComposer.BuildRowContent(
-                    TreeRowTooltipComposer.BuildStatTooltipContent(node, getStatBlock),
-                    identity,
-                    extraContent));
+                () => TreeRowTooltipComposer.BuildStatTooltipContent(node, getStatBlock),
+                () => extraContent,
+                TreeRowTooltipComposer.WikiTargetFor(node));
         }
 
         /// <summary>
@@ -2081,10 +2063,11 @@ namespace TaimisToolbench.Views.Rendering
                 if (interactive)
                 {
                     var source = spec.Source.Value;
+                    int anchorNodeId = node.NodeId;
                     outer.Click += (_, __) =>
                     {
-                        _nodeOverrides[node.NodeId] = source;
-                        ApplyOverridesAndResolve();
+                        _nodeOverrides[anchorNodeId] = source;
+                        ApplyOverridesAndResolve(anchorNodeId: anchorNodeId);
                     };
                     Color restingBorder = borderColor;
                     outer.MouseEntered += (_, __) => outer.BackgroundColor = Color.White;
@@ -2097,6 +2080,7 @@ namespace TaimisToolbench.Views.Rendering
                     // or out of _ignoredItemIds, matching gw2e's own
                     // tree-wide-by-item-id "Ignore" semantics.
                     int itemId = node.ItemId;
+                    int anchorNodeId = node.NodeId;
                     outer.Click += (_, __) =>
                     {
                         if (!_ignoredItemIds.Remove(itemId))
@@ -2104,7 +2088,7 @@ namespace TaimisToolbench.Views.Rendering
                             _ignoredItemIds.Add(itemId);
                         }
 
-                        ApplyOverridesAndResolve();
+                        ApplyOverridesAndResolve(anchorNodeId: anchorNodeId);
                     };
 
                     // No hand-rolled wash-and-restore here: ignoreInteractive
@@ -2395,7 +2379,7 @@ namespace TaimisToolbench.Views.Rendering
         /// trailing "+N" pill so the two can never disagree about pill
         /// chrome. Border simulated as an outer colored panel with a
         /// 1px-inset fill panel, the same nesting technique
-        /// IconControls.CreateItemIcon uses.
+        /// IconControls.DrawItemIcon uses.
         /// </summary>
         private static Panel CreatePillPanel(
             Panel rowPanel, string text, BitmapFont font, int pillWidth, int textWidth,

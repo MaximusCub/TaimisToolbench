@@ -64,7 +64,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Currency", Id = TokenCurrencyId, Count = 3 },
                 },
                 MerchantName = "Lyhr",
-                Locations = new List<string> { "Outer Ring" },
                 UnlockRecipeItemId = unlockItemId,
                 UnlockRecipeId = unlockRecipeId,
             };
@@ -111,7 +110,7 @@ namespace TaimisToolbench.Tests.Services
             // onto a name that already carries one.
             Assert.Equal(
                 "https://wiki.guildwars2.com/wiki/Recipe%3A_Legendary_Obsidian_Armor#Acquisition",
-                row.WikiUrl);
+                row.WikiTarget.BuildUrl());
             Assert.Equal("Required Recipes (1)", section.Title);
         }
 

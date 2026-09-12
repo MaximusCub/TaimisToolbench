@@ -730,6 +730,246 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void LoadLatest_NegativeSchemaVersion_ReturnsNullAndLogsWarn()
+        {
+            // The third value outside the readable range, and the only one
+            // no build could ever have written: a hand-edited or damaged
+            // field. It takes the error channel with 0 and the future
+            // versions, never the Info channel drift uses.
+            string filePath = Path.Combine(_tempDir, "plan.json");
+            File.WriteAllText(filePath,
+                "{ \"SchemaVersion\": -1, \"Result\": { \"Plan\": { \"TargetItemId\": 1 } } }");
+
+            string capturedError = null;
+            string capturedInfo = null;
+            var store = new PlanStore(
+                _tempDir, (message, ex) => capturedError = message, message => capturedInfo = message);
+
+            Assert.Null(store.LoadLatest()?.Plan);
+            Assert.Null(capturedInfo);
+            Assert.NotNull(capturedError);
+        }
+
+        [Fact]
+        public async Task LoadLatest_SchemaVersionAtTheFloor_RestoresTheWholeResult()
+        {
+            // The floor is a readable version, not merely a tolerated one:
+            // a file stamped there must come back with its solved result,
+            // not with the request alone. Written by the real store at the
+            // current version, then restamped at the floor, because no
+            // build that stamps the floor still exists to run.
+            var pipeline = BuildPipeline(out var priceApi);
+            priceApi.AddPrice(1, buyUnitPrice: 400, sellUnitPrice: 1000);
+            priceApi.AddPrice(2, buyUnitPrice: 10, sellUnitPrice: 100);
+
+            var result = await pipeline.GenerateStructuredAsync(
+                1, 1, null, CancellationToken.None, priceBasis: PriceBasis.InstantBuy);
+            _store.Save(Wrap(result, new DateTime(2026, 8, 9, 12, 0, 0, DateTimeKind.Local)));
+            RestampOnDisk(PersistedPlan.MinimumReadableSchemaVersion);
+
+            string capturedError = null;
+            string capturedInfo = null;
+            var store = new PlanStore(
+                _tempDir, (message, ex) => capturedError = message, message => capturedInfo = message);
+
+            var load = store.LoadLatest();
+
+            Assert.NotNull(load);
+            Assert.True(load.HasResult, "the floor version lost its result: " + (capturedInfo ?? capturedError));
+            Assert.Null(capturedError);
+            Assert.Null(capturedInfo);
+
+            // Intact, not merely present: the restored graph renders to the
+            // same view model the freshly solved one does.
+            var vmBuilder = new PlanViewModelBuilder();
+            Assert.Equal(ToJson(vmBuilder.Build(result)), ToJson(vmBuilder.Build(load.Plan.Result)));
+        }
+
+        [Fact]
+        public async Task LoadLatest_FloorVersionFileStillCarryingVendorOfferLocations_RestoresTheWholeResult()
+        {
+            // The exact on-disk difference the 3 -> 4 bump made: a file at
+            // the floor carries a "Locations" array on every vendor offer
+            // and no current type claims it. Newtonsoft must skip it rather
+            // than fail the read, which is the whole reason the floor can
+            // sit below the current version at all.
+            using (var tmp = new TempDirectory())
+            {
+                var pipeline = BuildVendorOfferPipeline(tmp.Path);
+                var result = await pipeline.GenerateStructuredAsync(
+                    1, 1, null, CancellationToken.None,
+                    priceBasis: PriceBasis.InstantBuy,
+                    currencyValuation: new CurrencyValuation(new Dictionary<int, long> { { 2, 1 } }));
+
+                Assert.True(result.SolveContext.VendorOffers.TryGetValue(2, out var offers));
+                Assert.NotEmpty(offers);
+
+                _store.Save(Wrap(result, new DateTime(2026, 8, 9, 12, 0, 0, DateTimeKind.Local)));
+                RestampOnDisk(PersistedPlan.MinimumReadableSchemaVersion, AddVendorOfferLocations);
+
+                string capturedError = null;
+                string capturedInfo = null;
+                var store = new PlanStore(
+                    _tempDir, (message, ex) => capturedError = message, message => capturedInfo = message);
+
+                var load = store.LoadLatest();
+
+                Assert.NotNull(load);
+                Assert.True(load.HasResult,
+                    "a floor-version file carrying Locations lost its result: "
+                    + (capturedInfo ?? capturedError));
+                Assert.Null(capturedError);
+                Assert.Null(capturedInfo);
+
+                Assert.True(load.Plan.Result.SolveContext.VendorOffers.TryGetValue(2, out var reloaded));
+                Assert.Equal(offers.Count, reloaded.Count);
+                Assert.Equal(offers[0].OfferId, reloaded[0].OfferId);
+                Assert.Equal(offers[0].MerchantName, reloaded[0].MerchantName);
+                Assert.Equal(offers[0].CostLines.Count, reloaded[0].CostLines.Count);
+
+                var vmBuilder = new PlanViewModelBuilder();
+                Assert.Equal(ToJson(vmBuilder.Build(result)), ToJson(vmBuilder.Build(load.Plan.Result)));
+            }
+        }
+
+        [Fact]
+        public async Task LoadLatest_CurrentVersionButUnbindableResult_KeepsTheRequest()
+        {
+            // What the readable range must not cost. A version inside the
+            // range no longer proves the result binds, so the structural
+            // gate behind it is what stops a half-bound graph reaching the
+            // tab. Every property name inside Result is prefixed, so no
+            // member of the result graph can bind to anything.
+            var pipeline = BuildPipeline(out var priceApi);
+            priceApi.AddPrice(1, buyUnitPrice: 400, sellUnitPrice: 1000);
+            priceApi.AddPrice(2, buyUnitPrice: 10, sellUnitPrice: 100);
+
+            var result = await pipeline.GenerateStructuredAsync(
+                1, 1, null, CancellationToken.None, priceBasis: PriceBasis.InstantBuy);
+            _store.Save(Wrap(result, new DateTime(2026, 8, 9, 12, 0, 0, DateTimeKind.Local), quantity: 3));
+            RestampOnDisk(PersistedPlan.CurrentSchemaVersion, AlienateResultPropertyNames);
+
+            string capturedError = null;
+            var store = new PlanStore(_tempDir, (message, ex) => capturedError = message, message => { });
+
+            var load = store.LoadLatest();
+
+            Assert.NotNull(load);
+            Assert.False(load.HasResult);
+            Assert.NotNull(capturedError);
+            Assert.Equal(1, load.Plan.RequestItems[0].ItemId);
+            Assert.Equal(3, load.Plan.RequestItems[0].Quantity);
+        }
+
+        // A real VendorOfferStore-backed offer for item 2, priced far under
+        // the trading post so the solve routes through it and the offer
+        // lands in PlanSolveContext.VendorOffers.
+        private static CraftingPlanPipeline BuildVendorOfferPipeline(string dataDirectoryPath)
+        {
+            var recipeApi = new InMemoryRecipeApiClient();
+            recipeApi.AddSearchResult(1, 10);
+            recipeApi.AddRecipe(new RawRecipe
+            {
+                Id = 10,
+                OutputItemId = 1,
+                OutputItemCount = 1,
+                Ingredients = new List<RawIngredient>
+                {
+                    new RawIngredient { Type = "Item", Id = 2, Count = 5 },
+                },
+                Disciplines = new List<string> { "Weaponsmith" },
+                MinRating = 500,
+                Flags = new List<string> { "AutoLearned" },
+            });
+
+            var priceApi = new InMemoryPriceApiClient();
+            priceApi.AddPrice(1, buyUnitPrice: 100, sellUnitPrice: 5000);
+            priceApi.AddPrice(2, buyUnitPrice: 100, sellUnitPrice: 1000);
+
+            var itemApi = new InMemoryItemApiClient();
+            itemApi.AddItem(1, "Target", "t.png");
+            itemApi.AddItem(2, "Ingredient", "i.png");
+
+            var vendorStore = new VendorOfferStore(dataDirectoryPath, new VendorOfferLoader());
+            vendorStore.LoadBaseline(null);
+            vendorStore.AddOffersToOverlay(new[]
+            {
+                new VendorOffer
+                {
+                    OfferId = "test-ingredient-offer",
+                    OutputItemId = 2,
+                    OutputCount = 1,
+                    CostLines = new List<CostLine>
+                    {
+                        new CostLine { Type = "Currency", Id = 2, Count = 10 },
+                    },
+                    MerchantName = "Test Vendor",
+                },
+            });
+
+            return new CraftingPlanPipeline(
+                new RecipeService(recipeApi),
+                new TradingPostService(priceApi),
+                new PlanSolver(),
+                new ItemMetadataService(itemApi),
+                vendorStore,
+                reducer: new InventoryReducer());
+        }
+
+        // Rewrites the saved plan.json in place, through the same gzip
+        // container the store writes, so the load under test still goes
+        // through PlanStore.LoadLatest's own sniff and decompress.
+        private void RestampOnDisk(int schemaVersion, Action<JObject> edit = null)
+        {
+            string path = Path.Combine(_tempDir, "plan.json");
+            var onDisk = JObject.Parse(GzipJsonFile.DecompressToJson(File.ReadAllBytes(path)));
+            onDisk["SchemaVersion"] = schemaVersion;
+            edit?.Invoke(onDisk);
+            File.WriteAllBytes(path, GzipJsonFile.Compress(onDisk.ToString(Formatting.None)));
+        }
+
+        // What a build before the 3 -> 4 bump wrote: every vendor offer
+        // carried the place names ref/vendor_offers.json still holds.
+        private static void AddVendorOfferLocations(JObject onDisk)
+        {
+            int touched = 0;
+            foreach (var offer in onDisk.Descendants().OfType<JObject>()
+                .Where(node => node["OfferId"] != null).ToList())
+            {
+                offer["Locations"] = new JArray("Lion's Arch", "Divinity's Reach");
+                touched++;
+            }
+
+            Assert.True(touched > 0, "no vendor offer was found in the saved plan to age.");
+        }
+
+        private static void AlienateResultPropertyNames(JObject onDisk)
+        {
+            onDisk["Result"] = Alienate(onDisk["Result"]);
+        }
+
+        private static JToken Alienate(JToken token)
+        {
+            if (token is JObject obj)
+            {
+                var renamed = new JObject();
+                foreach (var property in obj.Properties())
+                {
+                    renamed["x" + property.Name] = Alienate(property.Value);
+                }
+
+                return renamed;
+            }
+
+            if (token is JArray array)
+            {
+                return new JArray(array.Select(Alienate));
+            }
+
+            return token;
+        }
+
+        [Fact]
         public void LoadLatest_SchemaDriftAndCorruption_ReportDistinctMessagesAndSeverities()
         {
             // The 2026-08-23 blocker itself: both verdicts threw one
@@ -1197,7 +1437,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = 2, Count = 10 },
                         },
                         MerchantName = "Test Vendor",
-                        Locations = new List<string>(),
                     },
                 });
 
@@ -2109,7 +2348,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = 23, Count = 3 },
                         },
                         MerchantName = "Test NPC",
-                        Locations = new List<string>(),
                     },
                 });
 

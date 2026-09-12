@@ -207,5 +207,29 @@ namespace TaimisToolbench.Models
         /// empty (not null) when no active festival beats this plan.
         /// </summary>
         public List<SeasonalVendorTip> SeasonalVendorTips { get; set; }
+
+        /// <summary>
+        /// Vendor requirements the plan's own purchases run into, that the
+        /// account does not meet or that could not be checked. Empty when
+        /// every gated vendor the plan uses is one the account can use.
+        /// Informational only - see Models/VendorRequirementNotice.cs.
+        /// </summary>
+        public List<VendorRequirementNotice> VendorRequirementNotices { get; set; }
+
+        /// <summary>
+        /// Whether the account's achievements and masteries were read for
+        /// those notices, and when they were not, why - see
+        /// Models/AccountProgression.cs. What turns an Unknown notice from
+        /// "not checked" into an action the player can take.
+        /// </summary>
+        public AccountProgressionAccess AccountProgressionAccess { get; set; }
+
+        /// <summary>
+        /// See MissingRecipeSheetSourceCalculator.Apply, the sole
+        /// producer. Cosmetic display data only; null until the calculator
+        /// runs, empty (not null) when no missing recipe has a sheet any
+        /// vendor sells.
+        /// </summary>
+        public List<MissingRecipeSheetSource> MissingRecipeSheetSources { get; set; }
     }
 }

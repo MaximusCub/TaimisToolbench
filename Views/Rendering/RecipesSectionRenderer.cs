@@ -9,8 +9,9 @@ using TaimisToolbench.Services;
 
 namespace TaimisToolbench.Views.Rendering
 {
-    // The Required Recipes table: Recipe (flex) | Discipline | Status,
-    // every row one line at RecipeRowHeight.
+    // The Required Recipes table:
+    // Recipe (flex) | Discipline | Cost | Sold By | Status, every row one
+    // line at RecipeRowHeight.
     //
     // The discipline used to be row.Sublabel, a second Caption line under
     // the name, which is why this section carried a second (48px) row
@@ -36,13 +37,16 @@ namespace TaimisToolbench.Views.Rendering
     internal sealed class RecipesSectionRenderer
     {
         private readonly ISectionRelayoutSink _sink;
-        private readonly Func<int, ItemStatBlock> _getItemStatBlock;
+        private readonly Func<int, ItemTooltipFacts> _getItemFacts;
+        private readonly Func<int, CurrencyTooltipFacts> _getCurrencyFacts;
 
         internal RecipesSectionRenderer(
-            ISectionRelayoutSink sink, Func<int, ItemStatBlock> getItemStatBlock = null)
+            ISectionRelayoutSink sink, Func<int, ItemTooltipFacts> getItemFacts,
+            Func<int, CurrencyTooltipFacts> getCurrencyFacts)
         {
             _sink = sink ?? throw new ArgumentNullException(nameof(sink));
-            _getItemStatBlock = getItemStatBlock;
+            _getItemFacts = getItemFacts ?? throw new ArgumentNullException(nameof(getItemFacts));
+            _getCurrencyFacts = getCurrencyFacts ?? throw new ArgumentNullException(nameof(getCurrencyFacts));
         }
 
         // Left x of the name column (past the row's tier-2 framed icon at
@@ -52,20 +56,30 @@ namespace TaimisToolbench.Views.Rendering
         private const string RecipeHeaderText = "Recipe";
         private const string StatusHeaderText = "Status";
         private const string DisciplineHeaderText = "Discipline";
+        private const string SheetCostHeaderText = "Cost";
+        private const string SoldByHeaderText = "Sold By";
+
+        // Gap between the barter run and the coin/currency run that
+        // follows it in the same cell, on the one sheet whose price is
+        // both. The between-segment gap a coin run already keeps
+        // internally, so the whole cell reads at one rhythm.
+        private const int SheetCostPartGap = CoinSegmentMath.CoinSegmentGap;
 
         /// <summary>
-        /// One pass over the rows for the two right-hand BAND widths, then
-        /// the header and the rows, all anchored through the same
-        /// RecipesColumnMath call.
+        /// One pass over the rows for every data-derived BAND width and the
+        /// widest recipe name, then the header and the rows, all anchored
+        /// through the same RecipesColumnMath call.
         /// <para>
         /// Each band is max(widest data, its own header label): the header
         /// centres over the band its own cells occupy, and at the
         /// ColumnHeader tier "Discipline" out-measures a short "Chef 400" -
         /// a band narrower than its own header would let the column beside
-        /// it run underneath that header. The Discipline
-        /// column is reserved only when some row actually has one (a
-        /// mystic-forge-only recipe list has no disciplines at all), the
-        /// same gate Required Disciplines puts on its Characters column.
+        /// it run underneath that header. Discipline, Cost and Sold By are
+        /// each reserved only when some row actually fills them (a
+        /// mystic-forge-only recipe list has no disciplines at all; a plan
+        /// missing no recipe has no sheet to price and no merchant to
+        /// name), the same gate Required Disciplines puts on its Characters
+        /// column.
         /// </para>
         /// </summary>
         internal void Render(PlanSectionViewModel section, FlowPanel contentFlow, int panelWidth)
@@ -75,15 +89,31 @@ namespace TaimisToolbench.Views.Rendering
 
             int statusInk = 0;
             int disciplineInk = 0;
+            int sheetCostInk = 0;
+            int soldByInk = 0;
+            int nameInk = 0;
             bool anyDiscipline = false;
+            bool anySheetCost = false;
+            bool anySoldBy = false;
             for (int i = 0; i < section.Rows.Count; i++)
             {
                 var row = section.Rows[i];
 
-                int statusWidth = MeasureWidth(font, row.StatusTag);
-                if (statusWidth > statusInk)
+                statusInk = Max(statusInk, MeasureWidth(font, row.StatusTag));
+                nameInk = Max(nameInk, MeasureWidth(font, row.Label));
+
+                int sheetCostWidth = SheetCostWidth(row, font);
+                if (sheetCostWidth > 0)
                 {
-                    statusInk = statusWidth;
+                    anySheetCost = true;
+                    sheetCostInk = Max(sheetCostInk, sheetCostWidth);
+                }
+
+                string soldBy = SoldByDisplayText(row, font);
+                if (soldBy != null)
+                {
+                    anySoldBy = true;
+                    soldByInk = Max(soldByInk, MeasureWidth(font, soldBy));
                 }
 
                 if (string.IsNullOrEmpty(row.Sublabel))
@@ -92,11 +122,7 @@ namespace TaimisToolbench.Views.Rendering
                 }
 
                 anyDiscipline = true;
-                int disciplineWidth = MeasureWidth(font, row.Sublabel);
-                if (disciplineWidth > disciplineInk)
-                {
-                    disciplineInk = disciplineWidth;
-                }
+                disciplineInk = Max(disciplineInk, MeasureWidth(font, row.Sublabel));
             }
 
             // Bands stay floored at their own header label - a band
@@ -107,54 +133,93 @@ namespace TaimisToolbench.Views.Rendering
             int disciplineColumnWidth = anyDiscipline
                 ? Max(disciplineInk, MeasureWidth(headerFont, DisciplineHeaderText))
                 : 0;
+            int sheetCostColumnWidth = anySheetCost
+                ? Max(sheetCostInk, MeasureWidth(headerFont, SheetCostHeaderText))
+                : 0;
+            int soldByColumnWidth = anySoldBy
+                ? Max(soldByInk, MeasureWidth(headerFont, SoldByHeaderText))
+                : 0;
 
-            var scan = new ColumnScan(statusColumnWidth, disciplineColumnWidth);
+            var scan = new ColumnScan(
+                statusColumnWidth, disciplineColumnWidth, sheetCostColumnWidth, soldByColumnWidth,
+                nameInk);
 
-            // Both data headers centre over the INK their own cells cover
-            // rather than sharing an edge with them, and are bounded by the
-            // columns either side rather than by their own bands - the
+            // Every data header centres over the INK its own cells cover
+            // rather than sharing an edge with them, and is bounded by the
+            // columns either side rather than by its own band - the
             // module's header law, JustifiedColumnTracks.HeaderRoom. Only
             // Recipe stays on a rule: it is the flexing column, and its
             // rows start with the icon its header rules on
             // (Services/ColumnHeaderLabelMath).
             int disciplineHeaderWidth = MeasureWidth(headerFont, DisciplineHeaderText);
+            int sheetCostHeaderWidth = MeasureWidth(headerFont, SheetCostHeaderText);
+            int soldByHeaderWidth = MeasureWidth(headerFont, SoldByHeaderText);
             int statusHeaderWidth = MeasureWidth(headerFont, StatusHeaderText);
             Func<int, int> statusLabelX = w =>
             {
                 var e = scan.EdgesFor(w);
-                RecipesColumnMath.HeaderRooms(e, disciplineInk, statusInk, out _, out var statusRoom);
+                RecipesColumnMath.HeaderRooms(
+                    e, disciplineInk, sheetCostInk, soldByInk, statusInk,
+                    out _, out _, out _, out var statusRoom);
                 return JustifiedColumnTracks.CenteredOverContentRightAligned(
                     e.StatusRightEdge, statusInk, statusHeaderWidth, statusRoom);
             };
 
-            Func<int> rowsHeight =
-                () => section.Rows.Count * PlanContentHeightMath.RecipeRowHeight;
-
+            var middleHeaders = new List<ColumnHeaderRowRenderer.MiddleHeader>(3);
             if (anyDiscipline)
             {
-                ColumnHeaderRowRenderer.CreateColumnHeaderRow(
-                    contentFlow, panelWidth, RecipeHeaderText,
-                    ColumnHeaderLabelMath.LabelX(NameX, IconX), StatusHeaderText, _sink,
-                    middleLabel: DisciplineHeaderText,
-                    middleXForWidth: w =>
+                middleHeaders.Add(new ColumnHeaderRowRenderer.MiddleHeader(
+                    DisciplineHeaderText,
+                    w =>
                     {
                         var e = scan.EdgesFor(w);
                         RecipesColumnMath.HeaderRooms(
-                            e, disciplineInk, statusInk, out var disciplineRoom, out _);
+                            e, disciplineInk, sheetCostInk, soldByInk, statusInk,
+                            out var disciplineRoom, out _, out _, out _);
                         return JustifiedColumnTracks.CenteredOverContent(
                             e.DisciplineX, disciplineInk, disciplineHeaderWidth, disciplineRoom);
-                    },
-                    rightLabelXForWidth: statusLabelX,
-                    rowsHeight: rowsHeight);
+                    }));
             }
-            else
+
+            if (anySheetCost)
             {
-                ColumnHeaderRowRenderer.CreateColumnHeaderRow(
-                    contentFlow, panelWidth, RecipeHeaderText,
-                    ColumnHeaderLabelMath.LabelX(NameX, IconX), StatusHeaderText, _sink,
-                    rightLabelXForWidth: statusLabelX,
-                    rowsHeight: rowsHeight);
+                middleHeaders.Add(new ColumnHeaderRowRenderer.MiddleHeader(
+                    SheetCostHeaderText,
+                    w =>
+                    {
+                        var e = scan.EdgesFor(w);
+                        RecipesColumnMath.HeaderRooms(
+                            e, disciplineInk, sheetCostInk, soldByInk, statusInk,
+                            out _, out var sheetCostRoom, out _, out _);
+                        return JustifiedColumnTracks.CenteredOverContentRightAligned(
+                            e.SheetCostRightEdge, sheetCostInk, sheetCostHeaderWidth, sheetCostRoom);
+                    }));
             }
+
+            if (anySoldBy)
+            {
+                middleHeaders.Add(new ColumnHeaderRowRenderer.MiddleHeader(
+                    SoldByHeaderText,
+                    w =>
+                    {
+                        var e = scan.EdgesFor(w);
+                        RecipesColumnMath.HeaderRooms(
+                            e, disciplineInk, sheetCostInk, soldByInk, statusInk,
+                            out _, out _, out var soldByRoom, out _);
+                        return JustifiedColumnTracks.CenteredOverContent(
+                            e.SoldByX, soldByInk, soldByHeaderWidth, soldByRoom);
+                    }));
+            }
+
+            Func<int> rowsHeight =
+                () => section.Rows.Count * PlanContentHeightMath.RecipeRowHeight;
+
+            ColumnHeaderRowRenderer.CreateColumnHeaderRow(
+                contentFlow, panelWidth, RecipeHeaderText,
+                ColumnHeaderLabelMath.LabelX(NameX, IconX), StatusHeaderText, _sink,
+                middleHeaders: middleHeaders.Count > 0 ? middleHeaders : null,
+                rightLabelXForWidth: statusLabelX,
+                rowsHeight: rowsHeight);
 
             for (int i = 0; i < section.Rows.Count; i++)
             {
@@ -164,26 +229,86 @@ namespace TaimisToolbench.Views.Rendering
         }
 
         /// <summary>
-        /// The two data-derived (panelWidth-invariant) band widths every
-        /// row and header closure needs to recompute its column edges -
-        /// grouped so a third cannot be added to one call site and
-        /// forgotten at another. Mirrors the Shopping List's own ColumnScan.
+        /// What one row's Sold By cell draws, capped at
+        /// RecipesColumnMath.SoldByMaxWidth. Null on a row with no
+        /// merchant, which is what leaves the column unreserved.
+        /// <para>
+        /// The cap is a constant, not a share of the panel, so the cell
+        /// never re-ellipsizes on a resize and the band it reserves is the
+        /// same at every width.
+        /// </para>
+        /// </summary>
+        private static string SoldByDisplayText(PlanRowViewModel row, BitmapFont font)
+        {
+            return string.IsNullOrEmpty(row.SoldByText)
+                ? null
+                : LabelHelpers.EllipsizeToWidth(font, row.SoldByText, RecipesColumnMath.SoldByMaxWidth);
+        }
+
+        /// <summary>
+        /// Width of one row's whole Cost cell: the barter run, then the
+        /// coin and currency run, with a gap between them when the price is
+        /// both. 0 for a row that has no sheet price. Measured through the
+        /// same CoinCurrencyRenderer calls the cell is laid out by, so the
+        /// band this reserves can never differ from the run that lands in
+        /// it.
+        /// </summary>
+        private static int SheetCostWidth(PlanRowViewModel row, BitmapFont font)
+        {
+            int valueWidth = SheetValueWidth(row, font);
+            int barterWidth = CoinCurrencyRenderer.MeasureBarterWidth(row.SheetBarterItems, font);
+            if (valueWidth > 0 && barterWidth > 0)
+            {
+                return barterWidth + SheetCostPartGap + valueWidth;
+            }
+
+            return valueWidth + barterWidth;
+        }
+
+        /// <summary>
+        /// Width of the coin and currency half alone, 0 when the sheet
+        /// costs neither. Resolved ONCE per row at build time and carried
+        /// into the relayout closure: MeasureValueWidth builds segment
+        /// lists and calls MeasureString, and that closure is replayed on
+        /// every frame of a resize drag.
+        /// </summary>
+        private static int SheetValueWidth(PlanRowViewModel row, BitmapFont font)
+        {
+            return row.CoinValue > 0 || (row.CurrencyCosts != null && row.CurrencyCosts.Count > 0)
+                ? CoinCurrencyRenderer.MeasureValueWidth(row.CoinValue, row.CurrencyCosts, font)
+                : 0;
+        }
+
+        /// <summary>
+        /// The data-derived (panelWidth-invariant) band widths every row
+        /// and header closure needs to recompute its column edges -
+        /// grouped so one cannot be added to a call site and forgotten at
+        /// another. Mirrors the Shopping List's own ColumnScan.
         /// </summary>
         private readonly struct ColumnScan
         {
             private readonly int _statusColumnWidth;
             private readonly int _disciplineColumnWidth;
+            private readonly int _sheetCostColumnWidth;
+            private readonly int _soldByColumnWidth;
+            private readonly int _maxNameWidth;
 
-            internal ColumnScan(int statusColumnWidth, int disciplineColumnWidth)
+            internal ColumnScan(
+                int statusColumnWidth, int disciplineColumnWidth, int sheetCostColumnWidth,
+                int soldByColumnWidth, int maxNameWidth)
             {
                 _statusColumnWidth = statusColumnWidth;
                 _disciplineColumnWidth = disciplineColumnWidth;
+                _sheetCostColumnWidth = sheetCostColumnWidth;
+                _soldByColumnWidth = soldByColumnWidth;
+                _maxNameWidth = maxNameWidth;
             }
 
             internal RecipesColumnMath.ColumnEdges EdgesFor(int panelWidth)
             {
                 return RecipesColumnMath.ComputeEdges(
-                    panelWidth, _statusColumnWidth, _disciplineColumnWidth, NameX);
+                    panelWidth, _statusColumnWidth, _disciplineColumnWidth,
+                    _sheetCostColumnWidth, _soldByColumnWidth, _maxNameWidth, NameX);
             }
         }
 
@@ -197,12 +322,11 @@ namespace TaimisToolbench.Views.Rendering
             return (int)Math.Ceiling(font.MeasureString(text ?? "").Width);
         }
 
-        // rowHeight 45 = the tier-2 rarity-framed icon (42) at y=0 plus
-        // the 2px divider plus the clearance pixel the height derivation
-        // absorbs: an exact, non-overlapping fit, the same one Used
-        // Materials and the Shopping List have. There is no second
-        // row height any more - the discipline is a column, so no row is
-        // two lines tall.
+        // rowHeight = the tier-2 rarity-framed icon at y=0 plus the 2px
+        // divider plus the clearance pixel the height derivation absorbs:
+        // an exact, non-overlapping fit, the same one Used Materials and
+        // the Shopping List have. There is no second row height any more -
+        // the discipline is a column, so no row is two lines tall.
         private void CreateRecipeRow(
             PlanRowViewModel row, FlowPanel parent, int panelWidth,
             ColumnScan scan, bool isLast)
@@ -212,61 +336,11 @@ namespace TaimisToolbench.Views.Rendering
 
             var rowPanel = new ClippedPanel() { Size = new Point(panelWidth, rowHeight), Parent = parent };
 
-            // A context action
-            // (right-click), not a visible icon - the row already packs an
-            // icon/name/optional sublabel/right-aligned status tag into a
-            // fixed height with no spare column.
-            // Right-click also cannot collide with the row's existing
-            // interactions (this row has none - unlike the Recipe Tree,
-            // Required Recipes rows are not expand/collapse toggles), and
-            // is naturally low-accidental-click-risk for a click that
-            // steals focus into the default browser.
-            //
-            // Fix-pass (right-click-as-camera-drag): mirrors
-            // TreeSectionController's identical fix - GW2's own right-drag
-            // is the camera-rotate gesture, so firing on button-DOWN alone
-            // opened the browser and yanked focus out of a fullscreen game
-            // the instant a drag begun over this row went down, with no
-            // way to abort. A bare switch to RightMouseButtonReleased is
-            // not sufficient either: Blish routes the release event to
-            // whichever row is under the cursor at release time, so a drag
-            // that started on a DIFFERENT row would open THIS row's page.
-            // Pairing press+release on this SAME rowPanel closes that:
-            // press arms a per-row flag, and only this row's own Released
-            // handler (which only fires when the release also lands on
-            // this row) can consume it; MouseLeft disarms the flag as soon
-            // as the cursor leaves this row after a press, so a stale arm
-            // from an earlier aborted drag can't be replayed by an
-            // unrelated release later landing back on this row.
-            string wikiHint = null;
-            if (!string.IsNullOrEmpty(row.WikiUrl))
-            {
-                string wikiUrl = row.WikiUrl;
-                bool wikiLinkArmed = false;
-                rowPanel.RightMouseButtonPressed += (_, __) => wikiLinkArmed = true;
-                rowPanel.MouseLeft += (_, __) => wikiLinkArmed = false;
-                rowPanel.RightMouseButtonReleased += (_, __) =>
-                {
-                    if (wikiLinkArmed)
-                    {
-                        wikiLinkArmed = false;
-                        WikiLinkLauncher.Open(wikiUrl);
-                    }
-                };
-                wikiHint = TreeRowTooltipComposer.WikiHintText;
-            }
-
-            int itemId = row.ItemId;
-            string hintLine = wikiHint;
-            var hover = ItemIconTooltip.ForItem(
-                ItemTooltipIdentity.ForItem(row.Label ?? "", row.IconUrl, row.Rarity),
-                _getItemStatBlock == null || itemId <= 0 ? (Func<ItemStatBlock>)null
-                    : () => _getItemStatBlock(itemId),
-                () => hintLine == null ? null : new List<string> { hintLine });
-
-            IconControls.CreateItemIcon(
-                rowPanel, row.IconUrl, ItemIconFrame.ForRarity(row.Rarity),
-                IconX, PlanContentHeightMath.IconRowIconY, ItemIconTier.BagSidebar, hover);
+            string hintLine = row.HintText;
+            IconControls.DrawItemIcon(
+                rowPanel, row.ItemId, IconX, PlanContentHeightMath.IconRowIconY,
+                ItemIconTier.BagSidebar, _getItemFacts,
+                () => string.IsNullOrEmpty(hintLine) ? null : new List<string> { hintLine });
 
             var font = UiFonts.Body;
             string fullName = row.Label ?? "";
@@ -305,15 +379,67 @@ namespace TaimisToolbench.Views.Rendering
                     });
             }
 
+            // Right-aligned on the column's own edge: the bartered items
+            // first, then the coin and currency run, so the coin icons stay
+            // to the RIGHT of their numbers as the repo requires and no
+            // number is ever separated from the icon that names its unit.
+            CoinCurrencyRenderer.SegmentLayoutHandle? barterRun = null;
+            CoinCurrencyRenderer.ValueCellHandle sheetCostCell = null;
+            int sheetValueWidth = SheetValueWidth(row, font);
+            int barterWidth = 0;
+            if (edges.HasSheetCost)
+            {
+                if (sheetValueWidth > 0)
+                {
+                    sheetCostCell = CoinCurrencyRenderer.RenderValueCellRightAligned(
+                        rowPanel, row.CoinValue, row.CurrencyCosts,
+                        edges.SheetCostRightEdge, NameY, font, _getCurrencyFacts);
+                }
+
+                var barterSegments = CoinCurrencyRenderer.BuildBarterSegments(
+                    row.SheetBarterItems, font);
+                barterWidth = CoinSegmentMath.TotalBarterSegmentsWidth(barterSegments);
+                if (barterWidth > 0)
+                {
+                    barterRun = CoinCurrencyRenderer.LayoutBarterSegments(
+                        rowPanel, barterSegments,
+                        BarterRightEdge(edges.SheetCostRightEdge, sheetValueWidth) - barterWidth,
+                        NameY, font, _getItemFacts);
+                }
+            }
+
+            // The merchants, with the module's standard right-click to the
+            // wiki on the cell itself. The gesture goes through
+            // IconWikiClick, the one file that subscribes to it, so this
+            // cell cannot become a second tab per click.
+            Label soldByLabel = null;
+            string soldByText = SoldByDisplayText(row, font);
+            if (edges.HasSoldBy && soldByText != null)
+            {
+                soldByLabel = LabelHelpers.WithDescenderClearance(
+                    new Label()
+                    {
+                        Text = soldByText,
+                        Font = font,
+                        TextColor = new Color(170, 170, 170),
+                        AutoSizeWidth = true,
+                        AutoSizeHeight = true,
+                        Location = new Point(edges.SoldByX, NameY),
+                        Parent = rowPanel,
+                    });
+                TooltipFacility.ApplyPlain(soldByLabel, SoldByTooltip(row, soldByText));
+                IconWikiClick.ApplyToCell(soldByLabel, row.SoldByWikiTarget);
+            }
+
             Label statusLabel = null;
             if (!string.IsNullOrEmpty(row.StatusTag))
             {
                 Color statusColor = Color.White;
-                if (row.StatusTag == "Missing!")
+                if (row.StatusTag == RequiredRecipesVisibility.MissingStatusTag)
                 {
                     statusColor = new Color(255, 100, 100);
                 }
-                else if (row.StatusTag == "Auto-learned")
+                else if (row.StatusTag == RequiredRecipesVisibility.AutoLearnedStatusTag)
                 {
                     statusColor = new Color(150, 200, 150);
                 }
@@ -322,11 +448,11 @@ namespace TaimisToolbench.Views.Rendering
                     rowPanel, row.StatusTag, font, statusColor, edges.StatusRightEdge, NameY);
             }
 
-            // IconRowDividerClearance: RecipeRowHeight (45) absorbs the
-            // clearance pixel in its own derivation, so the divider
-            // (42..44) sits exactly flush under the 0..42 icon frame - see
-            // the identical note in CreateUsedMaterialRow and the re-run
-            // simulation behind LabelHelpers.CreateRowDivider.
+            // IconRowDividerClearance: RecipeRowHeight absorbs the
+            // clearance pixel in its own derivation, so the divider sits
+            // exactly flush under the icon frame - see the identical note
+            // in CreateUsedMaterialRow and the re-run simulation behind
+            // LabelHelpers.CreateRowDivider.
             RowRelayoutHelpers.FinishRow(
                 rowPanel, panelWidth, rowHeight, isLast,
                 PlanContentHeightMath.IconRowDividerClearance, _sink,
@@ -336,6 +462,25 @@ namespace TaimisToolbench.Views.Rendering
                     if (disciplineLabel != null)
                     {
                         disciplineLabel.Location = new Point(e.DisciplineX, NameY);
+                    }
+
+                    if (sheetCostCell != null)
+                    {
+                        CoinCurrencyRenderer.RepositionValueCellRightAligned(
+                            sheetCostCell, e.SheetCostRightEdge, NameY);
+                    }
+
+                    if (barterRun.HasValue)
+                    {
+                        CoinCurrencyRenderer.RepositionSegments(
+                            barterRun.Value,
+                            BarterRightEdge(e.SheetCostRightEdge, sheetValueWidth) - barterWidth,
+                            NameY);
+                    }
+
+                    if (soldByLabel != null)
+                    {
+                        soldByLabel.Location = new Point(e.SoldByX, NameY);
                     }
 
                     if (statusLabel != null)
@@ -353,6 +498,37 @@ namespace TaimisToolbench.Views.Rendering
                     nameLabel.Text = newDisplayName;
                 }
             });
+        }
+
+        /// <summary>
+        /// What the Sold By cell says on hover: the module's own
+        /// right-click affordance line, led by the full merchant phrase on
+        /// a cell whose words were capped. The wording is
+        /// IconWikiTarget's, never this file's.
+        /// </summary>
+        private static string SoldByTooltip(PlanRowViewModel row, string displayed)
+        {
+            string hint = row.SoldByWikiTarget.Hint;
+            if (string.Equals(displayed, row.SoldByText, StringComparison.Ordinal))
+            {
+                return hint;
+            }
+
+            return hint == null ? row.SoldByText : row.SoldByText + "\n\n" + hint;
+        }
+
+        /// <summary>
+        /// Right edge the barter run ends on: the cell's own right edge,
+        /// less the coin and currency run that follows it and the gap
+        /// between the two halves. Off the SAME
+        /// <see cref="SheetValueWidth"/> the band was reserved from, so the
+        /// two halves can never overlap.
+        /// </summary>
+        private static int BarterRightEdge(int sheetCostRightEdge, int sheetValueWidth)
+        {
+            return sheetValueWidth > 0
+                ? sheetCostRightEdge - sheetValueWidth - SheetCostPartGap
+                : sheetCostRightEdge;
         }
 
         // 12, not the pre-tier-2 8: the icon frame's center moved down 4px

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using TaimisToolbench.Models;
 using TaimisToolbench.Services;
 using Xunit;
@@ -52,6 +54,116 @@ namespace TaimisToolbench.Tests.Services
                     new SnapshotWalletEntry { CurrencyId = 2, CurrencyName = "Karma", Value = 1000 },
                 },
             };
+        }
+
+        // ---- What a refused refresh leaves on disk. The commit itself
+        // lives in Module.FetchAndSaveSnapshotAsync, which is Blish-bound
+        // and cannot be reached from here, so these drive the real
+        // collector, the real retry policy and the real store, and gate the
+        // save on the same CharacterSnapshotHarvest.IsComplete that
+        // Gw2AccountSnapshotService gates its own throw on.
+        [Fact]
+        public async Task ACharacterThatKeepsFailing_LeavesThePreviousSnapshotOnDisk()
+        {
+            _store.Save(CreateSnapshot(coinCopper: 4321));
+
+            var harvest = await CharacterSnapshotCollector.CollectAsync(
+                new[] { "Ayn", "Bex" },
+                2,
+                name => Task.FromResult(PartFor(name, degraded: name == "Bex")),
+                CancellationToken.None);
+
+            Assert.False(harvest.IsComplete);
+            Assert.Equal(new[] { "Bex" }, harvest.IncompleteCharacterNames);
+
+            if (harvest.IsComplete)
+            {
+                _store.Save(CreateSnapshot(coinCopper: 1));
+            }
+
+            // Older and complete beats fresh with holes: a plan built on a
+            // snapshot missing Bex's bags tells the user to buy what Bex
+            // is carrying.
+            Assert.Equal(4321, _store.LoadLatest().CoinCopper);
+        }
+
+        [Fact]
+        public async Task ACharacterThatFailsOnceAndThenAnswers_CommitsTheCompleteSnapshot()
+        {
+            _store.Save(CreateSnapshot(coinCopper: 4321));
+            int bexCalls = 0;
+
+            var harvest = await CharacterSnapshotCollector.CollectAsync(
+                new[] { "Ayn", "Bex" },
+                2,
+                name => SnapshotCallRetry.RunAsync<CharacterSnapshotPart>(
+                    ct =>
+                    {
+                        if (name == "Bex" && Interlocked.Increment(ref bexCalls) == 1)
+                        {
+                            throw new InvalidOperationException("transient refusal");
+                        }
+
+                        return Task.FromResult(PartFor(name, degraded: false));
+                    },
+                    null,
+                    (delay, ct) => Task.CompletedTask,
+                    CancellationToken.None),
+                CancellationToken.None);
+
+            Assert.True(harvest.IsComplete);
+            Assert.Empty(harvest.IncompleteCharacterNames);
+            Assert.Equal(2, bexCalls);
+
+            if (harvest.IsComplete)
+            {
+                _store.Save(CreateSnapshot(coinCopper: 9999));
+            }
+
+            Assert.Equal(9999, _store.LoadLatest().CoinCopper);
+        }
+
+        private static CharacterSnapshotPart PartFor(string name, bool degraded)
+        {
+            var part = new CharacterSnapshotPart { ItemsDegraded = degraded };
+            part.Items.Add(new SnapshotItemEntry { ItemId = 1, Count = 1, Source = name });
+            return part;
+        }
+
+        // ---- The incomplete-character counts. They ride the snapshot
+        // rather than the refresh status because they describe the DATA,
+        // and a status string is replaced by the next refresh attempt.
+        [Fact]
+        public void Save_Load_PreservesTheIncompleteCharacterCounts()
+        {
+            var snapshot = CreateSnapshot();
+            snapshot.CharacterCount = 9;
+            snapshot.IncompleteCharacterCount = 2;
+
+            _store.Save(snapshot);
+            var loaded = _store.LoadLatest();
+
+            Assert.Equal(9, loaded.CharacterCount);
+            Assert.Equal(2, loaded.IncompleteCharacterCount);
+        }
+
+        [Fact]
+        public void Load_SnapshotWrittenBeforeTheCountsExisted_ReadsAsNothingMissing()
+        {
+            // A snapshot.json from an older build carries neither field.
+            // Defaulting both to 0 keeps exactly the claim that build made,
+            // rather than inventing a fault it never measured.
+            File.WriteAllText(
+                SnapshotPath,
+                "{\"CapturedAt\":\"2025-06-15T12:00:00Z\",\"CoinCopper\":7,"
+                + "\"Items\":[],\"Wallet\":[]}");
+
+            var loaded = _store.LoadLatest();
+
+            Assert.NotNull(loaded);
+            Assert.Equal(7, loaded.CoinCopper);
+            Assert.Equal(0, loaded.CharacterCount);
+            Assert.Equal(0, loaded.IncompleteCharacterCount);
         }
 
         [Fact]

@@ -264,7 +264,7 @@ restored) defines an `AfterTargets="Build"` target named
 `BuildBlishHUDModule` that runs automatically **on every build**. As of
 M38/WP-29, `TaimisToolbench.csproj` redeclares that same-named target
 after the import (the one and only hand-written pack/zip logic in this
-repo's own csproj) so its own version wins, purely to add a four-file
+repo's own csproj) so its own version wins, purely to add a six-file
 `Exclude` - see the addendum below. Otherwise it does exactly this,
 unconditionally:
 
@@ -329,9 +329,8 @@ produced by the build above shows it contains, under `ref/`:
   copy for `ref/wiki_vendor_cache.json` and `ref/item_id_cache.json`, so
   neither file is ever copied into the output directory or the `.bhm`,
   regardless of whether they exist in the working copy. See the addendum
-  below for details. The list is **three** files today: `MysticForgeSeeder`
-  later added `ref/mf_item_id_cache.json` to the same `Exclude`
-  (`TaimisToolbench.csproj:449`, measured).
+  below for details. The list has grown since; the addendum below tracks
+  what is on it now.
 
 ## `manifest.json` fields
 
@@ -426,7 +425,26 @@ created, because it appeared in no `<Content Include>` entry and the packing
 glob never consulted that list anyway. Those `<Content Include>` entries are
 now gone entirely and this target is the sole owner of what ships.
 
-None of the four is
+**Six, as of the dropped-fields audit branch:**
+`ref/seasonal_wikitext_cache.json` and `ref/vendor_offers_unresolved.json`
+joined them. `tools/VendorOfferUpdater` writes both. The first caches each
+vendor page's wikitext for the seasonal-tag pass. The second names the
+sections a scrape could not resolve. Each was added to `.gitignore` when it
+was introduced and to this `Exclude` never. `release.yml` builds from a clean
+checkout, so no published `.bhm` ever carried them. A locally built one did,
+which is the artifact step 10 above installs for in-game testing. The
+seasonal cache measured 69,672 bytes on one such machine on 2026-09-07. That
+is the third time the two lists have drifted apart.
+
+**Compared in CI since the faithful-costs branch:**
+`tests/TaimisToolbench.Tests/PackagedRefFilesTests.cs` reads `.gitignore` and
+the `RefFiles` `Exclude` in `TaimisToolbench.csproj` and fails when a `ref/`
+path is in the first and not the second. It asserts the rule, not a built
+artefact: no `.bhm` is unpacked and no Windows build is needed. Adding a
+`ref/` line to `.gitignore` still means adding the same file to this
+`Exclude`; the suite now says so instead of a player finding out.
+
+None of the six is
 copied into `$(OutDir)ref` or zipped into the `.bhm` any more, regardless of
 whether a developer's working copy has them sitting on disk from running
 `tools/VendorOfferUpdater`. Building from an active `VendorOfferUpdater`

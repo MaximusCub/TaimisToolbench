@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TaimisToolbench.Services;
 
 namespace TaimisToolbench.Models
 {
@@ -237,14 +238,40 @@ namespace TaimisToolbench.Models
     }
 
     /// <summary>
-    /// A single non-coin currency amount, already resolved to display-ready
-    /// name/icon (never a raw currency id - see CurrencyDisplayResolver).
-    /// Used for BuyFromVendor rows/nodes priced wholly or partly in a
-    /// non-coin currency (spirit shards, karma, etc.) - KNOWN-ISSUES #16.
+    /// A count of one bartered ITEM in an inline price run. Separate from
+    /// <see cref="CurrencyAmountViewModel"/> because the id is an item id,
+    /// and the two id spaces share numbers: id 24 is a real item AND the
+    /// currency "Pristine Fractal Relics". Carries the id alone, no name
+    /// and no icon url, because the icon component resolves all of that
+    /// from the id (Views/Rendering/IconControls.DrawItemIcon).
+    /// </summary>
+    internal class BarterAmountViewModel
+    {
+        public int ItemId { get; set; }
+
+        public long Amount { get; set; }
+    }
+
+    /// <summary>
+    /// A single non-coin amount, already resolved to display-ready
+    /// name/icon (never a raw id - see CurrencyDisplayResolver). Used for
+    /// BuyFromVendor rows/nodes priced wholly or partly in something other
+    /// than coin - KNOWN-ISSUES #16.
+    /// <para>
+    /// Usually a wallet currency such as a spirit shard or karma. Not
+    /// always: NonCoinCostTotals also projects barter-item rows into this
+    /// type, where Amount is a count of items rather than of currency. Read
+    /// the source list to know which, and never label one as the other.
+    /// </para>
     /// </summary>
     internal class CurrencyAmountViewModel
     {
         public long Amount { get; set; }
+
+        // The wallet currency this amount is of. Set by
+        // CurrencyDisplayResolver alongside Name and IconUrl, so an icon
+        // drawn from this view model can resolve its whole tooltip.
+        public int CurrencyId { get; set; }
 
         public string Name { get; set; }
 
@@ -339,20 +366,35 @@ namespace TaimisToolbench.Models
         // a total-price table column.
         public long UnitCoinValue { get; set; }
 
+        // How many units UnitCoinValue actually buys, when it does not buy
+        // one. Zero means UnitCoinValue is a true per-unit price and the
+        // Each cell renders it alone.
+        //
+        // A vendor offer selling 2 for 5 copper has no per-unit coin price,
+        // and a merged step whose occurrences paid different prices has no
+        // single price either. Dividing produced a number that failed the
+        // reader's own check, because Each times Amount did not reach
+        // Total. The Each cell instead renders UnitCoinValue followed by
+        // "for N", the same shape CurrencyAmountViewModel.BundleLabel
+        // already uses for the currency half of the same cell.
+        public int UnitCoinBundleQuantity { get; set; }
+
         public string StatusTag { get; set; }
 
-        // Wiki-derived acquisition guidance for unknown-source rows,
-        // tooltip-only. Deliberately separate from Sublabel, which renders
-        // inline in the row itself - HintText never renders inline.
+        // What this row's hover adds in its second box, above the wiki
+        // line: acquisition guidance on an unknown-source row, the crafted
+        // item a recipe sheet unlocks on a RecipeRow. Deliberately separate
+        // from Sublabel, which renders inline in the row itself - HintText
+        // never renders inline.
         public string HintText { get; set; }
 
-        // The GW2 wiki page
-        // this row's row-level wiki affordance should open (see
-        // WikiLinkBuilder). Currently populated only for RecipeRow rows
-        // (RequiredRecipes section - see PlanViewModelBuilder.
-        // BuildRecipesSection); null for every other row type, which
-        // suppresses the affordance entirely rather than guessing a URL.
-        public string WikiUrl { get; set; }
+        // The wiki page this row's icon and its row-level right-click
+        // both open, and the affordance line its hover ends with - one
+        // value so the two can never disagree (see IconWikiTarget).
+        // Currently named only for RecipeRow rows (RequiredRecipes - see
+        // PlanViewModelBuilder.BuildRecipesSection); every other row type
+        // leaves it at the default, which opens nothing.
+        public IconWikiTarget WikiTarget { get; set; }
 
         // Short pill/tag label (e.g. "SALVAGE", "EXPLORE") for
         // ShoppingUnknown rows, from the same seeded hint entry as
@@ -366,6 +408,50 @@ namespace TaimisToolbench.Models
         // CoinValue. Null/empty when this row has no non-coin currency
         // cost - KNOWN-ISSUES #16.
         public List<CurrencyAmountViewModel> CurrencyCosts { get; set; }
+
+        /// <summary>
+        /// Bartered ITEMS a Required Recipes row's sheet costs - five
+        /// Charms of Skill, three of one thing and two of another. Null on
+        /// every other row and on a sheet bought for coin or currency
+        /// alone, which ride CoinValue and CurrencyCosts instead. Each
+        /// amount draws as its number followed by the item's own icon, the
+        /// shape a wallet currency already draws in - see
+        /// PlanViewModelBuilder.ApplySheetCost.
+        /// </summary>
+        public List<BarterAmountViewModel> SheetBarterItems { get; set; }
+
+        /// <summary>
+        /// The item a Plan Notes line is about, whose name the row draws
+        /// after its icon and before the note itself. Null on a note with
+        /// no single item subject, which draws as plain text at the
+        /// section's own left rule. ItemId carries the icon.
+        /// </summary>
+        public string NoteSubject { get; set; }
+
+        /// <summary>
+        /// A Plan Notes line's sentence, split where a link starts and
+        /// ends (see PlanNoteSegment). Null on a note that is one plain
+        /// run, which the view wraps from Label instead. Label always
+        /// carries the same words as one string, so the row's full-text
+        /// hover reads the same sentence the row draws.
+        /// </summary>
+        public List<PlanNoteSegment> NoteSegments { get; set; }
+
+        /// <summary>
+        /// Who sells the sheet for a missing recipe, as the Required
+        /// Recipes table's Sold By cell reads it: one merchant's name, or
+        /// that name and how many others charge the same. Null on every
+        /// row whose sheet the module found no vendor for.
+        /// </summary>
+        public string SoldByText { get; set; }
+
+        /// <summary>
+        /// The wiki page the Sold By cell's right-click opens, and the
+        /// affordance line it hovers with. The sheet's own page at its
+        /// Acquisition section, where the full merchant list lives. Opens
+        /// nothing when <see cref="SoldByText"/> is null.
+        /// </summary>
+        public IconWikiTarget SoldByWikiTarget { get; set; }
 
         // Per-unit ("Each" column) counterpart of CurrencyCosts - integer-
         // divided by Quantity the same way UnitCoinValue divides CoinValue.
@@ -384,14 +470,6 @@ namespace TaimisToolbench.Models
         // CurrencyNeededQuantity below is the (still-clamped-to-zero) gap
         // derived from this value.
         public int? CurrencyOwnedQuantity { get; set; }
-
-        // The currency's own /v2/currencies prose, for a CurrencyCost
-        // row's hover (CurrencyTooltipComposer). Resolved here rather than
-        // at the render site because the renderer holds no currency id -
-        // by design: a row carries no id at all, so its tooltip can never
-        // be keyed into the wrong id space. Null when the plan ran without
-        // currency metadata, which drops the paragraph.
-        public string CurrencyDescription { get; set; }
 
         // Still-to-acquire gap for a CurrencyCost row in the
         // currency table's "Needed" column - max(0, Quantity -
@@ -429,13 +507,19 @@ namespace TaimisToolbench.Models
         // is capped at what the row still needs, so it never claims a
         // holding covers more than the plan asks for. Null/0 everywhere
         // else, which is what suppresses the table's Note column.
-        public string TradeUpCurrencyName { get; set; }
+        public int TradeUpCurrencyId { get; set; }
 
-        public string TradeUpCurrencyIconUrl { get; set; }
+        public string TradeUpCurrencyName { get; set; }
 
         public int? TradeUpCurrencyHeld { get; set; }
 
         public int TradeUpBuysQuantity { get; set; }
+
+        // The wallet currency this row is about, on a CurrencyCost row
+        // that is not a barter item. Zero elsewhere. The row's icon
+        // resolves its whole tooltip from this id, so the table and the
+        // Recipe Tree cannot show different boxes for the same currency.
+        public int CurrencyId { get; set; }
 
         // Identity of one CurrencyCost row, stable across a re-solve: the
         // row's id with the id space it came from written into the string.

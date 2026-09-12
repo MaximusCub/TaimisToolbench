@@ -11,11 +11,21 @@ namespace TaimisToolbench.Services
     {
         private const int BatchSize = 200;
 
-        // The GW2 commerce API refreshes trading post prices on its own short
-        // upstream cache cycle; a 15 minute local TTL keeps this cache from
-        // drifting far behind that cycle while still avoiding a re-fetch on
-        // every request.
-        private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(15);
+        /// <summary>
+        /// How long a fetched price answers later requests before it is
+        /// re-fetched. Also the window a known-untradeable id is remembered
+        /// for, so an item that becomes tradeable in a patch is exactly as
+        /// stale as a cached price is, no worse.
+        /// <para>
+        /// Two minutes is a spam guard, chosen by the maintainer: a user
+        /// pressing Generate Plan repeatedly must not fire a price fetch
+        /// each time, and trading post prices do not move much in two
+        /// minutes. It replaced a 15 minute window, which was long enough
+        /// that a plan generated twenty minutes apart still quoted the
+        /// older prices.
+        /// </para>
+        /// </summary>
+        public static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(120);
 
         private readonly IPriceApiClient _api;
         private readonly Func<DateTime> _utcNow;

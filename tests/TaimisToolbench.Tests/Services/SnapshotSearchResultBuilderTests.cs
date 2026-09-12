@@ -620,8 +620,11 @@ namespace TaimisToolbench.Tests.Services
                 ArmorySnapshot(
                     (100, "Divineaxe"), (100, "Apoyu"), (100, "Divineaxe"), (200, "Zoe")));
 
-            Assert.Equal(new[] { "Divineaxe", "Apoyu" }, index[100]);
-            Assert.Equal(new[] { "Zoe" }, index[200]);
+            Assert.Equal(
+                new[] { "Divineaxe", "Apoyu" },
+                index[100].Select(d => d.CharacterName).ToArray());
+            Assert.Equal(
+                new[] { "Zoe" }, index[200].Select(d => d.CharacterName).ToArray());
         }
 
         [Fact]
@@ -1281,6 +1284,49 @@ namespace TaimisToolbench.Tests.Services
             Assert.NotNull(
                 SnapshotSearchResultBuilder.ShortQueryCharacterHint(
                     "y", Roster, new HashSet<string>(StringComparer.Ordinal) { "Bob" }));
+        }
+
+        // ---- The "N of M items" line's two halves ----
+        [Fact]
+        public void UnfilteredRowCountEqualsDistinctItemCount()
+        {
+            // MainView builds both from one snapshot and prints them as
+            // "Showing N of M items". A zero-count entry used to raise M
+            // through the representative map while producing no row, so the
+            // line read "1203 of 1204" with no filter to relax.
+            var items = new List<SnapshotItemEntry>
+            {
+                Entry(1, "Held", 5, AccountItemIndex.SourceBank),
+                Entry(2, "Also held", 2, CharSource("Alice")),
+                Entry(3, "Empty stack", 0, AccountItemIndex.SourceBank),
+                Entry(4, "No source", 7, ""),
+            };
+            var index = new AccountItemIndex(items);
+
+            var rows = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", new SnapshotSourceFilter(), null);
+
+            Assert.Equal(2, rows.Count);
+            Assert.Equal(rows.Count, index.DistinctItemCount);
+        }
+
+        [Fact]
+        public void ASourceFilterMakesRowsFewerThanDistinctItemCount()
+        {
+            // The genuine "N of M" case: M stays the account total and N
+            // drops because the user unchecked a source.
+            var items = new List<SnapshotItemEntry>
+            {
+                Entry(1, "Banked", 5, AccountItemIndex.SourceBank),
+                Entry(2, "On Alice", 2, CharSource("Alice")),
+            };
+            var index = new AccountItemIndex(items);
+
+            var rows = SnapshotSearchResultBuilder.BuildItemRows(
+                ItemsById(items), index, "", Unchecked("Alice"), null);
+
+            Assert.Single(rows);
+            Assert.Equal(2, index.DistinctItemCount);
         }
     }
 }

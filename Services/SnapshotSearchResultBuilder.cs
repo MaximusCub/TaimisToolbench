@@ -34,25 +34,27 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// The extra line the Snapshot tab's "No items match ..." message
-        /// carries when <see cref="MinCharacterSearchLength"/> is the reason the
-        /// list is empty, and null in every other case.
+        /// carries when <see cref="MinCharacterSearchLength"/> is the reason
+        /// the list is empty, and null in every other case.
         /// <para>
-        /// Emitted ONLY on that exact case - a query shorter than the minimum,
-        /// and a roster character whose name really would match it at the next
-        /// keystroke - so it never appears as boilerplate under an ordinary
-        /// empty result. A character the source filter has unchecked is not a
-        /// match: typing another letter would still not surface it, and a hint
-        /// that promises otherwise is worse than none. That is why the
-        /// exclusion set is a parameter rather than assumed empty - it is the
-        /// same set <see cref="SnapshotSourceFilter.UncheckedCharacters"/>
-        /// carries. No id is involved: the hint names no character at all.
+        /// Emitted ONLY on that exact case - a query shorter than the
+        /// minimum, and a roster character whose name really would match it
+        /// at the next keystroke - so it never appears as boilerplate. A
+        /// hint that promises a match the filter has already hidden is worse
+        /// than none, so two filter states withhold it: a character in
+        /// uncheckedCharacterNames (the set
+        /// <see cref="SnapshotSourceFilter.UncheckedCharacters"/> carries),
+        /// and anyCharacterPlaceShown false, which is the location set
+        /// hiding bags, worn gear and equipment templates together. No id is
+        /// involved: the hint names no character at all.
         /// </para>
         /// <para>Why the hold-back needs a hint at all: docs/ARCHITECTURE.md,
         /// "Services Q-Z: relocated design narrative".</para>
         /// </summary>
         public static string ShortQueryCharacterHint(
             string searchText, IReadOnlyList<string> characterNames,
-            ICollection<string> uncheckedCharacterNames = null)
+            ICollection<string> uncheckedCharacterNames = null,
+            bool anyCharacterPlaceShown = true)
         {
             string trimmed = (searchText ?? string.Empty).Trim();
             if (trimmed.Length == 0 || trimmed.Length >= MinCharacterSearchLength)
@@ -60,7 +62,7 @@ namespace TaimisToolbench.Services
                 return null;
             }
 
-            if (characterNames == null)
+            if (characterNames == null || !anyCharacterPlaceShown)
             {
                 return null;
             }
@@ -136,17 +138,18 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// Which characters are wearing each Legendary Armory item, keyed by
-        /// item id, in the order the capture saw them and with each
-        /// character named once. Built once per snapshot alongside
+        /// Which places draw on each Legendary Armory item, keyed by item
+        /// id, in the order the capture saw them and with each place listed
+        /// once. Built once per snapshot alongside
         /// <see cref="BuildRepresentativeIndex"/>, because
         /// <see cref="BuildItemRows"/> runs once per search-box keystroke
         /// and a scan of the raw pairings per row would cost the roster
         /// times the result set. Returns an empty dictionary, never null.
         /// </summary>
-        public static Dictionary<int, List<string>> BuildArmoryEquippedIndex(AccountSnapshot snapshot)
+        public static Dictionary<int, List<SnapshotArmoryEquip>> BuildArmoryEquippedIndex(
+            AccountSnapshot snapshot)
         {
-            var byItemId = new Dictionary<int, List<string>>();
+            var byItemId = new Dictionary<int, List<SnapshotArmoryEquip>>();
             if (snapshot == null || snapshot.LegendaryArmoryEquipped == null)
             {
                 return byItemId;
@@ -154,26 +157,45 @@ namespace TaimisToolbench.Services
 
             foreach (var equip in snapshot.LegendaryArmoryEquipped)
             {
-                if (equip == null || equip.ItemId <= 0 || string.IsNullOrEmpty(equip.CharacterName))
+                if (equip == null
+                    || equip.ItemId <= 0
+                    || (string.IsNullOrEmpty(equip.CharacterName)
+                        && string.IsNullOrEmpty(equip.Source)))
                 {
                     continue;
                 }
 
-                if (!byItemId.TryGetValue(equip.ItemId, out var names))
+                if (!byItemId.TryGetValue(equip.ItemId, out var draws))
                 {
-                    names = new List<string>();
-                    byItemId[equip.ItemId] = names;
+                    draws = new List<SnapshotArmoryEquip>();
+                    byItemId[equip.ItemId] = draws;
                 }
 
                 // One character can wear the same legendary in two slots -
                 // two entries for one wearer, which must read as one name.
-                if (!names.Contains(equip.CharacterName))
+                // Two sockets in two pieces of gear are two places.
+                if (!AlreadyDrawn(draws, equip))
                 {
-                    names.Add(equip.CharacterName);
+                    draws.Add(equip);
                 }
             }
 
             return byItemId;
+        }
+
+        private static bool AlreadyDrawn(
+            List<SnapshotArmoryEquip> draws, SnapshotArmoryEquip equip)
+        {
+            for (int i = 0; i < draws.Count; i++)
+            {
+                if (string.Equals(draws[i].CharacterName, equip.CharacterName, StringComparison.Ordinal)
+                    && string.Equals(draws[i].Source, equip.Source, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -203,7 +225,7 @@ namespace TaimisToolbench.Services
             SnapshotSourceFilter sourceFilter,
             string activeCharacterName,
             IReadOnlyDictionary<int, IReadOnlyList<TransmutedItemCopy>> transmutedCopies = null,
-            IReadOnlyDictionary<int, List<string>> armoryEquipped = null)
+            IReadOnlyDictionary<int, List<SnapshotArmoryEquip>> armoryEquipped = null)
         {
             var rows = new List<SnapshotSearchRow>();
 
@@ -219,6 +241,15 @@ namespace TaimisToolbench.Services
             // ask it about a stack's raw source, which is the same question
             // the breakdown loop below already answers for itself.
             Func<string, bool> sourceVisible = source => IsSourceEnabled(source, sourceFilter);
+
+            // Same once-per-call reason. A socket place names the gear it
+            // sits in, and this map is the only thing on this path that can
+            // turn that gear's id into a name.
+            Func<int, string> hostItemName = hostId =>
+            {
+                SnapshotItemEntry host;
+                return itemsById.TryGetValue(hostId, out host) ? host.Name : null;
+            };
 
             foreach (var kvp in itemsById)
             {
@@ -259,11 +290,11 @@ namespace TaimisToolbench.Services
                         characterMatches = CharacterNameMatches(source, trimmedSearch);
                     }
 
-                    var location = SnapshotHoldLine.FromSource(source, quantity);
+                    var location = SnapshotHoldLine.FromSource(source, quantity, hostItemName);
                     if (location.Category == SnapshotHoldCategory.LegendaryArmory)
                     {
-                        location.EquippedBy = VisibleWearers(
-                            itemId, armoryEquipped, sourceFilter);
+                        AttachArmoryDraws(
+                            location, itemId, armoryEquipped, sourceFilter, hostItemName);
                     }
 
                     breakdown.Add(location);
@@ -432,43 +463,83 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// The characters wearing this item that the source filter still
-        /// shows, or null when none are left. Unchecking a character hides
-        /// its bags and its worn gear, so it must not go on naming that
-        /// character under the Legendary Armory either.
+        /// Names the places drawing this armory item that the source filter
+        /// still shows. Unchecking a character hides its bags and its worn
+        /// gear, unchecking Equipped hides every wearer, and unchecking the
+        /// Bank hides a banked piece. None of those may go on being named
+        /// under the Legendary Armory.
+        /// <para>
+        /// Wearers stay names; a socket anywhere else becomes a whole place
+        /// phrase, because "Equipped" is not what a banked piece is
+        /// (Models.SnapshotHoldLocation.SocketedInto). One phrase per place,
+        /// so two banked pieces holding it read as one Bank.
+        /// </para>
         /// </summary>
-        private static IReadOnlyList<string> VisibleWearers(
+        private static void AttachArmoryDraws(
+            SnapshotHoldLocation location,
             int itemId,
-            IReadOnlyDictionary<int, List<string>> armoryEquipped,
-            SnapshotSourceFilter filter)
+            IReadOnlyDictionary<int, List<SnapshotArmoryEquip>> armoryEquipped,
+            SnapshotSourceFilter filter,
+            Func<int, string> hostItemName)
         {
             if (armoryEquipped == null
-                || !armoryEquipped.TryGetValue(itemId, out var names)
-                || names == null
-                || names.Count == 0)
+                || !armoryEquipped.TryGetValue(itemId, out var draws)
+                || draws == null)
             {
-                return null;
+                return;
             }
 
+            List<string> wearers = null;
+            List<string> socketSources = null;
             var excluded = filter == null ? null : filter.UncheckedCharacters;
-            if (excluded == null || excluded.Count == 0)
-            {
-                return names;
-            }
 
-            // Allocates only once the user has unchecked something, and only
-            // for a row the armory holds - the legendaries, not the roster's
-            // whole item list.
-            var visible = new List<string>(names.Count);
-            for (int i = 0; i < names.Count; i++)
+            // A wearer is worn gear, so the Equipped location box hides one
+            // just as unchecking that character does.
+            bool wearersShown = filter == null || filter.Equipped;
+
+            for (int i = 0; i < draws.Count; i++)
             {
-                if (!excluded.Contains(names[i]))
+                var draw = draws[i];
+                if (draw == null)
                 {
-                    visible.Add(names[i]);
+                    continue;
                 }
+
+                if (!string.IsNullOrEmpty(draw.Source))
+                {
+                    if (!IsSourceEnabled(draw.Source, filter))
+                    {
+                        continue;
+                    }
+
+                    if (socketSources == null)
+                    {
+                        socketSources = new List<string>();
+                    }
+
+                    socketSources.Add(draw.Source);
+                    continue;
+                }
+
+                if (!wearersShown
+                    || string.IsNullOrEmpty(draw.CharacterName)
+                    || (excluded != null && excluded.Contains(draw.CharacterName)))
+                {
+                    continue;
+                }
+
+                if (wearers == null)
+                {
+                    wearers = new List<string>();
+                }
+
+                wearers.Add(draw.CharacterName);
             }
 
-            return visible.Count > 0 ? visible : null;
+            location.EquippedBy = wearers;
+            location.SocketedInto = socketSources == null
+                ? null
+                : SnapshotHoldLine.PlacePhrases(socketSources, hostItemName);
         }
 
         /// <summary>
@@ -494,17 +565,23 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// True when the raw AccountItemIndex source string passes the
-        /// currently-checked categories in <paramref name="filter"/>. A
-        /// null filter is treated as "show everything" (matches the
+        /// True when the raw AccountItemIndex source string passes both
+        /// filter sets in <paramref name="filter"/>. The location set is
+        /// asked about every source. The character set is asked only about
+        /// bags, worn gear and equipment templates, which are the only
+        /// places that name a character, so unchecking every character
+        /// still leaves the account-wide locations showing.
+        /// <para>
+        /// A null filter is treated as "show everything" (matches the
         /// controls' own all-checked default), as is a character whose name
         /// is absent from SnapshotSourceFilter.UncheckedCharacters. A raw
         /// source string that matches none of the known shapes
-        /// (Bank/MaterialStorage/SharedInventory/LegendaryArmory, or either
-        /// character encoding) is shown regardless -
+        /// (Bank/MaterialStorage/SharedInventory/LegendaryArmory, or any of
+        /// the three character encodings) is shown regardless -
         /// failing open rather than silently hiding real inventory data
         /// the module does not yet recognize (KNOWN-ISSUES #31's "never
         /// silently mask data" posture); there is no such source today.
+        /// </para>
         /// </summary>
         public static bool IsSourceEnabled(string rawSource, SnapshotSourceFilter filter)
         {
@@ -518,9 +595,17 @@ namespace TaimisToolbench.Services
                 return false;
             }
 
-            int characterNameOffset = AccountItemIndex.CharacterNameOffset(rawSource);
-            if (characterNameOffset >= 0)
+            int characterNameOffset;
+            var place = AccountItemIndex.CharacterPlaceOf(rawSource, out characterNameOffset);
+            if (place != CharacterPlaceKind.None)
             {
+                // The location set is tested first, then the character set.
+                // Both must pass for a character-held place to show.
+                if (!CharacterPlaceEnabled(place, filter))
+                {
+                    return false;
+                }
+
                 var excluded = filter.UncheckedCharacters;
                 if (excluded == null || excluded.Count == 0)
                 {
@@ -530,13 +615,48 @@ namespace TaimisToolbench.Services
                 return !IsExcludedCharacter(rawSource, characterNameOffset, excluded);
             }
 
-            switch (rawSource)
+            // Matched against the container half of the key, so a socket
+            // in a banked piece answers to the Bank checkbox. In-place
+            // comparisons: this runs per source per item on the keystroke
+            // path, and a plain key is its own container, so the common
+            // case still takes no substring.
+            if (AccountItemIndex.ContainerIs(rawSource, AccountItemIndex.SourceBank))
             {
-                case AccountItemIndex.SourceBank: return filter.Bank;
-                case AccountItemIndex.SourceMaterialStorage: return filter.MaterialStorage;
-                case AccountItemIndex.SourceSharedInventory: return filter.SharedInventory;
-                case AccountItemIndex.SourceLegendaryArmory: return filter.LegendaryArmory;
-                default: return true;
+                return filter.Bank;
+            }
+
+            if (AccountItemIndex.ContainerIs(rawSource, AccountItemIndex.SourceMaterialStorage))
+            {
+                return filter.MaterialStorage;
+            }
+
+            if (AccountItemIndex.ContainerIs(rawSource, AccountItemIndex.SourceSharedInventory))
+            {
+                return filter.SharedInventory;
+            }
+
+            if (AccountItemIndex.ContainerIs(rawSource, AccountItemIndex.SourceLegendaryArmory))
+            {
+                return filter.LegendaryArmory;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Which location checkbox governs a character-held place.
+        /// </summary>
+        private static bool CharacterPlaceEnabled(
+            CharacterPlaceKind place, SnapshotSourceFilter filter)
+        {
+            switch (place)
+            {
+                case CharacterPlaceKind.Equipped:
+                    return filter.Equipped;
+                case CharacterPlaceKind.TemplateGear:
+                    return filter.EquipmentTemplates;
+                default:
+                    return filter.Bags;
             }
         }
 

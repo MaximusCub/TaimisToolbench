@@ -32,7 +32,19 @@ namespace TaimisToolbench.Services
         /// currency table, the Snapshot wallet rows).
         /// </summary>
         public const int CoinIconSize = CurrencyIconTiers.WalletBarIconSize;
-        public const int CoinLabelIconGap = 2;
+
+        /// <summary>
+        /// Gap between a number and the icon that marks it, applied from
+        /// the number's MEASURED width - the right edge of its last glyph
+        /// box, which is one column past the last column that draws (every
+        /// Menomonia region's first and last column is fully transparent).
+        /// So the drawn gap is this plus one: 4 logical pixels, one wider
+        /// than the game's own 3 at bar tier (CurrencyIconTiers). The extra
+        /// pixel is deliberate and is the whole of this constant's job;
+        /// matching the game exactly reads as the number touching its icon.
+        /// </summary>
+        public const int CoinLabelIconGap = 3;
+
         public const int CoinSegmentGap = 6;
 
         /// <summary>
@@ -249,13 +261,47 @@ namespace TaimisToolbench.Services
             public string Text;
             public int TextWidth;
 
-            // Display name of this currency (in-game finding B's name-
-            // tooltip sweep principle: anywhere a currency icon shows, its
-            // name must be available) - never rendered as text here
-            // (width-neutral), only surfaced via the icon's BasicTooltipText
-            // in LayoutCurrencySegments. Null/empty is handled the same as
-            // every other icon-only cell (no tooltip set at all).
+            // Display name of this currency - never rendered as text here
+            // (width-neutral), only surfaced through the icon's hover in
+            // LayoutCurrencySegments.
             public string Name;
+
+            // The wallet currency this segment is of. The icon resolves
+            // its whole tooltip from this id, the same way every other
+            // currency icon in the module does, so an inline symbol beside
+            // a number says as much as a row's own icon.
+            public int CurrencyId;
+        }
+
+        /// <summary>
+        /// One bartered ITEM in an inline price run - the number of units
+        /// handed over, marked by that item's own icon. Same shape and same
+        /// advance as <see cref="CurrencySegmentSpec"/>, in a separate type
+        /// because the id is an ITEM id: one numeric slot shared by two id
+        /// spaces is how id 24 came to open an unrelated item's tooltip on
+        /// a currency row (see PlanRowViewModel.ItemId).
+        /// </summary>
+        public struct BarterSegmentSpec
+        {
+            public int ItemId;
+            public string Text;
+            public int TextWidth;
+        }
+
+        /// <summary>
+        /// Width of a whole barter run. Same formula as
+        /// <see cref="TotalCurrencySegmentsWidth"/>, because the two runs
+        /// draw at the same icon size and the same gaps.
+        /// </summary>
+        public static int TotalBarterSegmentsWidth(List<BarterSegmentSpec> segments)
+        {
+            var widths = new List<int>(segments.Count);
+            foreach (var seg in segments)
+            {
+                widths.Add(seg.TextWidth);
+            }
+
+            return ShoppingColumnMath.SegmentRunWidth(widths, CoinIconSize, CoinLabelIconGap, CoinSegmentGap);
         }
 
         /// <summary>

@@ -87,6 +87,8 @@ namespace TaimisToolbench.Services.Recipes
             IReadOnlyCollection<int> knownPositiveRecipeIds,
             CancellationToken ct)
         {
+            Gw2ApiConnectionLimit.Apply();
+
             // The cheap-out: a relaunch inside the same patch with the same
             // corpus costs zero requests. The count re-arms the probe when
             // a module update swaps the seed or the user clears the cache.

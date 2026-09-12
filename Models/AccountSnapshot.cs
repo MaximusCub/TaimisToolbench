@@ -5,7 +5,23 @@ namespace TaimisToolbench.Models
 {
     internal class AccountSnapshot
     {
+        // When the last holding was read, not when the fetch started. The
+        // two differ by the whole fetch, which the snapshot budget allows
+        // up to a minute (see Module.SnapshotFetchTimeout).
         public DateTime CapturedAt { get; set; }
+
+        // How many characters this snapshot reached, and how many of those
+        // it could not read in full. A character counts incomplete when its
+        // bags, its equipment or its disciplines failed to fetch; its
+        // holdings are then missing, so the plan can tell the user to buy
+        // something they own. A fetch no longer commits a snapshot with a
+        // non-zero count, so one on disk was written by an earlier build.
+        // Both default to 0, which a snapshot.json written before these
+        // fields existed loads as "nothing known to be missing" - the same
+        // claim those older builds already made.
+        public int CharacterCount { get; set; }
+
+        public int IncompleteCharacterCount { get; set; }
 
         public int CoinCopper { get; set; }
 
@@ -15,8 +31,9 @@ namespace TaimisToolbench.Models
 
         // Per-character learned crafting disciplines. Deliberately NOT
         // defaulted to an empty list like Items/Wallet: null means "no
-        // discipline data was ever captured" (old snapshot.json, degraded
-        // fetch), distinct from "captured and empty". Consumers rely on
+        // discipline data was ever captured" (an old snapshot.json, since a
+        // degraded fetch no longer commits), distinct from "captured and
+        // empty". Consumers rely on
         // the distinction to never fabricate a "not trained" claim for a
         // snapshot that never looked.
         public List<SnapshotCharacterDiscipline> CharacterDisciplines { get; set; }

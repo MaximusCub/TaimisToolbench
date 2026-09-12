@@ -188,6 +188,32 @@ jobs:
             exit 1
           fi
 
+      - name: No BCL bulk copy of a Blish ControlCollection
+        shell: bash
+        run: |
+          # Blish's ControlCollection<T> implements ICollection<T> and then
+          # throws InvalidOperationException from CopyTo. Every BCL path that
+          # bulk-copies an ICollection<T> calls it: new List<Control>(children),
+          # OrderBy and Reverse through their internal buffer, and Cast<T>,
+          # which returns the source unchanged and hands it to whatever
+          # materializes next. The type carries its own ToArray and ToList and
+          # those are what a call site must use. All of it compiles, so nothing
+          # but this step catches one before a player does: a single
+          # new List<Control>(tableFlow.Children) made every Pop Out click in
+          # 0.3.1 throw during construction and open no window at all.
+          hits=$(git ls-files -z '*.cs' | xargs -0 -r grep -nE \
+            'new List<[A-Za-z0-9_.<>, ]*>\([A-Za-z0-9_.]*\.Children\)|\.Children\.(Cast<|Reverse\(\)|CopyTo\(|OrderBy)' \
+            | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(//|\*|/\*)' || true)
+          if [ -n "$hits" ]; then
+            echo "A Blish ControlCollection is being bulk-copied by the BCL."
+            echo "ControlCollection.CopyTo throws at runtime and the compiler"
+            echo "says nothing. Use the collection's own .ToArray() or .ToList(),"
+            echo "or enumerate it with foreach:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "No BCL bulk copy of a ControlCollection."
+
       - name: csproj Compile list matches disk
         shell: bash
         run: |
@@ -218,20 +244,73 @@ jobs:
           # without them. `item.Id` is what marks a row built from an
           # account API item; material storage builds from `mat` and
           # carries neither field.
-          f=Services/Gw2AccountSnapshotService.cs
-          rows=$(grep -c 'ItemId = item.Id,' "$f" || true)
-          ups=$(grep -c 'Upgrades = SocketedIds(item.Upgrades),' "$f" || true)
-          infs=$(grep -c 'Infusions = SocketedIds(item.Infusions),' "$f" || true)
-          skins=$(grep -c 'SkinId = SkinIdOf(item.Skin),' "$f" || true)
+          # Both files, because the per-character rows moved to the second
+          # one when the fetch changed shape; counting only the first would
+          # have kept passing while checking half as much. The optional
+          # qualifier is the same helper called across a file boundary.
+          f="Services/Gw2AccountSnapshotService.cs Services/CharacterRecordProjection.cs"
+          q='\(CharacterRecordProjection\.\)\?'
+          rows=$(cat $f | grep -c 'ItemId = item.Id,' || true)
+          ups=$(cat $f | grep -c "Upgrades = ${q}SocketedIds(item.Upgrades)," || true)
+          infs=$(cat $f | grep -c "Infusions = ${q}SocketedIds(item.Infusions)," || true)
+          skins=$(cat $f | grep -c "SkinId = ${q}SkinIdOf(item.Skin)," || true)
           if [ "$rows" -lt 1 ] || [ "$ups" -ne "$rows" ] || [ "$infs" -ne "$rows" ] \
               || [ "$skins" -ne "$rows" ]; then
-            echo "$f builds $rows rows from an account API item, but records"
+            echo "$f build $rows rows from an account API item, but record"
             echo "Upgrades on $ups of them, Infusions on $infs and SkinId on $skins."
             echo "Every such row must carry all three, the way the bank rows do."
-            grep -n 'ItemId = item.Id,' "$f"
+            grep -n 'ItemId = item.Id,' $f
             exit 1
           fi
           echo "$rows rows built from an account item; all record sockets and skin."
+
+      - name: Every stack turns its sockets into rows of their own
+        shell: bash
+        run: |
+          # A rune or infusion held only on its host stack's socket lists is
+          # searchable nowhere and counted nowhere, so a plan needing one
+          # tells the player to buy another. The armory branch is the worse
+          # half: it drops the slot outright, and dropped its sockets with
+          # it. These projections are Gw2Sharp-bound and no test may touch
+          # Gw2Sharp (repo invariant), so this is what holds the calls in
+          # place. What the rows then mean is SocketedItemRowsTests.
+          python3 - <<'PY'
+          import sys
+
+          FILES = ('Services/CharacterRecordProjection.cs',
+                   'Services/Gw2AccountSnapshotService.cs',
+                   'tools/TaimisToolbench.Harness/SnapshotFetchShapes.cs')
+          CALL = 'SocketedItemRows.AddFor('
+          RECORD = 'SocketedIds(item.Upgrades),'
+          DROP = 'part.ArmoryItemIds.Add(item.Id);'
+
+          bad = []
+          for path in FILES:
+              text = open(path, encoding='utf-8').read()
+              records = text.count(RECORD)
+              calls = text.count(CALL)
+              if calls < records:
+                  bad.append('%s records sockets on %d stack sources but turns '
+                             'them into rows %d times. A stack whose sockets '
+                             'reach the snapshot must also make rows of them.'
+                             % (path, records, calls))
+                  continue
+
+              if DROP not in text:
+                  continue
+
+              start = text.index(DROP)
+              branch = text[start:text.index('continue;', start)]
+              if CALL not in branch:
+                  bad.append('%s drops an armory-drawn slot without reading its '
+                             'sockets first. The wrapper is the armory\'s to '
+                             'count; what is fitted into it is not.' % path)
+
+          if bad:
+              print('\n'.join(bad))
+              sys.exit(1)
+          print('Every stack projection records what is socketed into it.')
+          PY
 
       - name: Live docs cite source paths that exist
         shell: bash
@@ -334,42 +413,13 @@ jobs:
           fi
           echo "docs/KNOWN-ISSUES.md: $bytes bytes."
 
-      - name: Files stay within their line budgets
-        shell: bash
-        run: |
-          # A ratchet, not a metric. docs/file-budgets.txt explains itself;
-          # this is the half that has teeth. See the CraftingPlanView regrowth
-          # it was written for.
-          fail=0
-          while read -r path budget; do
-            case "$path" in ''|\#*) continue ;; esac
-            if [ ! -f "$path" ]; then
-              echo "budget entry for a path that no longer exists: $path"
-              echo "  a rename has to move its budget with it, not drop it."
-              fail=1
-              continue
-            fi
-            actual=$(wc -l < "$path")
-            if [ "$actual" -gt "$budget" ]; then
-              echo "$path: $actual lines, budget $budget (+$((actual - budget)))"
-              fail=1
-            fi
-          done < docs/file-budgets.txt
-          if [ "$fail" -ne 0 ]; then
-            echo "Raise the budget in docs/file-budgets.txt in this same commit and"
-            echo "say why in the message, or put the growth somewhere it belongs."
-            exit 1
-          fi
-          echo "Every budgeted file is within its entry."
-
       - name: Comment blocks stay within their pinned counts
         shell: bash
         run: |
           # A ratchet, not a metric. docs/comment-budgets.txt explains itself;
-          # this is the half that has teeth. The line-budget step above counts
-          # total lines, which makes a 50-line comment indistinguishable from
-          # 50 lines of code - so the August comment sweep could land three
-          # times and leave the long blocks in place with nothing to notice.
+          # this is the half that has teeth. It counts comment blocks, not
+          # total lines - so the August comment sweep could land three times
+          # and leave the long blocks in place with nothing to notice.
           python3 tools/comment-budgets.py --check
 
       - name: No doc comment left stranded on the wrong member

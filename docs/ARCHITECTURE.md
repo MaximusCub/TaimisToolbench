@@ -614,23 +614,22 @@ fully region-mapped with KNOWN-ISSUES anchor comments at each region head.
 
 The file then grew back past its own pre-decomposition baseline - 5,281
 lines on 2026-08-25, +2,156 in the 33 days after the decomposition
-landed - with nothing in CI to notice. Its current size is the entry in
-`docs/file-budgets.txt`, which CI enforces, rather than a number restated
-here that goes stale the moment the file moves; it was 5,185 against the
-~4,802 above when this paragraph was last checked. `Views/Rendering/` holds
-about 12,100 lines across 46 files, so the split of plan-tab code is roughly
-70% outside the view -
+landed. It was 5,615 lines on 2026-09-12, against the ~4,802 above.
+`Views/Rendering/` holds about 13,700 lines across 50 files, so the split
+of plan-tab code is roughly 70% outside the view -
 a ratio that can move in either direction, unlike the one-off before/after
 figure. Both numbers, and the date, so a later reader can re-run the two
 commands rather than take a characterization on trust.
 
-Two things changed on that date so the regrowth cannot repeat quietly.
-`docs/file-budgets.txt` pins every tracked `.cs` file to its size that
-day and a CI step fails when a file exceeds its entry, so growth now
-costs a visible line in a checked-in file rather than nothing. And the
-view's `#region` markers, which had numbered eight responsibilities but
+Nothing in CI measures the file's length. A per-file line budget ran from
+2026-08-25 to 2026-09-12 and was removed. Every entry was set to the file's
+size on the day it was raised. The gate was set by the commit it gated.
+Growth is caught at review, not by a counter.
+
+On 2026-08-25 the view's `#region` markers were renamed. They had
+numbered eight responsibilities but
 shipped twenty-three disjoint blocks with eleven headers reading
-"(continued)", were renamed: each marker now names its own block and no
+"(continued)". Each marker now names its own block and no
 two names repeat. The numbering went rather than the code, because making
 it true would mean reordering exactly the scroll/wheel/ticker machinery
 the WP-26 cut above is about.
@@ -1171,13 +1170,17 @@ behavior itself.
 two-part mechanism (`initialTreeChecks` plus `calculateTreeQuantity`'s
 `achievement_bit` check -
 [`docs/research/m37-r3-achievement-dedup.md`](research/m37-r3-achievement-dedup.md)
-sections 1.1/1.2) for a small handful of real recipes: the WvW "Infinite
-[siege weapon] Blueprint" achievement rewards, whose ingredients name a
-specific achievement *bit* - a one-time reward item that must never be
-counted twice just because it also happens to be needed directly
-elsewhere in the same plan. The rule itself is ported 1:1 from the
-ground-truth gw2e unit test quoted in that report (section 1.4) and is
-stated in the class's own doc comment.
+sections 1.1/1.2). It fires on an ingredient that names a specific
+achievement *bit* - a one-time reward item that must never be counted
+twice just because it also happens to be needed directly elsewhere in the
+same plan. The rule itself is ported 1:1 from the ground-truth gw2e unit
+test quoted in that report (section 1.4) and is stated in the class's own
+doc comment.
+
+No shipped recipe carries an `achievementBit` today. The rows that did
+were removed from `ref/recipes_seed.json`, so the pass is a no-op walk
+over every plan the seed can produce. It stays because the field survives
+in the schema and the recipe overlay cache can still carry one.
 
 **Zeroing clears `Recipes`, not just `Quantity`.** Unlike gw2e's nested
 tree - which stores a small per-edge ratio and resolves every absolute
@@ -1421,6 +1424,32 @@ time-gated daily craft is absent on purpose. Absent is a supported state,
 not an unfinished one - the offer still reaches the user, as an honestly
 unranked fallback (section 8's barter-offer rule).
 
+**Where a decision value may appear.** The original rule was "may tip a
+comparison, never reaches a displayed total". It now has a second permitted
+use, and the boundary moved from *what may consult a valuation* to *what
+kind of number may carry one*:
+
+- A decision value may weight a **ratio** - a dimensionless 0..1 figure the
+  module prints as a percentage. The Crafting Ranker's materials gate is
+  the one such reader (`Services/RankerReadinessCalculator.cs`,
+  `ScoreMaterials`): the gate is the plan's whole bill in copper, so the
+  same valuation stands above and below its line and a wrong rate moves
+  both halves together.
+- A decision value may **never** reach a coin total the module presents as
+  money. `CraftingPlan.TotalCoinCost`, the Ranker's Remaining column and
+  every Total Cost row stay coin the user will actually spend.
+
+An unvalued currency is not zero under either rule. The solver demotes its
+offer to the fallback tier (section 7.1); the materials gate drops it from
+both halves, reports it in
+`RankerRowMetrics.MaterialsUnpricedCurrencyIds`, and the Ready hover names
+it. The Ranker's separate currencies gate scores it in its own units
+regardless, which is why dropping it from a copper ratio loses a weighting
+rather than a barrier. MEASURED over the shipped corpus: 61 distinct
+non-coin currencies appear as a vendor cost, 45 of them carry a value, and
+820 of the 33,849 offers with a non-coin currency cost - 2.4 percent -
+charge one that does not.
+
 ---
 
 ## 9. Data pipeline: seeds, wiki scrapes, dev-only caches
@@ -1557,6 +1586,42 @@ calculator's own class doc comment for its individual rationale.
 
 ---
 
+## 10a. Account data a plan reads
+
+**What:** which parts of the account snapshot a plan generation actually
+consults, established from `Services/CraftingPlanPipeline.cs` rather than
+assumed. `Services/StaleAccountDataWarning.cs` is the executable copy of
+this table, and it decides whether a failed refresh is worth a dialog.
+
+| Snapshot member | What the plan does with it | When it is read |
+| --- | --- | --- |
+| `Items` | `AccountItemIndex` feeds `InventoryReducer.Reduce`, which subtracts owned stock from the tree. Also the source of the display-only owned amounts on vendor item cost lines. | Only when Use Own Materials is on, which is the same thing as the pipeline being handed a non-null snapshot. |
+| `Wallet` | `AccountCurrencyIndex` fills `CraftingPlanResult.OwnedCurrencyAmounts`, the "you have N" figure beside a currency cost. Never fed back into a decision. | Only when the plan has a non-coin currency cost, a barter trade-up currency, or a vendor offer currency cost line. |
+| `CharacterDisciplines` | `CraftCompetencyEvaluator.BuildBestRatingByDiscipline` gates whether a Craft decision may win automatically. | Whenever the plan crafts. Passed independently of Use Own Materials, so it is read even when the plan ignores holdings. |
+| `CoinCopper` | Nothing. | Never. The solver folds coin costs into `Plan.TotalCoinCost` and never asks what the account holds. The Crafting Ranker reads it; a plan does not. |
+| `LegendaryArmoryEquipped` | Nothing. | Never. It names who wears an armory item; the armory's counts arrive in `Items` under the `LegendaryArmory` source. |
+| `CapturedAt`, `CharacterCount`, `IncompleteCharacterCount` | Status text only. | Never by the solve. |
+
+`Items` is one flat list, and the only record of which part of the account
+holds what is the `Source` string on each entry
+(`Services/AccountItemIndex.cs` owns that vocabulary). So "does material
+storage hold anything this plan needs" is answered from what material
+storage held at the last successful capture. That is exact for what the
+plan subtracted, and blind to anything the account acquired since - which
+is the limit the dialog's wording respects.
+
+**What this cannot say:** whether refreshing a source would have changed
+the plan. Knowing that needs the read that failed. The dialog therefore
+names what went unread and what in the plan depends on it, and claims
+neither that the plan is wrong nor that it is fine.
+
+**Where:** `Services/StaleAccountDataWarning.cs` (the decision and the
+wording), `Services/AccountDataSource.cs` (the source vocabulary),
+`Services/PlanItemIds.cs` (what the plan needs),
+`Views/CraftingPlanView.cs` (`RaiseStaleAccountDataDialog`).
+
+---
+
 ## 11. Typography: the measured type ramp
 
 **What:** `Services/TypeRampMetrics.cs` holds the measured Menomonia glyph
@@ -1616,17 +1681,19 @@ that cannot be read. Concretely, in the order the guarantees weaken:
    It is versioned by `PersistedPlan.RequestSchemaVersion`, and that
    version has never been bumped.
 2. The **result** - `Result` and `NodeOverrides`, the whole solved tree
-   with its prices, offers and metadata - survives only when
-   `PersistedPlan.SchemaVersion` matches this build exactly. Anything
-   else discards the result and keeps the request.
+   with its prices, offers and metadata - survives while
+   `PersistedPlan.SchemaVersion` sits inside
+   `[PersistedPlan.MinimumReadableSchemaVersion, CurrentSchemaVersion]`.
+   Anything else discards the result and keeps the request.
 3. Nothing is ever *partially* restored. A degraded result is discarded
    whole; the module never renders half a plan.
 
-What a schema bump costs a user is therefore one click, not their plan:
-the tab comes back with their items and settings, and Generate Plan
-re-solves them at current prices. Before this split, a bump cost every
-saved plan on every user's disk, which is why the version had been left
-stale at 2 for the whole of a ~275-line graph change.
+A schema bump therefore costs a user nothing on its own. It costs one
+click - the tab comes back with the items and settings, and Generate Plan
+re-solves at current prices - only on a bump that also moves the floor.
+Before the split, a bump cost every saved plan on every user's disk, which
+is why the version had been left stale at 2 for the whole of a ~275-line
+graph change; before the range, a bump still cost every saved *result*.
 
 **Why the layers can be read apart.** The document is one JSON object
 with one set of property names - there is no second file and no second
@@ -1646,7 +1713,10 @@ between its index row and its blob.
 **Plan History was already split** along the same line, across two files
 rather than within one: the index row in `plan_history.json` carries the
 request identity, and the expensive result lives in a per-entry blob. A
-`PersistedPlan` bump therefore already discarded blobs and kept rows.
+`PersistedPlan` bump therefore already discarded blobs and kept rows, and
+now discards a blob only when it moves the floor past that blob's version
+- `PlanHistoryBlobStore` reads through the same `DeserializePersistedPlan`
+and inherits the range with no code of its own.
 
 **The index answers the same contract by a different mechanism.** It is a
 *collection*, so its compatibility unit is the row, not a layer - there is
@@ -1665,11 +1735,12 @@ no happier than one who loses one. Two things make a row survive:
   constants. An addition is free - Newtonsoft leaves an absent member at
   its default, so every existing row still loads.
 
-`MinimumReadableSchemaVersion` is therefore the single constant in the
-module whose value *is* the amount of user data a release destroys. It is
-1, and it is pinned twice - by `PlanHistorySchemaMemberSetTests` and by
-the CI corpus step - so raising it is a deliberate, reviewed act and never
-a side effect of a merge. A newer-than-current file is still discarded:
+`PlanHistoryIndex.MinimumReadableSchemaVersion` is therefore one of the
+two constants in the module whose value *is* the amount of user data a
+release destroys; `PersistedPlan.MinimumReadableSchemaVersion` is the
+other. It is 1, and it is pinned twice - by
+`PlanHistorySchemaMemberSetTests` and by the CI corpus step - so raising
+it is a deliberate, reviewed act and never a side effect of a merge. A newer-than-current file is still discarded:
 this build cannot know what a later one wrote, which is the same answer
 the plan gives to the same question.
 
@@ -1694,6 +1765,103 @@ additive-only row graph behind it).
 
 ---
 
+## 13. Popout windows
+
+A player who has generated a plan wants the Shopping List or the Crafting
+Steps on screen while they play, with the module window shut. The popout
+windows serve that and nothing else.
+
+### The table is the plan tab's table
+
+`Views/PopoutTable.cs` calls `Views/Rendering/ShoppingListSectionRenderer.cs`
+and `Views/Rendering/CraftStepsSectionRenderer.cs`. It does not reimplement
+either. Both were already written against `ISectionRelayoutSink` (section 5),
+which was the only thing tying them to `Views/CraftingPlanView.cs`, so a
+popout implements that interface and gets the pinned column header, the
+click-to-sort cells, the resize ellipsis, the row rules, the icon hovers and
+the wiki right-click for free. Nothing had to be lifted out of the tab.
+
+One window type hosts either section. The row shapes differ because two
+renderers draw them, not because the surfaces differ.
+
+### Where the tick column goes
+
+The plan tab draws the same rows and must not grow tick boxes, so a tick
+cannot live inside a row. The renderer's flow is inset by
+`PopoutLayout.CheckColumnWidth` and the boxes are laid down the gutter beside
+it, at offsets `PopoutLayout.CheckboxYOffsets` derives from the same per-row
+heights `PlanContentHeightMath.SectionBodyHeight` sums. Both are children of
+one panel inside the scroll region, so they scroll together.
+
+A tick is stored against a row identity (`Services/PopoutRowKey.cs`), never
+against a screen position, so a tick follows its row through a sort. The
+Shopping List renderer sorts its own rows, so `PopoutTable` re-derives the
+same order from the same pure `PlanTableSorter.Sort` call against the same
+state rather than guessing at it.
+
+### What a Refresh can and cannot change
+
+It syncs the account and then subtracts. It does not solve.
+
+It can: remove a row whose item the player has acquired since the last sync,
+reduce a partly-acquired row's outstanding quantity and its money columns pro
+rata, and clear every tick.
+
+It cannot: change a craft-or-buy decision, reprice anything, reorder the
+list, add a row, or bring a removed row back. A row with no item id of its
+own - a currency row - is never touched.
+
+Progress is measured as a delta against the holding at the previous sync, and
+the baseline moves forward each time. An absolute count would resurrect a
+finished shopping row the moment its materials were spent on the very craft
+they were bought for. A delta cannot: a fall in the holding contributes
+nothing.
+
+The button is not held back by `Services/SnapshotRefreshPolicy`'s freshness
+windows. Those exist for refreshes the module decides to run on the player's
+behalf. This one is a deliberate press, like the Account Snapshot tab's
+Refresh Now.
+
+### Window chrome
+
+A popout is dressed in the module window's own art and texture-space regions
+(`Views/ModuleWindowArt.cs`, named in `Services/WindowSizing.cs`). Blish
+scales a window background so the window region maps onto the control's own
+bounds, so one pair of regions serves a 1378px module window and a small
+popout alike. The chrome those regions imply - 46px left of the content box,
+40px above it, 15px below - is the module window's and is already named, so
+the popout retypes none of it.
+
+`WindowBase2` draws a window's `Title` 78px in, which is the seat a
+`TabbedWindow2`'s tab sidebar and emblem fill. A popout has neither, so the
+word read as indented. The popout leaves Blish's `Title` unset and paints its
+own in `PaintBeforeChildren`, on the same left rule the table under it starts
+at.
+
+### Why a stored opacity has to be re-imposed every frame
+
+`WindowBase2.Show` sets `Opacity` to 0 and resumes a tween that animates it
+to 1; `Hide` reflects the same tween back down to 0. The tween is private, so
+an opacity written once before `Show` was overwritten 0.2 seconds later: the
+setting persisted, the window stopped honouring it the first time it was
+closed and reopened. `PopoutWindow.UpdateContainer` caps `Opacity` at the
+stored value every frame, through `Services/PopoutOpacity.CapToStored`.
+
+Capping and not assigning is the part that matters. `Hide`'s completion
+callback only makes the window invisible if `Opacity` has reached 0, so a
+window pinned to its stored value in both directions would never close.
+
+### Lifetime
+
+The windows are parented to the sprite screen, never to the module window,
+which is what lets one outlive it. `Views/PopoutWindowHost.cs` owns them and
+is held by `Module`, disposed in `Unload` beside the tickers and suggestion
+panels that are screen-parented for the same reason. Ticks and sort survive
+closing and reopening a popout within a session, and do not survive a
+restart, because a sync clears them anyway.
+
+---
+
 ## V. Views: relocated design narrative
 
 The `Views/` tree carries a lot of hard-won reasoning: decompiled Blish HUD
@@ -1711,10 +1879,21 @@ The subsections below are ordered by file, top-level `Views/` first, then
 
 The About tab is the same shape as `LogTabContent`: one
 `FlowPanel(CanScroll)`, a `Build(Container)` that populates it once, and no
-relayout registry. Nothing on it is interactive beyond plain
-selectable/copyable text, so there is no state worth keeping "sticky"
-across a tab revisit and the rebuild-per-visit cost buys correctness for
-free. `MainView` carries the cross-cutting note on that rebuild policy.
+relayout registry. Nothing on it is interactive beyond the data
+directory text box and the links in its credit copy and fact table, so
+there is no state worth keeping "sticky" across a tab revisit and the
+rebuild-per-visit cost buys correctness for free. `MainView` carries the
+cross-cutting note on that rebuild policy.
+
+The credit block and the "Source" and "Built with" rows draw one Label
+per run rather than one Label per paragraph, because a Blish `Label`
+draws one string in one colour with no underline. Which words are links
+is decided in `Services/LinkPhraseSpans.cs` and `Services/AboutTabText.cs`;
+`Services/NoteSegmentWrap.cs` and `Services/NoteRunLayout.cs` wrap and
+place the runs, the same two the Plan tab's Notes section uses, so a link
+phrase that straddles a wrap point keeps its target on both lines.
+`Views/Rendering/LinkedTextRenderer.cs` draws them and
+`Views/Rendering/LinkRunStyle.cs` holds the one style both surfaces share.
 
 The manifest read cannot fail under normal operation: `ModuleParameters.Manifest`
 is the exact object Blish HUD itself already parsed and validated in order
@@ -2798,9 +2977,9 @@ failure.
 The two unreadable-file verdicts carry two different severities because
 merging them once cost a full forensic investigation (2026-08-23). A
 corrupt or otherwise unparseable file goes to `onError` at Warn, the same
-as every I/O failure; a file written at an older *shipped* schema version
-- expected, benign, and repaired by the next Generate - goes to `onInfo`
-at Info. Any caller wiring one and not the other silently drops half the
+as every I/O failure; a file written at a *shipped* schema version below
+`PersistedPlan.MinimumReadableSchemaVersion` - expected, benign, and
+repaired by the next Generate - goes to `onInfo` at Info. Any caller wiring one and not the other silently drops half the
 story.
 
 `PlanStoreHelpers.DeserializePersistedPlan` is what makes that split
@@ -2861,13 +3040,43 @@ reached.
 
 ### 12.4 What the shape hash last moved for
 
-`PersistedPlan.SchemaShapeHash` last moved for the plan-level barter item
+`PersistedPlan.SchemaShapeHash` last moved for the missing recipe sheet
+sources and for what a vendor-requirement notice now says, both purely
+additive: `CraftingPlanResult.MissingRecipeSheetSources` and the
+`MissingRecipeSheetSource` type it reaches, plus
+`VendorRequirementNotice.Kind`, `VendorRequirementNotice.UnknownReason`,
+`CraftingPlanResult.AccountProgressionAccess` and
+`PlanSolveContext.AccountProgressionAccess`. An older file omits them,
+Newtonsoft leaves each at null or its zero value, and a restored plan then
+prices no missing sheet and tells the reader to generate the plan again
+before it can say whether a gated vendor will trade. A plan written before
+it still deserializes and `CurrentSchemaVersion` stays at 4.
+
+Before that it moved for vendor requirements, also additive:
+`VendorOffer.Requirement`, `PlanStep.VendorRequirement`,
+`PlanSolveContext.AccountProgression`,
+`CraftingPlanResult.VendorRequirementNotices`, and the `VendorRequirement`,
+`VendorRequirementNotice` and `AccountProgression` types they reach.
+
+Before that it moved for a REMOVAL, and removals are
+what `CurrentSchemaVersion` exists to gate: `VendorOffer.Locations` is gone,
+so the version went 3 -> 4. It cost no saved result, because a removal is
+the one shape change the current types absorb whole - see 12.5 - so the
+floor stayed at 3 and a version 3 file still restores its plan and every
+Plan History blob. Nothing reads a location: the module dropped
+the field to stop holding 2.19 MB of place names for the whole session, and
+`Services/VendorOfferLocations.cs` reads them back off
+`ref/vendor_offers.json` on demand. Measured saving on the loaded corpus:
+71,226,080 bytes of managed heap before, 60,178,792 after.
+
+Before that it moved for the plan-level barter item
 total, which is purely additive: `CraftingPlan.BarterItemCosts`,
 `PlanStep.VendorBarterItemCosts` and the `BarterItemCost` type they reach.
 An older file omits all three, Newtonsoft leaves the lists null, and a
 restored plan then shows no barter rows in its Total Cost table until it is
-re-solved - the same degradation shape the previous addition had. A plan
-written before it still deserializes and `CurrentSchemaVersion` stays at 3.
+re-solved - the same degradation shape the previous addition had. That one
+was additive, so a plan written before it still deserialized and
+`CurrentSchemaVersion` stayed where it was.
 
 Before that it moved for the currency tooltip work, also purely additive:
 one string, `CurrencyMetadata.Description`, absent from an older file and
@@ -2879,6 +3088,60 @@ It does cost bytes. The persisted `CurrencyMetadata` is the whole
 `/v2/currencies` reply, so every saved plan grows by the descriptions of
 all 79 currencies - measured 2026-08-28 at 8.5 KB raw, ~2.5 KB gzipped,
 per plan blob.
+
+### 12.5 Which past plan versions are readable, and why
+
+`PersistedPlan.MinimumReadableSchemaVersion` is 3. A version belongs in
+the range when nothing a file stamped that way carries can be *misread* by
+the current types - not when it merely parses.
+
+Two of the four shape changes are absorbable and two are not:
+
+- An **addition** is free. Newtonsoft leaves an absent member at its
+  default, and there was no value on disk to lose.
+- A **removal** is free. Newtonsoft skips a JSON property no type claims,
+  and nothing that survived the removal moved.
+- A **rename** is not. The old name is skipped and the new one defaults,
+  so a value the file *did* carry is silently lost.
+- A **retype** is not. Newtonsoft either throws or coerces, and a coerced
+  value is a wrong one.
+
+Read against that, each bump:
+
+| Bump | What it did | Below it readable? |
+| --- | --- | --- |
+| 3 -> 4 (`b03eb0ef`) | Removed `VendorOffer.Locations`, nothing else. | **Yes.** A removal, so a version 3 file is complete and its extra property is skipped. |
+| 2 -> 3 (`35e97ed3`) | No shape change of its own. It retired a stamp left at 2 while the graph grew ~275 unversioned lines. | **No.** "2" names no single shape, so there is nothing to check a version 2 file against. |
+| 1 -> 2 (`c55596a9`) | Added `PersistedPlan.ValueOwnMaterials`. | **No.** Additive in itself, but 1 sits under the same unversioned drift 2 does. |
+
+The evidence for the 3 -> 4 row is `tests/shared/persisted_plan_schema.txt`:
+across its whole history the only deleted line is the one for
+`VendorOffer.Locations`, and the part of version 3's life
+that predates the snapshot (`35e97ed3`..`0492fc88`) contains no property
+removal, rename or retype in any type the persisted graph reaches.
+
+A future bump for a rename or a retype must raise the floor to that bump's
+version, in the same commit, with the member named in the message. A bump
+for an addition or a removal must leave the floor alone.
+
+**Every other persisted store.** `PlanHistoryStore` already read a range.
+`PlanHistoryBlobStore` reads through `DeserializePersistedPlan` and
+inherits the plan's. `RankerStore` had the same exact-version rule the plan
+store did and now reads
+`[RankerWatchlist.MinimumReadableSchemaVersion, CurrentSchemaVersion]`;
+only version 1 has ever shipped, so its accepted set is unchanged and the
+constant is there for the next bump to decide against.
+`OverlayRecipeCacheStore` already migrates its own version 1 file rather
+than rejecting it. `SnapshotStore`, `StatusStore` and `ModuleLogStore`
+carry no version stamp at all, so there is no rule to relax;
+`VendorOfferStore` reads shipped reference data, not user data, and never
+compares its stamp.
+
+Between `b15b3fd2` and `dfdc5eac` master briefly stamped 4 for a different
+reason - a public `CraftingTreeNode.IsPlanRoot` - and that bump was
+reverted rather than released. No tag ever carried it; a file from such a
+build reads today because `IsPlanRoot` is now `internal` and its JSON
+property is skipped like any other unclaimed one.
 
 ---
 
@@ -3103,7 +3366,38 @@ currency tiers above were; the tooltip header icon's 34x34 was not. The same
 frame proves it: a currency tooltip capture shows the game's header icon at
 34 physical pixels beside the module's own 34-unit frame painted at 31, which
 puts that capture at 0.897. So the tier holds 34 / 0.897 = 38, which paints
-the game's 34 at "Normal" and its 38 at "Large", and the art inside it is 36.
+the game's 34 at "Normal" and its 38 at "Large", and the art inside it
+is 36.
+
+**The frame is painted at one pixel, and the last row is what needed
+fixing**, decided 2026-09-12. A framed icon on the Snapshot tab was reported
+cut off at the bottom when a search returned one result. The first diagnosis
+was sub-pixel: a 1px band is 0.897 physical pixels at GW2 UI Size "Normal",
+the GPU covers a scanline only when the scanline's centre falls inside the
+band, so the band was said to miss on 10.3% of vertical positions. The frame
+was widened to 2px on that reading. The reading was wrong, and the test it
+failed is that it predicts the fault at random vertical positions on every
+icon in the module, all the time. That has never been seen. The fault
+appeared on one result and only there.
+
+The cause is the container clip. A container hands its children a clip that
+has been through a floor/ceil round trip in each direction, and the round
+trip can leave that clip up to two logical pixels short of the container's
+own bottom edge. The Snapshot result panel is sized to its content, so its
+bottom edge sat exactly on the last row's, and the short clip reached into
+that row's icon frame. Only the last row can be hit, which is why a
+one-result search made it obvious.
+
+`SnapshotResultLayout.TrailingClearance` moves the panel's bottom edge one
+logical pixel past the last row. The sweep is
+`tests/TaimisToolbench.Tests/Services/IconFrameScissorSimulationTests.cs`,
+over the clip half of the paint model in section V.26. At the shipped 1px
+frame it reproduces the defect with the clearance at zero - 1400 of 15000
+swept positions at UI Size "Small", none of them without a container ending
+on the row's edge - and reports zero clipped positions for every shipped
+framed icon at all four scales with the clearance in place. It does not
+model quad rasterization, because that is the premise above that the field
+record contradicts.
 
 ### S1.4 Item tooltips: what the API says and what the game shows
 
@@ -3366,20 +3660,32 @@ add amounts across currencies. The numeric key is `UnitRate` rather than
 `Amount` 0 and shows its rate as bundle text ("912 for 92"), so keying on
 `Amount` would sort every such row as free and tie them all with each other.
 
-### S1.9 Session caches and timing diagnostics
+### S1.9 Learned recipe freshness and timing diagnostics
 
-`Services/CachingAccountRecipeClient.cs` is a decorator rather than a field
-inside `Gw2AccountRecipeClient` because that class holds a Blish
-`Gw2ApiManager`, and tests in this repo are Blish-free, so caching logic
-living there could never be exercised by a test. Its staleness has two
-downstream consumers, both annotations rather than solver inputs: the
-"already known" flag on required recipes
-(`PlanResultBuilder`'s `RecipeRequirement.IsMissing`), and the gate on
-`RecipeSheetSavingsCalculator`, which emits a note advising the purchase of
-a recipe sheet the account does not own, carrying a `SavingsPerUnit` coin
-figure. So a recipe learned in-game inside the TTL window not only still
-reads as missing - the plan may keep recommending, priced, the sheet that
-taught it until the window passes.
+Every plan generation fetches the account's learned recipe ids from
+`/v2/account/recipes`. There is no cache in front of that call. A five
+minute cache used to sit there and was removed in September 2026, because
+Blish HUD is an overlay on the running game: a player can buy a recipe
+sheet, learn the recipe and generate a plan again well inside five minutes.
+The learned ids drive two annotations, both of which then told the player
+to buy a sheet they already owned: the "already known" flag on required
+recipes (`PlanResultBuilder`'s `RecipeRequirement.IsMissing`), and the gate
+on `RecipeSheetSavingsCalculator`, which emits a note advising the purchase
+of a recipe sheet the account does not own, carrying a `SavingsPerUnit`
+coin figure. Neither is a solver input, so the stale answer never produced
+a wrong plan, only a wrong recommendation. The cost of the removal is one
+extra fetch per generation, measured at 1129ms and 1453ms in a tester's log
+on the day it was removed.
+
+A caller generating several plans in a row fetches once instead. The
+Crafting Ranker does: `Views/RankerTabContent.cs` calls
+`CraftingPlanPipeline.GetLearnedRecipeIdsAsync` once per refresh and passes
+the ids to the `learnedRecipeIds` parameter of every generation, which
+solves two plans for each watchlist row. Those generations make no call, so
+their `Fetch learned recipes` timing line reads about 0ms. A refresh is one
+user action, and the account cannot learn a recipe part way through it
+without the player leaving the tab. This is a per-run argument, not a clock:
+the next refresh fetches again.
 
 `Services/Diagnostics/PlanPhaseTimingSummary.cs` buckets the raw per-step
 `timingLog` lines `PlanTimingAnalyzer` already parses (Build recipe
@@ -3563,12 +3869,17 @@ calls about substitutability, which is a property the game itself decides:
 
 - A daily reset cannot be bought at any price. It is the only barrier with
   no substitute, so it takes the largest share.
-- Coin is the bulk of the work and the one gate measured exactly, by the
-  real solver at real prices. Equal claim on precision grounds; no better
-  claim than time on difficulty grounds.
-- Currencies are a real barrier measured only as within-currency ratios, so
-  each point carries less information than a coin point. Weighted below
-  materials for that reason, not because currencies matter less.
+- The bill is the bulk of the work and the gate measured most precisely, by
+  the real solver at real prices. Equal claim on precision grounds; no
+  better claim than time on difficulty grounds. It is a copper figure, so a
+  currency the plan pays enters it at the decision valuation (section 8.3)
+  and an unvalued one enters neither half.
+- The currencies gate measures something else: what the WALLET covers of
+  what the plan still needs, as within-currency ratios. The materials gate
+  measures the bill, this one measures the ability to pay it, and a row can
+  owe a large Karma cost it can already afford. Each point carries less
+  information than a coin point, which is why it is weighted below
+  materials - not because currencies matter less.
 - A discipline is a hard wall - you cannot craft at all without it - but a
   short one next to a legendary's materials bill, and usually either
   satisfied already or cheap to satisfy. Non-zero because it is real; small
@@ -3577,6 +3888,29 @@ calls about substitutability, which is a property the game itself decides:
   hard wall, but most recipes are purchasable sheets or cheap unlocks, so it
   takes the disciplines weight rather than inventing a new tier. First call,
   reviewable like the others.
+
+**Barter items are not a sixth gate - the measured size of that gap.** A
+barter item is the account-bound token a vendor takes in place of coin.
+`CraftingPlan.BarterItemCosts` holds them, `TotalCoinCost` excludes them
+because they carry no Trading Post price to fold in, and no gate scores
+them. A row that pays one is ranked as though that cost is not there.
+
+MEASURED over the shipped corpus, planning 30 legendaries and gifts through
+the real pipeline against `ref/vendor_offers.json`: 15 of the 30 pay at
+least one barter item cost, over 50 barter lines and 26 distinct items.
+Aurora pays 11 distinct items. Gift of Dedication pays 4 with no coin bill
+at all. Only 5 of the 26 items carry a curated decision value in
+`Models/BarterItemDecisionDefaults.cs`, so valuing the class into Materials
+would leave most of the bill uncounted.
+
+These counts were measured before `ref/recipes_seed.json` dropped the
+Infinite Trebuchet Blueprint chain. That root was one of the 30 and no
+longer plans, so read the figures as an upper bound until someone
+re-measures.
+
+The gap is real and undisclosed. A sixth gate was written for it and taken
+back out: the headline is five gates by decision. Anyone reopening this
+starts from these numbers rather than measuring them again.
 
 **`RankerResultCache` - why two sets.** The two comparison modes answer
 different questions about the same rows, and a row's answer under one says
@@ -3598,6 +3932,15 @@ edge is what stops a short item name being stranded far left with the
 middle of the row empty. Each header centres over its band rather than
 sharing an edge with it; `JustifiedColumnTracks` carries the argument for
 why a shared edge is not enough.
+
+**`ShoppingColumnMath` - why Amount left the track grid.** The table read
+Item, Source, Amount, Each, Total, so a player scanning a shopping list met
+the count in the middle of the row while Used Materials and the Account
+Snapshot both put it first. Amount now heads the row in the fixed band on
+its left inset that `AmountLedRowMath` owns, and three tracks carry Source,
+Each and Total over what the Item column does not need. The plan tab's own
+Shopping List and the popout are the same renderer, so the two could not
+have been changed apart.
 
 **`SnapshotHeaderLayout` - what the shared row buys and costs.** The header
 used five sparse rows to say what four can, and the widest of them - the
@@ -3901,6 +4244,70 @@ the URL off, and a cold browser start, DDE negotiation, or a "choose an app"
 prompt can stall that call for hundreds of milliseconds to seconds, freezing
 the whole overlay - scroll and relayout included - for as long as it runs.
 
+**Why the browser opens behind the game.** Windows lets a process raise a
+window to the foreground only under the conditions listed in the Remarks of
+[`SetForegroundWindow`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow):
+the calling process is the foreground process, was started by the foreground
+process, received the last input event, is being debugged, there is no
+foreground process at all, or the foreground lock time-out has expired.
+[`AllowSetForegroundWindow`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-allowsetforegroundwindow)
+passes that right to another process and is documented to fail when the
+caller does not hold it: "The function will fail if the calling process
+cannot set the foreground window."
+
+Blish HUD cannot hold it while the player is playing, for three separate
+reasons.
+
+- The overlay window is click-through and stays that way.
+  `WindowUtil.SetWindowParam` is the only `GWL_EXSTYLE` write in Blish HUD
+  and it ORs `WS_EX_TRANSPARENT` in on every call, so nothing ever clears
+  the bit. Read off the running overlay, its ex-style is `0x000900A0`
+  (`WS_EX_LAYERED | WS_EX_COMPOSITED | WS_EX_TOOLWINDOW |
+  WS_EX_TRANSPARENT`). A click-through window is never hit-tested, so a
+  click can never activate it.
+- Blish HUD never activates itself. Its only `SetForegroundWindow` call site
+  is `Gw2InstanceIntegration.FocusGw2`, which targets the Guild Wars 2
+  window, and nothing in Blish core calls it. `WindowUtil.UpdateOverlay`
+  moves the overlay in the Z order with `SetWindowPos`, which does not
+  activate, and demotes it below Guild Wars 2 whenever Guild Wars 2 is
+  active.
+- The right-click is never delivered to Blish HUD. Blish reads mouse and
+  keyboard input from `WH_MOUSE_LL` and `WH_KEYBOARD_LL` global hooks while
+  Windows routes the input itself to Guild Wars 2. Guild Wars 2 is therefore
+  both the foreground process and the process that received the last input
+  event. Focusing a Blish text box does not change this: it registers a
+  delegate and swallows keystrokes at the hook, and never activates a window.
+
+The overlay window is not barred from the foreground outright. It carries no
+`WS_EX_NOACTIVATE`, and polling `GetForegroundWindow` caught it holding the
+foreground twice while the player was switching between other applications.
+That state cannot be the one a wiki click arrives in, though.
+`InputService` enables the hooks on `Gw2AcquiredFocus` and disables them on
+`Gw2LostFocus`, so the module can only receive a right-click while Guild
+Wars 2 has focus, and while Guild Wars 2 has focus it is the foreground
+process. The two states exclude each other.
+
+That leaves the foreground lock time-out as the only condition the module
+can ever satisfy, and only while nobody is playing. Measured on the
+maintainer's machine, where `HKCU\Control Panel\Desktop\ForegroundLockTimeout`
+holds its 200000 ms default: `AllowSetForegroundWindow(ASFW_ANY)` called
+from a background process returned FALSE with `GetLastError` 5
+(`ERROR_ACCESS_DENIED`) at 0 ms, 15 ms, 281 ms and 469 ms since the last
+user input, and TRUE at 265953 ms. The grant is not dead code. It succeeds,
+and the browser does come forward, once the player has been idle longer than
+the time-out.
+
+One other Blish module does force the browser forward, using
+`AttachThreadInput` against the foreground thread followed by
+`BringWindowToTop`. This module will not do that: it hijacks the input queue
+of a process it does not own.
+
+So `WikiLinkLauncher.Launch` records which of the two cases happened and
+reports a `WikiLaunchOutcome`. `Module.DrainWikiLaunchNotice` raises a
+screen notification for `ForegroundRefused` and `Failed` only. When the grant
+succeeded the browser is already in front of the player, and a caption
+telling them so would be noise.
+
 ### S2.11 Recipe corpus refresh
 
 **`RecipeCorpusRefresher` - the case that motivates it.** Recipe 14025's
@@ -4017,6 +4424,27 @@ deleted shipped offers before, when a pass returned rows with
 `merchantsWithSkippedRows` opt-out: those merchants union instead of
 replace. A possibly-stale baseline row surviving an extra run is visible
 and fixable; a silent deletion is neither.
+
+One kind of stale row is not fixable by an extra run, though, and the
+union has to drop it: a second price for a sale this pass already
+priced. The wiki writes a vendor's coin price in gold, silver or copper,
+so a run that reads the unit differently records a different number of
+copper for the same sale. Both rows then ship and the solver buys at the
+lower one. `ComputeSameSaleKey` names a sale by its merchant, what it
+hands over, and what it charges other than coin; a protected merchant's
+baseline row goes when this pass produced a row for that sale and no row
+at that price. A baseline row this pass produced no row for is still
+kept, and so is one whose price this pass agrees with. The rule never
+collapses two rows from the same pass, so a vendor that really does sell
+one item at two prices keeps both.
+
+`merchantsWithSkippedRows` also never empties for a pass that reads the
+wiki cache rather than the wiki. `--resolve-item-currencies-only` builds
+the set from cache rows with `GameId <= 0`, and those rows are in the
+cache until a fresh scrape replaces them, so the same ~880 merchants are
+protected on every such run. Their rows are the ones that need the rule
+above; the "re-run once every row resolves a game id" advice in the
+merge's own warning only reaches merchants a live scrape can fix.
 
 ### T.5 `Program.ResolveSeasonalFestivalValuesAsync`: opt-in, budgeted, page-keyed
 
@@ -4147,3 +4575,54 @@ asserts the arithmetic instead: a partition that overflowed has more rows
 than it returned, so at least one child must hold rows. If every child
 answers with none, the partition is recorded UNRESOLVED rather than
 accepted, and the coverage gate blocks the write.
+
+### T.10 Vendor requirements: classifying free-form wiki prose
+
+Every wiki vendor row can carry a `Has requirement` value, and 9,337 of the
+70,644 scraped rows do, across 1,236 distinct strings. The property is prose
+written by editors, and it records every kind of gate the wiki knows about:
+achievements, mastery levels, expansions, festivals, renown hearts, wardrobe
+unlocks, held items. Nothing in the data marks which kind a string is, and
+the kinds are not distinguishable by shape - "Radiance of the Sun God" is an
+achievement, "Nuhoch Language" is a mastery level, and the two are the same
+sort of noun phrase.
+
+`VendorRequirementClassifier` therefore matches whole values against GW2 API
+name lists rather than parsing them. A value is classified only when, after
+one enclosing wiki link is unwrapped, the WHOLE of it is an exact API name:
+
+- an achievement name from `/v2/achievements`, or a page anchor of the form
+  `Page#achievement<id>`, which the wiki's own achievement tables emit and
+  which names the achievement's API id outright;
+- a mastery LEVEL name from `/v2/masteries` (the wiki cites the level, not
+  the track, so the track id alone would not answer the question);
+- one of the five expansion titles `/v2/account` is documented to report in
+  its `access` array.
+
+Three rules keep it from inventing an answer. A name two achievements share
+is dropped from the index rather than resolved to one of them - 193 of the
+live list's 8,230 names are shared. A value that matches two different KINDS
+is left unclassified and reported, because either answer could be the wrong
+gate. And an expansion the `access` array has no documented flag for, such
+as Visions of Eternity, stays unclassified rather than being given a flag
+derived from its title.
+
+Measured over the full scrape: 1,284 rows resolve to an achievement by name,
+115 by anchor, 965 to a mastery level, 400 to an expansion, 1 distinct value
+(5 rows) is ambiguous, and 6,568 rows carry prose nothing matches. So about
+30% of requirement rows can be checked against an account and the rest
+cannot. Every row keeps its text either way: a player who is told "this
+vendor requires Radiance of the Sun God" can act on that whether or not the
+module can verify it.
+
+The account side costs one scope. `/v2/account/achievements` and
+`/v2/account/masteries` both need `progression`; the `access` array comes
+from `/v2/account` on the `account` scope the module already requires, so an
+account that declines `progression` still gets its expansion gates checked.
+One documented quirk is coded for: an account that received Heart of Thorns
+by buying Path of Fire does not carry the `HeartOfThorns` flag, so
+`PathOfFire` satisfies a Heart of Thorns requirement.
+
+None of this changes a plan. A gated offer is selected, priced and routed
+exactly as before; the requirement is reported as a notice row beside the
+vendor purchase caps, which are handled the same way.

@@ -102,10 +102,11 @@ namespace TaimisToolbench.Services
         /// The STRICT read: a whole PersistedPlan or nothing. Returns null
         /// for null/whitespace input. Throws (does not swallow) for
         /// malformed JSON, a document too degraded to render safely (no
-        /// Result/Plan at all), a SchemaVersion mismatch (as
-        /// PlanSchemaVersionMismatchException for an older shipped version,
-        /// as InvalidDataException for an unrecorded (0) or newer-than-this-
-        /// build one - see PersistedPlan.CurrentSchemaVersion's own doc
+        /// Result/Plan at all), a SchemaVersion outside the readable range
+        /// (as PlanSchemaVersionMismatchException below it, as
+        /// InvalidDataException for an unrecorded (0), negative or
+        /// newer-than-this-build one - see
+        /// PersistedPlan.MinimumReadableSchemaVersion's own doc
         /// comment), or a
         /// structurally-valid-but-degraded object graph (round 4 review-fix,
         /// critical - see PlanStructuralValidator's own doc comment) - see
@@ -140,14 +141,13 @@ namespace TaimisToolbench.Services
                     "Persisted plan is missing Result/Plan - corrupt file.");
             }
 
-            // Drift: a recognizable plan file written by another build at a
-            // version this one actually shipped. Expected, benign, and
-            // self-healing on the next Generate, so it carries its own
-            // exception type - PlanStore.LoadLatest reports it at Info, not
-            // Warn. The check is also what makes the tolerance contract
-            // enforceable going forward: a future member rename/removal
-            // elsewhere on this graph would otherwise pass the structural
-            // check above while coming back silently defaulted.
+            // Drift: a recognizable plan file stamped BELOW the readable
+            // range - a shipped version whose shape this build can no
+            // longer be sure of. Expected, benign, and self-healing on the
+            // next Generate, so it carries its own exception type -
+            // PlanStore.LoadLatest reports it at Info, not Warn. Which
+            // versions sit inside the range, and on what evidence, is
+            // PersistedPlan.MinimumReadableSchemaVersion's own doc comment.
             //
             // Two versions are deliberately NOT drift and take the error
             // channel instead, each with its own wording:
@@ -158,22 +158,23 @@ namespace TaimisToolbench.Services
             //       version gate itself or a construction site that forgot
             //       to stamp it - a module defect whose every save is
             //       silently unrestorable. Info would bury that.
-            //   anything else - a version this build never shipped, i.e.
-            //       above current (a newer build wrote it, and this one
-            //       cannot know what is in it) or negative (only a
-            //       hand-edited file reaches that).
+            //   above current or negative - a version this build never
+            //       shipped. A newer build wrote it and this one cannot
+            //       know what is in it; only a hand-edited file is
+            //       negative.
             int observed = plan.SchemaVersion;
             int expected = PersistedPlan.CurrentSchemaVersion;
-            if (observed >= 1 && observed < expected)
+            int oldest = PersistedPlan.MinimumReadableSchemaVersion;
+            if (observed >= 1 && observed < oldest)
             {
-                throw new PlanSchemaVersionMismatchException(observed, expected);
+                throw new PlanSchemaVersionMismatchException(observed, oldest, expected);
             }
 
-            if (observed != expected)
+            if (observed < 1 || observed > expected)
             {
                 throw new InvalidDataException(observed == 0
-                    ? $"Persisted plan records no schema version at all, this build expects {expected} - it predates the version gate, or whatever wrote it never set PersistedPlan.SchemaVersion."
-                    : $"Persisted plan is schema {observed}, which this build ({expected}) never shipped - written by a newer build, or the field was damaged.");
+                    ? $"Persisted plan records no schema version at all, this build reads {oldest} to {expected} - it predates the version gate, or whatever wrote it never set PersistedPlan.SchemaVersion."
+                    : $"Persisted plan is schema {observed}, which this build ({oldest} to {expected}) never shipped - written by a newer build, or the field was damaged.");
             }
 
             // a single, class-level walk of
@@ -342,26 +343,28 @@ namespace TaimisToolbench.Services
     }
 
     /// <summary>
-    /// A recognizable plan file written by a build at an OLDER shipped
-    /// PersistedPlan.CurrentSchemaVersion (an unrecorded or newer version is
-    /// not this, and does not come here - see the throw site's own comment
-    /// in DeserializePersistedPlan). Kept distinct from the plain
+    /// A recognizable plan file written by a build at a shipped
+    /// PersistedPlan.SchemaVersion BELOW
+    /// PersistedPlan.MinimumReadableSchemaVersion (an unrecorded, negative
+    /// or newer version is not this, and does not come here - see the throw
+    /// site's own comment in DeserializePersistedPlan). Kept distinct from the plain
     /// InvalidDataException the corrupt/degraded paths throw so the ONE
     /// caller that can tell a user anything - PlanStore.LoadLatest - can
     /// report it as the routine, self-healing event it is (Info, no
-    /// "corrupt") rather than as damage. The message stops at the two
-    /// versions and states no outcome: what survives the rejection is the
-    /// caller's to know (PlanStore.ReportDiscardedResult appends it). Derives straight from Exception
-    /// only because InvalidDataException is sealed on .NET Framework; every
-    /// other handler on this path is a catch-all, so it still degrades to
-    /// the same null + one log line. The message names both versions,
-    /// which is what the 2026-08-23 incident had to reconstruct from commit
-    /// timestamps.
+    /// "corrupt") rather than as damage. The message names the observed
+    /// version and the whole readable range, which is what the 2026-08-23
+    /// incident had to reconstruct from commit timestamps, and it states no
+    /// outcome: what survives the rejection is the caller's to know
+    /// (PlanStore.ReportDiscardedResult appends it). Derives straight from
+    /// Exception only because InvalidDataException is sealed on .NET
+    /// Framework; every other handler on this path is a catch-all, so it
+    /// still degrades to the same null + one log line.
     /// </summary>
     internal sealed class PlanSchemaVersionMismatchException : Exception
     {
-        internal PlanSchemaVersionMismatchException(int observedVersion, int expectedVersion)
-            : base($"Saved plan file is schema {observedVersion}, this build expects {expectedVersion}.")
+        internal PlanSchemaVersionMismatchException(
+            int observedVersion, int oldestReadableVersion, int currentVersion)
+            : base($"Saved plan file is schema {observedVersion}, this build reads {oldestReadableVersion} to {currentVersion}.")
         {
         }
     }

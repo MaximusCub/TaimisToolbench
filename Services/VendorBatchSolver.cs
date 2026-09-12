@@ -50,6 +50,11 @@ namespace TaimisToolbench.Services
             // comparison decides VendorBatchState.Conflict, which decides
             // whether a merged step's coin total is re-derived at all, so
             // widening it would move reported coin totals.
+            // What the offer's vendor demands of the account, carried
+            // beside the unlock gate above and treated the same way: never
+            // read by the solve, only reported.
+            public VendorRequirement Requirement;
+
             public int? UnlockRecipeItemId;
 
             public int? UnlockRecipeId;
@@ -671,6 +676,7 @@ namespace TaimisToolbench.Services
                                 SeasonalCap = offer.SeasonalCap,
                                 UnlockRecipeItemId = offer.UnlockRecipeItemId,
                                 UnlockRecipeId = offer.UnlockRecipeId,
+                                Requirement = offer.Requirement,
                             };
                         }
 
@@ -734,6 +740,7 @@ namespace TaimisToolbench.Services
                         SeasonalCap = offer.SeasonalCap,
                         UnlockRecipeItemId = offer.UnlockRecipeItemId,
                         UnlockRecipeId = offer.UnlockRecipeId,
+                        Requirement = offer.Requirement,
                     };
                 }
             }
@@ -959,6 +966,7 @@ namespace TaimisToolbench.Services
                     step.VendorOfferCurrencyCostLinesPerBatch = batch.CurrencyCostLinesPerBatch;
                     step.VendorUnlockRecipeItemId = batch.UnlockRecipeItemId;
                     step.VendorUnlockRecipeId = batch.UnlockRecipeId;
+                    step.VendorRequirement = batch.Requirement;
 
                     int? cap = batch.DailyCap.HasValue && batch.DailyCap.Value > 0
                         ? batch.DailyCap

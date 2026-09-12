@@ -63,9 +63,9 @@ namespace TaimisToolbench.Services.Recipes
 
                 foreach (int recipeId in rows)
                 {
-                    // Negative ids are the hand-authored Mystic Forge and
-                    // achievement rows; the live API has no such recipe
-                    // and the sweep never asks for one.
+                    // Negative ids are the Mystic Forge rows; the live
+                    // API has no such recipe and the sweep never asks for
+                    // one.
                     if (recipeId <= 0 || !seenRecipes.Add(recipeId))
                     {
                         continue;

@@ -95,7 +95,7 @@ namespace TaimisToolbench.Views.Rendering
 
     /// <summary>
     /// What colour an item icon's frame is, and WHY - the parameter
-    /// IconControls.CreateItemIcon takes instead of a bare rarity string.
+    /// IconControls.DrawItemIcon takes instead of a bare rarity string.
     ///
     /// <para>
     /// A string parameter cannot tell "this row has no rarity" apart from

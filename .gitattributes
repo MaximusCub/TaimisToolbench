@@ -10,7 +10,7 @@ ref/*.json -text -diff -merge linguist-generated=true
 
 # ...except the files under ref/ a human writes and a reviewer has to read:
 # the provenance manifests, the hand-curated vendor exclusions (each row
-# carries its own evidence), and the hand-maintained hint/cooldown/sheet
+# carries its own evidence), and the hand-maintained hint and cooldown
 # lists. These are small, and making them unreadable would defeat the point.
 # eol=lf rather than text=auto on the manifests specifically: Program.cs's
 # SerializeManifest forces LF, and VendorOfferManifestTests compares the
@@ -22,7 +22,6 @@ ref/*_manifest.json text eol=lf diff merge -linguist-generated
 ref/vendor_offer_exclusions.json text=auto diff merge -linguist-generated
 ref/acquisition_hints_seed.json text=auto diff merge -linguist-generated
 ref/daily_cooldown_items.json text=auto diff merge -linguist-generated
-ref/recipe_sheet_items.json text=auto diff merge -linguist-generated
 
 # ...and the three large seeds that are pretty-printed rather than minified.
 # The glob above assumes seeder output is one opaque line, which is true of
@@ -41,3 +40,11 @@ ref/recipe_sheet_items.json text=auto diff merge -linguist-generated
 ref/mystic_forge_recipes.json text eol=lf diff merge -linguist-generated
 ref/recipe_search_seed.json text eol=lf diff merge linguist-generated=true
 ref/recipes_seed.json text eol=lf diff merge linguist-generated=true
+
+# ref/recipe_sheet_items.json was hand-maintained and listed above until
+# tools/VendorOfferUpdater --build-recipe-sheet-map started generating it.
+# It is now 1,788 pretty-printed entries over 18,425 lines, which no
+# reviewer reads, so it collapses in a pull request view like the other two
+# generated seeds. diff and merge stay on because it is still line-oriented
+# text. eol=lf because RecipeSheetMapBuilder.Serialize forces LF.
+ref/recipe_sheet_items.json text eol=lf diff merge linguist-generated=true

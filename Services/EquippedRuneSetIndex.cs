@@ -96,9 +96,32 @@ namespace TaimisToolbench.Services
         /// </summary>
         public int WornCopies(int hostItemId, int runeItemId)
         {
+            return WornCopiesOf(EquippedBy(hostItemId), runeItemId);
+        }
+
+        /// <summary>
+        /// The one character wearing every stack of
+        /// <paramref name="hostItemId"/>, or null when the id sits
+        /// anywhere else or in more than one place. Null is "not knowable",
+        /// and a caller that passes it on gets no count rather than a wrong
+        /// one.
+        /// </summary>
+        public string EquippedBy(int hostItemId)
+        {
+            return _soleEquipmentSource.TryGetValue(hostItemId, out string source) ? source : null;
+        }
+
+        /// <summary>
+        /// How many pieces the NAMED character wears carrying
+        /// <paramref name="runeItemId"/>. The character is the caller's to
+        /// supply, so a surface that knows who has the item equipped gets a
+        /// count and one that does not gets 0.
+        /// </summary>
+        public int WornCopiesOf(string equippedBy, int runeItemId)
+        {
             if (runeItemId <= 0
-                || !_soleEquipmentSource.TryGetValue(hostItemId, out string source)
-                || !_wornCounts.TryGetValue(source, out var counts))
+                || string.IsNullOrEmpty(equippedBy)
+                || !_wornCounts.TryGetValue(equippedBy, out var counts))
             {
                 return 0;
             }

@@ -104,6 +104,8 @@ namespace TaimisToolbench.Services.Recipes
             IReadOnlyCollection<int> priorityRecipeIds,
             CancellationToken ct)
         {
+            Gw2ApiConnectionLimit.Apply();
+
             // An empty corpus is not a refreshed one: stamping it complete
             // here would suppress the sweep for the whole patch cycle if
             // the seed failed to load.

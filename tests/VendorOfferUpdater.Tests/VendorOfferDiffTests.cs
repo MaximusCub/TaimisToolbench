@@ -20,10 +20,12 @@ namespace VendorOfferUpdater.Tests
             int coinCost,
             int outputCount = 1,
             string festival = null,
-            int? weeklyCap = null)
+            int? weeklyCap = null,
+            VendorRequirement requirement = null)
         {
             var offer = new VendorOffer
             {
+                Requirement = requirement,
                 OutputItemId = itemId,
                 OutputCount = outputCount,
                 MerchantName = merchant,
@@ -136,7 +138,9 @@ namespace VendorOfferUpdater.Tests
             Assert.Empty(result.Added);
             Assert.Empty(result.Removed);
             Assert.Empty(result.Repriced);
-            Assert.Contains("festival (none) -> Wintersday",
+            Assert.Contains("festival (none), requirement (none)",
+                VendorOfferDiff.Format(result, "old", "new"));
+            Assert.Contains("festival Wintersday, requirement (none)",
                 VendorOfferDiff.Format(result, "old", "new"));
         }
 
@@ -260,7 +264,43 @@ namespace VendorOfferUpdater.Tests
             Assert.Single(result.Retagged);
             Assert.Empty(result.Repriced);
             Assert.False(result.IsEmpty);
-            Assert.Contains("festival Wintersday -> (none)",
+            Assert.Contains("festival Wintersday, requirement (none)",
+                VendorOfferDiff.Format(result, "old", "new"));
+            Assert.Contains("-> festival (none), requirement (none)",
+                VendorOfferDiff.Format(result, "old", "new"));
+        }
+
+        /// <summary>
+        /// A requirement is outside the hash exactly as the festival tag is,
+        /// so back-filling one onto a shipped row changes no offerId. Without
+        /// TagKey covering it, the whole back-fill would appear in the report
+        /// as nothing at all.
+        /// </summary>
+        [Fact]
+        public void RequirementBackFill_KeepsTheIdAndIsReportedAsARetag()
+        {
+            var before = new List<VendorOffer> { Offer(1, "Miyani", 100) };
+            var after = new List<VendorOffer>
+            {
+                Offer(
+                    1, "Miyani", 100,
+                    requirement: new VendorRequirement
+                    {
+                        Text = "Nuhoch Language",
+                        MasteryId = 3,
+                        MasteryLevel = 2,
+                    }),
+            };
+
+            Assert.Equal(before[0].OfferId, after[0].OfferId);
+
+            var result = VendorOfferDiff.Compute(before, after);
+
+            Assert.Single(result.Retagged);
+            Assert.Empty(result.Repriced);
+            Assert.Contains("requirement Nuhoch Language",
+                VendorOfferDiff.Format(result, "old", "new"));
+            Assert.Contains("mastery 3/2",
                 VendorOfferDiff.Format(result, "old", "new"));
         }
 

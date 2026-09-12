@@ -56,7 +56,6 @@ namespace TaimisToolbench.Tests.Services
                 OutputCount = outputCount,
                 CostLines = costLines,
                 MerchantName = "Barter Vendor",
-                Locations = new List<string>(),
             };
         }
 
@@ -161,7 +160,6 @@ namespace TaimisToolbench.Tests.Services
                         new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = 40 },
                     },
                     MerchantName = "Coin Vendor",
-                    Locations = new List<string>(),
                 });
             var solver = new PlanSolver();
 
@@ -263,7 +261,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Item", Id = SecondBarterTokenItemId, Count = 1 },
                 },
                 MerchantName = "Barter Vendor",
-                Locations = new List<string>(),
             };
             var valuation = new CurrencyValuation(
                 null, null, new Dictionary<int, long> { { BarterTokenItemId, 40 } });
@@ -386,7 +383,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Currency", Id = BarterTokenItemId, Count = 1 },
                 },
                 MerchantName = "Currency Vendor",
-                Locations = new List<string>(),
             };
             var solver = new PlanSolver();
 
@@ -420,7 +416,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = 500 },
                 },
                 MerchantName = "Coin Vendor",
-                Locations = new List<string>(),
             };
             var solver = new PlanSolver();
 

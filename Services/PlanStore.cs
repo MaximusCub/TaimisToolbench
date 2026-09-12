@@ -15,10 +15,10 @@ namespace TaimisToolbench.Services
     /// Contract a caller can violate: a MISSING file is silent (a fresh
     /// start with no plan is the ordinary first-run case). An UNREADABLE
     /// one never is, and its two verdicts carry two severities - a corrupt
-    /// or unparseable file goes to onError at Warn, a file written at an
-    /// older SHIPPED schema version to onInfo at Info. A caller wiring one
-    /// and not the other silently drops half the story. Both verdicts cost
-    /// the RESULT and keep the REQUEST, so LoadLatest returns a
+    /// or unparseable file goes to onError at Warn, a file stamped below
+    /// PersistedPlan.MinimumReadableSchemaVersion to onInfo at Info. A
+    /// caller wiring one and not the other silently drops half the story.
+    /// Both verdicts cost the RESULT and keep the REQUEST, so LoadLatest returns a
     /// PersistedPlanLoad rather than a plan; null means only "nothing to
     /// restore". Save takes an internal lock because it has two genuinely
     /// independent callers - see the field's own comment.

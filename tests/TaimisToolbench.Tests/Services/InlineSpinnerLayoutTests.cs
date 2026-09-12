@@ -83,5 +83,59 @@ namespace TaimisToolbench.Tests.Services
                 InlineSpinnerLayout.SnapshotStatusSize <= SnapshotHeaderLayout.StatusRowHeight,
                 "Snapshot-tab spinner must fit inside the status panel it sits in.");
         }
+
+        [Fact]
+        public void LabelWidthForText_TakesTheTextWidthNotTheBudget()
+        {
+            Assert.Equal(120, InlineSpinnerLayout.LabelWidthForText(textWidth: 120, budget: 400));
+        }
+
+        [Fact]
+        public void SpinnerSitsBesideTheTextRatherThanAtTheEndOfTheBudget()
+        {
+            // The Ranker toolbar reserved 400 pixels for a status line that
+            // measured 120. Sizing the label to the reserve seated the
+            // spinner 280 pixels right of the text it belongs to.
+            const int budget = 400;
+            const int textWidth = 120;
+
+            var stranded = InlineSpinnerLayout.Place(
+                labelX: 0, labelY: 8, labelWidth: budget, labelHeight: 19,
+                spinnerSize: InlineSpinnerLayout.SnapshotStatusSize,
+                gap: InlineSpinnerLayout.LabelGap);
+
+            int seated = InlineSpinnerLayout.LabelWidthForText(textWidth, budget);
+            var beside = InlineSpinnerLayout.Place(
+                0, 8, seated, 19,
+                InlineSpinnerLayout.SnapshotStatusSize, InlineSpinnerLayout.LabelGap);
+
+            Assert.Equal(textWidth + InlineSpinnerLayout.LabelGap, beside.X);
+            Assert.Equal(280, stranded.X - beside.X);
+        }
+
+        [Fact]
+        public void LabelWidthForText_CapsAtTheBudgetSoTheSpinnerStaysInItsBand()
+        {
+            // Ellipsizing measures the shortened string; rounding can put
+            // it a pixel past the budget the band reserved for it.
+            Assert.Equal(400, InlineSpinnerLayout.LabelWidthForText(textWidth: 401, budget: 400));
+        }
+
+        [Fact]
+        public void LabelWidthForText_TreatsNegativeInputsAsZero()
+        {
+            Assert.Equal(0, InlineSpinnerLayout.LabelWidthForText(textWidth: 40, budget: -1));
+            Assert.Equal(0, InlineSpinnerLayout.LabelWidthForText(textWidth: -1, budget: 400));
+        }
+
+        [Fact]
+        public void RankerAndSnapshotDrawTheSameSizeSpinner()
+        {
+            // The Ranker's spinner reads small next to the Snapshot tab's
+            // only because it was stranded alone at the right hand end.
+            // Both tabs build one at this constant, so seating it correctly
+            // changes no size.
+            Assert.Equal(22, InlineSpinnerLayout.SnapshotStatusSize);
+        }
     }
 }

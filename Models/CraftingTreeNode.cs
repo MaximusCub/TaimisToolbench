@@ -125,8 +125,9 @@ namespace TaimisToolbench.Models
         // DecisionPillPlanner offers no IGNORE toggle here.
         // Internal, not public: Newtonsoft's default contract serializes
         // public properties only, so this stays out of the persisted graph
-        // and needs no PersistedPlan schema bump (a bump discards every
-        // existing user's saved plan). PlanStoreHelpers re-derives it on
+        // and needs no PersistedPlan schema bump (a bump costs a saved
+        // result whenever PersistedPlan.MinimumReadableSchemaVersion has
+        // to move with it). PlanStoreHelpers re-derives it on
         // restore - see DeserializePersistedPlan.
         internal bool IsPlanRoot { get; set; }
 

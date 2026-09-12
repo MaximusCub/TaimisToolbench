@@ -33,6 +33,11 @@ namespace TaimisToolbench.Services
     /// carried while it was four fixed checkboxes. Blish-free by
     /// construction: callers measure their own label widths and apply the
     /// returned offsets (see Views/MainView.cs).
+    /// <para>
+    /// The tab shows two filter sets, locations and characters.
+    /// <see cref="LayoutGroups"/> starts each set on a row of its own, which
+    /// is what makes the two read as separate sets at every width.
+    /// </para>
     /// </summary>
     internal static class SourceFilterFlowLayout
     {
@@ -62,7 +67,76 @@ namespace TaimisToolbench.Services
 
             int x = 0;
             int rowIndex = 0;
+            PlaceRun(result, cellWidths, availableWidth, height, gapX, gapY, ref x, ref rowIndex);
+            Finish(result, rowIndex, height, gapY);
+            return result;
+        }
 
+        /// <summary>
+        /// The same placement, run over several groups of cells, with every
+        /// group after the first starting on a fresh row. Cells come back
+        /// flattened in group order, so a caller reads them off against its
+        /// own controls in the order it passed them. An empty group takes no
+        /// row. A null group list returns an empty result.
+        /// </summary>
+        public static SourceFilterFlowResult LayoutGroups(
+            IReadOnlyList<IReadOnlyList<int>> groups,
+            int availableWidth,
+            int cellHeight,
+            int horizontalGap,
+            int verticalGap)
+        {
+            var result = new SourceFilterFlowResult();
+
+            if (groups == null || groups.Count == 0)
+            {
+                return result;
+            }
+
+            int height = cellHeight > 0 ? cellHeight : 0;
+            int gapX = horizontalGap > 0 ? horizontalGap : 0;
+            int gapY = verticalGap > 0 ? verticalGap : 0;
+
+            int x = 0;
+            int rowIndex = 0;
+            bool anyPlaced = false;
+
+            foreach (var group in groups)
+            {
+                if (group == null || group.Count == 0)
+                {
+                    continue;
+                }
+
+                if (anyPlaced)
+                {
+                    rowIndex++;
+                    x = 0;
+                }
+
+                PlaceRun(result, group, availableWidth, height, gapX, gapY, ref x, ref rowIndex);
+                anyPlaced = true;
+            }
+
+            if (!anyPlaced)
+            {
+                return result;
+            }
+
+            Finish(result, rowIndex, height, gapY);
+            return result;
+        }
+
+        private static void PlaceRun(
+            SourceFilterFlowResult result,
+            IReadOnlyList<int> cellWidths,
+            int availableWidth,
+            int height,
+            int gapX,
+            int gapY,
+            ref int x,
+            ref int rowIndex)
+        {
             foreach (int rawWidth in cellWidths)
             {
                 int width = rawWidth > 0 ? rawWidth : 0;
@@ -76,10 +150,13 @@ namespace TaimisToolbench.Services
                 result.Cells.Add(new FlowCellPlacement { X = x, Y = rowIndex * (height + gapY) });
                 x += width + gapX;
             }
+        }
 
-            result.RowCount = rowIndex + 1;
-            result.TotalHeight = (result.RowCount * height) + (rowIndex * gapY);
-            return result;
+        private static void Finish(
+            SourceFilterFlowResult result, int lastRowIndex, int height, int gapY)
+        {
+            result.RowCount = lastRowIndex + 1;
+            result.TotalHeight = (result.RowCount * height) + (lastRowIndex * gapY);
         }
     }
 }

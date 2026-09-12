@@ -73,6 +73,7 @@ namespace VendorOfferUpdater
             int maxSeasonalPages = 500;
             string? diffSummaryBefore = null;
             string? diffSummaryAfter = null;
+            bool buildRecipeSheetMap = false;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -141,6 +142,10 @@ namespace VendorOfferUpdater
                 {
                     recheckMisses = true;
                 }
+                else if (args[i] == "--build-recipe-sheet-map")
+                {
+                    buildRecipeSheetMap = true;
+                }
                 else if (args[i] == "--tag-seasonal-festivals")
                 {
                     tagSeasonalFestivals = true;
@@ -174,6 +179,21 @@ namespace VendorOfferUpdater
             if (diffSummaryBefore != null && diffSummaryAfter != null)
             {
                 return await RunDiffSummaryAsync(diffSummaryBefore, diffSummaryAfter);
+            }
+
+            // --build-recipe-sheet-map reads ref/vendor_offers.json and the
+            // GW2 item endpoint, and writes only ref/recipe_sheet_items.json.
+            // It short-circuits here for the same reason --diff-summary does:
+            // it touches no wiki page, so none of the scrape setup below
+            // applies to it.
+            if (buildRecipeSheetMap)
+            {
+                using var itemHttpClient = new HttpClient();
+                itemHttpClient.DefaultRequestHeaders.UserAgent.ParseAdd(
+                    "TaimisToolbench-VendorOfferUpdater/1.0 " +
+                    "(+https://github.com/MaximusCub/TaimisToolbench)");
+                return await RecipeSheetMapBuilder.RunAsync(
+                    FindRepoRoot(), itemHttpClient, delayMs, allowCoverageDrop, ct);
             }
 
             if (maxAttempts <= 0)
@@ -415,6 +435,13 @@ namespace VendorOfferUpdater
                     Console.WriteLine();
                 }
 
+                // Step 3.6: Load the GW2 API name lists that decide which
+                // kind of gate each row's "Has requirement" text names.
+                var requirementNames =
+                    await VendorRequirementNameLoader.LoadAsync(httpClient, ct);
+                ReportAmbiguousRequirements(wikiResults, requirementNames);
+                Console.WriteLine();
+
                 // Step 4: Convert to VendorOffers
                 Console.WriteLine("Converting to vendor offers...");
                 var offers = new List<VendorOffer>();
@@ -444,7 +471,7 @@ namespace VendorOfferUpdater
                     }
 
                     var offer = ConvertToOffer(
-                        result, apiHelper, itemIdMap, unlockRecipeIdByItemId);
+                        result, apiHelper, itemIdMap, unlockRecipeIdByItemId, requirementNames);
                     if (offer != null)
                     {
                         offers.Add(offer);
@@ -459,12 +486,7 @@ namespace VendorOfferUpdater
                     $"  Converted: {offers.Count} offers " +
                     $"(skipped: {skippedNoId} no game ID, {skippedUnresolved} unresolved cost)");
 
-                // Deduplicate by OfferId
-                var uniqueOffers = offers
-                    .GroupBy(o => o.OfferId)
-                    .Select(g => g.First())
-                    .OrderBy(o => o.OfferId, StringComparer.Ordinal)
-                    .ToList();
+                var uniqueOffers = DeduplicateByOfferId(offers);
 
                 Console.WriteLine($"  Unique offers: {uniqueOffers.Count}");
                 Console.WriteLine();
@@ -839,14 +861,14 @@ namespace VendorOfferUpdater
         /// least one GameId&lt;=0 row this pass, built before the GameId
         /// filter runs) opts a merchant OUT of that replacement: its baseline
         /// offers are unioned with the fresh ones, deduplicated by OfferId
-        /// with fresh preferred - a losing row's SeasonalFestival tag is
-        /// carried onto an untagged winner - plus a content-key pass
-        /// (ComputeContentKey) for rows predating a hash-format change. Why
-        /// replacing there is unsafe: docs/ARCHITECTURE.md section T.4.
+        /// with fresh preferred, plus a content-key pass (ComputeContentKey)
+        /// for rows predating a hash-format change. Why replacing there is
+        /// unsafe: docs/ARCHITECTURE.md section T.4.
         ///
-        /// NOTE (non-purity): assigns onto SeasonalFestival/OfferId of rows in
-        /// the caller's own <paramref name="fresh"/>/<paramref name="baseline"/>
-        /// lists rather than cloning, so a caller's own reference sees it.
+        /// Every seat that discards one of two rows for the same sale first
+        /// calls <see cref="CarryForwardUnhashedFields"/>. That method and
+        /// the OfferId migration below both assign onto rows in the caller's
+        /// own lists rather than cloning, so a caller's reference sees it.
         /// </summary>
         // internal for testability (VendorOfferUpdater.Tests)
         internal static BaselineMergeResult MergeIntoBaseline(
@@ -872,31 +894,39 @@ namespace VendorOfferUpdater
                 .ToList();
             var merchantsReplacedSet = new HashSet<string>(merchantsReplaced, StringComparer.Ordinal);
 
-            // An ORDINARY (non-protected) replaced merchant's
-            // baseline rows are about to be dropped entirely by `kept`
-            // below, before the fresh/kept GroupBy tag-carry-forward logic
-            // further down ever runs - that logic only ever sees a
-            // baseline row for PROTECTED merchants. Without this, a
-            // transiently failed fetch loses a previously-shipped tag for
-            // every ordinary merchant. Harvest each replaced merchant's
-            // tagged baseline rows into a lookup BEFORE `kept` drops them,
-            // keyed by both OfferId and ComputeContentKey - a
-            // VendorOfferHasher hash-format migration can leave either as
-            // the only field still matching between the baseline and fresh
-            // copies of the same offer (see the protected-merchant
-            // content-key dedupe pass further below for the same
-            // reasoning) - then apply the harvested tag onto that
-            // merchant's fresh rows that have no tag of their own. A fresh
-            // row that already carries its own (possibly different) tag is
-            // never overwritten - fresh always wins when both sides are
-            // tagged.
+            // An ORDINARY (non-protected) replaced merchant's baseline rows
+            // are about to be dropped entirely by `kept` below, before the
+            // fresh/kept GroupBy carry-forward further down ever runs - that
+            // logic only ever sees a baseline row for PROTECTED merchants.
+            // Without this, a transiently failed fetch loses a
+            // previously-shipped unhashed field for every ordinary merchant.
+            // Harvest each such baseline row into a lookup BEFORE `kept`
+            // drops them, keyed by OfferId, ComputeContentKey and
+            // ComputeSameSaleKey - a VendorOfferHasher hash-format migration
+            // can leave any one of the three as the only key still matching
+            // between the baseline and fresh copies of the same offer.
+            // CarryForwardUnhashedFields then decides what moves: fresh wins
+            // every field it already carries.
             if (merchantsReplacedSet.Count > 0)
             {
-                var replacedTagsByOfferId = new Dictionary<string, string>(StringComparer.Ordinal);
-                var replacedTagsByContentKey = new Dictionary<string, string>(StringComparer.Ordinal);
+                var replacedByOfferId = new Dictionary<string, VendorOffer>(StringComparer.Ordinal);
+                var replacedByContentKey = new Dictionary<string, VendorOffer>(StringComparer.Ordinal);
+
+                // Both keys above carry the coin count, so a run that
+                // corrects a sale's coin price matches on neither and the
+                // row is lost. ComputeSameSaleKey leaves the price out.
+                var replacedBySaleKey = new Dictionary<string, VendorOffer>(StringComparer.Ordinal);
+
+                // A sale key a SECOND row shares names no single row, so it
+                // is dropped rather than resolved to one of them. Several
+                // merchants sell one item twice - full price, and cheaper to
+                // an account that already owns the thing - and the two rows
+                // share a sale key because it deliberately leaves the price
+                // out. See AmbiguousSaleKeys.
+                var ambiguousSaleKeys = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var o in baseline)
                 {
-                    if (o.SeasonalFestival == null)
+                    if (!CarriesUnhashedFields(o))
                     {
                         continue;
                     }
@@ -908,35 +938,53 @@ namespace VendorOfferUpdater
 
                     if (o.OfferId != null)
                     {
-                        replacedTagsByOfferId[o.OfferId] = o.SeasonalFestival;
+                        replacedByOfferId[o.OfferId] = o;
                     }
 
-                    replacedTagsByContentKey[ComputeContentKey(o)] = o.SeasonalFestival;
+                    replacedByContentKey[ComputeContentKey(o)] = o;
+
+                    string saleKey = ComputeSameSaleKey(o);
+                    if (!replacedBySaleKey.ContainsKey(saleKey))
+                    {
+                        replacedBySaleKey[saleKey] = o;
+                    }
+                    else
+                    {
+                        ambiguousSaleKeys.Add(saleKey);
+                    }
                 }
 
-                if (replacedTagsByOfferId.Count > 0 || replacedTagsByContentKey.Count > 0)
+                ambiguousSaleKeys.UnionWith(
+                    AmbiguousSaleKeys(fresh, merchantsReplacedSet));
+                foreach (string saleKey in ambiguousSaleKeys)
+                {
+                    replacedBySaleKey.Remove(saleKey);
+                }
+
+                if (replacedByOfferId.Count > 0 || replacedByContentKey.Count > 0
+                    || replacedBySaleKey.Count > 0)
                 {
                     foreach (var o in fresh)
                     {
-                        if (o.SeasonalFestival != null)
-                        {
-                            continue;
-                        }
-
                         if (!merchantsReplacedSet.Contains(o.MerchantName ?? string.Empty))
                         {
                             continue;
                         }
 
                         if (o.OfferId != null
-                            && replacedTagsByOfferId.TryGetValue(o.OfferId, out var tagById))
+                            && replacedByOfferId.TryGetValue(o.OfferId, out var byId))
                         {
-                            o.SeasonalFestival = tagById;
+                            CarryForwardUnhashedFields(o, byId);
                         }
-                        else if (replacedTagsByContentKey.TryGetValue(
-                            ComputeContentKey(o), out var tagByContent))
+                        else if (replacedByContentKey.TryGetValue(
+                            ComputeContentKey(o), out var byContent))
                         {
-                            o.SeasonalFestival = tagByContent;
+                            CarryForwardUnhashedFields(o, byContent);
+                        }
+                        else if (replacedBySaleKey.TryGetValue(
+                            ComputeSameSaleKey(o), out var bySale))
+                        {
+                            CarryForwardUnhashedFields(o, bySale);
                         }
                     }
                 }
@@ -947,40 +995,27 @@ namespace VendorOfferUpdater
                 .ToList();
             int removed = baseline.Count - kept.Count;
 
-            //
             // fresh must come FIRST in the concat so an OfferId collision
             // resolves to the FRESH row via GroupBy(...).Select(g =>
             // g.First()) below. The old kept.Concat(fresh) order let the
-            // BASELINE row win every collision - for a protected merchant
-            // (kept includes its baseline rows; SeasonalFestival is
-            // deliberately NOT hashed by VendorOfferHasher, so a row whose
-            // content is otherwise unchanged collides on OfferId) this
-            // silently discarded the freshly-derived SeasonalFestival tag,
-            // i.e. exactly the merchants the protected-merchant guard
-            // exists to preserve data for kept shipping untagged.
-            // This pass used to just take
-            // g.First() unconditionally, so a FRESH row with no
-            // SeasonalFestival (e.g. one whose page's wikitext fetch
-            // missed this run - see ResolveSeasonalFestivalValuesAsync's
-            // null-wikitext handling) silently deleted a shipped, tagged
-            // baseline row on an OfferId collision - the exact opposite of
-            // the content-key pass below, which already prefers whichever
-            // side carries the tag. Same rule now applies here: keep the
-            // winning row (fresh, if present in the group, for freshness
-            // of everything else), but carry a losing sibling's tag
-            // forward if the winner itself has none.
+            // BASELINE row win every collision, which discarded whatever
+            // this pass had freshly derived.
+            //
+            // A collision is possible at all because an unhashed field is
+            // not part of the id: two rows identical everywhere else but
+            // differing in one still land in the same group. So the winner
+            // takes the freshness of everything the hash covers, and
+            // CarryForwardUnhashedFields takes each losing sibling's
+            // unhashed fields for anything the winner lacks. Whichever side
+            // holds a field, it survives the group.
             var merged = fresh.Concat(kept)
                 .GroupBy(o => o.OfferId, StringComparer.Ordinal)
                 .Select(g =>
                 {
                     var winner = g.First();
-                    if (winner.SeasonalFestival == null)
+                    foreach (var sibling in g)
                     {
-                        var taggedSibling = g.FirstOrDefault(o => o.SeasonalFestival != null);
-                        if (taggedSibling != null)
-                        {
-                            winner.SeasonalFestival = taggedSibling.SeasonalFestival;
-                        }
+                        CarryForwardUnhashedFields(winner, sibling);
                     }
 
                     return winner;
@@ -1029,6 +1064,11 @@ namespace VendorOfferUpdater
                     string contentKey = ComputeContentKey(offer);
                     if (byContentKey.TryGetValue(contentKey, out var survivor))
                     {
+                        // Which row survives is decided on the festival tag
+                        // alone, as it always was. The unhashed fields move
+                        // onto whichever one that is, so a row carrying the
+                        // tag and a row carrying the unlock gate no longer
+                        // cost each other their data.
                         if (survivor.SeasonalFestival == null && offer.SeasonalFestival != null)
                         {
                             if (offer.OfferId != null && survivor.OfferId != null
@@ -1038,7 +1078,12 @@ namespace VendorOfferUpdater
                                 offer.OfferId = survivor.OfferId;
                             }
 
+                            CarryForwardUnhashedFields(offer, survivor);
                             byContentKey[contentKey] = offer;
+                        }
+                        else
+                        {
+                            CarryForwardUnhashedFields(survivor, offer);
                         }
                     }
                     else
@@ -1049,6 +1094,66 @@ namespace VendorOfferUpdater
 
                 result.AddRange(byContentKey.Values);
                 merged = result;
+
+                // The wiki writes a coin price in gold, silver or copper,
+                // so a run that reads the unit differently records a
+                // different number of copper for the same sale
+                // (ComputeSameSaleKey). Both rows then ship and the solver
+                // buys at the cheaper of them. This pass's price wins: a
+                // protected merchant's baseline row goes when this pass
+                // produced a row for the same sale and no row at that
+                // price, after its festival tag is carried across. A
+                // baseline row this pass produced no row for is kept, and
+                // so is one whose price this pass agrees with - those are
+                // the cases the protected-merchant guard exists for.
+                var freshBySaleKey =
+                    new Dictionary<string, List<VendorOffer>>(StringComparer.Ordinal);
+                foreach (var o in fresh)
+                {
+                    if (!protectedSet.Contains(o.MerchantName ?? string.Empty))
+                    {
+                        continue;
+                    }
+
+                    string saleKey = ComputeSameSaleKey(o);
+                    if (!freshBySaleKey.TryGetValue(saleKey, out var sameSale))
+                    {
+                        sameSale = new List<VendorOffer>();
+                        freshBySaleKey[saleKey] = sameSale;
+                    }
+
+                    sameSale.Add(o);
+                }
+
+                if (freshBySaleKey.Count > 0)
+                {
+                    var deduped = new List<VendorOffer>(merged.Count);
+                    foreach (var offer in merged)
+                    {
+                        List<VendorOffer>? freshRows = null;
+                        bool drop =
+                            protectedSet.Contains(offer.MerchantName ?? string.Empty)
+                            && (offer.OfferId == null || !freshOfferIds.Contains(offer.OfferId))
+                            && freshBySaleKey.TryGetValue(
+                                ComputeSameSaleKey(offer), out freshRows)
+                            && !freshRows.Any(f => TotalCoinCost(f) == TotalCoinCost(offer));
+
+                        if (!drop)
+                        {
+                            deduped.Add(offer);
+                            continue;
+                        }
+
+                        // Only when the sale key names ONE fresh row - see
+                        // AmbiguousSaleKeys for why several means none.
+                        if (freshRows!.Count == 1)
+                        {
+                            CarryForwardUnhashedFields(freshRows[0], offer);
+                        }
+                    }
+
+                    merged = deduped;
+                }
             }
 
             merged = merged
@@ -1062,6 +1167,138 @@ namespace VendorOfferUpdater
                 MerchantNamesReplaced = merchantsReplaced,
                 MerchantNamesProtected = merchantsProtected,
             };
+        }
+
+        /// <summary>
+        /// Collapses rows that hash to the same OfferId, folding each
+        /// discarded sibling's unhashed fields into the survivor.
+        /// <para>
+        /// Two wiki rows for the identical sale can differ in nothing but
+        /// their "Has requirement" text, because WikiSmwClient's own dedupe
+        /// key folds that text in while VendorOfferHasher does not hash it.
+        /// Keeping the first row outright then discarded the other's
+        /// requirement, and the loss changed no OfferId, so no diff showed
+        /// it: measured, 8 offers reached ref/vendor_offers.json ungated
+        /// that way. Same reasoning as
+        /// <see cref="CarryForwardUnhashedFields"/>, applied one step
+        /// earlier.
+        /// </para>
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static List<VendorOffer> DeduplicateByOfferId(List<VendorOffer> offers)
+        {
+            var unique = new List<VendorOffer>();
+            var byId = new Dictionary<string, VendorOffer>(StringComparer.Ordinal);
+
+            foreach (var offer in offers)
+            {
+                string id = offer.OfferId ?? string.Empty;
+                if (byId.TryGetValue(id, out var survivor))
+                {
+                    CarryForwardUnhashedFields(survivor, offer);
+                    continue;
+                }
+
+                byId[id] = offer;
+                unique.Add(offer);
+            }
+
+            unique.Sort((a, b) => StringComparer.Ordinal.Compare(a.OfferId, b.OfferId));
+            return unique;
+        }
+
+        /// <summary>
+        /// Sale keys held by more than one of <paramref name="offers"/>,
+        /// among the merchants in <paramref name="merchants"/>.
+        /// <para>
+        /// ComputeSameSaleKey leaves the price out, so a merchant selling one
+        /// item at full price and again at a discount to an account that
+        /// already owns it has two rows under one key. Copying a dropped
+        /// row's unhashed fields to both puts the discount's requirement on
+        /// the full-price row, which has none: measured, 8 offers claimed a
+        /// Commander's Compendium gate that way.
+        /// </para>
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static HashSet<string> AmbiguousSaleKeys(
+            IEnumerable<VendorOffer> offers, ISet<string> merchants)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var ambiguous = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var offer in offers)
+            {
+                if (!merchants.Contains(offer.MerchantName ?? string.Empty))
+                {
+                    continue;
+                }
+
+                string saleKey = ComputeSameSaleKey(offer);
+                if (!seen.Add(saleKey))
+                {
+                    ambiguous.Add(saleKey);
+                }
+            }
+
+            return ambiguous;
+        }
+
+        /// <summary>
+        /// True when <paramref name="offer"/> carries at least one field that
+        /// <see cref="VendorOfferHasher.ComputeOfferId"/> does not hash, so
+        /// losing it changes no OfferId and shows in no diff.
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static bool CarriesUnhashedFields(VendorOffer offer)
+        {
+            return offer != null
+                && (offer.SeasonalFestival != null
+                    || offer.UnlockRecipeItemId != null
+                    || offer.UnlockRecipeId != null
+                    || offer.Requirement != null);
+        }
+
+        /// <summary>
+        /// Fills each field <see cref="VendorOfferHasher.ComputeOfferId"/>
+        /// does not hash on <paramref name="target"/> from
+        /// <paramref name="source"/>, leaving any the target already carries.
+        /// <para>
+        /// Every seat in <see cref="MergeIntoBaseline"/> that discards one of
+        /// two rows for the same sale calls this first. An unhashed field is
+        /// the only kind a merge can drop without changing an OfferId, so
+        /// nothing downstream notices the loss. Adding a field to VendorOffer
+        /// and not to this method reintroduces that.
+        /// </para>
+        /// <para>
+        /// UnlockRecipeItemId and UnlockRecipeId move as a pair, because
+        /// ConvertToOffer sets them as one and a half-resolved gate names a
+        /// sheet whose ownership the module cannot check - see
+        /// tools/VendorOfferUpdater/Models/VendorOffer.cs.
+        /// </para>
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static void CarryForwardUnhashedFields(VendorOffer target, VendorOffer source)
+        {
+            if (target == null || source == null || ReferenceEquals(target, source))
+            {
+                return;
+            }
+
+            if (target.SeasonalFestival == null)
+            {
+                target.SeasonalFestival = source.SeasonalFestival;
+            }
+
+            if (target.UnlockRecipeItemId == null && target.UnlockRecipeId == null)
+            {
+                target.UnlockRecipeItemId = source.UnlockRecipeItemId;
+                target.UnlockRecipeId = source.UnlockRecipeId;
+            }
+
+            if (target.Requirement == null)
+            {
+                target.Requirement = source.Requirement;
+            }
         }
 
         /// <summary>
@@ -1129,6 +1366,73 @@ namespace VendorOfferUpdater
             return sb.ToString();
         }
 
+        private static bool IsCoinCost(CostLine cost)
+        {
+            return string.Equals(cost.Type, "Currency", StringComparison.Ordinal)
+                && cost.Id == Gw2Constants.CoinCurrencyId;
+        }
+
+        private static long TotalCoinCost(VendorOffer offer)
+        {
+            return (offer.CostLines ?? new List<CostLine>())
+                .Where(IsCoinCost)
+                .Sum(c => (long)c.Count);
+        }
+
+        /// <summary>
+        /// Key for "these two rows are the same sale": the merchant, what it
+        /// hands over, and what it charges other than coin. The coin amount
+        /// is left out, and so is everything the wiki can restate for a sale
+        /// it still lists - where the vendor stands, and the caps. Whether
+        /// the sale costs coin at all is kept, so a free row never matches a
+        /// priced one.
+        /// <para>
+        /// Used only by MergeIntoBaseline, to drop a protected merchant's
+        /// baseline row once this pass has produced its own row for the same
+        /// sale. It never collapses two rows from the same pass.
+        /// </para>
+        /// </summary>
+        private static string ComputeSameSaleKey(VendorOffer offer)
+        {
+            var sb = new StringBuilder();
+
+            sb.Append("merchant=");
+            sb.Append(offer.MerchantName ?? "");
+
+            sb.Append(";output=");
+            sb.Append(offer.OutputItemId);
+            sb.Append('/');
+            sb.Append(offer.OutputCount);
+
+            var costs = offer.CostLines ?? new List<CostLine>();
+
+            sb.Append(";coinCost=");
+            sb.Append(costs.Any(IsCoinCost) ? "yes" : "no");
+
+            sb.Append(";otherCosts=");
+            var sortedCosts = costs
+                .Where(c => !IsCoinCost(c))
+                .OrderBy(c => c.Type, StringComparer.Ordinal)
+                .ThenBy(c => c.Id)
+                .ThenBy(c => c.Count)
+                .ToList();
+            for (int i = 0; i < sortedCosts.Count; i++)
+            {
+                if (i > 0)
+                {
+                    sb.Append(',');
+                }
+
+                sb.Append(sortedCosts[i].Type);
+                sb.Append(':');
+                sb.Append(sortedCosts[i].Id);
+                sb.Append(':');
+                sb.Append(sortedCosts[i].Count);
+            }
+
+            return sb.ToString();
+        }
+
         /// <summary>
         /// Converts a single wiki vendor result to a VendorOffer.
         /// Returns null if any cost line cannot be resolved.
@@ -1138,7 +1442,8 @@ namespace VendorOfferUpdater
             WikiVendorResult result,
             Gw2ApiHelper apiHelper,
             Dictionary<string, int> itemIdMap,
-            IReadOnlyDictionary<int, int>? unlockRecipeIdByItemId = null)
+            IReadOnlyDictionary<int, int>? unlockRecipeIdByItemId = null,
+            VendorRequirementNames? requirementNames = null)
         {
             int outputCount = result.OutputQuantity ?? 1;
             if (outputCount <= 0)
@@ -1159,11 +1464,30 @@ namespace VendorOfferUpdater
                 int? currencyId = apiHelper.ResolveCurrencyId(cost.Currency);
                 if (currencyId.HasValue)
                 {
+                    // A coin price is stored in copper, but the wiki writes
+                    // it in whichever unit the vendor page used - 200 under
+                    // the name "Gold" is 2000000 copper. Every other
+                    // currency counts in whole units and needs no scaling.
+                    long count = cost.Value;
+                    if (Gw2Constants.TryGetCopperPerUnit(cost.Currency, out int copperPerUnit))
+                    {
+                        count = (long)cost.Value * copperPerUnit;
+                    }
+
+                    if (count > int.MaxValue)
+                    {
+                        Console.WriteLine(
+                            $"  WARNING: cost of {cost.Value} {cost.Currency} for game id " +
+                            $"{result.GameId} exceeds the copper a cost line can hold - " +
+                            "offer skipped.");
+                        return null;
+                    }
+
                     costLines.Add(new CostLine
                     {
                         Type = "Currency",
                         Id = currencyId.Value,
-                        Count = cost.Value,
+                        Count = (int)count,
                     });
                 }
                 else if (!string.IsNullOrEmpty(cost.Currency) &&
@@ -1289,7 +1613,38 @@ namespace VendorOfferUpdater
                 SeasonalFestival = seasonalFestival,
                 UnlockRecipeItemId = unlockRecipeItemId,
                 UnlockRecipeId = unlockRecipeId,
+                Requirement = VendorRequirementClassifier.Classify(
+                    result.Requirement, requirementNames),
             };
+        }
+
+        /// <summary>
+        /// Prints every distinct requirement string that names more than
+        /// one kind of gate, which <see cref="VendorRequirementClassifier"/>
+        /// leaves unclassified. Measured over the full scrape there is
+        /// exactly one ("Follows Advice", both an achievement and a mastery
+        /// level); a second one appearing is a signal that the exact-name
+        /// rule has stopped being enough, and it would otherwise be silent.
+        /// </summary>
+        // internal for testability (VendorOfferUpdater.Tests)
+        internal static void ReportAmbiguousRequirements(
+            IEnumerable<WikiVendorResult> wikiResults, VendorRequirementNames names)
+        {
+            var reported = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var result in wikiResults)
+            {
+                string? requirement = result.Requirement;
+                if (string.IsNullOrWhiteSpace(requirement) ||
+                    !reported.Add(requirement!) ||
+                    !VendorRequirementClassifier.IsAmbiguous(requirement, names))
+                {
+                    continue;
+                }
+
+                Console.WriteLine(
+                    $"  WARNING: requirement \"{requirement}\" names more than one kind of " +
+                    "gate - left unclassified, shown to the player as text only.");
+            }
         }
 
         /// <summary>

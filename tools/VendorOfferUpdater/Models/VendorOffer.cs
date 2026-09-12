@@ -71,5 +71,12 @@ namespace VendorOfferUpdater.Models
         public int? UnlockRecipeItemId { get; set; }
 
         public int? UnlockRecipeId { get; set; }
+
+        // What the vendor demands of the account before it will trade. Set
+        // from the wiki's "Has requirement" text by
+        // VendorRequirementClassifier; null when the row records none. Not
+        // hashed into OfferId, so the same pass-through-mirror reason
+        // SeasonalFestival is declared here applies.
+        public VendorRequirement? Requirement { get; set; }
     }
 }

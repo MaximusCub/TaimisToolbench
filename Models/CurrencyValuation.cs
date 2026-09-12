@@ -223,12 +223,15 @@ namespace TaimisToolbench.Models
         /// <summary>
         /// Resolves <paramref name="currencyId"/>'s EFFECTIVE
         /// decision-only copper value per the three-state precedence
-        /// documented on this class. Not called by any solver comparison
-        /// at runtime - its one production caller is WithDefaults, which
-        /// materializes the precedence into a plain dictionary before the
-        /// solver runs. Trap for a future caller: handing Solve a raw,
-        /// non-materialized CurrencyValuation silently yields zero
-        /// curated defaults. Strictly DECISION-ONLY.
+        /// documented on this class. No solver comparison calls it at
+        /// runtime: WithDefaults materializes the precedence into a plain
+        /// dictionary before the solver runs. Trap for a future caller:
+        /// handing Solve a raw, non-materialized CurrencyValuation
+        /// silently yields zero curated defaults.
+        /// RankerReadinessCalculator.ScoreMaterials is the other production
+        /// caller, and goes through here rather than reading CopperPerUnit
+        /// so it gets the curated defaults whichever instance it is given.
+        /// Strictly DECISION-ONLY.
         /// </summary>
         public bool TryGetEffectiveCopperValue(int currencyId, out long copperPerUnit)
         {

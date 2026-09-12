@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -44,6 +45,16 @@ namespace TaimisToolbench.Tests.Services
             }
         }
 
+        private static IReadOnlyDictionary<string, IReadOnlyList<string>> LoadShippedLocations(
+            IEnumerable<string> offerIds)
+        {
+            string path = FindRepoFile(Path.Combine("ref", "vendor_offers.json"));
+            using (var stream = File.OpenRead(path))
+            {
+                return VendorOfferLocations.Read(stream, offerIds);
+            }
+        }
+
         [Fact]
         public void ShippedHints_NoBadgeRendersAsAnAcquisitionSourcePill()
         {
@@ -69,6 +80,11 @@ namespace TaimisToolbench.Tests.Services
 
             var hintedItemsWithOffers = hints.Keys.Where(offersByItem.ContainsKey).ToList();
 
+            // Models/VendorOffer.cs holds no locations, so they come back
+            // off disk through the production reader that exists for this.
+            var locationsByOfferId = LoadShippedLocations(
+                hintedItemsWithOffers.SelectMany(id => offersByItem[id]).Select(o => o.OfferId));
+
             // Trip-wire on the population itself: for the first seven
             // hints the module held no vendor data at all, and the
             // mechanism's implicit contract was "no source anywhere in our
@@ -90,11 +106,16 @@ namespace TaimisToolbench.Tests.Services
                     $"Hint for item {itemId} names no merchant the shipped vendor offer carries " +
                     $"(offer merchants: {string.Join(", ", offers.Select(o => o.MerchantName))}).");
 
+                var locations = offers
+                    .SelectMany(o => locationsByOfferId.TryGetValue(o.OfferId, out var found)
+                        ? found
+                        : Array.Empty<string>())
+                    .ToList();
+
                 Assert.True(
-                    offers.SelectMany(o => o.Locations ?? new List<string>())
-                        .Any(loc => !string.IsNullOrEmpty(loc) && text.Contains(loc)),
+                    locations.Any(loc => !string.IsNullOrEmpty(loc) && text.Contains(loc)),
                     $"Hint for item {itemId} names no location the shipped vendor offer carries " +
-                    $"(offer locations: {string.Join(", ", offers.SelectMany(o => o.Locations ?? new List<string>()))}).");
+                    $"(offer locations: {string.Join(", ", locations)}).");
             }
         }
 

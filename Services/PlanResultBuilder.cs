@@ -7,14 +7,6 @@ namespace TaimisToolbench.Services
 {
     internal class PlanResultBuilder
     {
-        // Disciplines that are informational source tags, not real,
-        // player-levelable GW2 crafting disciplines: a recipe carrying one
-        // of these is inherently available whenever its ingredients are,
-        // with no "learn this recipe" unlock concept at all (mirrors the
-        // pre-existing Mystic Forge treatment below).
-        private static readonly HashSet<string> InherentlyAvailableDisciplines =
-            new HashSet<string> { "MysticForge", "Achievement", "Merchant" };
-
         // "Achievement"/"Merchant" are informational source tags on seed
         // recipes, and the Mystic Forge is a facility with no rating or
         // unlock concept - none are player-levelable disciplines, so all
@@ -33,7 +25,14 @@ namespace TaimisToolbench.Services
             // Which disciplines the account actually has, used only to
             // break the Pass 2 greedy-cover tie below. Null falls back to
             // the coverage-then-alphabetical order.
-            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null)
+            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null,
+            // recipe id -> unlocking sheet item id
+            // (ref/recipe_sheet_items.json). Null or a miss leaves
+            // RequiredRecipe.SheetItemId at 0.
+            IReadOnlyDictionary<int, int> recipeSheetItemIdByRecipeId = null,
+            // What the account has unlocked, for the vendor-requirement
+            // notices below. Null leaves every requirement Unknown.
+            AccountProgression accountProgression = null)
         {
             var debugLog = new List<string>();
 
@@ -284,12 +283,14 @@ namespace TaimisToolbench.Services
                 // recipe unlocked via a consumable recipe sheet.
                 bool isLearnedFromItem = option.Flags.Contains("LearnedFromItem");
                 bool? isMissing;
-                if (option.Disciplines.Any(d => InherentlyAvailableDisciplines.Contains(d)))
+                if (RequiredRecipesVisibility.IsUnlockFree(option.Disciplines))
                 {
                     // Membership check on the recipe's declared
                     // Disciplines, not a "recipeId < 0" sign check - the
                     // achievement/merchant seed recipes also use negative
-                    // ids. All are inherently available - no unlock.
+                    // ids. The shared predicate is what keeps the surfaces
+                    // that COUNT these recipes agreeing with this decision
+                    // not to give them an unlock state.
                     isMissing = false;
                 }
                 else
@@ -297,6 +298,17 @@ namespace TaimisToolbench.Services
                     isMissing = learnedRecipeIds != null
                         ? (bool?)!learnedRecipeIds.Contains(step.RecipeId)
                         : null;
+                }
+
+                // Only a LearnedFromItem recipe has a sheet to buy, and
+                // the seed is built from that flag, so the gate keeps a
+                // stale seed row from inventing one for a recipe learned
+                // some other way.
+                int sheetItemId = 0;
+                if (isLearnedFromItem && recipeSheetItemIdByRecipeId != null &&
+                    recipeSheetItemIdByRecipeId.TryGetValue(step.RecipeId, out int mappedSheetItemId))
+                {
+                    sheetItemId = mappedSheetItemId;
                 }
 
                 requiredRecipes.Add(new RequiredRecipe
@@ -308,6 +320,7 @@ namespace TaimisToolbench.Services
                     MinRating = option.MinRating,
                     Disciplines = new List<string>(option.Disciplines),
                     IsMissing = isMissing,
+                    SheetItemId = sheetItemId,
                 });
             }
 
@@ -379,8 +392,59 @@ namespace TaimisToolbench.Services
                 RequiredDisciplines = requiredDisciplines,
                 RequiredRecipes = requiredRecipes,
                 ProbabilisticForgeOutputItemIds = probabilisticForgeOutputItemIds,
+                VendorRequirementNotices =
+                    BuildVendorRequirementNotices(plan, accountProgression),
                 DebugLog = debugLog,
             };
+        }
+
+        /// <summary>
+        /// One notice per vendor step whose offer names a requirement the
+        /// account does not meet, or that could not be checked. A met
+        /// requirement produces nothing, and no notice ever changes the
+        /// plan - see Models/VendorRequirementNotice.cs.
+        /// </summary>
+        // internal for testability (TaimisToolbench.Tests)
+        internal static List<VendorRequirementNotice> BuildVendorRequirementNotices(
+            CraftingPlan plan, AccountProgression accountProgression)
+        {
+            var notices = new List<VendorRequirementNotice>();
+            if (plan?.Steps == null)
+            {
+                return notices;
+            }
+
+            var seenItemIds = new HashSet<int>();
+            foreach (var step in plan.Steps)
+            {
+                var requirement = step?.VendorRequirement;
+                if (step == null ||
+                    step.Source != AcquisitionSource.BuyFromVendor ||
+                    requirement == null ||
+                    string.IsNullOrEmpty(requirement.Text) ||
+                    !seenItemIds.Add(step.ItemId))
+                {
+                    continue;
+                }
+
+                var status = VendorRequirementEvaluator.Evaluate(
+                    requirement, accountProgression, out var unknownReason);
+                if (status == VendorRequirementStatus.Met)
+                {
+                    continue;
+                }
+
+                notices.Add(new VendorRequirementNotice
+                {
+                    ItemId = step.ItemId,
+                    RequirementText = requirement.Text,
+                    Status = status,
+                    Kind = VendorRequirementEvaluator.KindOf(requirement),
+                    UnknownReason = unknownReason,
+                });
+            }
+
+            return notices;
         }
 
         // Builds a RecipeId -> RecipeOption index with a single tree walk.

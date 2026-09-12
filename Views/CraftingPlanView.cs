@@ -119,7 +119,9 @@ namespace TaimisToolbench.Views
         // phaseProgress carries live coarse-phase events for the status
         // strip; requestLabel is a best-effort item-name label; the
         // valueOwnMaterials bool is a per-plan session choice, like useOwn.
-        private readonly Func<IReadOnlyList<PlanRequestItem>, bool, bool, PriceBasis, CancellationToken, IProgress<PlanStatus>, IProgress<PlanPhaseEvent>, string, Task<CraftingPlanResult>> _generateAsync;
+        // The last argument is called once, before the returned task
+        // completes, with what the generation's own account refresh did.
+        private readonly Func<IReadOnlyList<PlanRequestItem>, bool, bool, PriceBasis, CancellationToken, IProgress<PlanStatus>, IProgress<PlanPhaseEvent>, string, Action<PlanAccountRefresh>, Task<CraftingPlanResult>> _generateAsync;
         private readonly Func<PlanSolveContext, IReadOnlyDictionary<int, AcquisitionSource>, ISet<int>, CraftingPlanResult> _resolveOverridesSync;
         private readonly ModalDialog _modalDialog;
         // Session-scoped item stat lookup (ItemMetadataService's own cache -
@@ -143,6 +145,10 @@ namespace TaimisToolbench.Views
         private readonly ModuleSettings _settings;
         private readonly PlanViewModelBuilder _vmBuilder = new PlanViewModelBuilder();
 
+        private readonly Action<PlanViewModel> _onPlanRendered;
+
+        private readonly Action<PlanSectionType> _onPopOutSection;
+
         private PlanViewModel _currentPlan;
 
         private DateTime _planGeneratedAt;
@@ -152,6 +158,12 @@ namespace TaimisToolbench.Views
         // from gw2efficiency, whose default is unchecked. Purely in-memory
         // session state, reset on every module reload.
         private bool _useOwnMaterials = true;
+
+        // The live account snapshot, for the plan status line's account-data
+        // age clause. Separate from _accountDataAvailable below, which is
+        // pushed every tick and carries only whether one exists.
+        private readonly Func<AccountSnapshot> _getSnapshot;
+
         // Whether an account snapshot exists to subtract from; pushed by
         // the host every tick (Module.Update) so a key added mid-session,
         // or a Clear Cache, moves the gate without a restart.
@@ -208,33 +220,31 @@ namespace TaimisToolbench.Views
         // of every generation.
         private static readonly TimeSpan SpinnerTickInterval = TimeSpan.FromMilliseconds(150);
 
-        // The toolbar's Use Own Materials / Prices / Value Own Materials
-        // controls only take effect on the next Generate, unlike the
-        // instant-apply controls that look just like them on other tabs.
-        // Every one of them says so through the status label at the moment
-        // it changes.
-        // "press" is filler and "update" said nothing about WHAT updates;
-        // "apply" says what happens to the settings, and the button is
-        // named exactly.
-        private const string SettingsChangedStatus = "Settings changed - Generate Plan to apply";
-
         // Shown while Generate resolves typed-but-unpicked row names against
         // the search provider, before any plan work starts.
         private const string ResolvingStatus = "Resolving items...";
 
-        // Separates the strip's standing notices from the status board's own
-        // text (and from each other).
-        private const string StatusNoticeSeparator = "  |  ";
+        // What the strip says before anything has been generated this
+        // session, and what a rolled-back restore puts back.
+        private const string ReadyStatus = "Ready";
 
-        // Two things that stay true about the plan on screen for longer than
-        // one status write: a toolbar change it does not include, and rows
-        // that were left out of it. Held as state rather than written
-        // straight into the label because RenderFromBoard re-renders the
-        // strip from _statusBoard about seven times a second during a
-        // generation and again on every rebuild - a bare SetStatus is erased
-        // within one spinner tick by the very run the notice is about.
+        // Three things that stay true about the plan on screen for longer
+        // than one status write: a toolbar change it does not include, rows
+        // that were left out of it, and an account snapshot that landed
+        // after it. Held as state rather than written straight into the
+        // label because RenderFromBoard re-renders the strip from
+        // _statusBoard about seven times a second during a generation and
+        // again on every rebuild - a bare SetStatus is erased within one
+        // spinner tick by the very run the notice is about.
         private bool _settingsChangedPending;
         private string _unresolvedRowsNotice;
+        private bool _accountDataChanged;
+
+        // CapturedAt of the snapshot the plan on screen was solved against,
+        // or null when it was solved against none - see
+        // StatusText.PlanAccountDataMoved, which owns what that means. Read
+        // by PollForSnapshotChange only; nothing renders it.
+        private DateTime? _plannedCapturedAtUtc;
 
         // How far the plan on screen is dimmed while a new one generates -
         // enough to read as superseded, not so far that it stops being
@@ -369,6 +379,12 @@ namespace TaimisToolbench.Views
         // Views/Rendering/StickyHeaderHost.
         private StickyHeaderHost _stickyHeaders;
 
+        // Trailing blank space that lets a shrunken plan still scroll far
+        // enough to hold the anchored row where it was. Rebuilt on demand:
+        // ResetContentPanelToEmpty disposes it with the rest of the
+        // content - see SetScrollTailSpacer.
+        private Panel _scrollTailSpacer;
+
         // How to put the TREE's band back after a preserving rebuild. Only
         // the tree needs one: every other section re-registers its band as
         // it re-renders it, and the tree is the one whose controls a
@@ -495,7 +511,9 @@ namespace TaimisToolbench.Views
         // nothing else, and none of them becomes part of this class's own
         // callable surface. Every one forwards to the private member that
         // used to be handed over as a constructor delegate.
-        void ITreePlanHost.PreserveScrollAcross(Action mutate) => PreserveScrollAcross(mutate);
+        void ITreePlanHost.PreserveScrollAcross(Action mutate, int? anchorNodeId) =>
+            PreserveScrollAcross(
+                mutate, anchorNodeId.HasValue ? TreeRowAnchorKey(anchorNodeId.Value) : null);
 
         void ITreePlanHost.SetStatus(string status) => SetStatus(status);
 
@@ -505,6 +523,48 @@ namespace TaimisToolbench.Views
         {
             get => _currentPlan;
             set => _currentPlan = value;
+        }
+
+        /// <summary>
+        /// Everything one item's icon draws and its tooltip shows, from its
+        /// id. Every item icon this tab draws reads it, so no two of its
+        /// tables can show different boxes for the same item.
+        /// <para>
+        /// Merges the plan's own captured metadata with the session stat
+        /// cache. That merge happens here and nowhere else.
+        /// </para>
+        /// </summary>
+        public ItemTooltipFacts ItemFactsFor(int itemId)
+        {
+            var plan = _currentPlan;
+            ItemMetadata meta = null;
+            if (itemId > 0 && plan?.ItemMetadata != null)
+            {
+                plan.ItemMetadata.TryGetValue(itemId, out meta);
+            }
+
+            return ItemTooltipFacts.ForItemId(
+                itemId,
+                meta,
+                _getItemStatBlock == null || itemId <= 0 ? null : _getItemStatBlock(itemId));
+        }
+
+        /// <summary>
+        /// The whole content of one currency's tooltip, from its id. Every
+        /// currency icon this tab draws reads it, so the Total Cost table,
+        /// the Recipe Tree and the inline symbols in a value cell cannot
+        /// show different boxes for the same currency.
+        /// <para>
+        /// Reads <c>_currentPlan</c> per call rather than capturing its
+        /// dictionaries, so a re-solve's wallet figures reach the next
+        /// hover.
+        /// </para>
+        /// </summary>
+        public CurrencyTooltipFacts CurrencyFactsFor(int currencyId)
+        {
+            var plan = _currentPlan;
+            return CurrencyTooltipFacts.ForCurrencyId(
+                currencyId, plan?.CurrencyMetadata, plan?.OwnedCurrencyAmounts);
         }
 
         int ITreePlanHost.PanelWidth => GetCurrentPanelWidth();
@@ -797,7 +857,7 @@ namespace TaimisToolbench.Views
 
         #region Construction & status
         public CraftingPlanView(
-            Func<IReadOnlyList<PlanRequestItem>, bool, bool, PriceBasis, CancellationToken, IProgress<PlanStatus>, IProgress<PlanPhaseEvent>, string, Task<CraftingPlanResult>> generateAsync,
+            Func<IReadOnlyList<PlanRequestItem>, bool, bool, PriceBasis, CancellationToken, IProgress<PlanStatus>, IProgress<PlanPhaseEvent>, string, Action<PlanAccountRefresh>, Task<CraftingPlanResult>> generateAsync,
             ModalDialog modalDialog,
             IItemSearchProvider itemSearchProvider,
             ModuleSettings settings,
@@ -816,8 +876,23 @@ namespace TaimisToolbench.Views
             // ends them instead of leaving them running against disposed
             // objects. Optional; without it both use CancellationToken.None,
             // which is what they did before.
-            Func<CancellationToken> moduleLifetimeToken = null)
+            Func<CancellationToken> moduleLifetimeToken = null,
+            // Read once per Generate, at the moment the pipeline reads the
+            // same snapshot, so the finished plan can say how old the owned
+            // materials it subtracted were. Optional; without it the plan
+            // status line carries no account-data clause.
+            Func<AccountSnapshot> getSnapshot = null,
+            // The popout windows (Views/PopoutWindowHost) are owned by
+            // Module, not by this view: they are sprite-screen children and
+            // have to survive the module window closing. These two are the
+            // whole of this tab's reach into them - tell the host which
+            // plan is on screen, and ask it to open one section.
+            Action<PlanViewModel> onPlanRendered = null,
+            Action<PlanSectionType> onPopOutSection = null)
         {
+            _getSnapshot = getSnapshot;
+            _onPlanRendered = onPlanRendered;
+            _onPopOutSection = onPopOutSection;
             _generateAsync = generateAsync;
             _modalDialog = modalDialog;
             _itemSearchProvider = itemSearchProvider;
@@ -932,6 +1007,12 @@ namespace TaimisToolbench.Views
             _lastDebugLog = result.DebugLog;
             _currentPlan = vm;
             _planGeneratedAt = generatedAt;
+
+            // A plan off disk does not record which snapshot it was solved
+            // against, so there is no stamp to notice a newer one against.
+            // Its own status line already says to Generate for fresh data.
+            _plannedCapturedAtUtc = null;
+            _accountDataChanged = false;
 
             RestoreRequestControls(
                 requestItems, result.ItemMetadata, useOwnMaterials, priceBasis, valueOwnMaterials);
@@ -1126,6 +1207,8 @@ namespace TaimisToolbench.Views
             _lastDebugLog = null;
             _currentPlan = null;
             _planGeneratedAt = default(DateTime);
+            _plannedCapturedAtUtc = null;
+            _accountDataChanged = false;
 
             ResetContentPanelToEmpty();
             // ResetContentPanelToEmpty withdrew the toolbar commands; the
@@ -1142,7 +1225,7 @@ namespace TaimisToolbench.Views
 
             if (_statusBoard.ClearRestoredSeed())
             {
-                SetStatus("Ready");
+                SetStatus(ReadyStatus);
             }
         }
 
@@ -1212,7 +1295,7 @@ namespace TaimisToolbench.Views
         /// against a late Blish-internal scrollbar reset
         /// (StartScrollVerify).
         /// </summary>
-        private void PreserveScrollAcross(Action mutate)
+        private void PreserveScrollAcross(Action mutate, string anchorKey = null)
         {
             int saved = _contentPanel?.VerticalScrollOffset ?? 0;
             int capturedGeneration = ++_scrollRestoreGeneration;
@@ -1223,22 +1306,20 @@ namespace TaimisToolbench.Views
             // stale-offset verify against the new content.
             _resizeScrollRestorePending = false;
 
-            // Nothing to hold still at the very top of the content, and a
-            // restore is skipped there anyway.
-            ScrollAnchor anchor = default(ScrollAnchor);
-            bool anchored = false;
-            if (saved > 0)
+            ScrollAnchor anchor;
+            if (!TryCaptureScrollAnchor(saved, anchorKey, out anchor))
             {
-                anchored = TryCaptureScrollAnchor(saved, out anchor);
+                anchor = default(ScrollAnchor);
             }
 
             mutate();
-            if (saved <= 0)
-            {
-                return;
-            }
 
-            int restore = anchored ? ResolveAnchoredOffset(anchor, saved) : saved;
+            // Two statements, deliberately. ResolveAnchoredOffset sizes
+            // the trailing spacer as part of deciding the offset, and the
+            // write below measures the content and recalculates the
+            // scrollbar from what it finds. The spacer has to be in place
+            // before that measure runs.
+            int restore = ResolveAnchoredOffset(anchor, saved);
             ApplySavedScrollSynchronously(restore, capturedGeneration);
         }
 
@@ -1379,7 +1460,14 @@ namespace TaimisToolbench.Views
             return true;
         }
 
-        private bool TryCaptureScrollAnchor(int savedOffset, out ScrollAnchor anchor)
+        /// <summary>
+        /// The element this restore must hold still. The three-tier rule
+        /// itself is ScrollAnchorMath.TryCaptureFor's, which is where its
+        /// derivation and its tests live; this reads the two inputs only
+        /// the view can see - where the cursor is, and how much of the
+        /// viewport's top edge a pinned sticky band covers.
+        /// </summary>
+        private bool TryCaptureScrollAnchor(int savedOffset, string anchorKey, out ScrollAnchor anchor)
         {
             anchor = default(ScrollAnchor);
             if (_contentPanel == null || _scrollAnchors.Count == 0)
@@ -1387,11 +1475,32 @@ namespace TaimisToolbench.Views
                 return false;
             }
 
-            int anchorLine = ScrollAnchorMath.AnchorLine(
-                savedOffset, _contentPanel.Height, CursorYInContentViewport());
+            return ScrollAnchorMath.TryCaptureFor(
+                CollectScrollAnchorCandidates(),
+                anchorKey,
+                savedOffset,
+                _contentPanel.Height,
+                CursorYInContentViewport(),
+                PinnedBandTopInset(),
+                out anchor);
+        }
 
-            return ScrollAnchorMath.TryCapture(
-                CollectScrollAnchorCandidates(), anchorLine, out anchor);
+        /// <summary>
+        /// How many pixels of the content viewport's top edge a pinned
+        /// sticky header band is drawn over, or zero when none is pinned.
+        /// StickyHeaderHost publishes an absolute y, so this subtracts the
+        /// viewport's own absolute top.
+        /// </summary>
+        private int PinnedBandTopInset()
+        {
+            int? pinnedBottom = _stickyHeaders?.PinnedBandBottom;
+            if (!pinnedBottom.HasValue || _contentPanel == null)
+            {
+                return 0;
+            }
+
+            int inset = pinnedBottom.Value - _contentPanel.AbsoluteBounds.Y;
+            return inset > 0 ? inset : 0;
         }
 
         /// <summary>
@@ -1420,9 +1529,16 @@ namespace TaimisToolbench.Views
 
         /// <summary>
         /// The offset that puts the anchored element back under the line
-        /// it was on. Falls back to the pre-mutate offset when the element
-        /// is gone from the rebuilt content - a jump to wherever a missing
-        /// row "would" be is worse than the reflow this fixes.
+        /// it was on. Walks the anchor's on-screen fallbacks when the
+        /// anchor itself is gone, then falls back to the pre-mutate
+        /// offset clamped to what the rebuilt content can scroll to.
+        /// <para>
+        /// The clamp is the point. An unclamped offset past the end of
+        /// shorter content saturates ScrollMath.RatioForOffset at 1.0 and
+        /// lands the viewport at the very bottom, which is a jump nobody
+        /// chose. Clamping cannot hold a row still when the content below
+        /// it is gone, but it stops at the last position that exists.
+        /// </para>
         /// </summary>
         private int ResolveAnchoredOffset(ScrollAnchor anchor, int savedOffset)
         {
@@ -1431,15 +1547,79 @@ namespace TaimisToolbench.Views
                 return savedOffset;
             }
 
-            int? newTop = ScrollAnchorMath.FindTop(CollectScrollAnchorCandidates(), anchor);
-            if (!newTop.HasValue)
+            // Zeroed BEFORE the measure. The previous restore's spacer is
+            // not content, and left standing it would count toward the
+            // height this one measures, size the new spacer to nothing,
+            // and clamp anyway one rebuild late.
+            SetScrollTailSpacer(0, 0);
+
+            int contentHeight = MeasureContentHeight(_contentPanel);
+            var plan = ScrollAnchorMath.PlanRestore(
+                CollectScrollAnchorCandidates(),
+                anchor,
+                savedOffset,
+                contentHeight,
+                _contentPanel.Height);
+
+            // Sized BEFORE the scroll write, which measures the content
+            // again and recalculates the scrollbar from what it finds.
+            SetScrollTailSpacer(plan.TailSpacerHeight, contentHeight);
+            return plan.Offset;
+        }
+
+        /// <summary>
+        /// Sizes the trailing spacer, creating it as the content panel's
+        /// last child when the last rebuild disposed it with everything
+        /// else. Height zero hides it, so a plan that needs none measures
+        /// and scrolls exactly as it did before this existed - Blish's
+        /// FlowPanel reflow and MeasureContentHeight both skip an
+        /// invisible child.
+        /// <para>
+        /// Only ever called from the rebuild path. A spacer that changed
+        /// height during free scrolling would move the content height at a
+        /// moment with no restore armed, which is precisely when Blish's
+        /// Scrollbar.RecalculateLayout zeroes ScrollDistance.
+        /// </para>
+        /// </summary>
+        private void SetScrollTailSpacer(int height, int contentBottom)
+        {
+            if (_contentPanel == null)
             {
-                return savedOffset;
+                return;
             }
 
-            return ScrollAnchorMath.RestoredOffset(
-                savedOffset, anchor, newTop.Value,
-                MeasureContentHeight(_contentPanel), _contentPanel.Height);
+            if (height <= 0)
+            {
+                if (_scrollTailSpacer != null)
+                {
+                    _scrollTailSpacer.Visible = false;
+                }
+
+                return;
+            }
+
+            if (_scrollTailSpacer == null || _scrollTailSpacer.Parent != _contentPanel)
+            {
+                _scrollTailSpacer = new WheelTransparentClippedPanel()
+                {
+                    Parent = _contentPanel,
+                };
+            }
+
+            int width = _contentPanel.Width - RightEdgePadding;
+            if (width < 0)
+            {
+                width = 0;
+            }
+
+            // Placed at the measured content bottom rather than left to
+            // the FlowPanel's own reflow: the scroll write that follows
+            // reads this control's Bottom inside the same call. The panel
+            // sets no ControlPadding, so this is where the reflow puts it
+            // too, and a later one moves nothing.
+            _scrollTailSpacer.Size = new Point(width, height);
+            _scrollTailSpacer.Location = new Point(0, contentBottom);
+            _scrollTailSpacer.Visible = true;
         }
 
         #endregion // Scroll preserve/restore/verify: the reflection handle and PreserveScrollAcross - KNOWN-ISSUES #12/#14/#19
@@ -2305,7 +2485,7 @@ namespace TaimisToolbench.Views
             _statusLabel = new Label()
             {
                 Font = UiFonts.Status,
-                Text = "Ready",
+                Text = ReadyStatus,
                 AutoSizeWidth = true,
                 AutoSizeHeight = true,
                 Location = new Point(0, layout.StatusRowY),
@@ -4034,11 +4214,24 @@ namespace TaimisToolbench.Views
                 .Resolve(_useOwnMaterials, _accountDataAvailable)
                 .Checked;
 
+            // Read here rather than when the result lands: a background
+            // refresh committing mid-generation would otherwise make the
+            // finished plan describe a snapshot it never used. The
+            // generation's own refresh reports through accountRefresh
+            // below and replaces this reading when it does.
+            AccountSnapshot plannedSnapshot = useOwnMaterials ? _getSnapshot?.Invoke() : null;
+            PlanAccountRefresh accountRefresh = null;
+
             try
             {
                 var result = await _generateAsync(
                     requestItems, useOwnMaterials, _valueOwnMaterials, _priceBasis,
-                    ModuleLifetimeToken(), null, phaseProgress, requestLabel);
+                    ModuleLifetimeToken(), null, phaseProgress, requestLabel,
+                    refresh =>
+                    {
+                        accountRefresh = refresh;
+                        plannedSnapshot = refresh.UsedHoldings ? refresh.Snapshot : null;
+                    });
 
                 // Blish HUD's XNA host has no SynchronizationContext, so this
                 // continuation may resume on a ThreadPool thread. vm-building
@@ -4076,12 +4269,19 @@ namespace TaimisToolbench.Views
                     _currentPlan = vm;
                     _planGeneratedAt = DateTime.Now;
 
+                    // This plan's own account data, so the poll compares
+                    // against what THIS run solved with. Cleared together:
+                    // a snapshot that superseded the previous plan has been
+                    // folded into this one.
+                    _plannedCapturedAtUtc = plannedSnapshot?.CapturedAt;
+                    _accountDataChanged = false;
+
                     // Unconditional board write, deliberately BEFORE the
                     // panel-liveness bail: a completion landing while the
                     // panel is torn down must not drop the "Plan
                     // generated" text - a later Build() pulls it from the
                     // board instead.
-                    _statusBoard.Finish(myGen, StatusText.Stamp("Plan generated", _planGeneratedAt));
+                    _statusBoard.Finish(myGen, PlanGeneratedStatus(plannedSnapshot));
 
                     // Plan CONTENT still requires a live panel to render
                     // into - unlike the strip status above, this part of
@@ -4098,6 +4298,11 @@ namespace TaimisToolbench.Views
 
                     _lastRenderedWidth = _contentPanel.Width;
                     RenderPlan(vm);
+
+                    // After the plan is drawn, because the dialog describes
+                    // the plan behind it. Raised over an empty panel it
+                    // would read as the generation having failed.
+                    RaiseStaleAccountDataDialog(accountRefresh, result, useOwnMaterials);
                 });
             }
             catch (Exception ex)
@@ -4293,38 +4498,119 @@ namespace TaimisToolbench.Views
             }
         }
 
+        // One dialog per run of failed refreshes - see
+        // Services/RefreshFailureRun.cs. Held on the view because the run
+        // is the module's fact and being told about it is the user's.
+        private readonly StaleDataDialogGate _staleDataDialog = new StaleDataDialogGate();
+
+        /// <summary>
+        /// Tells the user their account snapshot did not refresh, but only
+        /// when this plan reads something the refresh failed to read - see
+        /// Services/StaleAccountDataWarning.cs - and only once per run of
+        /// failures. The status line and the Log tab carry every one.
+        /// </summary>
+        public void RaiseStaleAccountDataDialog(
+            PlanAccountRefresh refresh, CraftingPlanResult result, bool usedOwnMaterials)
+        {
+            if (refresh == null || !refresh.Failed)
+            {
+                return;
+            }
+
+            var notice = StaleAccountDataWarning.Evaluate(
+                refresh.FailedSources,
+                refresh.IncompleteCharacterNames,
+                refresh.Snapshot,
+                result,
+                usedOwnMaterials && refresh.UsedHoldings,
+                DateTime.UtcNow);
+
+            if (notice == null)
+            {
+                return;
+            }
+
+            // The detail the dialog no longer carries. Written first, so it
+            // is already in the Log tab by the time a reader dismisses the
+            // box and goes looking for what it left out.
+            ModuleLog.Shared.Write(
+                ModuleLogLevel.Warn, "plan", StaleAccountDataWarning.ComposeLogDetail(notice));
+
+            if (!_staleDataDialog.ShouldRaise(refresh.FailureRunId))
+            {
+                return;
+            }
+
+            _modalDialog?.ShowAcknowledgement(StaleAccountDataWarning.Compose(notice));
+        }
+
+        /// <summary>
+        /// The finished plan's status line, with the account-data clause
+        /// Services/PlanStatusLine.cs decides on. A plan solved against no
+        /// snapshot, or a view with no settings to read the staleness
+        /// threshold from, carries the bare timestamp.
+        /// </summary>
+        private string PlanGeneratedStatus(AccountSnapshot planned)
+        {
+            if (planned == null || _settings == null)
+            {
+                return StatusText.Stamp("Plan generated", _planGeneratedAt);
+            }
+
+            return PlanStatusLine.ForGeneratedPlan(
+                _planGeneratedAt,
+                DateTime.UtcNow - planned.CapturedAt,
+                TimeSpan.FromMinutes(_settings.GetClampedSnapshotRefreshIntervalMinutes()),
+                planned.IncompleteCharacterCount,
+                planned.CharacterCount);
+        }
+
         /// <summary>
         /// <paramref name="status"/> with the strip's standing notices
         /// appended - the facts that outlive any single status write (see
-        /// _settingsChangedPending / _unresolvedRowsNotice). Returns
-        /// <paramref name="status"/> itself, allocating nothing, in the
-        /// ordinary case where there are none: this runs on every spinner
-        /// render for the whole of every generation.
+        /// _settingsChangedPending / _unresolvedRowsNotice /
+        /// _accountDataChanged). The join and the wording live in
+        /// Services/PlanStatusLine.cs, where the widest line the strip can
+        /// compose is measurable.
         /// </summary>
         private string WithStandingNotices(string status)
         {
-            if (_unresolvedRowsNotice == null && !_settingsChangedPending)
+            return PlanStatusLine.WithStandingNotices(
+                status, _unresolvedRowsNotice, _settingsChangedPending, _accountDataChanged);
+        }
+
+        /// <summary>
+        /// Notices the account snapshot moving under the plan on screen and
+        /// says so on the strip. Nothing regenerates: a plan carries the
+        /// user's own craft-or-buy decisions, and discarding those to spend
+        /// a solve nobody asked for is the worse trade. The next Generate
+        /// is theirs to press.
+        /// <para>
+        /// Run by Module.Update only while this is the selected tab of a
+        /// visible window, on the same terms as the Ranker's own poll. One
+        /// nullable-DateTime compare per tick, and none at all once the
+        /// notice is up or the plan has no stamp to compare against.
+        /// </para>
+        /// </summary>
+        public void PollForSnapshotChange()
+        {
+            if (_accountDataChanged || _plannedCapturedAtUtc == null)
             {
-                return status;
+                return;
             }
 
-            var parts = new List<string>(3);
-            if (!string.IsNullOrEmpty(status))
+            if (_contentPanel == null || _contentPanel.Parent == null)
             {
-                parts.Add(status);
+                return;
             }
 
-            if (_unresolvedRowsNotice != null)
+            if (!StatusText.PlanAccountDataMoved(_plannedCapturedAtUtc, _getSnapshot?.Invoke()?.CapturedAt))
             {
-                parts.Add(_unresolvedRowsNotice);
+                return;
             }
 
-            if (_settingsChangedPending)
-            {
-                parts.Add(SettingsChangedStatus);
-            }
-
-            return string.Join(StatusNoticeSeparator, parts);
+            _accountDataChanged = true;
+            RenderFromBoard(_statusBoard.Snapshot());
         }
 
         /// <summary>
@@ -4492,6 +4778,10 @@ namespace TaimisToolbench.Views
             {
                 child.Dispose();
             }
+
+            // Disposed by the sweep above, and a disposed control is not a
+            // spacer to re-size.
+            _scrollTailSpacer = null;
         }
 
         /// <summary>
@@ -4562,11 +4852,17 @@ namespace TaimisToolbench.Views
                 return;
             }
 
+            // Before the rebuild, not after: an open popout reads its rows
+            // from the host, and the host drops a popout's ticks only when
+            // the plan INSTANCE changes, so a sort click or a pill override
+            // passes the same instance through here and changes nothing.
+            _onPlanRendered?.Invoke(vm);
+
             ResetContentPanelToEmpty(preserveTree);
 
             int panelWidth = _contentPanel.Width - RightEdgePadding;
 
-            new PlanHeaderRenderer(this, _getItemStatBlock).Render(vm, _contentPanel, panelWidth);
+            new PlanHeaderRenderer(this, ItemFactsFor).Render(vm, _contentPanel, panelWidth);
 
             // Separator under header
             var headerSeparator = new ClippedPanel()
@@ -4950,8 +5246,25 @@ namespace TaimisToolbench.Views
                 return;
             }
 
-            var header = CreateSectionHeader(section.Title, section.SectionType, panelWidth, section.IsDefaultExpanded);
+            // The button is built after the header it parents to, so both
+            // predicates resolve it lazily - the same order, and for the
+            // same reason, as Required Recipes' own header checkbox.
+            FeedbackButton popOutButton = null;
+            bool pressStartedOnPopOut = false;
+            var header = CreateSectionHeader(
+                section.Title, section.SectionType, panelWidth, section.IsDefaultExpanded,
+                () => pressStartedOnPopOut,
+                () => CursorOverHeaderControl(popOutButton));
             var contentFlow = header.ContentFlow;
+
+            popOutButton = CreatePopOutButton(header.HeaderPanel, section.SectionType, panelWidth);
+            if (popOutButton != null)
+            {
+                header.HeaderPanel.LeftMouseButtonPressed += (_, __) =>
+                {
+                    pressStartedOnPopOut = CursorOverHeaderControl(popOutButton);
+                };
+            }
 
 #if DEBUG
             // A section type added without registering its own width
@@ -4976,28 +5289,30 @@ namespace TaimisToolbench.Views
                     // Row rendering (the cost-tile row, the
                     // MultiItemNote banner, and the per-currency rows) moved
                     // to Views/Rendering/SummarySectionRenderer.
-                    new SummarySectionRenderer(this, _getItemStatBlock, RegisterScrollAnchor)
+                    new SummarySectionRenderer(
+                        this, CurrencyFactsFor, ItemFactsFor, RegisterScrollAnchor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 case PlanSectionType.UsedMaterials:
                     // Row rendering moved to
                     // Views/Rendering/UsedMaterialsSectionRenderer.
                     new UsedMaterialsSectionRenderer(
-                        this, _usedMaterialsSort, RerenderForSortChange, _getItemStatBlock)
+                        this, _usedMaterialsSort, RerenderForSortChange, ItemFactsFor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 case PlanSectionType.ShoppingList:
                     // Row rendering moved to
                     // Views/Rendering/ShoppingListSectionRenderer.
                     new ShoppingListSectionRenderer(
-                        this, _shoppingListSort, RerenderForSortChange, _getItemStatBlock)
+                        this, _shoppingListSort, RerenderForSortChange,
+                        CurrencyFactsFor, ItemFactsFor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 case PlanSectionType.CraftingSteps:
                     // Row rendering (including the TimegatedNotice
                     // informational rows) moved to
                     // Views/Rendering/CraftStepsSectionRenderer.
-                    new CraftStepsSectionRenderer(this, _getItemStatBlock)
+                    new CraftStepsSectionRenderer(this, ItemFactsFor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 case PlanSectionType.RequiredDisciplines:
@@ -5012,7 +5327,7 @@ namespace TaimisToolbench.Views
                     // needs its own case rather than the default fallback
                     // below, since CreateTextRow never draws a coin value
                     // and this section's excess/reclaim lines carry one.
-                    notesBodyHeight = new NotesSectionRenderer(this)
+                    notesBodyHeight = new NotesSectionRenderer(this, ItemFactsFor, CurrencyFactsFor)
                         .Render(section, contentFlow, panelWidth);
                     break;
                 // PlanSectionType.RequiredRecipes is handled entirely by
@@ -5061,24 +5376,71 @@ namespace TaimisToolbench.Views
         }
 
         /// <summary>
-        /// Whether the cursor is over the section header's checkbox, from
-        /// the checkbox's own live rectangle rather than
+        /// The header-row button that opens this section on its own window,
+        /// on the two sections that have one. Null everywhere else, and null
+        /// when the module did not hand this view a popout host at all.
+        /// </summary>
+        private FeedbackButton CreatePopOutButton(
+            Panel headerPanel, PlanSectionType sectionType, int panelWidth)
+        {
+            if (_onPopOutSection == null || !PopoutWindowHost.Supports(sectionType))
+            {
+                return null;
+            }
+
+            var button = new FeedbackButton()
+            {
+                Text = "Pop Out",
+                Size = new Point(PopOutButtonWidth, UiMetrics.ButtonHeight),
+                Location = new Point(PopOutButtonX(panelWidth), PopOutButtonY),
+                Parent = headerPanel,
+            };
+            TooltipFacility.ApplyPlain(
+                button,
+                "Opens this list in its own window. It stays on screen with the module closed.");
+            button.Click += (_, __) => _onPopOutSection(sectionType);
+            _relayoutActions.Add(
+                w => button.Location = new Point(PopOutButtonX(w), PopOutButtonY));
+            return button;
+        }
+
+        private const int PopOutButtonWidth = 84;
+
+        /// <summary>
+        /// Level with Required Recipes' own header control, so the two
+        /// sections' header rows read as one row wherever both are open.
+        /// </summary>
+        private const int PopOutButtonY = 3;
+
+        /// <summary>
+        /// Right-ruled on the same pinned edge every table under it ends at,
+        /// so the button lines up with the Total column rather than with the
+        /// scrollbar.
+        /// </summary>
+        private static int PopOutButtonX(int panelWidth)
+        {
+            return PlanRelayoutMath.PinnedRightEdge(panelWidth) - PopOutButtonWidth;
+        }
+
+        /// <summary>
+        /// Whether the cursor is over a control the section header carries,
+        /// from that control's own live rectangle rather than
         /// <c>Control.MouseOver</c>. Toggling it rebuilds the whole plan,
         /// so the control this asks about is a different instance on every
         /// click and the hover chain has not resolved to it - the same
         /// staleness Services/TreeRowPillHitTest was written for, and the
         /// same half-open convention answers it.
         /// </summary>
-        private static bool CursorOverCheckbox(Checkbox checkbox)
+        private static bool CursorOverHeaderControl(Control control)
         {
-            if (checkbox == null)
+            if (control == null)
             {
                 return false;
             }
 
-            var cursor = checkbox.RelativeMousePosition;
+            var cursor = control.RelativeMousePosition;
             return TreeRowPillHitTest.Covers(
-                new TreeRowPillHitTest.PillBox(0, 0, checkbox.Width, checkbox.Height),
+                new TreeRowPillHitTest.PillBox(0, 0, control.Width, control.Height),
                 cursor.X, cursor.Y);
         }
 
@@ -5106,7 +5468,7 @@ namespace TaimisToolbench.Views
         {
             var visibleRows = RequiredRecipesVisibility.ApplyFilter(section.Rows, _hideUnlockedRecipes);
             string headerTitle = RequiredRecipesVisibility.BuildHeaderTitle(
-                section.Rows.Count, visibleRows.Count, _hideUnlockedRecipes);
+                section.Rows, visibleRows, _hideUnlockedRecipes);
 
             // suppressToggle reads the press-time flag (a click that began
             // off the checkbox still toggles the section); the press
@@ -5120,7 +5482,7 @@ namespace TaimisToolbench.Views
             var header = CreateSectionHeader(
                 headerTitle, section.SectionType, panelWidth, section.IsDefaultExpanded,
                 () => pressStartedOnCheckbox,
-                () => CursorOverCheckbox(hideUnlockedCheckbox));
+                () => CursorOverHeaderControl(hideUnlockedCheckbox));
             var headerPanel = header.HeaderPanel;
             var contentFlow = header.ContentFlow;
 
@@ -5140,7 +5502,7 @@ namespace TaimisToolbench.Views
 
             headerPanel.LeftMouseButtonPressed += (_, __) =>
             {
-                pressStartedOnCheckbox = CursorOverCheckbox(hideUnlockedCheckbox);
+                pressStartedOnCheckbox = CursorOverHeaderControl(hideUnlockedCheckbox);
             };
 
             hideUnlockedCheckbox.CheckedChanged += (_, e) =>
@@ -5173,7 +5535,7 @@ namespace TaimisToolbench.Views
                     Rows = visibleRows,
                     IsDefaultExpanded = section.IsDefaultExpanded,
                 };
-                new RecipesSectionRenderer(this, _getItemStatBlock)
+                new RecipesSectionRenderer(this, ItemFactsFor, CurrencyFactsFor)
                     .Render(filteredSection, contentFlow, panelWidth);
             }
 

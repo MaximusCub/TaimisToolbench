@@ -327,6 +327,114 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void ShortfallTooltip_NamesWhatTheChipWasMeasuredAgainst()
+        {
+            var shortfall = new RankerCurrencyShortfall
+            {
+                CurrencyId = 23,
+                Needed = 500,
+                Held = 200,
+                Short = 300,
+                BaselineNeeded = 500,
+            };
+
+            string cascade = RankerReadinessCalculator.ShortfallTooltip(
+                shortfall, "Karma", RankerMode.Cascade);
+            string independent = RankerReadinessCalculator.ShortfallTooltip(
+                shortfall, "Karma", RankerMode.Independent);
+
+            // In Cascade mode the held figure is the wallet residual, so the
+            // line's bare "200/500" is not measured against the wallet.
+            Assert.Contains("200 of the 500 Karma", cascade);
+            Assert.Contains("higher-priority", cascade);
+            Assert.Contains("200 of the 500 Karma", independent);
+            Assert.Contains("full wallet", independent);
+            Assert.DoesNotContain("higher-priority", independent);
+        }
+
+        [Fact]
+        public void ShortfallTooltip_ToleratesAMissingNameAndANullShortfall()
+        {
+            Assert.Null(RankerReadinessCalculator.ShortfallTooltip(null, "Karma", RankerMode.Cascade));
+
+            string text = RankerReadinessCalculator.ShortfallTooltip(
+                new RankerCurrencyShortfall { CurrencyId = 23, Needed = 5, Short = 5 },
+                null,
+                RankerMode.Cascade);
+            Assert.Contains("0 of the 5 this item still needs", text);
+        }
+
+        [Fact]
+        public void ShortfallText_ReadsAsHeldOverNeeded()
+        {
+            string text = RankerReadinessCalculator.ShortfallText(new RankerCurrencyShortfall
+            {
+                CurrencyId = 23,
+                Needed = 1500,
+                Held = 1000,
+                Short = 500,
+                BaselineNeeded = 1500,
+            });
+
+            Assert.Equal("1,000/1,500", text);
+        }
+
+        [Fact]
+        public void ShortfallText_CapsAWalletThatHoldsMoreThanTheItemNeeds()
+        {
+            // The currency line draws the shared full-coverage marker in this
+            // case, so this never reaches the screen. The formatter still has
+            // to be total: "9,000/1,500" would read as owing more than 100%.
+            string text = RankerReadinessCalculator.ShortfallText(new RankerCurrencyShortfall
+            {
+                CurrencyId = 23,
+                Needed = 1500,
+                Held = 9000,
+                Short = 0,
+                BaselineNeeded = 1500,
+            });
+
+            Assert.Equal("1,500/1,500", text);
+        }
+
+        [Fact]
+        public void ShortfallText_GroupsWalletScaleNumbers()
+        {
+            // Karma reaches seven figures. Without separators the pair is an
+            // unreadable run of digits.
+            string text = RankerReadinessCalculator.ShortfallText(new RankerCurrencyShortfall
+            {
+                CurrencyId = 23,
+                Needed = 2400000,
+                Held = 2100000,
+                Short = 300000,
+                BaselineNeeded = 2400000,
+            });
+
+            Assert.Equal("2,100,000/2,400,000", text);
+        }
+
+        [Fact]
+        public void ShortfallText_ToleratesANullShortfall()
+        {
+            Assert.Null(RankerReadinessCalculator.ShortfallText(null));
+        }
+
+        [Fact]
+        public void ShortfallText_FormatsWhatTheSolverActuallyProduced()
+        {
+            var currency = new List<CurrencyCost> { new CurrencyCost { CurrencyId = 29, Amount = 500 } };
+            var availability = Availability(currency: new Dictionary<int, int> { { 29, 400 } });
+
+            var metrics = RankerReadinessCalculator.Compute(
+                Result(currencies: currency), Result(currencies: currency), availability, 0);
+
+            Assert.Equal(
+                "400/500",
+                RankerReadinessCalculator.ShortfallText(metrics.CurrencyShortfalls.Single()));
+        }
+
+        [Fact]
         public void EachCurrencyCountsOnceRegardlessOfMagnitude()
         {
             // Weighting by need would compare 5,000 karma against 10 laurels as
@@ -538,6 +646,35 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void ADisciplineNameThatDiffersOnlyInCaseDoesNotCount()
+        {
+            // CraftCompetencyEvaluator and the plan's "not trained on any
+            // character" line both compare ordinal. This used to compare
+            // case-insensitively, so it could score a discipline the plan
+            // reported as untrained.
+            var owned = Result(
+                coin: 50,
+                disciplines: new List<RequiredDiscipline>
+                {
+                    new RequiredDiscipline { Discipline = "Huntsman", MinRating = 400 },
+                },
+                characters: new List<SnapshotCharacterDiscipline>
+                {
+                    new SnapshotCharacterDiscipline
+                    {
+                        CharacterName = "Alice",
+                        Discipline = "huntsman",
+                        Rating = 400,
+                    },
+                });
+
+            var metrics = RankerReadinessCalculator.Compute(Result(coin: 100), owned, Availability(), 0);
+
+            Assert.True(GateApplies(metrics, RankerGate.Disciplines));
+            Assert.Equal(0.0, GateCompletion(metrics, RankerGate.Disciplines), 9);
+        }
+
+        [Fact]
         public void SeveralRequiredDisciplinesAverageUnweighted()
         {
             var owned = Result(
@@ -630,9 +767,17 @@ namespace TaimisToolbench.Tests.Services
         // ---------------------------------------------------------------
         // The recipes gate
         // ---------------------------------------------------------------
-        private static RequiredRecipe Recipe(bool? isMissing, bool autoLearned = false)
+        private static RequiredRecipe Recipe(
+            bool? isMissing, bool autoLearned = false, params string[] disciplines)
         {
-            return new RequiredRecipe { RecipeId = 1, OutputItemId = 2, IsMissing = isMissing, IsAutoLearned = autoLearned };
+            return new RequiredRecipe
+            {
+                RecipeId = 1,
+                OutputItemId = 2,
+                IsMissing = isMissing,
+                IsAutoLearned = autoLearned,
+                Disciplines = new List<string>(disciplines),
+            };
         }
 
         [Fact]
@@ -685,6 +830,79 @@ namespace TaimisToolbench.Tests.Services
             var metrics = RankerReadinessCalculator.Compute(Result(coin: 100), owned, Availability(), 0);
 
             Assert.False(GateApplies(metrics, RankerGate.Recipes));
+        }
+
+        [Fact]
+        public void RecipesGate_IgnoresMysticForgeOnlyRecipes()
+        {
+            // The Mystic Forge has no unlock, so PlanResultBuilder marks a
+            // forge recipe as not missing. Counting it padded both halves of
+            // this fraction and lifted the cell above the plan's own count.
+            var owned = Result(coin: 50);
+            owned.RequiredRecipes = new List<RequiredRecipe>
+            {
+                Recipe(isMissing: false, autoLearned: false, "MysticForge"),
+                Recipe(isMissing: false, autoLearned: false, "MysticForge"),
+                Recipe(isMissing: true, autoLearned: false, "Weaponsmith"),
+            };
+
+            var metrics = RankerReadinessCalculator.Compute(Result(coin: 100), owned, Availability(), 0);
+
+            Assert.True(GateApplies(metrics, RankerGate.Recipes));
+            Assert.Equal(0.0, GateCompletion(metrics, RankerGate.Recipes), 9);
+        }
+
+        [Theory]
+        [InlineData("Achievement")]
+        [InlineData("Merchant")]
+        public void RecipesGate_IgnoresTheOtherUnlockFreeSourceTags(string discipline)
+        {
+            // PlanResultBuilder marks a "Merchant" or "Achievement" recipe
+            // not missing on the same no-unlock rule it applies to the
+            // forge, so each padded this fraction as a forge recipe used to.
+            var owned = Result(coin: 50);
+            owned.RequiredRecipes = new List<RequiredRecipe>
+            {
+                Recipe(isMissing: false, autoLearned: false, discipline),
+                Recipe(isMissing: true, autoLearned: false, "Weaponsmith"),
+            };
+
+            var metrics = RankerReadinessCalculator.Compute(Result(coin: 100), owned, Availability(), 0);
+
+            Assert.True(GateApplies(metrics, RankerGate.Recipes));
+            Assert.Equal(0.0, GateCompletion(metrics, RankerGate.Recipes), 9);
+        }
+
+        [Fact]
+        public void RecipesGate_DropsARecipeThatPairsTheForgeWithALeveledDiscipline()
+        {
+            // PlanResultBuilder forces IsMissing = false as soon as ONE
+            // discipline is unlock-free, so such a recipe can only ever
+            // arrive as known and can only pad the fraction.
+            var owned = Result(coin: 50);
+            owned.RequiredRecipes = new List<RequiredRecipe>
+            {
+                Recipe(isMissing: false, autoLearned: false, "MysticForge", "Artificer"),
+                Recipe(isMissing: true, autoLearned: false, "Weaponsmith"),
+            };
+
+            var metrics = RankerReadinessCalculator.Compute(Result(coin: 100), owned, Availability(), 0);
+
+            Assert.True(GateApplies(metrics, RankerGate.Recipes));
+            Assert.Equal(0.0, GateCompletion(metrics, RankerGate.Recipes), 9);
+        }
+
+        [Fact]
+        public void RecipesGate_StillScoresARecipeWithNoDisciplineData()
+        {
+            // An empty discipline list is absent data, not a forge recipe.
+            var owned = Result(coin: 50);
+            owned.RequiredRecipes = new List<RequiredRecipe> { Recipe(isMissing: false) };
+
+            var metrics = RankerReadinessCalculator.Compute(Result(coin: 100), owned, Availability(), 0);
+
+            Assert.True(GateApplies(metrics, RankerGate.Recipes));
+            Assert.Equal(1.0, GateCompletion(metrics, RankerGate.Recipes), 9);
         }
 
         [Fact]

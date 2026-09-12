@@ -26,7 +26,6 @@ namespace TaimisToolbench.Tests.Helpers
                     new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = coinCost },
                 },
                 MerchantName = "TestMerchant",
-                Locations = new List<string> { "TestLoc" },
                 DailyCap = dailyCap,
                 WeeklyCap = weeklyCap,
                 SeasonalCap = seasonalCap,
@@ -57,7 +56,6 @@ namespace TaimisToolbench.Tests.Helpers
                 OutputCount = outputCount,
                 CostLines = costLines,
                 MerchantName = "Mixed Vendor",
-                Locations = new List<string>(),
                 DailyCap = dailyCap,
                 WeeklyCap = weeklyCap,
                 SeasonalCap = seasonalCap,
@@ -116,7 +114,6 @@ namespace TaimisToolbench.Tests.Helpers
                 OutputCount = outputCount,
                 CostLines = costLines,
                 MerchantName = "Barter Vendor",
-                Locations = new List<string>(),
             };
         }
     }

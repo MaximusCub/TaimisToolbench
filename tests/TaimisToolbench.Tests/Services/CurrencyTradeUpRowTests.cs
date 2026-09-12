@@ -221,7 +221,7 @@ namespace TaimisToolbench.Tests.Services
         {
             Assert.Equal(
                 "https://wiki.guildwars2.com/wiki/Clot_of_Congealed_Screams#Acquisition",
-                TreeRowTooltipComposer.BuildWikiUrl(TradeUpNode()));
+                TreeRowTooltipComposer.WikiTargetFor(TradeUpNode()).BuildUrl());
         }
 
         [Fact]
@@ -232,18 +232,23 @@ namespace TaimisToolbench.Tests.Services
 
             Assert.Equal(
                 "https://wiki.guildwars2.com/wiki/Clot_of_Congealed_Screams",
-                TreeRowTooltipComposer.BuildWikiUrl(node));
+                TreeRowTooltipComposer.WikiTargetFor(node).BuildUrl());
         }
 
         [Fact]
         public void TheTooltipAffordanceLine_NamesTheAcquisitionSection()
         {
-            var lines = TreeRowTooltipComposer
-                .BuildExtraTooltipContent(TradeUpNode(), null, null)
-                .ToPlainLines();
+            // The affordance line is written by the target, not by the
+            // tips composer, so this reads it where the second box does.
+            Assert.Equal(
+                IconWikiTarget.AcquisitionHintText,
+                TreeRowTooltipComposer.WikiTargetFor(TradeUpNode()).Hint);
 
-            Assert.Contains(TreeRowTooltipComposer.WikiAcquisitionHintText, lines);
-            Assert.DoesNotContain(TreeRowTooltipComposer.WikiHintText, lines);
+            var node = TradeUpNode();
+            node.Decision = CraftingDecision.Craft;
+            Assert.Equal(
+                IconWikiTarget.HintText,
+                TreeRowTooltipComposer.WikiTargetFor(node).Hint);
         }
     }
 }

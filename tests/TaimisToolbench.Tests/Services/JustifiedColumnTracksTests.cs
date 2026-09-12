@@ -253,6 +253,52 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void RightAlignedOverContent_EndsOnTheEdgeItsCellsEndOn()
+        {
+            // A money column right-aligns its values. Centring the word
+            // over ink narrower than the word left it hanging past that
+            // edge; this puts the two on one line.
+            var room = JustifiedColumnTracks.HeaderRoom.Between(842, 1076);
+
+            Assert.Equal(907, JustifiedColumnTracks.RightAlignedOverContent(975, 68, room));
+            Assert.Equal(975, JustifiedColumnTracks.RightAlignedOverContent(975, 68, room) + 68);
+        }
+
+        [Fact]
+        public void RightAlignedOverContent_IgnoresHowWideTheValuesAre()
+        {
+            // The edge is the whole rule. A column of "1c" and a column of
+            // "1234g 56s 78c" seat their header identically.
+            var room = JustifiedColumnTracks.HeaderRoom.Between(842, 1076);
+
+            Assert.Equal(
+                JustifiedColumnTracks.RightAlignedOverContent(975, 68, room),
+                JustifiedColumnTracks.CenteredOverContentRightAligned(975, 68, 68, room));
+        }
+
+        [Fact]
+        public void RightAlignedOverContent_NeighbourTooClose_PinsLeftAndSpillsOneWay()
+        {
+            // A header wider than the gap beside it cannot take the edge
+            // without covering the column on its left, so it gives that up
+            // and overhangs rightward - the one direction every other
+            // header in this class already spills in.
+            var room = JustifiedColumnTracks.HeaderRoom.Between(940, 1076);
+
+            Assert.Equal(940, JustifiedColumnTracks.RightAlignedOverContent(975, 200, room));
+        }
+
+        [Fact]
+        public void RightAlignedOverContent_RoomShorterThanTheEdge_KeepsTheHeaderInside()
+        {
+            // Nothing may cross the room's right bound, which for the last
+            // column is the table's own pinned edge.
+            var room = JustifiedColumnTracks.HeaderRoom.Between(842, 960);
+
+            Assert.Equal(892, JustifiedColumnTracks.RightAlignedOverContent(975, 68, room));
+        }
+
+        [Fact]
         public void HeaderRoom_InvertedBounds_CollapseRatherThanInvert()
         {
             var room = JustifiedColumnTracks.HeaderRoom.Between(200, 100);

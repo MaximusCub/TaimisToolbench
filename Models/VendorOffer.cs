@@ -14,8 +14,12 @@ namespace TaimisToolbench.Models
 
         public string MerchantName { get; set; }
 
-        public List<string> Locations { get; set; } = new List<string>();
-
+        // No Locations property, deliberately: holding them cost 2.19MB of
+        // place names across the 65,315 shipped offers for a whole session
+        // and nothing routes, prices or displays one. System.Text.Json
+        // skips the file's "locations" because nothing here claims it, and
+        // Services/VendorOfferLocations.cs reads them back off disk.
+        // Re-adding a property here would restore the cost silently.
         public int? DailyCap { get; set; }
 
         public int? WeeklyCap { get; set; }
@@ -69,5 +73,14 @@ namespace TaimisToolbench.Models
         public int? UnlockRecipeItemId { get; set; }
 
         public int? UnlockRecipeId { get; set; }
+
+        // What this vendor demands of the account before it will trade, or
+        // null for a vendor that demands nothing. Additive, backward-
+        // compatible - an offer written before this field deserializes with
+        // it null. NEVER read by the solver: a gated offer stays selectable
+        // and priced exactly as before, and the requirement is only
+        // reported, by Services/VendorRequirementEvaluator through
+        // PlanResultBuilder. See Models/VendorRequirement.cs.
+        public VendorRequirement Requirement { get; set; }
     }
 }

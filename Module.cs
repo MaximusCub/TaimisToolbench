@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Blish_HUD;
 using Blish_HUD.Content;
 using Blish_HUD.Controls;
+using Blish_HUD.Graphics.UI;
 using Blish_HUD.Modules;
 using Blish_HUD.Modules.Managers;
 using Blish_HUD.Settings;
@@ -41,15 +42,6 @@ namespace TaimisToolbench
     {
         private static readonly Logger Logger = Logger.GetLogger<Module>();
 
-        // Bounds the whole multi-step account-snapshot fetch (wallet, bank,
-        // shared inventory, materials, one call per character) so a full
-        // network outage fails fast instead of stacking several ~100s HTTP
-        // timeouts sequentially (KNOWN-ISSUES #31/api-degradation F6) -
-        // mirrors CurrencyMetadataService's own internal-timeout pattern,
-        // just with a larger budget since this fetch does far more work on
-        // a genuine success than a single /v2/currencies call.
-        private static readonly TimeSpan SnapshotFetchTimeout = TimeSpan.FromSeconds(60);
-
         internal ContentsManager ContentsManager => this.ModuleParameters.ContentsManager;
 
         internal DirectoriesManager DirectoriesManager => this.ModuleParameters.DirectoriesManager;
@@ -58,6 +50,7 @@ namespace TaimisToolbench
 
         private CornerIcon _cornerIcon;
         private ResizableTabbedWindow _mainWindow;
+        private Views.PopoutWindowHost _popoutWindows;
         private ModalDialog _modalDialog;
         private ApiAccessDialog _apiAccessDialog;
         private MainView _snapshotContent;
@@ -139,6 +132,14 @@ namespace TaimisToolbench
         // being asked for by both.
         private bool _iconPrimeHandedOver;
 
+        private TradingPostService _tradingPostService;
+
+        // Item ids of the plan this session restored, kept so opening the
+        // module window can warm their trading post prices. Null until a
+        // result-carrying plan is restored, and never updated afterwards:
+        // a generation refills the same cache itself.
+        private IReadOnlyList<int> _restoredPlanPriceWarmIds;
+
         private SnapshotStore _snapshotStore;
         private StatusStore _statusStore;
         private Gw2AccountSnapshotService _snapshotService;
@@ -202,11 +203,6 @@ namespace TaimisToolbench
         private HttpClient _httpClient;
         private CraftingPlanPipeline _craftingPipeline;
 
-        // Held apart from the pipeline that owns it purely so
-        // OnSubtokenUpdated can drop the cached ids: they belong to the
-        // account the old subtoken addressed.
-        private CachingAccountRecipeClient _accountRecipeClient;
-
         // Held apart from the pipeline that owns it so the Settings tab's
         // currency icons can read the same session-cached list the plan
         // rows do, instead of opening a second one - see
@@ -221,6 +217,17 @@ namespace TaimisToolbench
         private readonly PlanStripStatusBoard _planStripStatusBoard = new PlanStripStatusBoard();
         private VendorOfferStore _vendorOfferStore;
         private OverlayRecipeCacheStore _recipeOverlay;
+
+        // Held so a later build-id attempt can stamp both stores, the way
+        // the startup attempt does. See FetchLiveBuildIdAsync.
+        private SeededRecipeCacheStore _recipeSeed;
+        private Gw2BuildApiClient _buildApi;
+
+        // At most one build-id fetch in flight. Retried rather than tried
+        // once per session: without the id nothing verifies the corpus, so
+        // a launch that raced the network stayed unverified until Blish was
+        // restarted.
+        private int _buildIdFetchRunning;
         private IItemSearchProvider _itemSearchProvider;
         private Texture2D _moduleIconTexture;
         private Texture2D _cornerIconTexture;
@@ -248,6 +255,22 @@ namespace TaimisToolbench
         // unsynchronized statements) - see SnapshotRefreshSlot's own doc
         // comment for the race that shape allowed.
         private readonly SnapshotRefreshSlot _refreshSlot = new SnapshotRefreshSlot();
+
+        // The refresh half of a Generate Plan press, held apart from this
+        // class so its orderings are testable - see PlanRefreshGate.
+        private PlanRefreshGate _planRefreshGate;
+
+        // The wait half of the same press. Held for the life of the module
+        // because it remembers a wait that ran out, which is what stops a
+        // second press spending the same window again - see
+        // ApiHandoverWait.
+        private ApiHandoverWait _apiHandoverWait;
+
+        // Whether Blish has granted usable API access. Every permission
+        // probe in this class goes through it so a Generate press waiting
+        // for the subtoken is released by whichever part of the module
+        // notices it first - see ApiReadySignal.
+        private ApiReadySignal _apiReady;
 
         // Cancels the background /v2/build lookup and the corpus probe
         // behind it - both retry/run across several seconds and hold
@@ -297,6 +320,12 @@ namespace TaimisToolbench
         // instead), without needing a lock of its own here.
         private long _lastFailedRefreshAttemptTicks;
 
+        // The same failures, counted as runs rather than timed, so the
+        // Crafting Plan tab can raise its stale-data dialog once per outage
+        // instead of once per Generate press. Its own doc comment carries
+        // the rule; the ticks above stay the timing side and gate retries.
+        private readonly RefreshFailureRun _refreshFailures = new RefreshFailureRun();
+
         // Minimum wait after a failed background
         // refresh before RefreshSnapshotInBackgroundAsync is allowed to
         // auto-retrigger again. Deliberately does NOT gate UserRefreshAsync
@@ -345,6 +374,16 @@ namespace TaimisToolbench
         // state instead of retrying on the next tick.
         private bool _backgroundRefreshSpinnerApplied;
 
+        // A wiki launch outcome waiting to be put on screen, as the
+        // WikiLaunchOutcome value plus one so that 0 can mean "nothing
+        // pending". Written from WikiLinkLauncher's launch task, which runs
+        // on a ThreadPool thread, and drained in Update because
+        // ScreenNotification builds a Blish control and controls belong to
+        // the frame thread - the same reason SaveStatusThreadSafe defers.
+        // Static so the handler the launcher holds does not root this Module
+        // instance past Unload.
+        private static int _pendingWikiNotice;
+
         [ImportingConstructor]
         public Module([Import("ModuleParameters")] ModuleParameters moduleParameters)
             : base(moduleParameters)
@@ -354,6 +393,37 @@ namespace TaimisToolbench
         protected override void DefineSettings(SettingCollection settings)
         {
             _settings = new ModuleSettings(settings);
+        }
+
+        /// <summary>
+        /// Replaces Blish's own setting list in the Manage Modules panel.
+        /// Every setting is defined into a sub-collection Blish does not
+        /// render, so that list is empty; this puts a line and a button
+        /// there instead. See docs/blish-settings-panel.md.
+        /// </summary>
+        public override IView GetSettingsView()
+        {
+            return new BlishSettingsHintView(OpenSettingsTab);
+        }
+
+        /// <summary>
+        /// Shows the module window on its Settings tab. Selecting the tab
+        /// before showing the window means a window that was closed never
+        /// appears on the tab it was left on first.
+        /// </summary>
+        private void OpenSettingsTab()
+        {
+            // Null before Initialize runs BuildWindow, and again after
+            // Unload clears it. Blish's panel can outlive the module's
+            // window, and a click that lands then must not throw inside
+            // Blish's own UI.
+            if (_mainWindow == null || _settingsTab == null)
+            {
+                return;
+            }
+
+            _mainWindow.SelectedTab = _settingsTab;
+            _mainWindow.Show();
         }
 
         /// <summary>
@@ -435,7 +505,8 @@ namespace TaimisToolbench
                 ModuleLog.Shared.Write(ModuleLogLevel.Warn, "store", $"{message}: {ex.GetType().Name} - {ex.Message}");
 
             // PlanStore alone also reports a non-failure: a saved plan
-            // written by a build at an older shipped schema version. It is
+            // written by a build at a shipped schema version below
+            // PersistedPlan.MinimumReadableSchemaVersion. It is
             // expected, benign and repaired by the next Generate, so it
             // must read as routine in the log rather than as damage - see
             // PlanStore's own doc comment.
@@ -449,6 +520,15 @@ namespace TaimisToolbench
             _planHistoryBlobStore = new PlanHistoryBlobStore(dataDir, onStoreError);
             _planStore = new PlanStore(dataDir, onStoreError, onStoreInfo);
             _snapshotService = new Gw2AccountSnapshotService(Gw2ApiManager);
+            _apiReady = new ApiReadySignal(_snapshotService.HasRequiredPermissions);
+            _apiHandoverWait = new ApiHandoverWait(
+                _apiReady, ReadGameClientState, SnapshotRefreshPolicy.HandoverWaitFor);
+            _planRefreshGate = new PlanRefreshGate(
+                _refreshSlot,
+                _apiReady,
+                ReadGameClientState,
+                IsInRefreshFailureBackoff,
+                FetchForPlanAsync);
             _lastStatus = _statusStore.Load();
 
             _httpClient = new HttpClient();
@@ -590,7 +670,65 @@ namespace TaimisToolbench
             // Async build ID fetch: stamps provenance and licenses the
             // corpus probe - never a wipe. The overlay is already loaded
             // and serving above.
-            var buildApi = new Gw2BuildApiClient(_httpClient);
+            _recipeSeed = recipeSeed;
+            _buildApi = new Gw2BuildApiClient(_httpClient);
+            KickBuildIdFetch();
+
+            // Hoisted out of the pipeline's argument list so the plan view
+            // can read its session item-stat cache for tooltips - the same
+            // instance, so the stats the plan already fetched are the ones
+            // a hover reads. Never a fetch (GetCachedStatBlock).
+            var itemMetadataService = new ItemMetadataService(itemApi, itemNameSeed);
+
+            _currencyMetadataService = new CurrencyMetadataService(_httpClient);
+
+            // Hoisted for the same reason itemMetadataService is: the
+            // window-open price warm has to fill the very cache the next
+            // generation reads, not a second one.
+            _tradingPostService = new TradingPostService(priceApi);
+
+            _craftingPipeline = new CraftingPlanPipeline(
+                recipeService,
+                _tradingPostService,
+                new PlanSolver(),
+                itemMetadataService,
+                _vendorOfferStore,
+                reducer: new InventoryReducer(),
+                accountRecipeClient: new Gw2AccountRecipeClient(Gw2ApiManager),
+                currencyMetadataService: _currencyMetadataService,
+                acquisitionHints: acquisitionHints,
+                dailyCooldownItems: dailyCooldownItems,
+                recipeSheetItemIdByRecipeId: recipeSheetItemIdByRecipeId,
+                activeFestivalNames: ReadActiveFestivalNames,
+                accountProgressionClient: new Gw2AccountProgressionClient(Gw2ApiManager));
+
+            return itemMetadataService;
+        }
+
+        /// <summary>
+        /// Fetches the live game build id in the background and stamps both
+        /// recipe stores with it. A no-op once the id is known, and while an
+        /// attempt is already running.
+        /// <para>
+        /// Called at startup and again from
+        /// <see cref="KickCorpusVerification"/>, so a launch with no network
+        /// picks the id up at a later plan generation rather than staying
+        /// unverified until Blish restarts.
+        /// </para>
+        /// </summary>
+        private void KickBuildIdFetch()
+        {
+            var buildApi = _buildApi;
+            if (buildApi == null || Volatile.Read(ref _liveGw2BuildId) != 0)
+            {
+                return;
+            }
+
+            if (Interlocked.CompareExchange(ref _buildIdFetchRunning, 1, 0) != 0)
+            {
+                return;
+            }
+
             Task.Run(async () =>
             {
                 try
@@ -600,18 +738,18 @@ namespace TaimisToolbench
                     if (!build.BuildId.HasValue)
                     {
                         // The cache still serves; only the build stamp and
-                        // the corpus verification are lost this session, so
+                        // the corpus verification are lost for now, so
                         // recipes a newer build added may render UNKNOWN.
                         string reason = build.LastError == null
                             ? "no response"
                             : $"[{build.LastError.GetType().Name}] {build.LastError.Message}";
-                        Logger.Warn("GW2 build ID unavailable after {0} attempts - recipe data cannot be verified against the live build this session: {1}", build.Attempts, reason);
-                        ModuleLog.Shared.Write(ModuleLogLevel.Warn, "startup", $"GW2 build ID unavailable after {build.Attempts} attempts - recipe data cannot be verified against the live build this session: {reason}");
+                        Logger.Warn("GW2 build ID unavailable after {0} attempts - recipe data cannot be verified against the live build yet: {1}", build.Attempts, reason);
+                        ModuleLog.Shared.Write(ModuleLogLevel.Warn, "startup", $"GW2 build ID unavailable after {build.Attempts} attempts - recipe data cannot be verified against the live build yet, retrying at the next plan generation: {reason}");
                         return;
                     }
 
-                    recipeOverlay.SetCurrentBuildId(build.BuildId.Value);
-                    recipeSeed.SetCurrentBuildId(build.BuildId.Value);
+                    _recipeOverlay?.SetCurrentBuildId(build.BuildId.Value);
+                    _recipeSeed?.SetCurrentBuildId(build.BuildId.Value);
 
                     Volatile.Write(ref _liveGw2BuildId, build.BuildId.Value);
                     KickCorpusVerification();
@@ -621,51 +759,38 @@ namespace TaimisToolbench
                     // Unloaded mid-fetch: _buildIdCts is cancelled and
                     // _httpClient disposed before this task can finish.
                 }
+                finally
+                {
+                    Volatile.Write(ref _buildIdFetchRunning, 0);
+                }
             });
-
-            // Hoisted out of the pipeline's argument list so the plan view
-            // can read its session item-stat cache for tooltips - the same
-            // instance, so the stats the plan already fetched are the ones
-            // a hover reads. Never a fetch (GetCachedStatBlock).
-            var itemMetadataService = new ItemMetadataService(itemApi, itemNameSeed);
-
-            _accountRecipeClient = new CachingAccountRecipeClient(
-                new Gw2AccountRecipeClient(Gw2ApiManager));
-
-            _currencyMetadataService = new CurrencyMetadataService(_httpClient);
-
-            _craftingPipeline = new CraftingPlanPipeline(
-                recipeService,
-                new TradingPostService(priceApi),
-                new PlanSolver(),
-                itemMetadataService,
-                _vendorOfferStore,
-                reducer: new InventoryReducer(),
-                accountRecipeClient: _accountRecipeClient,
-                currencyMetadataService: _currencyMetadataService,
-                acquisitionHints: acquisitionHints,
-                dailyCooldownItems: dailyCooldownItems,
-                recipeSheetItemIdByRecipeId: recipeSheetItemIdByRecipeId,
-                activeFestivalNames: ReadActiveFestivalNames);
-
-            return itemMetadataService;
         }
 
         /// <summary>
         /// Runs the corpus probe in the background: one /v2/recipes id-list
         /// request per game build, the license for serving derived
         /// negatives as exact (see RecipeCorpusVerifier). Never awaited by
-        /// plan generation. A no-op while the live build is unknown, while
-        /// a probe is already in flight, or - via the verifier's own
-        /// manifest cheap-out - when this build and corpus are already
-        /// verified (0 requests on a same-patch relaunch).
+        /// plan generation. A no-op while a probe is already in flight, or -
+        /// via the verifier's own manifest cheap-out - when this build and
+        /// corpus are already verified (0 requests on a same-patch
+        /// relaunch). While the live build is unknown it retries the build
+        /// fetch instead.
         /// </summary>
         private void KickCorpusVerification()
         {
             int buildId = Volatile.Read(ref _liveGw2BuildId);
             var store = _recipeCacheStore;
             var verifier = _recipeCorpusVerifier;
-            if (buildId == 0 || store == null || verifier == null || !store.CorpusUsable)
+            if (buildId == 0)
+            {
+                // Nothing can be verified without the id, and the startup
+                // attempt may have run before the network was up. Try again
+                // now; the next plan generation calls back here.
+                KickBuildIdFetch();
+                return;
+            }
+
+            if (store == null || verifier == null || !store.CorpusUsable)
             {
                 return;
             }
@@ -965,10 +1090,10 @@ namespace TaimisToolbench
             // single-item method inside the pipeline, so the lambda needs
             // no single-vs-multi branch of its own.
             _craftingContent = new CraftingPlanView(
-                (items, useOwn, valueOwnMaterials, priceBasis, ct, progress, phaseProgress, requestLabel) =>
+                (items, useOwn, valueOwnMaterials, priceBasis, ct, progress, phaseProgress, requestLabel, onAccountRefresh) =>
                     StartGenerateAsync(
                         items, useOwn, valueOwnMaterials, priceBasis, ct,
-                        progress, phaseProgress, requestLabel, lifetimeToken),
+                        progress, phaseProgress, requestLabel, onAccountRefresh, lifetimeToken),
                 _modalDialog,
                 _itemSearchProvider,
                 _settings,
@@ -981,6 +1106,12 @@ namespace TaimisToolbench
                     // from the same baseline, not empty (see
                     // PersistResolvedPlanInBackground).
                     PersistResolvedPlanInBackground(result, overrides, ignoredItemIds);
+
+                    // Off the main thread: this writes the history index,
+                    // and the caller is a pill Click chain.
+                    int overrideCount = overrides?.Count ?? 0;
+                    int ignoredCount = ignoredItemIds?.Count ?? 0;
+                    Task.Run(() => MarkHistoryResolvedWithOverrides(overrideCount, ignoredCount));
                     return result;
                 },
                 itemMetadataService.GetCachedStatBlock,
@@ -990,8 +1121,29 @@ namespace TaimisToolbench
                 // ItemMetadataService.WarmStatBlocksAsync for why it is
                 // not GetMetadataAsync.
                 _warmItemStatsAsync,
-                () => lifetimeToken
+                () => lifetimeToken,
+                () => _currentSnapshot,
+                vm => _popoutWindows?.PublishPlan(vm),
+                sectionType => _popoutWindows?.Open(sectionType)
             );
+
+            // Built after the view that opens it, and held here rather than
+            // on the view: its windows are sprite-screen children so they
+            // outlive the module window, which means only Unload can end
+            // them. UserRefreshAsync is the same ungated fetch the Account
+            // Snapshot tab's Refresh Now runs - a popout's Refresh is a
+            // deliberate press too, so it is not held back by the freshness
+            // windows in Services/SnapshotRefreshPolicy.
+            _popoutWindows = new PopoutWindowHost(
+                ModuleWindowArt.Background,
+                UserRefreshAsync,
+                () => _currentSnapshot,
+                // The Crafting Plan tab's own resolvers, not a second pair
+                // built here: a popout is a picture of one of its tables,
+                // so a row must hover identically in both.
+                _craftingContent.ItemFactsFor,
+                _craftingContent.CurrencyFactsFor,
+                _settings);
 
             _settingsContent = new SettingsTabContent(
                 _settings,
@@ -1119,30 +1271,21 @@ namespace TaimisToolbench
             int minWindowWidth = WindowSizing.EffectiveMinWindowWidth(
                 GameService.Graphics.SpriteScreen.Width);
 
-            // The window/content regions below stay at the 930x710 pair the
-            // 1024x1024 background texture (502049) was authored against -
-            // they are texture-space regions, and Blish grows the content
-            // region by the same delta it grows the window by, so the 46px
-            // horizontal chrome they encode holds at every size. Only the
-            // minimum (WindowSizing) moved; the window opens at it because
+            // The window/content regions stay at the 930x710 pair the
+            // 1024x1024 background texture was authored against - they are
+            // texture-space regions, and Blish grows the content region by
+            // the same delta it grows the window by, so the horizontal
+            // chrome they encode holds at every size. Only the minimum
+            // (WindowSizing) moved; the window opens at it because
             // ResizableTabbedWindow clamps the constructed size up, on the
             // same paths that clamp a drag and a size persisted by an
             // earlier session.
             // Validated in-game to align with Event Table / Blish HUD's own
             // TabbedWindow dimensions.
-            // The vertical terms of both rectangles live in WindowSizing,
-            // which owns the bottom margin they leave Blish and the panel
-            // height that falls out of it; the horizontal ones stay here,
-            // accounted for by WindowSizing.WindowToTabPanelChrome.
             _mainWindow = new ResizableTabbedWindow(
-                AsyncTexture2D.FromAssetId(502049),
-                new Rectangle(
-                    35, WindowSizing.WindowRegionTop, 930, WindowSizing.WindowRegionHeight),
-                new Rectangle(
-                    81,
-                    WindowSizing.WindowContentRegionTop,
-                    884,
-                    WindowSizing.WindowContentRegionHeight),
+                ModuleWindowArt.Background(),
+                ModuleWindowArt.WindowRegion(),
+                ModuleWindowArt.ContentRegion(),
                 new Point(WindowSizing.MinWindowWidth, WindowSizing.MinWindowHeight))
             {
                 Parent = GameService.Graphics.SpriteScreen,
@@ -1205,10 +1348,18 @@ namespace TaimisToolbench
 
             _snapshotTab = new Tab(
                 AsyncTexture2D.FromAssetId(156699),
-                () => new ViewAdapter(
-                    "Account Snapshot",
-                    c => _snapshotContent.Build(c),
-                    b => _snapshotContent.BuildHeaderActions(b)),
+                () =>
+                {
+                    // Blish calls this factory every time the tab is
+                    // selected, on the main thread, just before it queues
+                    // the off-thread Build - the same seam the other tabs
+                    // use to start their own rebuild.
+                    RefreshSnapshotOnTabOpen();
+                    return new ViewAdapter(
+                        "Account Snapshot",
+                        c => _snapshotContent.Build(c),
+                        b => _snapshotContent.BuildHeaderActions(b));
+                },
                 "Account Snapshot");
             _mainWindow.Tabs.Add(_snapshotTab);
 
@@ -1275,6 +1426,12 @@ namespace TaimisToolbench
         /// </summary>
         private void WireEvents()
         {
+            // Right-clicking an icon opens a wiki page in the player's
+            // browser, and Windows usually refuses to let that browser come
+            // forward over the game (docs/ARCHITECTURE.md, S2.10). This is
+            // what tells the player it happened at all.
+            WikiLinkLauncher.OutcomeReported = QueueWikiLaunchNotice;
+
             // Refresh log content when switching to the Log tab
             _mainWindow.TabChanged += (s, e) =>
             {
@@ -1298,6 +1455,8 @@ namespace TaimisToolbench
                     _planHistoryContent?.Refresh();
                 }
             };
+
+            _mainWindow.Shown += (s, e) => WarmRestoredPlanPrices();
 
             _cornerIcon = new CornerIcon()
             {
@@ -1323,7 +1482,7 @@ namespace TaimisToolbench
         /// is the one captured when the view was built - a later Initialize
         /// installs a different source, and Unload disposes this one.
         /// </param>
-        private Task<CraftingPlanResult> StartGenerateAsync(
+        private async Task<CraftingPlanResult> StartGenerateAsync(
             IReadOnlyList<PlanRequestItem> items,
             bool useOwn,
             bool valueOwnMaterials,
@@ -1332,6 +1491,7 @@ namespace TaimisToolbench
             IProgress<PlanStatus> progress,
             IProgress<PlanPhaseEvent> phaseProgress,
             string requestLabel,
+            Action<PlanAccountRefresh> onAccountRefresh,
             CancellationToken lifetimeToken)
         {
             // The corpus probe retries here when its startup run failed
@@ -1400,19 +1560,92 @@ namespace TaimisToolbench
             var generateCts = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetimeToken);
             ct = generateCts.Token;
 
-            Task<CraftingPlanResult> generateTask = useOwn
-                ? _craftingPipeline.GenerateStructuredAsync(
-                    items, _currentSnapshot, ct, progress,
-                    activeChar, priceBasis, currencyValuation, ownMaterialsMode,
-                    homesteadTiers, phaseProgress, requestLabel,
-                    characterDisciplines: _currentSnapshot?.CharacterDisciplines)
-                : _craftingPipeline.GenerateStructuredAsync(
-                    items, null, ct, progress,
-                    null, priceBasis, currencyValuation, ownMaterialsMode,
-                    homesteadTiers, phaseProgress, requestLabel,
-                    characterDisciplines: _currentSnapshot?.CharacterDisciplines);
+            // Ahead of both tasks below rather than alongside them. The
+            // status strip names one phase at a time, and a wait hidden
+            // under "Fetching prices" reads as a freeze. It also settles
+            // API access before the pipeline reaches the account
+            // progression read, which needs the same subtoken the refresh
+            // does.
+            try
+            {
+                await WaitForApiHandoverAsync(phaseProgress, ct);
+            }
+            catch
+            {
+                generateCts.Dispose();
+                throw;
+            }
 
-            return PersistAfterGenerateAsync(generateTask, items, useOwn, priceBasis, valueOwnMaterials, myPersistGen, ct, generateCts);
+            // Started here and awaited inside the pipeline, after the price
+            // fetch: the refresh runs alongside the tree build and the
+            // prices instead of ahead of them, so a generation waits for
+            // the longer of the two rather than their sum. It supplies both
+            // the snapshot and the disciplines, which is why neither is
+            // passed by value any more.
+            var accountRefresh = RefreshForPlanAsync(useOwn, onAccountRefresh, ct);
+
+            // A pipeline that throws before the seam - a failed tree build -
+            // never awaits the refresh, and a cancelled refresh would then
+            // be an unobserved fault.
+            _ = accountRefresh.ContinueWith(
+                t => { var ignored = t.Exception; },
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+
+            Task<CraftingPlanResult> generateTask = _craftingPipeline.GenerateStructuredAsync(
+                items, snapshot: null, ct, progress,
+                useOwn ? activeChar : null, priceBasis, currencyValuation, ownMaterialsMode,
+                homesteadTiers, phaseProgress, requestLabel,
+                characterDisciplines: null,
+                accountDataAsync: () => accountRefresh);
+
+            return await PersistAfterGenerateAsync(
+                generateTask, items, useOwn, priceBasis, valueOwnMaterials, myPersistGen, ct, generateCts);
+        }
+
+        /// <summary>
+        /// Waits for Blish to hand over the API subtoken, and tells the
+        /// status strip what the press is waiting for while it does.
+        /// <para>
+        /// The phase event is reported only when a wait actually starts,
+        /// so a press that already has access never flashes a line about
+        /// waiting. PlanPhase.WaitingForGame is first in its enum because
+        /// PhaseOrdinalGuard takes declaration order for emission order,
+        /// and this is the one phase that runs before the pipeline.
+        /// </para>
+        /// </summary>
+        private async Task WaitForApiHandoverAsync(
+            IProgress<PlanPhaseEvent> phaseProgress, CancellationToken ct)
+        {
+            bool waited = false;
+            var sw = new System.Diagnostics.Stopwatch();
+
+            bool granted = await _apiHandoverWait.WaitAsync(
+                state =>
+                {
+                    waited = true;
+                    sw.Start();
+                    phaseProgress?.Report(new PlanPhaseEvent
+                    {
+                        Phase = PlanPhase.WaitingForGame,
+                        DisplayName = state == GameClientState.InWorld
+                            ? "Waiting for API access"
+                            : "Waiting for Guild Wars 2",
+                        Detail = state == GameClientState.InWorld
+                            ? null
+                            : "sign in to a character",
+                    });
+                },
+                ct);
+
+            if (!waited)
+            {
+                return;
+            }
+
+            sw.Stop();
+            ModuleLog.Shared.Write(ModuleLogLevel.Info, "plan", granted
+                ? $"Generate Plan waited {sw.ElapsedMilliseconds}ms for the API subtoken and got it"
+                : $"Generate Plan waited {sw.ElapsedMilliseconds}ms for the API subtoken and did not get one");
         }
 
         /// <summary>
@@ -1645,7 +1878,9 @@ namespace TaimisToolbench
 
             Gw2ApiManager.SubtokenUpdated += OnSubtokenUpdated;
 
-            if (_snapshotService.HasRequiredPermissions())
+            ReportUnapprovedApiPermissions();
+
+            if (_apiReady.IsReady())
             {
                 await RefreshSnapshotInBackgroundAsync();
             }
@@ -1698,6 +1933,8 @@ namespace TaimisToolbench
                 }
             }
 
+            DrainWikiLaunchNotice();
+
             PrimeSnapshotIcons();
 
             // The Log tab's own poll, run
@@ -1722,6 +1959,19 @@ namespace TaimisToolbench
                 && _mainWindow.SelectedTab == _rankerTab)
             {
                 _rankerContent.PollForSnapshotChange();
+            }
+
+            // The Crafting Plan tab's poll, on the same terms. It starts no
+            // work at all - it appends a notice to the strip saying the
+            // plan on screen predates the account data now loaded - so the
+            // visible-window gate is about where the notice can be READ
+            // rather than about what the tick can spend.
+            if (_craftingContent != null
+                && _mainWindow != null
+                && _mainWindow.Visible
+                && _mainWindow.SelectedTab == _craftingPlanTab)
+            {
+                _craftingContent.PollForSnapshotChange();
             }
 
             // "Applying restored plan to view" - mirrors the
@@ -1764,6 +2014,7 @@ namespace TaimisToolbench
                         var restored = _pendingPlanRestore.Plan;
                         if (_pendingPlanRestore.HasResult)
                         {
+                            _restoredPlanPriceWarmIds = PlanItemIds.ForResult(restored.Result);
                             _craftingContent?.ApplyRestoredPlan(
                                 restored.Result,
                                 restored.GeneratedAt,
@@ -1825,7 +2076,7 @@ namespace TaimisToolbench
                         out _sinceFirstLoadGateCheck)
                     && FirstLoadSnapshotGate.ShouldRefreshNow(
                         hasCachedSnapshot: false,
-                        apiReady: _snapshotService.HasRequiredPermissions(),
+                        apiReady: _apiReady.IsReady(),
                         alreadyAttempted: _firstLoadRefreshAttempted,
                         refreshInProgress: false,
                         inFailureBackoff: IsInRefreshFailureBackoff()))
@@ -1848,7 +2099,7 @@ namespace TaimisToolbench
                 return;
             }
 
-            if (!_snapshotService.HasRequiredPermissions())
+            if (!_apiReady.IsReady())
             {
                 return;
             }
@@ -1882,6 +2133,10 @@ namespace TaimisToolbench
 
             _iconPrimeBatch.Clear();
             _iconPrime.Take(SnapshotIconWindow.BackgroundPrimePerFrame, _iconPrimeBatch);
+            if (_iconPrimeBatch.Count > 0)
+            {
+                IconAssetConnectionLimit.Apply();
+            }
 
             for (int i = 0; i < _iconPrimeBatch.Count; i++)
             {
@@ -1916,6 +2171,12 @@ namespace TaimisToolbench
 
             Gw2ApiManager.SubtokenUpdated -= OnSubtokenUpdated;
 
+            // WikiLinkLauncher is static and outlives this module instance,
+            // so a left-behind handler would keep notifying after unload -
+            // and Update is no longer running to drain what it queues.
+            WikiLinkLauncher.OutcomeReported = null;
+            Interlocked.Exchange(ref _pendingWikiNotice, 0);
+
             // The SettingEntry objects outlive this module instance
             // (DefineSetting returns the existing entry on re-enable), so a
             // leftover handler would root each dead Module in turn.
@@ -1947,7 +2208,18 @@ namespace TaimisToolbench
             _modalDialog?.Dispose();
             _apiAccessDialog?.Dispose();
             _cornerIcon?.Dispose();
+
+            // Before the module window and for the same reason the two
+            // lines above it exist: these windows are parented to the
+            // sprite screen, so disposing _mainWindow never reaches them.
+            _popoutWindows?.Dispose();
             _mainWindow?.Dispose();
+
+            // Cleared, not just disposed. Blish's Manage Modules panel may
+            // still hold the view GetSettingsView returned, and its button
+            // reads this field - see OpenSettingsTab. Control exposes no
+            // public disposed flag, so null is the only readable signal.
+            _mainWindow = null;
 
             // The module's ONE rich tooltip surface. Like the tickers
             // above it is parented to the SpriteScreen (only while
@@ -2000,11 +2272,7 @@ namespace TaimisToolbench
 
         private void OnSubtokenUpdated(object sender, ValueEventArgs<IEnumerable<Gw2Sharp.WebApi.V2.Models.TokenPermission>> e)
         {
-            // The key may now address a different account, which no TTL can
-            // detect - see CachingAccountRecipeClient.Invalidate.
-            _accountRecipeClient?.Invalidate();
-
-            if (_snapshotService.HasRequiredPermissions())
+            if (_apiReady.IsReady())
             {
                 _ = RefreshSnapshotInBackgroundAsync();
             }
@@ -2022,22 +2290,36 @@ namespace TaimisToolbench
             int myEpoch = _snapshotCommitGate.Epoch;
 
             AccountSnapshot snapshot;
+
+            // Bounds the whole multi-step fetch so a full network outage
+            // fails fast instead of stacking several ~100s HTTP timeouts
+            // (KNOWN-ISSUES #31/api-degradation F6). The budget starts at
+            // SnapshotFetchBudget's floor and is re-sized the moment the
+            // fetch reports how many characters the account has, because
+            // the per-character work is what makes a large account cost
+            // more than a small one.
+            var budget = SnapshotFetchBudget.For(0);
             using (var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
             {
-                timeoutCts.CancelAfter(SnapshotFetchTimeout);
+                timeoutCts.CancelAfter(budget);
                 try
                 {
-                    snapshot = await _snapshotService.FetchSnapshotAsync(timeoutCts.Token);
+                    snapshot = await _snapshotService.FetchSnapshotAsync(
+                        timeoutCts.Token,
+                        characterCount =>
+                        {
+                            budget = SnapshotFetchBudget.For(characterCount);
+                            timeoutCts.CancelAfter(budget);
+                        });
                 }
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested)
                 {
                     // The internal timeout fired, not the caller's own
-                    // token - a genuine fetch failure (KNOWN-ISSUES
-                    // #31/api-degradation F6), not a cancellation. Re-thrown as
-                    // a plain Exception so callers' "cancelled" catch
-                    // (which must stay silent) does not swallow it.
+                    // token - a genuine fetch failure, not a cancellation.
+                    // Re-thrown as a plain Exception so callers' "cancelled"
+                    // catch (which must stay silent) does not swallow it.
                     throw new TimeoutException(
-                        $"Account snapshot fetch exceeded {SnapshotFetchTimeout.TotalSeconds:0}s.");
+                        $"Account snapshot fetch exceeded {budget.TotalSeconds:0}s.");
                 }
             }
 
@@ -2095,6 +2377,273 @@ namespace TaimisToolbench
                 DateTime.UtcNow - new DateTime(lastFailedTicks, DateTimeKind.Utc) < RefreshFailureBackoff;
         }
 
+        /// <summary>
+        /// One snapshot fetch, published while it runs so a Generate Plan
+        /// click can join it rather than refuse to refresh.
+        /// <para>
+        /// Every fetch the module makes - background, clicked and
+        /// plan-driven alike - passes through here, so this is where a
+        /// successful read ends the standing failure run. A null return is
+        /// a fetch Clear Cache superseded, which read nothing.
+        /// </para>
+        /// </summary>
+        private async Task<AccountSnapshot> TrackedFetchAsync(CancellationToken ct)
+        {
+            var fetch = FetchAndSaveSnapshotAsync(ct);
+            _refreshSlot.PublishFetch(fetch);
+
+            var snapshot = await fetch;
+            if (snapshot != null)
+            {
+                _refreshFailures.RecordSuccess();
+                Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
+            }
+
+            return snapshot;
+        }
+
+        /// <summary>
+        /// Says once, at load, which declared API permissions the account
+        /// never approved - see ApiPermissionGap for why that happens and
+        /// why it does not resolve itself. Gw2ApiManager.Permissions is the
+        /// approved list and is populated with no subtoken, unlike
+        /// HasPermissions, so this can run before the player is in world.
+        /// <para>
+        /// Log tab and status line only. A missing optional permission
+        /// turns a feature off; it does not warrant interrupting anybody.
+        /// </para>
+        /// </summary>
+        private void ReportUnapprovedApiPermissions()
+        {
+            try
+            {
+                var declared = ModuleParameters?.Manifest?.ApiPermissions;
+                if (declared == null)
+                {
+                    return;
+                }
+
+                var declaredNames = new List<string>();
+                foreach (var permission in declared.Keys)
+                {
+                    declaredNames.Add(NameOfPermission(permission));
+                }
+
+                var approvedNames = new List<string>();
+                foreach (var permission in Gw2ApiManager.Permissions ?? new List<Gw2Sharp.WebApi.V2.Models.TokenPermission>())
+                {
+                    approvedNames.Add(NameOfPermission(permission));
+                }
+
+                var unapproved = ApiPermissionGap.Unapproved(declaredNames, approvedNames);
+
+                if (unapproved.Count == 0)
+                {
+                    return;
+                }
+
+                ModuleLog.Shared.Write(ModuleLogLevel.Warn, "api", ApiPermissionGap.Compose(unapproved));
+                SaveStatusThreadSafe(StatusText.Stamp(ApiPermissionGap.ComposeStatus(unapproved), DateTime.Now));
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Could not compare declared API permissions against approved ones");
+            }
+        }
+
+        private static string NameOfPermission(Gw2Sharp.WebApi.V2.Models.TokenPermission permission)
+        {
+            return permission.ToString().ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// How far along the game client is, which is what decides how
+        /// long waiting for a subtoken can help - see
+        /// SnapshotRefreshPolicy.HandoverWaitFor.
+        /// <para>
+        /// Blish sets IsInGame from the MumbleLink tick age
+        /// (TimeSinceTick under half a second) and Gw2IsRunning, which is
+        /// exactly the condition it renews a subtoken under. It reports a
+        /// loading screen, a cinematic and character select as one
+        /// not-in-game state and cannot separate them.
+        /// </para>
+        /// </summary>
+        private GameClientState ReadGameClientState()
+        {
+            try
+            {
+                var instance = GameService.GameIntegration?.Gw2Instance;
+                if (instance == null)
+                {
+                    return GameClientState.InWorld;
+                }
+
+                if (!instance.Gw2IsRunning)
+                {
+                    return GameClientState.NotRunning;
+                }
+
+                return instance.IsInGame ? GameClientState.InWorld : GameClientState.Loading;
+            }
+            catch (Exception ex)
+            {
+                // Unknown reads as in world. The only cost is one press
+                // spending the shorter of the two windows for nothing,
+                // against telling a player who is already signed in to
+                // sign in.
+                ModuleLog.Shared.Write(ModuleLogLevel.Debug, "snapshot",
+                    $"Blish game integration unavailable, cannot tell how far along the client is: {ex.GetType().Name} - {ex.Message}");
+                return GameClientState.InWorld;
+            }
+        }
+
+        /// <summary>
+        /// The fetch <see cref="_planRefreshGate"/> runs when a Generate
+        /// press is the caller that claimed the slot.
+        /// </summary>
+        private async Task<AccountSnapshot> FetchForPlanAsync(CancellationToken ct)
+        {
+            _backgroundRefreshInFlight = true;
+            try
+            {
+                var fetched = await TrackedFetchAsync(ct);
+                if (fetched != null)
+                {
+                    SaveStatusThreadSafe(StatusText.Stamp("Updated", fetched.CapturedAt.ToLocalTime()));
+                }
+
+                return fetched;
+            }
+            finally
+            {
+                _backgroundRefreshInFlight = false;
+            }
+        }
+
+        /// <summary>
+        /// The account refresh one Generate Plan click makes. Hands the
+        /// pipeline the account data to solve against, and tells
+        /// <paramref name="report"/> what happened so the Crafting Plan tab
+        /// can raise it.
+        /// <para>
+        /// A failed refresh never blocks a plan. The generation then uses
+        /// the snapshot already on disk, which is what every generation
+        /// used before this call existed.
+        /// </para>
+        /// <para>
+        /// Only an attempt that did not work is a failure. A snapshot the
+        /// module chose not to refresh, or had nothing to refresh it with,
+        /// is not one it could not refresh, and the Crafting Plan tab's
+        /// dialog keys off the difference. So refresh.Failed is set in
+        /// these catch blocks and nowhere else.
+        /// </para>
+        /// </summary>
+        private async Task<PlanAccountData> RefreshForPlanAsync(
+            bool useOwn, Action<PlanAccountRefresh> report, CancellationToken ct)
+        {
+            var refresh = new PlanAccountRefresh();
+
+            try
+            {
+                var outcome = await _planRefreshGate.RunAsync(
+                    _currentSnapshot?.CapturedAt,
+                    DateTime.UtcNow);
+
+                switch (outcome)
+                {
+                    case PlanRefreshOutcome.NotInWorld:
+                        // Blish cannot renew a subtoken until MumbleLink
+                        // ticks, which it does not do outside the world.
+                        // Nothing is wrong with the key, so the line names
+                        // the one thing that changes the outcome.
+                        SaveStatusThreadSafe(StatusText.Stamp(StatusText.NotInWorld, DateTime.Now));
+                        ModuleLog.Shared.Write(ModuleLogLevel.Info, "snapshot",
+                            "Plan solved without a refresh - no character in the world, so Blish has no subtoken to hand over");
+                        break;
+                    case PlanRefreshOutcome.NoApiAccess:
+                        // In the world, and the subtoken still did not
+                        // arrive, so this is a key the user has to add or
+                        // widen in Blish rather than one still on its way.
+                        SaveStatusThreadSafe(StatusText.Stamp(StatusText.NoApiAccess, DateTime.Now));
+                        ModuleLog.Shared.Write(ModuleLogLevel.Info, "snapshot",
+                            "Plan solved without a refresh - no usable GW2 API access");
+                        break;
+                    case PlanRefreshOutcome.SkippedInBackoff:
+                        // No status line. The failure that opened the
+                        // window already stamped one, and a second stamp
+                        // would date an attempt that did not happen.
+                        Logger.Debug("Skipping snapshot refresh for a plan - within backoff window after a prior failure");
+                        break;
+                    case PlanRefreshOutcome.LostTheClaim:
+                        Logger.Debug("Snapshot refresh for a plan found the slot taken and then free, twice");
+                        break;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                if (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+
+                // Either Clear Cache cancelled the fetch through the
+                // refresh slot, or the claim this press was waiting on
+                // ended without running one. Clear Cache writes its own
+                // status line, and a "Refresh failed" stamped over that
+                // would name the wrong cause.
+                Logger.Debug("Snapshot refresh for a plan was cancelled");
+                MarkPlanRefreshFailed(refresh, null);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Failed to refresh account snapshot for a plan");
+                ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot",
+                    $"Failed to refresh account snapshot for a plan: {ex.GetType().Name} - {ex.Message}");
+                Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, DateTime.UtcNow.Ticks);
+
+                var classification = SnapshotFailureClassifier.Classify(ex);
+                SaveStatusThreadSafe(StatusText.Stamp(StatusText.ForRefreshFailure(classification), DateTime.Now));
+                MarkPlanRefreshFailed(refresh, ex as SnapshotFetchFailedException);
+            }
+
+            // After the fetch, so a refresh that succeeded here has already
+            // closed the run this would otherwise re-open.
+            refresh.FailureRunId = refresh.Failed
+                ? _refreshFailures.RecordFailure()
+                : RefreshFailureRun.None;
+
+            var snapshot = _currentSnapshot;
+            refresh.Snapshot = snapshot;
+            refresh.UsedHoldings = useOwn && snapshot != null;
+            report?.Invoke(refresh);
+
+            return new PlanAccountData
+            {
+                Snapshot = refresh.UsedHoldings ? snapshot : null,
+                CharacterDisciplines = snapshot?.CharacterDisciplines,
+            };
+        }
+
+        /// <summary>
+        /// Records which reads went unread. A fetch that named none - a
+        /// whole-fetch timeout, a token the module cannot use - read none
+        /// of them, so every source is named.
+        /// </summary>
+        private static void MarkPlanRefreshFailed(PlanAccountRefresh refresh, SnapshotFetchFailedException detail)
+        {
+            refresh.Failed = true;
+
+            if (detail != null &&
+                (detail.FailedSources.Count > 0 || detail.IncompleteCharacterNames.Count > 0))
+            {
+                refresh.FailedSources = detail.FailedSources;
+                refresh.IncompleteCharacterNames = detail.IncompleteCharacterNames;
+                return;
+            }
+
+            refresh.FailedSources = AccountDataSources.All;
+        }
+
         private async Task RefreshSnapshotInBackgroundAsync()
         {
             if (_refreshSlot.IsClaimed)
@@ -2129,8 +2678,7 @@ namespace TaimisToolbench
 
             try
             {
-                var snapshot = await FetchAndSaveSnapshotAsync(_refreshSlot.BeginFetch());
-                Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, 0);
+                var snapshot = await TrackedFetchAsync(_refreshSlot.BeginFetch());
                 if (snapshot != null)
                 {
                     var status = StatusText.Stamp("Updated", snapshot.CapturedAt.ToLocalTime());
@@ -2151,6 +2699,7 @@ namespace TaimisToolbench
                 Logger.Warn(ex, "Failed to refresh account snapshot");
                 ModuleLog.Shared.Write(ModuleLogLevel.Warn, "snapshot", $"Failed to refresh account snapshot: {ex.GetType().Name} - {ex.Message}");
                 Interlocked.Exchange(ref _lastFailedRefreshAttemptTicks, DateTime.UtcNow.Ticks);
+                _refreshFailures.RecordFailure();
 
                 // KNOWN-ISSUES #37 follow-up: status-text parity with
                 // MainView.RefreshNowAsync's own catch block - this
@@ -2163,7 +2712,7 @@ namespace TaimisToolbench
                 // KNOWN-ISSUES #37 follow-up for why unprompted background
                 // popups are a separate, deferred UX call.
                 var classification = SnapshotFailureClassifier.Classify(ex);
-                string cause = StatusText.ForRefreshFailure(classification.Kind, classification.FailedSourceCount, classification.TotalSourceCount);
+                string cause = StatusText.ForRefreshFailure(classification);
                 var status = StatusText.Stamp(cause, DateTime.Now);
                 SaveStatusThreadSafe(status);
             }
@@ -2189,7 +2738,7 @@ namespace TaimisToolbench
                 // to leave the claim set forever, and with it every later
                 // refresh - automatic and clicked - silently declined for the
                 // rest of the session.
-                return await FetchAndSaveSnapshotAsync(_refreshSlot.BeginFetch());
+                return await TrackedFetchAsync(_refreshSlot.BeginFetch());
             }
             finally
             {
@@ -2242,6 +2791,76 @@ namespace TaimisToolbench
             KickCorpusVerification();
         }
 
+        /// <summary>
+        /// Refreshes the account when the Account Snapshot tab is opened
+        /// over data older than SnapshotRefreshPolicy.TabOpenFreshness.
+        /// <para>
+        /// Routed through the background refresh, so a refresh already
+        /// running wins and the one-minute backoff after a failed one still
+        /// holds. Flicking tabs during an API outage therefore does not
+        /// retry every switch.
+        /// </para>
+        /// </summary>
+        private void RefreshSnapshotOnTabOpen()
+        {
+            if (!SnapshotRefreshPolicy.ShouldRefreshOnTabOpen(_currentSnapshot?.CapturedAt, DateTime.UtcNow))
+            {
+                return;
+            }
+
+            if (!_apiReady.IsReady())
+            {
+                return;
+            }
+
+            _ = RefreshSnapshotInBackgroundAsync();
+        }
+
+        /// <summary>
+        /// Warms trading post prices for the plan this session restored, so
+        /// the next Generate on it does not pay for that fetch.
+        /// <para>
+        /// Fired when the module window opens, not when the module loads: a
+        /// price is only cached for TradingPostService.CacheTtl, and a warm
+        /// at Blish start would have expired long before the user opened
+        /// anything. The restored plan's own tree is the warm set because it
+        /// is exactly what the next Generate on it prices.
+        /// </para>
+        /// </summary>
+        private void WarmRestoredPlanPrices()
+        {
+            var ids = _restoredPlanPriceWarmIds;
+            if (ids == null || ids.Count == 0 || _tradingPostService == null)
+            {
+                return;
+            }
+
+            var token = _lifetimeCts?.Token ?? CancellationToken.None;
+            _ = WarmPricesAsync(ids, token);
+        }
+
+        private async Task WarmPricesAsync(IReadOnlyList<int> itemIds, CancellationToken ct)
+        {
+            try
+            {
+                await _tradingPostService.GetPricesAsync(itemIds, ct);
+                ModuleLog.Shared.Write(ModuleLogLevel.Debug, "plan",
+                    $"Warmed trading post prices for {itemIds.Count} restored plan items.");
+            }
+            catch (OperationCanceledException)
+            {
+                // The module is unloading, or the window closed with the
+                // fetch still out. Nothing to report.
+            }
+            catch (Exception ex)
+            {
+                // A warm that fails costs the next generation nothing but
+                // the fetch it would have made anyway.
+                ModuleLog.Shared.Write(ModuleLogLevel.Debug, "plan",
+                    $"Price warm failed: {ex.GetType().Name} - {ex.Message}");
+            }
+        }
+
         private void PersistStatus(string status)
         {
             _lastStatus = status ?? "";
@@ -2273,6 +2892,45 @@ namespace TaimisToolbench
         {
             PersistStatus(status);
             _statusDirty = true;
+        }
+
+        private static void QueueWikiLaunchNotice(WikiLaunchOutcome outcome)
+        {
+            Interlocked.Exchange(ref _pendingWikiNotice, (int)outcome + 1);
+        }
+
+        /// <summary>
+        /// Puts the last wiki launch outcome on screen, from Update so the
+        /// notification control is built on the frame thread. Only the
+        /// outcomes the player cannot see for themselves are shown: when the
+        /// browser did come forward it is already in front of them.
+        /// </summary>
+        private void DrainWikiLaunchNotice()
+        {
+            int pending = Interlocked.Exchange(ref _pendingWikiNotice, 0);
+            if (pending == 0)
+            {
+                return;
+            }
+
+            switch ((WikiLaunchOutcome)(pending - 1))
+            {
+                case WikiLaunchOutcome.ForegroundRefused:
+                    ScreenNotification.ShowNotification(
+                        "Wiki page opened in your browser, behind the game.",
+                        ScreenNotification.NotificationType.Info,
+                        null,
+                        3);
+                    break;
+
+                case WikiLaunchOutcome.Failed:
+                    ScreenNotification.ShowNotification(
+                        "Could not open the wiki page.",
+                        ScreenNotification.NotificationType.Warning,
+                        null,
+                        3);
+                    break;
+            }
         }
 
         /// <summary>
@@ -2601,6 +3259,38 @@ namespace TaimisToolbench
             }
         }
 
+        /// <summary>
+        /// Marks the history row for the plan the tab is showing, after a
+        /// decision pill re-solved it. See
+        /// PlanHistoryIndexEdits.MarkOverrides for what the mark says and
+        /// why the row's Cost is left alone.
+        /// </summary>
+        private void MarkHistoryResolvedWithOverrides(int overrideCount, int ignoredCount)
+        {
+            var metadata = _lastPersistedPlanMetadata;
+            if (metadata == null || _planHistoryStore == null)
+            {
+                return;
+            }
+
+            string key = PlanHistoryDedupKey.Compute(
+                metadata.RequestItems,
+                metadata.UseOwnMaterials,
+                metadata.PriceBasis,
+                metadata.ValueOwnMaterials,
+                null);
+
+            lock (_planHistoryLock)
+            {
+                var index = _planHistoryIndex;
+                var entry = PlanHistoryIndexEdits.FindByDedupKey(index, key);
+                if (PlanHistoryIndexEdits.MarkOverrides(entry, overrideCount, ignoredCount))
+                {
+                    _planHistoryStore.Save(index);
+                }
+            }
+        }
+
         private PlanHistoryEntry FindHistoryEntry(PlanHistoryIndex index, string entryId)
         {
             foreach (var entry in index.Entries)
@@ -2644,17 +3334,7 @@ namespace TaimisToolbench
             {
                 var index = _planHistoryIndex;
 
-                PlanHistoryEntry entry = null;
-                foreach (var candidate in index.Entries)
-                {
-                    if (candidate != null
-                        && string.Equals(PlanHistoryDedupKey.ForEntry(candidate), key, StringComparison.Ordinal))
-                    {
-                        entry = candidate;
-                        break;
-                    }
-                }
-
+                var entry = PlanHistoryIndexEdits.FindByDedupKey(index, key);
                 if (entry == null)
                 {
                     entry = new PlanHistoryEntry
@@ -2897,6 +3577,12 @@ namespace TaimisToolbench
             // StartGenerateAsync reads Gw2Mumble and per-plan settings,
             // so it is invoked on the main thread exactly like a Generate
             // click; only the await runs out here.
+
+            // Written by the generation's own refresh callback, read after
+            // the plan lands - a re-solve raises the same stale-account
+            // dialog a Generate click does.
+            PlanAccountRefresh accountRefresh = null;
+
             var startTcs = new TaskCompletionSource<Task<CraftingPlanResult>>();
             MainThreadMarshal.Run(() =>
             {
@@ -2904,7 +3590,9 @@ namespace TaimisToolbench
                 {
                     startTcs.SetResult(StartGenerateAsync(
                         requestItems, useOwnMaterials, valueOwnMaterials, priceBasis,
-                        ct, null, null, requestLabel, _lifetimeCts.Token));
+                        ct, null, null, requestLabel,
+                        refresh => Volatile.Write(ref accountRefresh, refresh),
+                        _lifetimeCts.Token));
                 }
                 catch (Exception ex)
                 {
@@ -2944,6 +3632,8 @@ namespace TaimisToolbench
                     requestItems,
                     useOwnMaterials,
                     priceBasis);
+                _craftingContent?.RaiseStaleAccountDataDialog(
+                    Volatile.Read(ref accountRefresh), result, useOwnMaterials);
                 _mainWindow.SelectedTab = _craftingPlanTab;
             });
 

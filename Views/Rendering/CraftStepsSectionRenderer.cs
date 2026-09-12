@@ -23,13 +23,13 @@ namespace TaimisToolbench.Views.Rendering
     internal sealed class CraftStepsSectionRenderer
     {
         private readonly ISectionRelayoutSink _sink;
-        private readonly Func<int, ItemStatBlock> _getItemStatBlock;
+        private readonly Func<int, ItemTooltipFacts> _getItemFacts;
 
         internal CraftStepsSectionRenderer(
-            ISectionRelayoutSink sink, Func<int, ItemStatBlock> getItemStatBlock = null)
+            ISectionRelayoutSink sink, Func<int, ItemTooltipFacts> getItemFacts)
         {
             _sink = sink ?? throw new ArgumentNullException(nameof(sink));
-            _getItemStatBlock = getItemStatBlock;
+            _getItemFacts = getItemFacts ?? throw new ArgumentNullException(nameof(getItemFacts));
         }
 
         /// <summary>
@@ -55,7 +55,7 @@ namespace TaimisToolbench.Views.Rendering
             for (int i = 0; i < section.Rows.Count; i++)
             {
                 var row = section.Rows[i];
-                if (row.RowType == PlanRowType.TimegatedNotice)
+                if (PlanRowKinds.IsCraftingStepsNotice(row.RowType))
                 {
                     continue;
                 }
@@ -82,7 +82,7 @@ namespace TaimisToolbench.Views.Rendering
             {
                 var row = section.Rows[i];
                 bool isLast = i == section.Rows.Count - 1;
-                if (row.RowType == PlanRowType.TimegatedNotice)
+                if (PlanRowKinds.IsCraftingStepsNotice(row.RowType))
                 {
                     TextRowRenderer.CreateTextRow(row.Label, contentFlow, panelWidth, _sink);
                 }
@@ -159,40 +159,38 @@ namespace TaimisToolbench.Views.Rendering
                 Parent = rowPanel,
             };
 
-            int itemId = row.ItemId;
-            var hover = ItemIconTooltip.ForItem(
-                ItemTooltipIdentity.ForItem(row.Label ?? "", row.IconUrl, row.Rarity),
-                _getItemStatBlock == null || itemId <= 0 ? (Func<ItemStatBlock>)null
-                    : () => _getItemStatBlock(itemId));
-
-            IconControls.CreateItemIcon(
-                rowPanel, row.IconUrl, ItemIconFrame.ForRarity(row.Rarity),
-                IconX, PlanContentHeightMath.IconRowIconY, ItemIconTier.BagSidebar, hover);
+            IconControls.DrawItemIcon(
+                rowPanel, row.ItemId, IconX, PlanContentHeightMath.IconRowIconY,
+                ItemIconTier.BagSidebar, _getItemFacts);
 
             var textFont = UiFonts.Body;
+            var advance = TextAdvanceMath.AdvanceWith(LabelHelpers.MeasureWith(textFont));
             var greyColor = new Color(170, 170, 170);
             int x = TextX;
+            string qtyPrefix = QtyPrefix(row.Quantity);
 
             // "Craft ", "12x " and the item name are one sentence on one
             // baseline: every label on it gets the same box treatment, so
-            // the clearance can never make the three disagree.
-            var craftLabel = LabelHelpers.WithDescenderClearance(
+            // the clearance can never make the three disagree. Each starts
+            // at the PEN the one before it ends on, never at that label's
+            // own width - see TextAdvanceMath for what that would cost.
+            LabelHelpers.WithDescenderClearance(
                 new Label()
                 {
                     Text = CraftPrefix, Font = textFont, TextColor = greyColor,
                     AutoSizeWidth = true, AutoSizeHeight = true,
                     Location = new Point(x, RowTextY), Parent = rowPanel,
                 });
-            x += craftLabel.Width;
+            x += advance(CraftPrefix);
 
-            var qtyLabel = LabelHelpers.WithDescenderClearance(
+            LabelHelpers.WithDescenderClearance(
                 new Label()
                 {
-                    Text = QtyPrefix(row.Quantity), Font = textFont, TextColor = greyColor,
+                    Text = qtyPrefix, Font = textFont, TextColor = greyColor,
                     AutoSizeWidth = true, AutoSizeHeight = true,
                     Location = new Point(x, RowTextY), Parent = rowPanel,
                 });
-            x += qtyLabel.Width;
+            x += advance(qtyPrefix);
 
             // The name is the row's flexing run: "Craft " and "Nx " are
             // fixed words at a font-only cursor x, so the whole of the

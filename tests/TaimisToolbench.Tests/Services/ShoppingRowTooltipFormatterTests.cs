@@ -193,54 +193,5 @@ namespace TaimisToolbench.Tests.Services
                 "Spirit Shards: this row costs 100. Your wallet holds 250.",
             }, lines);
         }
-
-        [Fact]
-        public void BuildRowContent_KeepsTheRowsOwnLinesOutOfTheItemsBox()
-        {
-            var costs = new List<CurrencyAmountViewModel>
-            {
-                new CurrencyAmountViewModel
-                {
-                    Amount = 100, Name = "Karma", OwnedQuantity = 40, RawOwnedQuantity = 40,
-                },
-            };
-
-            var content = ShoppingRowTooltipFormatter.BuildRowContent(
-                new ItemStatBlock { ItemId = 1, Name = "Bag of Stuff", Rarity = "Fine", VendorValue = 7 },
-                ItemTooltipIdentity.ForItem("Bag of Stuff", "icon://bag", "Fine"),
-                hintText: "Salvage from level 80 gear.",
-                currencyCosts: costs);
-
-            var lines = content.ToPlainLines();
-
-            // The stat block opens the tooltip, so the full-name line it
-            // would otherwise duplicate is gone.
-            Assert.Equal("Bag of Stuff", lines[0]);
-            Assert.Equal(1, lines.Count(l => l == "Bag of Stuff"));
-            Assert.DoesNotContain("Salvage from level 80 gear.", lines);
-
-            Assert.Equal(
-                new[]
-                {
-                    "Salvage from level 80 gear.",
-                    "Karma: this row costs 100. You have 40 in your wallet and need 60 more.",
-                },
-                content.ToExtraLines());
-        }
-
-        [Fact]
-        public void BuildRowContent_WithoutStats_StillHeadsWithTheRowsOwnIconAndName()
-        {
-            var content = ShoppingRowTooltipFormatter.BuildRowContent(
-                null,
-                ItemTooltipIdentity.ForItem("A Very Long Item Name", "icon://long", "Rare"),
-                "A hint.",
-                null);
-
-            Assert.Equal(TooltipLineKind.Header, content.Lines[0].Kind);
-            Assert.Equal("icon://long", content.Lines[0].IconUrl);
-            Assert.Equal(new[] { "A Very Long Item Name" }, content.ToPlainLines());
-            Assert.Equal(new[] { "A hint." }, content.ToExtraLines());
-        }
-}
+    }
 }

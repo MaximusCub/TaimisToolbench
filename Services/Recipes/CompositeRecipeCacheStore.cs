@@ -18,7 +18,7 @@ namespace TaimisToolbench.Services.Recipes
 
         public RecipeCacheStats Stats => _stats;
 
-        public bool SeedIsStale => _seed.SeedIsStale;
+        public bool SeedMayBeStale => _seed.SeedMayBeStale;
 
         public int? SeedBuildId => _seed.SeedBuildId;
 
@@ -80,9 +80,8 @@ namespace TaimisToolbench.Services.Recipes
 
         /// <summary>
         /// The union the corpus probe diffs against the live id list.
-        /// Positive ids only: the 1,595 negative-id rows (Mystic Forge and
-        /// the hand-authored achievement chains) are never in the live
-        /// list and must never be treated as removed by it.
+        /// Positive ids only: the negative-id Mystic Forge rows are never
+        /// in the live list and must never be treated as removed by it.
         /// </summary>
         public IReadOnlyCollection<int> GetKnownPositiveRecipeIds()
         {

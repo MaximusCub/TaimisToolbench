@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using TaimisToolbench.Models;
 using TaimisToolbench.Services;
 using Xunit;
 
@@ -115,6 +116,99 @@ namespace TaimisToolbench.Tests.Services
             Assert.Empty(failures);
             Assert.Equal(1, peakConcurrency);
             Assert.True(fetchesRun > 0, "no fetch ever claimed the slot");
+        }
+
+        /// <summary>
+        /// The claim is what a loser waits on, so a granted claim is
+        /// waitable before the fetch behind it exists. Losing the claim and
+        /// finding nothing published is what made a Generate press solve
+        /// against old data without saying so.
+        /// </summary>
+        [Fact]
+        public void Every_caller_that_loses_the_claim_finds_the_refresh_that_won()
+        {
+            for (int round = 0; round < 200; round++)
+            {
+                var slot = new SnapshotRefreshSlot();
+                var waitable = new ConcurrentQueue<Task<AccountSnapshot>>();
+
+                int granted = RunTogether(Contenders, () =>
+                {
+                    bool won = slot.TryClaim();
+                    if (!won)
+                    {
+                        waitable.Enqueue(slot.RunningFetch);
+                    }
+
+                    return won ? 1 : 0;
+                }).Sum();
+
+                Assert.Equal(1, granted);
+                Assert.Equal(Contenders - 1, waitable.Count);
+                Assert.DoesNotContain(null, waitable);
+                slot.Release();
+            }
+        }
+
+        [Fact]
+        public async Task A_published_fetch_hands_its_result_to_a_waiter()
+        {
+            var slot = new SnapshotRefreshSlot();
+            Assert.True(slot.TryClaim());
+            Task<AccountSnapshot> waiter = slot.RunningFetch;
+
+            var fetch = new TaskCompletionSource<AccountSnapshot>();
+            slot.PublishFetch(fetch.Task);
+            Assert.False(waiter.IsCompleted);
+
+            var fetched = new AccountSnapshot { CapturedAt = new DateTime(2026, 9, 10, 3, 2, 45, DateTimeKind.Utc) };
+            fetch.SetResult(fetched);
+
+            Assert.Same(fetched, await waiter);
+        }
+
+        [Fact]
+        public async Task A_published_fetch_hands_its_failure_to_a_waiter()
+        {
+            var slot = new SnapshotRefreshSlot();
+            Assert.True(slot.TryClaim());
+            Task<AccountSnapshot> waiter = slot.RunningFetch;
+
+            var fetch = new TaskCompletionSource<AccountSnapshot>();
+            slot.PublishFetch(fetch.Task);
+            fetch.SetException(new InvalidOperationException("the account read failed"));
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => waiter);
+        }
+
+        /// <summary>
+        /// A claim can end without ever starting a fetch - BeginFetch
+        /// throwing out of a registered cancellation callback is the case
+        /// on record. Its waiters must not be told a refresh happened.
+        /// </summary>
+        [Fact]
+        public async Task A_claim_released_without_a_fetch_cancels_its_waiters()
+        {
+            var slot = new SnapshotRefreshSlot();
+            Assert.True(slot.TryClaim());
+            Task<AccountSnapshot> waiter = slot.RunningFetch;
+
+            slot.Release();
+
+            await Assert.ThrowsAsync<TaskCanceledException>(() => waiter);
+        }
+
+        [Fact]
+        public void A_free_slot_has_no_refresh_to_wait_on()
+        {
+            var slot = new SnapshotRefreshSlot();
+            Assert.Null(slot.RunningFetch);
+
+            Assert.True(slot.TryClaim());
+            Assert.NotNull(slot.RunningFetch);
+
+            slot.Release();
+            Assert.Null(slot.RunningFetch);
         }
 
         /// <summary>

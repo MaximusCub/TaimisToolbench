@@ -33,7 +33,7 @@ namespace TaimisToolbench.Services.Diagnostics
         // CheckingLearnedRecipes -> BuildingDisplay sequence.
         private static readonly string[] BucketOrder =
         {
-            "tree", "prices", "solve", "item details", "learned recipes", "display",
+            "tree", "prices", "account", "solve", "item details", "learned recipes", "display",
         };
 
         // Maps a raw timingLog step name (PlanTimingAnalyzer.ParsedPhase.Name)
@@ -48,6 +48,10 @@ namespace TaimisToolbench.Services.Diagnostics
                 { "Collect item IDs", "tree" },
                 { "Fetch TP prices", "prices" },
                 { "Query vendor offers", "prices" },
+                // Its own bucket, and usually near zero: the account
+                // refresh a Generate starts runs alongside the tree and
+                // price work, so this is only what the overlap left over.
+                { "Await account refresh", "account" },
                 { "Inventory reduction", "solve" },
                 { "Solve", "solve" },
                 { "Fetch item metadata", "item details" },

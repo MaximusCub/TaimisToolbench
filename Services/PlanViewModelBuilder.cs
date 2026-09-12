@@ -69,8 +69,14 @@ namespace TaimisToolbench.Services
             // (it renders from vm.TreeRoot, positioned second by the view);
             // everything else below is exactly the gw2e ordering.
 
+            // The Total Cost table's Note and the Shopping List's row for a
+            // traded-up item are one number. It is worked out once, here,
+            // while the Note is seated, and read back below. Two
+            // derivations of it could disagree; one cannot.
+            var tradeUpPurchases = new Dictionary<int, TradeUpPurchase>();
+
             // 1. Total Cost section (always present)
-            var summarySection = BuildSummarySection(result, isMultiItem);
+            var summarySection = BuildSummarySection(result, isMultiItem, tradeUpPurchases);
             vm.Sections.Add(summarySection);
             vm.NonCoinCostTotals = BuildNonCoinCostTotals(summarySection);
 
@@ -91,7 +97,11 @@ namespace TaimisToolbench.Services
             // 3. Shopping List section (only if non-empty)
             if (shoppingSteps.Count > 0)
             {
-                vm.Sections.Add(BuildShoppingListSection(shoppingSteps, result));
+                var shoppingSection = BuildShoppingListSection(shoppingSteps, result, tradeUpPurchases);
+                if (shoppingSection.Rows.Count > 0)
+                {
+                    vm.Sections.Add(shoppingSection);
+                }
             }
 
             // 4. Required Disciplines section (only if non-empty)
@@ -100,9 +110,9 @@ namespace TaimisToolbench.Services
                 vm.Sections.Add(BuildDisciplinesSection(result));
             }
 
-            // 5. Required Recipes section (only if at least one
-            // non-Mystic-Forge recipe remains once BuildRecipesSection
-            // filters MF-only rows out)
+            // 5. Required Recipes section (only if at least one recipe
+            // remains once BuildRecipesSection filters the unlock-free
+            // rows out)
             if (result.RequiredRecipes != null && result.RequiredRecipes.Count > 0)
             {
                 var recipesSection = BuildRecipesSection(result);
@@ -116,7 +126,7 @@ namespace TaimisToolbench.Services
             // timegated notice to show) - last, per gw2e order. Vendor-cap
             // notices are pre-filtered so a plan whose only "notice" is a
             // TP-liquid item's vendor cap gets no notices-only section.
-            var vendorCapNotices = FilterVendorCapNotices(result);
+            var vendorCapNotices = VendorCapNotices.Filter(result);
             if (craftSteps.Count > 0 || vendorCapNotices.Count > 0)
             {
                 vm.Sections.Add(BuildCraftingStepsSection(craftSteps, vendorCapNotices, result));
@@ -232,7 +242,9 @@ namespace TaimisToolbench.Services
         // showing different numbers reads as a bug, not a scoping nuance.
         internal const string MaterialsValueSellableLabel = "Materials Value (sellable)";
 
-        private PlanSectionViewModel BuildSummarySection(CraftingPlanResult result, bool isMultiItem)
+        private PlanSectionViewModel BuildSummarySection(
+            CraftingPlanResult result, bool isMultiItem,
+            Dictionary<int, TradeUpPurchase> tradeUpPurchases)
         {
             var section = new PlanSectionViewModel
             {
@@ -262,7 +274,7 @@ namespace TaimisToolbench.Services
 
             BuildCostFormulaBand(section, result, coinTotalIsFloor);
             BuildProfitFormulaBand(section, result, isMultiItem, unpricedZero);
-            BuildCurrencyTableRows(section, result);
+            BuildCurrencyTableRows(section, result, tradeUpPurchases);
 
             // Gated on the same conditions the Sell value/Profit rows
             // themselves are, so this note never scopes a figure not
@@ -587,11 +599,13 @@ namespace TaimisToolbench.Services
         /// which projects in row order, in the order the table shows.
         /// </para>
         /// </summary>
-        private static void BuildCurrencyTableRows(PlanSectionViewModel section, CraftingPlanResult result)
+        private static void BuildCurrencyTableRows(
+            PlanSectionViewModel section, CraftingPlanResult result,
+            Dictionary<int, TradeUpPurchase> tradeUpPurchases)
         {
             var currencyRows = new List<PlanRowViewModel>();
             AddCurrencyCostRows(currencyRows, result);
-            AddBarterItemCostRows(currencyRows, result);
+            AddBarterItemCostRows(currencyRows, result, tradeUpPurchases);
             if (currencyRows.Count == 0)
             {
                 return;
@@ -633,9 +647,8 @@ namespace TaimisToolbench.Services
                     Label = currencyName,
                     Quantity = required,
                     IconUrl = iconUrl,
+                    CurrencyId = cc.CurrencyId,
                     NonCoinCostKey = SummarySectionLayoutMath.WalletCurrencyCostKey(cc.CurrencyId),
-                    CurrencyDescription = CurrencyDisplayResolver.ResolveDescription(
-                        cc.CurrencyId, result.CurrencyMetadata),
                 };
                 ApplyOwnedSplit(row, LookupOwned(result.OwnedCurrencyAmounts, cc.CurrencyId));
                 currencyRows.Add(row);
@@ -652,7 +665,8 @@ namespace TaimisToolbench.Services
         /// Have/Needed are genuinely unknown.
         /// </summary>
         private static void AddBarterItemCostRows(
-            List<PlanRowViewModel> currencyRows, CraftingPlanResult result)
+            List<PlanRowViewModel> currencyRows, CraftingPlanResult result,
+            Dictionary<int, TradeUpPurchase> tradeUpPurchases)
         {
             if (result.Plan.BarterItemCosts == null || result.Plan.BarterItemCosts.Count == 0)
             {
@@ -673,7 +687,7 @@ namespace TaimisToolbench.Services
                     Rarity = ResolveRarity(bc.ItemId, result.ItemMetadata),
                 };
                 int? held = LookupOwned(result.OwnedVendorItemAmounts, bc.ItemId);
-                ApplyOwnedSplit(row, held, ApplyTradeUpNote(row, bc, held, result));
+                ApplyOwnedSplit(row, held, ApplyTradeUpNote(row, bc, held, result, tradeUpPurchases));
                 currencyRows.Add(row);
             }
         }
@@ -716,44 +730,86 @@ namespace TaimisToolbench.Services
         /// the currency converts it up before acquiring the rest any other
         /// way.
         /// <para>
-        /// The note and that subtraction are one decision, never two: a
-        /// Needed the note cannot account for is a number with no visible
-        /// derivation. So both are skipped together whenever the currency
-        /// resolves no icon - without one the note names nothing on screen,
-        /// because the offline fallback for these ids is the word
-        /// "Currency" (Gw2Constants.ResolveCurrencyName).
+        /// The subtraction does not depend on currency metadata. It used to
+        /// be skipped whenever the currency resolved no icon, so the same
+        /// plan showed a different Needed before and after /v2/currencies
+        /// answered. The note is still drawn: the renderer seats an icon
+        /// frame whether or not art resolved, and that frame carries the
+        /// currency's name on hover.
         /// </para>
         /// </summary>
         private static int ApplyTradeUpNote(
-            PlanRowViewModel row, BarterItemCost cost, int? ownedItems, CraftingPlanResult result)
+            PlanRowViewModel row, BarterItemCost cost, int? ownedItems, CraftingPlanResult result,
+            Dictionary<int, TradeUpPurchase> tradeUpPurchases)
         {
             if (!cost.TradeUpCurrencyId.HasValue || !cost.TradeUpCurrencyPerUnit.HasValue)
             {
                 return 0;
             }
 
+            int outstanding = Math.Max(0, row.Quantity - (ownedItems ?? 0));
+            int buys = SeatTradeUpNote(row, cost, outstanding, result);
+            tradeUpPurchases[cost.ItemId] = new TradeUpPurchase
+            {
+                Outstanding = outstanding,
+                Buys = buys,
+                CurrencyId = cost.TradeUpCurrencyId.Value,
+                CurrencyPerUnit = cost.TradeUpCurrencyPerUnit.Value,
+            };
+            return buys;
+        }
+
+        /// <summary>
+        /// The note itself, for a row already known to be a trade-up. 0
+        /// whenever no note is seated, so the number the note states and
+        /// the number taken off Needed are always the same number.
+        /// <para>
+        /// A holding of 0 is a fact the wallet reports, so it seats a note
+        /// reading 0 rather than the blank a missing snapshot leaves.
+        /// </para>
+        /// </summary>
+        private static int SeatTradeUpNote(
+            PlanRowViewModel row, BarterItemCost cost, int outstanding, CraftingPlanResult result)
+        {
             int currencyId = cost.TradeUpCurrencyId.Value;
             int? heldCurrency = LookupOwned(result.OwnedCurrencyAmounts, currencyId);
-            if (!heldCurrency.HasValue || heldCurrency.Value <= 0)
+            if (!heldCurrency.HasValue || heldCurrency.Value < 0)
             {
                 return 0;
             }
 
-            int outstanding = Math.Max(0, row.Quantity - (ownedItems ?? 0));
             int buys = CurrencyTradeUpCoalescing.BuysNow(
                 heldCurrency.Value, cost.TradeUpCurrencyPerUnit.Value, outstanding);
 
-            string iconUrl = CurrencyDisplayResolver.ResolveIconUrl(currencyId, result.CurrencyMetadata);
-            if (string.IsNullOrEmpty(iconUrl))
-            {
-                return 0;
-            }
-
+            row.TradeUpCurrencyId = currencyId;
             row.TradeUpCurrencyName = CurrencyDisplayResolver.ResolveName(currencyId, result.CurrencyMetadata);
-            row.TradeUpCurrencyIconUrl = iconUrl;
             row.TradeUpCurrencyHeld = heldCurrency.Value;
             row.TradeUpBuysQuantity = buys;
             return buys;
+        }
+
+        /// <summary>
+        /// One traded-up item's requirement, what the held map currency
+        /// buys of it right now, and the vendor rate behind both. The
+        /// Shopping List reads Outstanding rather than the plan step's own
+        /// quantity, which is only the part of the requirement the solver
+        /// routed through the vendor.
+        /// </summary>
+        private struct TradeUpPurchase
+        {
+            /// <summary>
+            /// The Total Cost row's whole requirement less the items
+            /// already held: what the player still has to hand currency
+            /// over for. The Shopping List states this and the Total Cost
+            /// table states this, so the two cannot disagree.
+            /// </summary>
+            public int Outstanding;
+
+            public int Buys;
+
+            public int CurrencyId;
+
+            public int CurrencyPerUnit;
         }
 
         /// <summary>
@@ -872,52 +928,6 @@ namespace TaimisToolbench.Services
             return byItemId;
         }
 
-        /// <summary>
-        /// Vendor purchase caps that are genuinely a wait, not merely a
-        /// route - same filter as RankerReadinessCalculator's
-        /// FilterVendorCappedItems. The solver only emits a TimegatedItem
-        /// when the plan buys the item from the capped vendor, but a
-        /// TP-listed item (field case: Mystic Coin behind a weekly-capped
-        /// vendor) can cover the remainder with coin - that is a price,
-        /// not a time gate, so no cap notice. A result with no price data
-        /// keeps the notice rather than inventing liquidity. Distinct from
-        /// VendorCapsByItemId, which stays unfiltered: the value-detail
-        /// tooltip states the cap only on a node the plan actually routes
-        /// through that vendor, where the fact remains worth surfacing.
-        /// </summary>
-        private static IReadOnlyList<TimegatedItem> FilterVendorCapNotices(CraftingPlanResult result)
-        {
-            var capped = result.Plan.TimegatedItems;
-            if (capped == null || capped.Count == 0)
-            {
-                return Array.Empty<TimegatedItem>();
-            }
-
-            var prices = result.SolveContext?.Prices;
-            if (prices == null)
-            {
-                return capped;
-            }
-
-            var kept = new List<TimegatedItem>(capped.Count);
-            foreach (var item in capped)
-            {
-                if (item == null)
-                {
-                    continue;
-                }
-
-                bool tpLiquid = prices.TryGetValue(item.ItemId, out var price) &&
-                    price != null && (price.BuyInstant > 0 || price.SellInstant > 0);
-                if (!tpLiquid)
-                {
-                    kept.Add(item);
-                }
-            }
-
-            return kept;
-        }
-
         private PlanSectionViewModel BuildUsedMaterialsSection(CraftingPlanResult result)
         {
             var section = new PlanSectionViewModel
@@ -947,22 +957,44 @@ namespace TaimisToolbench.Services
             return section;
         }
 
+        /// <summary>
+        /// The Shopping List: what to go and buy, and what it costs. A
+        /// traded-up item is listed at the whole outstanding requirement
+        /// and priced at the map currency that requirement really costs,
+        /// which is the same number the Total Cost table states for it. The
+        /// plan step's own quantity is only the part of the requirement the
+        /// solver routed through the vendor, so it is not what to buy.
+        /// What the wallet can convert right now is the Total Cost table's
+        /// Note, not a smaller shopping directive: a list that shrank to
+        /// the affordable part omitted most of the plan's cost.
+        /// </summary>
         private PlanSectionViewModel BuildShoppingListSection(
-            List<PlanStep> steps, CraftingPlanResult result)
+            List<PlanStep> steps, CraftingPlanResult result,
+            Dictionary<int, TradeUpPurchase> tradeUpPurchases)
         {
             var section = new PlanSectionViewModel
             {
                 SectionType = PlanSectionType.ShoppingList,
-                Title = $"Shopping List ({steps.Count})",
                 IsDefaultExpanded = true,
             };
 
+            var requirementsByItemId = BuildVendorRequirementsByItemId(result);
+
             foreach (var step in steps)
             {
+                TradeUpPurchase purchase = default(TradeUpPurchase);
+                bool isTradeUp = step.Source == AcquisitionSource.BuyFromVendor &&
+                    tradeUpPurchases.TryGetValue(step.ItemId, out purchase);
+                if (isTradeUp && purchase.Outstanding <= 0)
+                {
+                    continue;
+                }
+
                 string name = ResolveName(step.ItemId, result.ItemMetadata);
                 string iconUrl = ResolveIconUrl(step.ItemId, result.ItemMetadata);
                 string rarity = ResolveRarity(step.ItemId, result.ItemMetadata);
                 PlanRowType rowType = MapShoppingRowType(step.Source);
+                ResolveUnitCoin(step, out long unitCoin, out int unitCoinBundle);
 
                 section.Rows.Add(new PlanRowViewModel
                 {
@@ -972,22 +1004,151 @@ namespace TaimisToolbench.Services
                     Label = name,
                     IconUrl = iconUrl,
                     Rarity = rarity,
-                    Quantity = step.Quantity,
+                    Quantity = isTradeUp ? purchase.Outstanding : step.Quantity,
                     CoinValue = step.TotalCost,
-                    UnitCoinValue = step.UnitCost,
-                    HintText = ResolveHintText(rowType, step.ItemId, result.AcquisitionHints),
+                    UnitCoinValue = unitCoin,
+                    UnitCoinBundleQuantity = unitCoinBundle,
+                    HintText = ResolveShoppingHintText(
+                        rowType, step.ItemId, result, requirementsByItemId),
                     BadgeText = ResolveBadgeText(rowType, step.ItemId, result.AcquisitionHints),
                     // Owned/needed split, cosmetic only - Total column
                     // only, never Each (a per-unit rate has no ownership
                     // concept).
                     CurrencyCosts = CurrencyDisplayResolver.ResolveAmounts(
-                        step.VendorCurrencyCosts, result.CurrencyMetadata, result.OwnedCurrencyAmounts),
+                        isTradeUp ? TradeUpCurrencyCost(purchase) : step.VendorCurrencyCosts,
+                        result.CurrencyMetadata,
+                        result.OwnedCurrencyAmounts),
                     UnitCurrencyCosts = CurrencyDisplayResolver.ResolveUnitAmounts(
                         step.VendorOfferOutputCount, step.VendorOfferCurrencyCostLinesPerBatch, result.CurrencyMetadata),
                 });
             }
 
+            section.Title = $"Shopping List ({section.Rows.Count})";
             return section;
+        }
+
+        /// <summary>
+        /// What the listed number of a traded-up item costs at the vendor.
+        /// Re-derived from the listed quantity, not carried over from the
+        /// plan step, whose currency total is for the step's own smaller
+        /// quantity. The product is taken in long and clamped, because a
+        /// requirement large enough to overflow an int at 250 units each is
+        /// reachable from a big enough target quantity.
+        /// </summary>
+        private static List<CostLine> TradeUpCurrencyCost(TradeUpPurchase purchase)
+        {
+            return new List<CostLine>
+            {
+                new CostLine
+                {
+                    Type = "Currency",
+                    Id = purchase.CurrencyId,
+                    Count = ClampToInt((long)purchase.Outstanding * purchase.CurrencyPerUnit),
+                },
+            };
+        }
+
+        /// <summary>
+        /// What the shopping list's coin "Each" cell says: a per-unit price,
+        /// or a price and the number of units that price buys.
+        /// <para>
+        /// A remainder means no whole coin value is the per-unit price, so
+        /// the pair is reported rather than a truncated division. Same rule
+        /// and same shape as CurrencyDisplayResolver.ResolveDividedAmounts,
+        /// which the currency half of this same cell already uses.
+        /// </para>
+        /// </summary>
+        private static void ResolveUnitCoin(PlanStep step, out long unitCoin, out int bundleQuantity)
+        {
+            long total = step.TotalCost;
+            int divisor = step.Quantity;
+
+            // A uniform vendor step's total is the offer's per-purchase coin
+            // cost times whole purchases, so dividing by the purchase count
+            // recovers that cost exactly. The offer's own batch is what the
+            // player is charged; the step's quantity can sit inside a
+            // part-used purchase, and dividing by that instead invents a
+            // rate no purchase of this offer ever charges. VendorBatchSolver
+            // sets VendorOfferOutputCount only when every occurrence merged
+            // into this step resolved to one offer.
+            if (step.VendorOfferOutputCount > 0 && step.Quantity > 0)
+            {
+                int purchases = (step.Quantity + step.VendorOfferOutputCount - 1)
+                    / step.VendorOfferOutputCount;
+                if (purchases > 0)
+                {
+                    total = step.TotalCost / purchases;
+                    divisor = step.VendorOfferOutputCount;
+                }
+            }
+
+            if (divisor <= 1 || total <= 0)
+            {
+                unitCoin = divisor == 0 ? 0 : total;
+                bundleQuantity = 0;
+                return;
+            }
+
+            if (total % divisor == 0)
+            {
+                unitCoin = total / divisor;
+                bundleQuantity = 0;
+                return;
+            }
+
+            unitCoin = total;
+            bundleQuantity = divisor;
+        }
+
+        /// <summary>
+        /// The requirement gating each purchase, keyed by the item, so the
+        /// Shopping List row for it can answer with it on hover. The row
+        /// rather than a row of its own: the table sorts, and a notice row
+        /// placed after its item would be carried away from it by the
+        /// first click on a header.
+        /// </summary>
+        private static Dictionary<int, string> BuildVendorRequirementsByItemId(
+            CraftingPlanResult result)
+        {
+            if (result.VendorRequirementNotices == null ||
+                result.VendorRequirementNotices.Count == 0)
+            {
+                return null;
+            }
+
+            var byItemId = new Dictionary<int, string>(result.VendorRequirementNotices.Count);
+            foreach (var requirement in result.VendorRequirementNotices)
+            {
+                if (requirement != null)
+                {
+                    byItemId[requirement.ItemId] = VendorRequirementNoticeText.ForRow(
+                        requirement, result.AccountProgressionAccess);
+                }
+            }
+
+            return byItemId;
+        }
+
+        /// <summary>
+        /// A shopping row's hover prose: the vendor requirement gating this
+        /// purchase, or the acquisition hint, never both - only a
+        /// ShoppingUnknown row has a hint, and only a ShoppingVendor row
+        /// can be gated.
+        /// </summary>
+        private static string ResolveShoppingHintText(
+            PlanRowType rowType,
+            int itemId,
+            CraftingPlanResult result,
+            IReadOnlyDictionary<int, string> requirementsByItemId)
+        {
+            if (rowType == PlanRowType.ShoppingVendor &&
+                requirementsByItemId != null &&
+                requirementsByItemId.TryGetValue(itemId, out string requirement))
+            {
+                return requirement;
+            }
+
+            return ResolveHintText(rowType, itemId, result.AcquisitionHints);
         }
 
         /// <summary>
@@ -1092,7 +1253,7 @@ namespace TaimisToolbench.Services
             // Timegated (vendor purchase cap) notices - caps are surfaced,
             // never solved around. Appended after the real craft steps so
             // a notices-only section still renders correctly. The list
-            // arrives pre-filtered (see FilterVendorCapNotices): a cap on
+            // arrives pre-filtered (see VendorCapNotices.Filter): a cap on
             // a TP-liquid item never reaches this loop. The label names
             // the vendor limit for what it is - same wording as the
             // Ranker's vendor-cap note (RankerTabContent).
@@ -1282,11 +1443,19 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// Assembles Notes rows in a fixed order - excess/reclaim, total
-        /// (2+ excess lines only), competency, competency opportunity,
-        /// recipe-sheet savings, seasonal vendor tips, forge-scope - so
-        /// re-solves and screenshots stay diffable. Returns zero rows when
-        /// every kind is empty; the caller skips the section then.
+        /// Assembles Notes rows in a fixed order - vendor requirements,
+        /// excess/reclaim, total (2+ excess lines only), competency,
+        /// competency opportunity, recipe-sheet savings, seasonal vendor
+        /// tips, forge-scope - so re-solves and screenshots stay diffable.
+        /// Returns zero rows when every kind is empty; the caller skips the
+        /// section then.
+        /// <para>
+        /// Vendor requirements lead because they are the only kind that
+        /// says the plan may not be doable, rather than that it could be
+        /// cheaper. They used to trail the Crafting Steps list, where an
+        /// unheaded line under the last step read as an orphan and named a
+        /// purchase that is not a craft step at all.
+        /// </para>
         /// </summary>
         private PlanSectionViewModel BuildNotesSection(CraftingPlanResult result)
         {
@@ -1298,6 +1467,36 @@ namespace TaimisToolbench.Services
 
             // "(N)" counts real entries, not rollup or continuation rows.
             int noteEntryCount = 0;
+
+            // 0. What a vendor the plan buys from wants of the account. A
+            // requirement the account MEETS reaches no row at all
+            // (PlanResultBuilder drops it), so every row here is either
+            // unmet or unchecked, and the words say which and what to do -
+            // see Services/VendorRequirementNoticeText.cs.
+            if (result.VendorRequirementNotices != null)
+            {
+                var requirementRows =
+                    new List<(string Name, PlanRowViewModel Row)>(result.VendorRequirementNotices.Count);
+                foreach (var requirement in result.VendorRequirementNotices)
+                {
+                    string itemName = ResolveName(requirement.ItemId, result.ItemMetadata);
+                    var segments = VendorRequirementNoticeText.Segments(
+                        requirement, result.AccountProgressionAccess);
+                    requirementRows.Add((itemName, new PlanRowViewModel
+                    {
+                        RowType = PlanRowType.NoteLine,
+                        ItemId = requirement.ItemId,
+                        NoteSubject = itemName,
+                        NoteSegments = segments,
+                        Label = PlanNoteSegment.Join(segments),
+                    }));
+                    noteEntryCount++;
+                }
+
+                section.Rows.AddRange(requirementRows
+                    .OrderBy(r => r.Name, StringComparer.Ordinal)
+                    .Select(r => r.Row));
+            }
 
             // 1. Excess/reclaim lines, alphabetical by resolved item name
             // (not the composed Label, whose "Excess: <qty>x " prefix
@@ -1456,6 +1655,48 @@ namespace TaimisToolbench.Services
                 }
             }
 
+            // 3b. Where to buy the sheet for a recipe the plan needs and
+            // the account has not learned, alphabetical by sheet name. One
+            // row each: the sheet's own icon and name, then where to buy
+            // it. What it costs is NOT here - it is the Cost cell on that
+            // recipe's own Required Recipes row.
+            if (result.MissingRecipeSheetSources != null && result.MissingRecipeSheetSources.Count > 0)
+            {
+                var sourceRows = new List<(string Name, PlanRowViewModel Row)>(
+                    result.MissingRecipeSheetSources.Count);
+                foreach (var source in result.MissingRecipeSheetSources)
+                {
+                    string sheetName = ResolvedNameOrNull(source.SheetItemId, result.ItemMetadata);
+                    if (sheetName == null)
+                    {
+                        continue;
+                    }
+
+                    var segments = MissingRecipeNoteText.Segments(
+                        source, IconWikiTarget.SheetPageAcquisition(sheetName));
+                    if (segments == null)
+                    {
+                        // No merchant to name, so the note has nothing to
+                        // say that the recipe's own row does not.
+                        continue;
+                    }
+
+                    sourceRows.Add((sheetName, new PlanRowViewModel
+                    {
+                        RowType = PlanRowType.NoteLine,
+                        ItemId = source.SheetItemId,
+                        NoteSubject = sheetName,
+                        NoteSegments = segments,
+                        Label = PlanNoteSegment.Join(segments),
+                    }));
+                    noteEntryCount++;
+                }
+
+                section.Rows.AddRange(sourceRows
+                    .OrderBy(r => r.Name, StringComparer.Ordinal)
+                    .Select(r => r.Row));
+            }
+
             // 4. Seasonal vendor tip opportunities, alphabetical by item
             // name. Two physical rows per tip: a single combined label
             // ellipsizes at the panel edge and cuts exactly the clause
@@ -1551,38 +1792,53 @@ namespace TaimisToolbench.Services
             };
 
             var planDiscNames = BuildPlanDiscNames(result);
+            var sheetSources = BuildSheetSourcesByRecipeId(result.MissingRecipeSheetSources);
 
             foreach (var recipe in result.RequiredRecipes)
             {
-                // A sole-Mystic-Forge recipe has nothing to learn - there
-                // is no unlock concept - so it is skipped rather than
-                // shown as an always-"Learned" row. Only a recipe whose
-                // ENTIRE Disciplines list is MysticForge is filtered; one
-                // combining the forge with a real leveled discipline still
-                // has something to learn. Touches only this section's row
-                // list - a Mystic Forge craft STEP keeps its location
-                // sublabel.
-                if (IsMysticForgeOnly(recipe.Disciplines))
+                // A recipe with no unlock has nothing to learn, so it is
+                // skipped rather than shown as an always-"Learned" row. The
+                // rule lives in RequiredRecipesVisibility.HasNoUnlockBarrier,
+                // which the Ranker's Recipes gate calls too so the header's
+                // total and that cell's denominator are one number.
+                // Touches only this section's row list - a Mystic Forge
+                // craft STEP keeps its location sublabel, and an auto-learned
+                // recipe still gets its Crafting Steps row.
+                if (RequiredRecipesVisibility.HasNoUnlockBarrier(
+                        recipe.IsAutoLearned, recipe.Disciplines))
                 {
                     continue;
                 }
 
-                string name = ResolveName(recipe.OutputItemId, result.ItemMetadata);
-                string iconUrl = ResolveIconUrl(recipe.OutputItemId, result.ItemMetadata);
-                string rarity = ResolveRarity(recipe.OutputItemId, result.ItemMetadata);
+                // The row's subject is the recipe SHEET where the module
+                // knows which one unlocks this recipe: a sheet is what the
+                // player buys and consumes, and the crafted item is not
+                // sold as a recipe. Only when the sheet's own metadata
+                // arrived, so a fetch that missed it names the crafted
+                // item rather than "Unknown Item".
+                string craftedName = ResolveName(recipe.OutputItemId, result.ItemMetadata);
+                string sheetName = recipe.SheetItemId > 0
+                    ? ResolvedNameOrNull(recipe.SheetItemId, result.ItemMetadata)
+                    : null;
+                bool namesTheSheet = sheetName != null;
+                int subjectItemId = namesTheSheet ? recipe.SheetItemId : recipe.OutputItemId;
+
+                string name = namesTheSheet ? sheetName : craftedName;
+                string iconUrl = ResolveIconUrl(subjectItemId, result.ItemMetadata);
+                string rarity = ResolveRarity(subjectItemId, result.ItemMetadata);
 
                 string statusTag;
                 if (recipe.IsAutoLearned)
                 {
-                    statusTag = "Auto-learned";
+                    statusTag = RequiredRecipesVisibility.AutoLearnedStatusTag;
                 }
                 else if (recipe.IsMissing == true)
                 {
-                    statusTag = "Missing!";
+                    statusTag = RequiredRecipesVisibility.MissingStatusTag;
                 }
                 else if (recipe.IsMissing == false)
                 {
-                    statusTag = "Learned";
+                    statusTag = RequiredRecipesVisibility.LearnedStatusTag;
                 }
                 else
                 {
@@ -1592,28 +1848,56 @@ namespace TaimisToolbench.Services
                 string sublabel = FormatDisciplineSublabel(
                     recipe.Disciplines, recipe.MinRating, planDiscNames);
 
-                // Wiki links only on Missing rows - a Learned/Auto-learned
-                // row has nothing left to unlock. A LearnedFromItem recipe
-                // links to its "Recipe: <name>" sheet page; every other
-                // recipe to the item's "#Acquisition" anchor. Gated on the
-                // semantic flags (not the display string) so a tag rename
-                // cannot drop every link; IsAutoLearned is excluded
-                // explicitly - it can be IsMissing yet has nothing to
-                // unlock via the wiki.
-                string wikiUrl = !recipe.IsAutoLearned && recipe.IsMissing == true
-                    ? WikiLinkBuilder.BuildRequiredRecipeUrl(name, recipe.IsLearnedFromItem)
-                    : null;
+                // Every row gets a page, Learned rows included: the icon
+                // standard is that a right-click always reaches the wiki.
+                // A sheet-named row opens the sheet's own page; a recipe
+                // learned from an item whose sheet the module cannot name
+                // opens the same "Recipe: <crafted name>" page it always
+                // did; anything else opens the crafted item's Acquisition
+                // section, where the player's unlock options are listed.
+                IconWikiTarget wikiTarget;
+                if (namesTheSheet || recipe.IsLearnedFromItem)
+                {
+                    wikiTarget = IconWikiTarget.RecipeSheet(craftedName);
+                }
+                else
+                {
+                    wikiTarget = IconWikiTarget.Acquisition(craftedName);
+                }
 
-                section.Rows.Add(new PlanRowViewModel
+                var row = new PlanRowViewModel
                 {
                     RowType = PlanRowType.RecipeRow,
+                    ItemId = subjectItemId,
                     Label = name,
                     Sublabel = sublabel,
                     IconUrl = iconUrl,
                     Rarity = rarity,
                     StatusTag = statusTag,
-                    WikiUrl = wikiUrl,
-                });
+                    WikiTarget = wikiTarget,
+                    // Named only on a sheet row, where the sheet's name is
+                    // all the reader sees and the crafted item it unlocks
+                    // is the thing they were planning.
+                    HintText = namesTheSheet ? $"Unlocks {craftedName}." : null,
+                };
+
+                MissingRecipeSheetSource sheetSource;
+                if (sheetSources != null && sheetSources.TryGetValue(recipe.RecipeId, out sheetSource))
+                {
+                    // The Sold By cell opens the row's own subject at the
+                    // Acquisition section, because that is where the wiki
+                    // lists every merchant rather than the one this row
+                    // names.
+                    ApplySheetCost(
+                        row,
+                        sheetSource,
+                        result,
+                        namesTheSheet
+                            ? IconWikiTarget.SheetPageAcquisition(sheetName)
+                            : IconWikiTarget.Acquisition(craftedName));
+                }
+
+                section.Rows.Add(row);
             }
 
             // Title reflects the count AFTER the Mystic-Forge filter, so
@@ -1625,25 +1909,85 @@ namespace TaimisToolbench.Services
             return section;
         }
 
-        // True only when EVERY entry in Disciplines is "MysticForge".
-        // Empty/null Disciplines is NOT Mystic-Forge-only - vacuous truth
-        // would wrongly match a recipe with no discipline data.
-        private static bool IsMysticForgeOnly(List<string> disciplines)
+        private static Dictionary<int, MissingRecipeSheetSource> BuildSheetSourcesByRecipeId(
+            List<MissingRecipeSheetSource> sources)
         {
-            if (disciplines == null || disciplines.Count == 0)
+            if (sources == null || sources.Count == 0)
             {
-                return false;
+                return null;
             }
 
-            foreach (var discipline in disciplines)
+            var byRecipeId = new Dictionary<int, MissingRecipeSheetSource>(sources.Count);
+            foreach (var source in sources)
             {
-                if (discipline != "MysticForge")
+                if (source != null)
                 {
-                    return false;
+                    byRecipeId[source.RecipeId] = source;
                 }
             }
 
-            return true;
+            return byRecipeId;
+        }
+
+        /// <summary>
+        /// Writes what the sheet for a missing recipe costs onto its
+        /// Required Recipes row, and who sells it. The coin part rides
+        /// CoinValue, the currency part CurrencyCosts and the bartered
+        /// items SheetBarterItems, so every part of the price draws as a
+        /// number followed by its own icon. The merchant phrase rides
+        /// SoldByText, which is the table's own Sold By column.
+        /// <para>
+        /// Writes nothing at all when an item line's name is not in
+        /// metadata: the module has no picture and no name for that item,
+        /// so the cell would understate what the player has to hand over,
+        /// and half a price is a wrong price.
+        /// </para>
+        /// </summary>
+        private static void ApplySheetCost(
+            PlanRowViewModel row, MissingRecipeSheetSource source, CraftingPlanResult result,
+            IconWikiTarget soldByWiki)
+        {
+            var currencyLines = new List<CostLine>();
+            var barterItems = new List<BarterAmountViewModel>();
+            if (source.NonCoinCostLines != null)
+            {
+                foreach (var line in source.NonCoinCostLines)
+                {
+                    if (line == null)
+                    {
+                        return;
+                    }
+
+                    if (string.Equals(line.Type, "Currency", StringComparison.Ordinal))
+                    {
+                        currencyLines.Add(line);
+                        continue;
+                    }
+
+                    if (ResolvedNameOrNull(line.Id, result.ItemMetadata) == null)
+                    {
+                        return;
+                    }
+
+                    barterItems.Add(new BarterAmountViewModel
+                    {
+                        ItemId = line.Id,
+                        Amount = line.Count,
+                    });
+                }
+            }
+
+            if (!source.CoinCost.HasValue && currencyLines.Count == 0 && barterItems.Count == 0)
+            {
+                return;
+            }
+
+            row.CoinValue = source.CoinCost ?? 0;
+            row.CurrencyCosts = CurrencyDisplayResolver.ResolveAmounts(
+                currencyLines, result.CurrencyMetadata);
+            row.SheetBarterItems = barterItems.Count > 0 ? barterItems : null;
+            row.SoldByText = MissingRecipeNoteText.Merchants(source);
+            row.SoldByWikiTarget = soldByWiki;
         }
 
         /// <summary>
@@ -1688,6 +2032,20 @@ namespace TaimisToolbench.Services
 
         // Internal so TreeSectionController can resolve a Subdued pill's
         // item-kind delta to a display name too.
+        /// <summary>The item's real name, or null when the fetch did not
+        /// return one. For a caller that has a better fallback than the
+        /// "Unknown Item" placeholder <see cref="ResolveName"/> hands
+        /// back.</summary>
+        private static string ResolvedNameOrNull(
+            int itemId, IReadOnlyDictionary<int, ItemMetadata> metadata)
+        {
+            return metadata != null &&
+                metadata.TryGetValue(itemId, out var meta) &&
+                !string.IsNullOrEmpty(meta.Name)
+                    ? meta.Name
+                    : null;
+        }
+
         internal static string ResolveName(
             int itemId, IReadOnlyDictionary<int, ItemMetadata> metadata)
         {

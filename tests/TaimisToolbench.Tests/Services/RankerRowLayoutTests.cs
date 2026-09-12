@@ -1,4 +1,5 @@
 using System;
+using TaimisToolbench.Models;
 using TaimisToolbench.Services;
 using Xunit;
 
@@ -89,8 +90,12 @@ namespace TaimisToolbench.Tests.Services
         public void TheGateStripCarriesAllFiveGates()
         {
             // Field issue 7: the strip gained a Recipes cell; the cell count
-            // is what the view's render loop truncates against.
+            // is what the view's render loop truncates against, so a gate the
+            // model scores and the strip cannot draw would be invisible.
             Assert.Equal(5, RankerRowLayout.GateCellCount);
+            Assert.Equal(
+                RankerRowLayout.GateCellCount,
+                Enum.GetValues(typeof(RankerGate)).Length);
         }
 
         [Theory]
@@ -300,8 +305,10 @@ namespace TaimisToolbench.Tests.Services
         // and the button band must never overlap, at any width, with any
         // progress string.
         // ---------------------------------------------------------------
-        private const int SpinnerSize = 20;
-        private const int SpinnerGap = 6;
+        // The same constants the view hands RankerRowLayout.Toolbar. A
+        // literal here proves a band that does not ship.
+        private const int SpinnerSize = InlineSpinnerLayout.SnapshotStatusSize;
+        private const int SpinnerGap = InlineSpinnerLayout.LabelGap;
 
         [Theory]
         [MemberData(nameof(RealWidths))]
@@ -928,6 +935,50 @@ namespace TaimisToolbench.Tests.Services
         public void MainLineY_ClampsRatherThanGoingNegative()
         {
             Assert.Equal(0, RankerRowLayout.MainLineY(RankerRowLayout.RowHeight + 100));
+        }
+
+        // --- The currencies the grid cannot fit ---
+        [Theory]
+        [InlineData(0, 0)]
+        [InlineData(1, 1)]
+        [InlineData(9, 9)]
+        [InlineData(10, 9)]
+        [InlineData(40, 9)]
+        public void CurrenciesShown_StopsAtTheGridSize(int currencies, int expected)
+        {
+            Assert.Equal(expected, RankerRowLayout.CurrenciesShown(currencies));
+        }
+
+        [Fact]
+        public void CurrencyLineCount_AgreesWithCurrenciesShown()
+        {
+            // The row's height and the number of chips it draws must come
+            // from one count, or a chip lands outside its own row.
+            for (int currencies = 0; currencies <= 40; currencies++)
+            {
+                int shown = RankerRowLayout.CurrenciesShown(currencies);
+                int expectedLines =
+                    (shown + RankerRowLayout.CurrenciesPerLine - 1) / RankerRowLayout.CurrenciesPerLine;
+                Assert.Equal(expectedLines, RankerRowLayout.CurrencyLineCount(currencies));
+            }
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(5)]
+        [InlineData(9)]
+        public void CurrencyOverflowNote_IsAbsentWhenEveryCurrencyFits(int currencies)
+        {
+            Assert.Null(RankerRowLayout.CurrencyOverflowNote(currencies));
+        }
+
+        [Fact]
+        public void CurrencyOverflowNote_CountsWhatTheGridDropped()
+        {
+            // The Currencies gate averages over all twelve, so the three the
+            // row never lists still move its percentage.
+            Assert.Equal("3 more currencies not shown", RankerRowLayout.CurrencyOverflowNote(12));
+            Assert.Equal("1 more currency not shown", RankerRowLayout.CurrencyOverflowNote(10));
         }
     }
 }

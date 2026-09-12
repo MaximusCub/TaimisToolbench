@@ -24,7 +24,7 @@ is left out rather than guessed at.
 | `api.guildwars2.com` | the running module, for account data | Blish HUD's, through `Gw2ApiManager` |
 | `api.guildwars2.com` | `tools/TaimisToolbench.RecipeSeeder`, `tools/VendorOfferUpdater` | ours |
 | `wiki.guildwars2.com/api.php` | `tools/VendorOfferUpdater`, `tools/MysticForgeSeeder` | ours |
-| `render.guildwars2.com` | the running module, for item and currency icons | Blish HUD's content service |
+| `assets.gw2dat.com` | the running module, for item and currency icon art | Blish HUD's content service |
 | `raw.githubusercontent.com` | `tools/build-glyph-font.py --fetch`, at development time only | ours |
 
 The running module never contacts the GW2 Wiki or gw2efficiency. Wiki data
@@ -187,16 +187,16 @@ that the schema version goes in the `v=` query parameter. Its
 | --- | --- | --- |
 | Client identifies itself | Met | `Services/Gw2ApiUserAgent.cs` builds the agent and `Module.cs` applies it to the single `HttpClient` every runtime API call shares; `tools/TaimisToolbench.RecipeSeeder/Program.cs` applies the same helper |
 | 200 ids per request | Met | `Services/Gw2RecipeApiClient.cs` batches at 200, `Services/Gw2AccountSnapshotService.cs` chunks item lookups at 200, `tools/TaimisToolbench.RecipeSeeder/Program.cs` batches at 200 |
-| Stay inside 600 requests a minute | Met in practice, not enforced | the heaviest runtime walk, `Services/Recipes/RecipeCorpusRefresher.cs`, sleeps one second between 200-id batches; `Services/RecipeService.cs` fans out at concurrency 4 with no pacing, but is bounded by how many recipes a plan misses in the committed corpus |
-| Honour `Retry-After` | Partly met | `tools/TaimisToolbench.RecipeSeeder/HttpRetry.cs` reads both the delta and the date form; `Services/Gw2BuildApiClient.cs` waits a fixed two seconds and reads neither |
-| Distinguish "come back later" from "this request is wrong" | Partly met | `tools/TaimisToolbench.RecipeSeeder/HttpRetry.cs` retries 429 and 5xx only; `Services/Gw2BuildApiClient.cs` retries any failure |
+| Stay inside 600 requests a minute | Not enforced | the heaviest runtime walk, `Services/Recipes/RecipeCorpusRefresher.cs`, sleeps one second between 200-id batches; `Services/RecipeService.cs` fans out at concurrency 4 with no pacing, and `Services/Gw2ApiConnectionLimit.cs` now gives that fan-out the sockets to run at, so it is bounded only by how many recipes a plan misses in the committed corpus. Nothing in the module counts requests per minute |
+| Honour `Retry-After` | Met on the module's own clients | `Services/HttpRetry.cs` reads both the delta and the date form, and `Services/Gw2ApiRequest.cs` applies it to the recipe, price and item clients; `Services/Gw2BuildApiClient.cs` applies it to the build lookup |
+| Distinguish "come back later" from "this request is wrong" | Partly met | `Services/Gw2ApiRequest.cs` repeats 429 and 503 only, and returns every other status to its caller unchanged; `Services/Gw2BuildApiClient.cs` still retries any failure |
 | A refusal must not read as an empty result | Met in the seeder | `tools/TaimisToolbench.RecipeSeeder/Program.cs` throws once a batch is unrecoverable instead of returning an empty batch into the seed |
 | Cache | Met | the recipe corpus persists across sessions in `Services/Recipes/OverlayRecipeCacheStore.cs`; prices carry a 15-minute TTL in `Services/TradingPostService.cs`; item metadata is memoised for the session in `Services/ItemMetadataService.cs`; `Services/CurrencyMetadataService.cs` fetches `ids=all` once |
 | Compression | Not met | the module's `HttpClient` uses the default handler, which requests no encoding |
 
 ---
 
-## 3. The render service
+## 3. Icon art: the render service URL, the gw2dat host
 
 [API:Render service](https://wiki.guildwars2.com/wiki/API:Render_service)
 states the contract: a URL has the form
@@ -206,20 +206,38 @@ the signature and the file id are required, and the only valid formats are
 
 Item and currency icon URLs therefore arrive from the GW2 API as data. This
 repository never composes one. `Views/Rendering/IconControls.cs` hands the
-URL it was given to Blish HUD's content service, which performs the fetch
-and holds the result.
+URL it was given to Blish HUD's content service.
 
-Measured on 2026-09-05, `GET https://render.guildwars2.com/file/...png`:
+**The module does not reach the render service.** Read in Blish HUD's own
+source at tag `v1.3.0`, `Blish HUD/GameServices/ContentService.cs`:
+`GetRenderServiceTexture` matches the signature and file id out of the URL,
+discards the signature, and calls `DatAssetCache.GetTextureFromAssetId`.
+`Blish HUD/GameServices/Content/DatAssetCache.cs` requests
+`https://assets.gw2dat.com/{fileId}.png` through Flurl.Http 2.4.2, writing
+each answer to a per-user disk cache first read on the next request. The
+`RENDERSERVICE_REQUESTURL` constant in `ContentService.cs` has no other
+reference in the tree.
+
+`assets.gw2dat.com` is a community-run mirror, not an ArenaNet service, and
+publishes no rate limit or connection guidance this repository can cite.
+
+Measured on 2026-09-07 from a developer machine, `GET
+https://assets.gw2dat.com/{fileId}.png`:
 
 | Property | Value |
 | --- | --- |
-| Cacheability | `Cache-Control: public,max-age=604800` (seven days) |
-| Delivery | CloudFront, reporting `X-Cache: Hit from cloudfront` |
+| Icon size | 5.9 KB to 8.6 KB over 8 samples |
+| Latency | 40 icons the CDN had not served recently, over one reused connection, averaged 0.446s each |
+| Cacheability | Blish HUD keeps every answer on disk, so a fetched icon is fetched once per installation |
 
-The seven-day lifetime is why a texture is worth fetching once and holding.
-The holding is Blish HUD's; what this repository controls is how many
-distinct URLs it asks for. An icon row with no URL never reaches the
-content service at all.
+What this repository controls is how many distinct URLs it asks for, and
+how many of those get a socket rather than queueing.
+`Services/IconAssetConnectionLimit.cs` raises the host's ServicePoint to 6,
+which is what HTTP/1.1 browsers use for many small static images from one
+host. Blish HUD bounds neither the rate nor the concurrency of these
+fetches, so that ServicePoint is the only thing holding back a cold-cache
+flood: at the .NET Framework default of 2, the 927 distinct icons of a
+large account take about 207s to arrive, and about 69s at 6.
 
 ---
 
@@ -235,21 +253,34 @@ Two files use it: `Services/Gw2AccountSnapshotService.cs` and
 
 What remains ours on that path is request volume and what we keep:
 
-- A snapshot costs five fixed account calls, two calls per character, one
+- A snapshot costs six fixed account calls, three calls per character, one
   call per 200 uncached items, and one currency call if the currency cache
-  is empty. Character calls run two at a time and characters run one after
-  another (`Services/Gw2AccountSnapshotService.cs`).
+  is empty. Six characters run at a time
+  (`CharacterSnapshotCollector.DefaultMaxCharactersInFlight`), each starting
+  its three calls together, so the widest moment is 18 requests
+  (`Services/Gw2AccountSnapshotService.cs`).
 - Item names and currency metadata are held across refreshes, so a second
   snapshot on the same session re-fetches neither
   (`Services/Gw2AccountSnapshotService.cs`).
-- The learned-recipe list is fronted by a five-minute cache with explicit
-  invalidation when the subtoken changes
-  (`Services/CachingAccountRecipeClient.cs`).
+- The learned-recipe list is fetched once per plan generation and is not
+  cached, so a recipe learned in game shows as known on the next plan
+  (`Services/CraftingPlanPipeline.cs`).
 - A single refresh is claimed once and cannot overlap itself
   (`Services/SnapshotRefreshSlot.cs`).
 
 Every other GW2 API call the module makes goes through the `HttpClient`
 built in `Module.cs`, which is entirely ours to configure.
+
+One thing is shared rather than split. A .NET `ServicePoint` is per host
+and per process, so Blish HUD's Gw2Sharp client and the module's own
+`HttpClient` draw sockets to `api.guildwars2.com` from the same pool.
+Outside ASP.NET that pool holds 2, which is small enough that running
+requests concurrently bought almost nothing.
+`Services/Gw2ApiConnectionLimit.cs` raises it to 25 and names where that
+number comes from; every entry point that starts several requests at once
+calls it, because a `ServicePoint` idle for 100 seconds is replaced by a
+fresh one at the process default. Raising one host's `ServicePoint` leaves
+Blish HUD's traffic to every other host alone.
 
 ---
 
@@ -305,14 +336,18 @@ These are known, sourced above, and not settled.
 3. **No request compression anywhere.** The GW2 API supports gzip, measured
    above; MediaWiki asks for it. No client in this repository sets
    `Accept-Encoding`.
-4. **`Services/Gw2BuildApiClient.cs` retries any failure on a fixed delay.**
-   It repeats a request the API has already rejected as malformed, and it
-   ignores a `Retry-After` the API sends.
-5. **POST reads carry no `Promise-Non-Write-API-Action` header.**
+4. **`Services/Gw2BuildApiClient.cs` retries any failure.** It repeats a
+   request the API has already rejected as malformed. It does read
+   `Retry-After`, unlike when this entry was written.
+5. **Nothing counts requests per minute.** `Services/Gw2ApiRequest.cs`
+   answers a refusal after it arrives; no client in the module paces itself
+   against the 600 a minute the API reports, and the module's own
+   concurrency bounds can exceed that rate in a burst.
+6. **POST reads carry no `Promise-Non-Write-API-Action` header.**
    `tools/MysticForgeSeeder/WikiRecipeClient.cs` POSTs its `action=ask`
    queries to keep URLs short, which is allowed, but does not send the
    header that tells MediaWiki the request is a read.
-6. **The GFDL attribution question on scraped facts.** Section 5 states
+7. **The GFDL attribution question on scraped facts.** Section 5 states
    what the wiki's copyright page says and what the seeds actually hold.
    Nothing in the repository states a position on it.
 

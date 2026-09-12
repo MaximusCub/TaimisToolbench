@@ -44,7 +44,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Item", Id = 999, Count = 250 },
                         },
                         MerchantName = "Token Vendor",
-                        Locations = new List<string>(),
                     },
                 });
 

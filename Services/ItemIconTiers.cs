@@ -45,6 +45,13 @@ namespace TaimisToolbench.Services
         /// frame at all (<see cref="IconFrameGeometry.CurrencyIsFramed"/>) -
         /// like the coin runs beside it, which are unframed and go through
         /// CoinCurrencyRenderer.
+        /// <para>
+        /// A bartered ITEM standing as the unit of a price takes this tier
+        /// too - the Required Recipes Cost cell, where five Charms of Skill
+        /// is the price the same way 350 Karma is. It keeps the rarity
+        /// frame every item icon has, and the frame lands inside the same
+        /// measured window, so the run's advance is unchanged.
+        /// </para>
         /// </summary>
         CurrencyBarRun,
 

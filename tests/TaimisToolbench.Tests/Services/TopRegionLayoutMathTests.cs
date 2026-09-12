@@ -69,6 +69,51 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void StatusBandWidth_AtTheWindowFloor_IsTheMeasuredBudget()
+        {
+            // The measurement StatusText.PlanStatusBudgetChars is derived
+            // from, and the number the status line ellipsizes against. An
+            // absolute literal on purpose: a change to the window floor,
+            // the tab chrome, the right-edge padding or the spinner size
+            // must fail here rather than silently move the band.
+            int panel = WindowSizing.TabPanelWidthFor(WindowSizing.MinWindowWidth);
+
+            Assert.Equal(1252, panel);
+            Assert.Equal(
+                1206,
+                TopRegionLayoutMath.StatusBandWidth(
+                    panel, InlineSpinnerLayout.PlanStripSize, InlineSpinnerLayout.LabelGap));
+        }
+
+        [Fact]
+        public void StatusBandWidth_StopsWhereTheRestOfTheStripStops()
+        {
+            // The separator rule and the Generate button both end one
+            // RightEdgePadding short of the panel. The status row is the
+            // same strip, so its spinner must not overhang them.
+            const int Panel = 1252;
+            int band = TopRegionLayoutMath.StatusBandWidth(
+                Panel, InlineSpinnerLayout.PlanStripSize, InlineSpinnerLayout.LabelGap);
+
+            Assert.Equal(
+                Panel - WindowSizing.RightEdgePadding,
+                band + InlineSpinnerLayout.LabelGap + InlineSpinnerLayout.PlanStripSize);
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(20)]
+        [InlineData(46)]
+        public void StatusBandWidth_NeverGoesNegative(int panelWidth)
+        {
+            // A panel narrower than its own chrome would otherwise hand the
+            // ellipsizer a negative budget.
+            Assert.True(
+                TopRegionLayoutMath.StatusBandWidth(
+                    panelWidth, InlineSpinnerLayout.PlanStripSize, InlineSpinnerLayout.LabelGap) >= 0);
+        }
+
+        [Fact]
         public void HiddenToolbar_CostsNothing_AndTheRowSitsWhereStatusDoes()
         {
             var hidden = TopRegionLayoutMath.Compute(rowCount: 3, treeToolbarVisible: false);

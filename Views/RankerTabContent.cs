@@ -512,7 +512,7 @@ namespace TaimisToolbench.Views
                 Enabled = false,
                 Parent = _addPanel,
             };
-            TooltipFacility.ApplyPlain(_addButton, "Add this item to the bottom of your priority list.");
+            TooltipFacility.ApplyPlain(_addButton, "Add this item to the bottom of your wishlist.");
             _addButton.Click += (_, __) => AddPendingItem();
 
             // The comparison mode is a two-option, mutually exclusive
@@ -721,7 +721,7 @@ namespace TaimisToolbench.Views
             "Show the five categories under each row - materials, currencies, time gates, disciplines and recipes - as the bars the Ready figure is blended from, along with the notes that explain them. Off by default so more rows fit on screen.";
 
         private const string CurrenciesTooltip =
-            "List the currencies each row is still short of, and by how much. The Currencies category says how close you are; this says which currency.";
+            "List the currencies each row needs, and how much of each you hold. The Currencies category says how close you are; this says which currency.";
 
         /// <summary>
         /// A display choice, not a measurement one: nothing is recomputed and
@@ -796,7 +796,12 @@ namespace TaimisToolbench.Views
             "Whether you can afford everything this item still needs right now, or how much coin you are short of it.",
             "How close this item is to finished: the five barriers under the row, blended into one figure.",
             "The shortest possible wait in days, set by once-per-day crafts that no amount of coin can shorten.",
-            "The coin still to spend, for the materials this item needs that you do not already hold.",
+            // Names the price basis because this tab always solves on buy
+            // orders with own materials free, whatever the plan tab is set
+            // to. Without that sentence the same item reads two different
+            // coin figures on two tabs and neither says why.
+            "The coin still to spend, for the materials this item needs that you do not already hold. " +
+                "Always priced at buy orders, and always counting your own materials as free, so every row compares.",
         };
 
         private void PositionChrome(Container container, int width)
@@ -819,8 +824,8 @@ namespace TaimisToolbench.Views
                 toolbar.FirstToggleX + CheckboxArtOverhang, _categoriesCheckbox.Location.Y);
             _currenciesCheckbox.Location = new Point(
                 toolbar.SecondToggleX + CheckboxArtOverhang, _currenciesCheckbox.Location.Y);
-            _statusLabel.Width = toolbar.StatusWidth;
-            InlineSpinner.PlaceAfter(_spinner, _statusLabel, InlineSpinnerLayout.LabelGap);
+            _statusBudget = toolbar.StatusWidth;
+            ApplyStatusText();
 
             PositionModeStrip(barWidth);
 
@@ -945,7 +950,7 @@ namespace TaimisToolbench.Views
         private static readonly string[] Captions =
         {
             "In priority order, each item is measured against what the items above it leave behind - higher rows have first claim on your materials, currencies, coin and daily crafts. Each on its own measures every item against your full account, ignoring the other rows, and sorts the closest-to-done to the top.",
-            "Ready blends five separate barriers - materials at buy-order prices, account currencies, time-gated daily crafts, crafting disciplines and recipe unlocks - and counts only the ones this item actually has. Hover it for the breakdown.",
+            "Ready blends five separate barriers - the coin and currency bill at buy-order prices, the currencies your wallet is short, time-gated daily crafts, crafting disciplines and recipe unlocks - and counts only the ones this item actually has. Hover it for the breakdown.",
         };
 
         private int MeasureCaptionsHeight(int barWidth)
@@ -1120,7 +1125,7 @@ namespace TaimisToolbench.Views
             _refreshButton.Enabled = !_isRefreshing && Entries.Count > 0;
             TooltipFacility.ApplyPlain(_refreshButton, Entries.Count > 0
                 ? "Recalculate every row. Each item is solved twice, so the first analysis of a session can take a while."
-                : "Add an item to your list first.");
+                : "Add an item to your wishlist first.");
 
             UpdateColumnHeaderTooltips();
             RebuildCaptions(barWidth);
@@ -1240,7 +1245,7 @@ namespace TaimisToolbench.Views
 
         private static readonly string[] EmptyStateLines =
         {
-            "Nothing on your priority list yet.",
+            "Nothing on your wishlist yet.",
             "",
             "Add the items you are working toward, in the order you want to finish them. The Ranker then answers a question the Crafting Plan tab cannot: given that everything above it already has first claim on your materials, your currencies and your daily crafts, how close is each one really?",
             "",
@@ -1444,13 +1449,11 @@ namespace TaimisToolbench.Views
             // column: it runs to the Status column's own left edge.
             // ONE resolved rarity feeds the frame, the name colour and the
             // hover header - resolving it three times is how they drift.
-            string rarity = ItemRarityResolution.Resolve(entry.Rarity, StatRarityFor(entry.ItemId));
-            var hover = ItemHover(row, entry, rarity);
-            row.IconName = IconNameRowHelpers.CreateIconAndEllipsizedName(
-                row.Panel, entry.IconUrl, rarity,
+            row.IconName = IconNameRowHelpers.DrawIconAndName(
+                row.Panel, entry.ItemId,
                 bands.IconX, MainLineIconY, row.FullName, UiFonts.Status,
                 bands.NameX + bands.NameWidth, 0, 0, bands.NameX, MainLineNameY,
-                hover, iconSize: RankerRowLayout.IconSize);
+                ItemIconTier.BagSlot, ItemFactsFor(entry));
 
             // Chip and placeholder are both exactly StatusCellWidth wide
             // (MeasureRowCells measures whichever of the two this row has),
@@ -1521,7 +1524,8 @@ namespace TaimisToolbench.Views
             {
                 row.RemainingCell = CoinCurrencyRenderer.RenderValueCellRightAligned(
                     row.Panel, metrics.RemainingCoinCost, null,
-                    RemainingCellRightEdge(bands, row), MainLineTextY, UiFonts.Body);
+                    RemainingCellRightEdge(bands, row), MainLineTextY, UiFonts.Body,
+                    CurrencyFactsFor);
             }
 
             row.Up = null;
@@ -1541,7 +1545,7 @@ namespace TaimisToolbench.Views
             }
 
             row.Remove = CreateRemoveButton(
-                row.Panel, bands.RemoveX, "Remove this item from your list.");
+                row.Panel, bands.RemoveX, "Remove this item from your wishlist.");
             row.Remove.Enabled = !_isRefreshing;
             row.Remove.Click += (_, __) => RemoveRow(rowIndex);
 
@@ -1794,7 +1798,7 @@ namespace TaimisToolbench.Views
             for (int i = 0; i < gateCount && i < RankerRowLayout.GateCellCount; i++)
             {
                 var gate = metrics.Gates[i];
-                row.GateNameLabels.Add(new Label
+                var gateName = new Label
                 {
                     Font = UiFonts.Body,
                     Text = RankerReadinessCalculator.GateLabel(gate.Gate),
@@ -1803,7 +1807,8 @@ namespace TaimisToolbench.Views
                     AutoSizeHeight = true,
                     Location = new Point(0, gateY + GateTextY),
                     Parent = row.Panel,
-                });
+                };
+                row.GateNameLabels.Add(gateName);
 
                 RankerRowLayout.GateBar(bands, i, labelBand, out int barX, out int barWidth);
 
@@ -1821,7 +1826,7 @@ namespace TaimisToolbench.Views
 
                 row.GateBarTracks.Add(track);
                 row.GateBarFills.Add(fill);
-                row.GateValueLabels.Add(new Label
+                var gateValue = new Label
                 {
                     // Seated with GateValueY, which is derived from this tier.
                     Font = UiFonts.Caption,
@@ -1835,12 +1840,25 @@ namespace TaimisToolbench.Views
                     AutoSizeHeight = true,
                     Location = new Point(0, gateY + GateValueY),
                     Parent = row.Panel,
-                });
+                };
+                row.GateValueLabels.Add(gateValue);
+
+                // Every control a reader can point AT inside the cell, and
+                // nothing else: Blish resolves a tooltip on the deepest
+                // control under the cursor and never bubbles, so the fill
+                // would answer nothing if only its plate were stamped. The
+                // dead space between cells still answers nothing, which is
+                // the rule the row panel's own stamping was removed for.
+                string cellTooltip = GateBlendLine(gate) + ".";
+                TooltipFacility.ApplyPlain(gateName, cellTooltip);
+                TooltipFacility.ApplyPlain(track, cellTooltip);
+                TooltipFacility.ApplyPlain(fill, cellTooltip);
+                TooltipFacility.ApplyPlain(gateValue, cellTooltip);
             }
 
-            int shown = currencyLines == 0 ? 0 : Math.Min(
-                metrics.CurrencyShortfalls.Count,
-                RankerRowLayout.CurrenciesPerLine * RankerRowLayout.MaxCurrencyLines);
+            int shown = currencyLines == 0
+                ? 0
+                : RankerRowLayout.CurrenciesShown(metrics.CurrencyShortfalls.Count);
             for (int i = 0; i < shown; i++)
             {
                 var shortfall = metrics.CurrencyShortfalls[i];
@@ -1854,10 +1872,9 @@ namespace TaimisToolbench.Views
 
                 string fullName = CurrencyName(shortfall);
                 row.CurrencyNameFulls.Add(fullName);
-                row.CurrencyIconFrames.Add(IconControls.CreateItemIcon(
-                    row.Panel, CurrencyIconUrl(shortfall), ItemIconFrame.Currency(),
-                    0, y, ItemIconTier.CurrencyListRow,
-                    CurrencyHover(shortfall.CurrencyId, fullName)));
+                row.CurrencyIconFrames.Add(IconControls.CreateCurrencyIcon(
+                    row.Panel, shortfall.CurrencyId, 0, y,
+                    ItemIconTier.CurrencyListRow, CurrencyFactsFor));
                 row.CurrencyNameLabels.Add(new Label
                 {
                     Font = UiFonts.Caption,
@@ -1874,17 +1891,31 @@ namespace TaimisToolbench.Views
                 // control (LabelHelpers.CreateFullCoverageMarker) rather than
                 // a green word only this tab uses. Seated on the ICON like
                 // the text beside it, but off the tag's own height.
-                row.CurrencyValues.Add(shortfall.Short > 0
-                    ? (Control)new Label
+                Label shortfallLabel = null;
+                if (shortfall.Short > 0)
+                {
+                    shortfallLabel = new Label
                     {
                         Font = UiFonts.Caption,
-                        Text = ShortfallText(shortfall),
+                        Text = RankerReadinessCalculator.ShortfallText(shortfall),
                         TextColor = ValueTextColor,
                         AutoSizeWidth = true,
                         AutoSizeHeight = true,
                         Location = new Point(0, textY),
                         Parent = row.Panel,
-                    }
+                    };
+
+                    // In Cascade mode Held is the wallet after the rows above
+                    // took theirs, so the bare held-over-needed pair beside it
+                    // is not measured against the account. The coin chip states
+                    // that in its own hover; this is the currency half of it.
+                    TooltipFacility.ApplyPlain(
+                        shortfallLabel,
+                        RankerReadinessCalculator.ShortfallTooltip(shortfall, fullName, Mode));
+                }
+
+                row.CurrencyValues.Add(shortfallLabel != null
+                    ? (Control)shortfallLabel
                     : LabelHelpers.CreateFullCoverageMarker(
                         row.Panel,
                         0,
@@ -2157,25 +2188,20 @@ namespace TaimisToolbench.Views
             PillColors.GetPillColors(PillKind.Locked, false, out border, out fill);
         }
 
-        /// <summary>
-        /// The standard rich item hover for one watchlist row: the item's
-        /// icon+name header either way, plus the session stat block when it
-        /// has one.
-        /// <para>
-        /// Its caller stamps it on the row PANEL and the rank as well,
-        /// because Blish resolves a tooltip on the deepest control under
-        /// the cursor and never bubbles to the parent (KNOWN-ISSUES #57):
-        /// every control the cursor can land on is its own hover, and the
-        /// panel is what it lands on between them.
-        /// </para>
-        /// </summary>
-        private ItemIconTooltip ItemHover(RenderedRow row, RankerWatchlistEntry entry, string rarity)
+        /// <summary>Everything one watchlist row's icon draws and its
+        /// tooltip shows. The entry is the tab's own capture; the stat
+        /// block comes from the session store.</summary>
+        private Func<int, ItemTooltipFacts> ItemFactsFor(RankerWatchlistEntry entry)
         {
-            int itemId = entry.ItemId;
-            return ItemIconTooltip.ForItem(
-                ItemTooltipIdentity.ForItem(row.FullName, entry.IconUrl, rarity),
-                _getItemStatBlock == null || itemId <= 0 ? (Func<ItemStatBlock>)null
-                    : () => _getItemStatBlock(itemId));
+            string capturedName = entry.Name;
+            string capturedIcon = entry.IconUrl;
+            string capturedRarity = entry.Rarity;
+
+            return id => ItemTooltipFacts.ForCapturedItem(
+                capturedName,
+                capturedIcon,
+                ItemRarityResolution.Resolve(capturedRarity, StatRarityFor(id)),
+                _getItemStatBlock == null || id <= 0 ? null : _getItemStatBlock(id));
         }
 
         /// <summary>The rarity the session stat cache knows for an item, or
@@ -2219,7 +2245,7 @@ namespace TaimisToolbench.Views
             {
                 return independent
                     ? "You have enough coin for what is left of this item, measured against your full account."
-                    : "You have enough coin for what is left of this item, after paying for everything above it on the list.";
+                    : "You have enough coin for what is left of this item, after paying for everything above it on the wishlist.";
             }
 
             return "You are " + CoinSegmentMath.GameStyleText(metrics.ShortfallCoin) +
@@ -2249,17 +2275,10 @@ namespace TaimisToolbench.Views
         /// drops the line rather than guessing at it.
         /// </para>
         /// </summary>
-        private ItemIconTooltip CurrencyHover(int currencyId, string fullName)
+        private CurrencyTooltipFacts CurrencyFactsFor(int currencyId)
         {
-            return ItemIconTooltip.ForCurrency(fullName, () =>
-            {
-                var metadata = CurrencyMetadataFor(currencyId);
-                return CurrencyTooltipFacts.For(
-                    fullName,
-                    CurrencyDisplayResolver.ResolveIconUrl(currencyId, metadata),
-                    CurrencyDisplayResolver.ResolveDescription(currencyId, metadata),
-                    null);
-            });
+            return CurrencyTooltipFacts.ForCurrencyId(
+                currencyId, CurrencyMetadataFor(currencyId), (int?)null);
         }
 
         private string CurrencyIconUrl(RankerCurrencyShortfall shortfall)
@@ -2281,16 +2300,6 @@ namespace TaimisToolbench.Views
             }
 
             return null;
-        }
-
-        /// <summary>
-        /// What a currency line still owes. Full coverage never reaches here
-        /// - it draws the shared marker instead of a word - so this only
-        /// ever formats a real shortfall.
-        /// </summary>
-        private static string ShortfallText(RankerCurrencyShortfall shortfall)
-        {
-            return shortfall.Short.ToString("N0", CultureInfo.InvariantCulture) + " short";
         }
 
         private IReadOnlyList<string> BuildNotes(RankerRowMetrics metrics)
@@ -2332,6 +2341,12 @@ namespace TaimisToolbench.Views
                 notes.Add("Claimed by higher priority: " + string.Join(", ", parts));
             }
 
+            // One line only, like the discipline note above it, and like it
+            // the rest are counted rather than dropped. The plan tab lists
+            // them all. A cap whose item resolves no name is not counted
+            // either, because the row could never name it.
+            string firstCapNote = null;
+            int namedCaps = 0;
             foreach (var capped in metrics.VendorCappedItems)
             {
                 string name = VendorCappedName(capped.ItemId);
@@ -2341,14 +2356,33 @@ namespace TaimisToolbench.Views
                     continue;
                 }
 
+                namedCaps++;
+                if (firstCapNote != null)
+                {
+                    continue;
+                }
+
                 // Same wording as the plan tab's TimegatedNotice rows, and
                 // named for what it is - a vendor purchase limit, not an
                 // earning cooldown (the calculator already drops caps on
                 // TP-liquid items, where the cap is coin rather than time).
-                notes.Add(name + " is timegated - vendor " + CapLabel(capped.CapType) +
+                firstCapNote = name + " is timegated - vendor " + CapLabel(capped.CapType) +
                     " limit: " + capped.CapValue.ToString(CultureInfo.InvariantCulture) +
-                    " (plan needs " + capped.NeededCount.ToString(CultureInfo.InvariantCulture) + ")");
-                break;
+                    " (plan needs " + capped.NeededCount.ToString(CultureInfo.InvariantCulture) + ")";
+            }
+
+            if (firstCapNote != null)
+            {
+                notes.Add(namedCaps > 1
+                    ? firstCapNote + " (and " + (namedCaps - 1).ToString(CultureInfo.InvariantCulture) + " more)"
+                    : firstCapNote);
+            }
+
+            string currencyOverflow = RankerRowLayout.CurrencyOverflowNote(
+                metrics.CurrencyShortfalls?.Count ?? 0);
+            if (currencyOverflow != null)
+            {
+                notes.Add(currencyOverflow);
             }
 
             return notes;
@@ -2379,7 +2413,7 @@ namespace TaimisToolbench.Views
             return null;
         }
 
-        private static string ReadyTooltip(RankerRowMetrics metrics)
+        private string ReadyTooltip(RankerRowMetrics metrics)
         {
             if (metrics == null)
             {
@@ -2393,22 +2427,89 @@ namespace TaimisToolbench.Views
 
             var lines = new List<string>
             {
-                "Ready blends the barriers this item actually has, each measured only against itself - nothing is converted into coin.",
+                "Ready blends the barriers this item actually has. Materials is the whole bill in coin, counting each currency this plan pays at its value in Settings. Every other barrier is measured only against itself.",
                 "",
             };
             foreach (var gate in metrics.Gates)
             {
-                string label = RankerReadinessCalculator.GateLabel(gate.Gate);
-                lines.Add(gate.Applies
-                    ? label + ": " + RankerReadinessCalculator.FormatPercent(gate.Completion) +
-                      " at weight " + gate.Weight.ToString("0.00", CultureInfo.InvariantCulture)
-                    : label + ": this item has none, so it is not part of the blend");
+                lines.Add(GateBlendLine(gate));
+            }
+
+            string unpriced = UnpricedCurrencyNotice(metrics);
+            if (unpriced != null)
+            {
+                lines.Add("");
+                lines.Add(unpriced);
             }
 
             lines.Add("");
             lines.Add("Weights are renormalised over the barriers that apply, so an item with only materials scores exactly its materials figure.");
             return string.Join("\n", lines);
         }
+
+        /// <summary>
+        /// One gate's line in the Ready hover and in that cell's own hover:
+        /// its figure and weight when the headline blended it, otherwise the
+        /// note that the item has no such barrier.
+        /// </summary>
+        private static string GateBlendLine(RankerGateScore gate)
+        {
+            string label = RankerReadinessCalculator.GateLabel(gate.Gate);
+            return gate.Applies
+                ? label + ": " + RankerReadinessCalculator.FormatPercent(gate.Completion) +
+                  " at weight " + gate.Weight.ToString("0.00", CultureInfo.InvariantCulture)
+                : label + ": this item has none, so it is not part of the blend";
+        }
+
+        /// <summary>
+        /// Names the currencies Materials had to leave out, so the figure
+        /// never quietly reports a smaller bill than the plan has. Null when
+        /// the plan spends none. Currencies still scores every one of them,
+        /// which is what makes leaving them out of a coin ratio honest
+        /// rather than free.
+        /// </summary>
+        private string UnpricedCurrencyNotice(RankerRowMetrics metrics)
+        {
+            var ids = metrics.MaterialsUnpricedCurrencyIds;
+            if (ids == null || ids.Count == 0)
+            {
+                return null;
+            }
+
+            // Distinct NAMES, not ids: every currency the session holds no
+            // metadata for resolves to the same offline placeholder, and
+            // "Currency, Currency" reads as a bug rather than a missing name.
+            var names = new List<string>(ids.Count);
+            foreach (int currencyId in ids)
+            {
+                string name = CurrencyDisplayResolver.ResolveName(
+                    currencyId, CurrencyMetadataFor(currencyId));
+                if (!names.Contains(name))
+                {
+                    names.Add(name);
+                }
+            }
+
+            string listed = string.Join(", ", names.Take(NamedUnpricedCurrencyLimit));
+            int rest = names.Count - Math.Min(names.Count, NamedUnpricedCurrencyLimit);
+            if (rest > 0)
+            {
+                listed += " and " + rest.ToString(CultureInfo.InvariantCulture) + " more";
+            }
+
+            return names.Count == 1
+                ? "No coin value exists for " + listed +
+                  ", so Materials leaves it out of its bill. Currencies still scores it."
+                : "No coin value exists for " + listed +
+                  ", so Materials leaves them out of its bill. Currencies still scores them.";
+        }
+
+        /// <summary>
+        /// How many unpriced currencies the Ready hover names before it
+        /// counts the rest. One shipped plan (the legendary ring Endless
+        /// Summer) spends five, which is a paragraph rather than a line.
+        /// </summary>
+        private const int NamedUnpricedCurrencyLimit = 3;
 
         private static string DaysTooltip(RankerRowMetrics metrics)
         {
@@ -2455,11 +2556,11 @@ namespace TaimisToolbench.Views
                 // re-searched it is the surprising outcome.
                 Entries[existing].Quantity = quantity;
                 InvalidateAfterChangeAt(existing);
-                SetStatus($"{Entries[existing].Name} is already on your list - quantity updated to {quantity}.", isError: false);
+                SetStatus($"{Entries[existing].Name} is already on your wishlist - quantity updated to {quantity}.", isError: false);
             }
             else if (Entries.Count >= RankerWatchlistLimits.MaxEntries)
             {
-                SetStatus($"Your list is full ({RankerWatchlistLimits.MaxEntries} items). Remove one to add another.", isError: false);
+                SetStatus($"Your wishlist is full ({RankerWatchlistLimits.MaxEntries} items). Remove one to add another.", isError: false);
                 return;
             }
             else
@@ -2552,7 +2653,7 @@ namespace TaimisToolbench.Views
         {
             if (_store != null && !_store.Save(_watchlist))
             {
-                SetStatus("Your list could not be saved - see the Log tab.", isError: true);
+                SetStatus("Your wishlist could not be saved - see the Log tab.", isError: true);
             }
         }
 
@@ -2688,6 +2789,11 @@ namespace TaimisToolbench.Views
                     ? cascade.CurrentAvailability
                     : null;
 
+                // One fetch for the whole run, not one per generation. A run
+                // solves two plans per row, and the account cannot learn a
+                // recipe between them without the player leaving this tab.
+                var learnedRecipeIds = await _pipeline.GetLearnedRecipeIdsAsync(ct).ConfigureAwait(false);
+
                 int total = work.Count(w => w.Solve);
                 int position = 0;
 
@@ -2726,7 +2832,8 @@ namespace TaimisToolbench.Views
                         ownMaterialsMode: OwnMaterialsMode.Free,
                         homesteadTiers: homesteadTiers,
                         phaseProgress: null,
-                        characterDisciplines: snapshot?.CharacterDisciplines).ConfigureAwait(false);
+                        characterDisciplines: snapshot?.CharacterDisciplines,
+                        learnedRecipeIds: learnedRecipeIds).ConfigureAwait(false);
 
                     if (myGen != _refreshGeneration)
                     {
@@ -2743,7 +2850,8 @@ namespace TaimisToolbench.Views
                         ownMaterialsMode: OwnMaterialsMode.Free,
                         homesteadTiers: homesteadTiers,
                         phaseProgress: null,
-                        characterDisciplines: snapshot?.CharacterDisciplines).ConfigureAwait(false);
+                        characterDisciplines: snapshot?.CharacterDisciplines,
+                        learnedRecipeIds: learnedRecipeIds).ConfigureAwait(false);
 
                     if (myGen != _refreshGeneration)
                     {
@@ -2752,7 +2860,8 @@ namespace TaimisToolbench.Views
 
                     ct.ThrowIfCancellationRequested();
 
-                    var metrics = RankerReadinessCalculator.Compute(baseline, owned, availability, slot, mode);
+                    var metrics = RankerReadinessCalculator.Compute(
+                        baseline, owned, availability, slot, mode, valuation);
                     if (mode == RankerMode.Cascade)
                     {
                         cascade.Consume(owned);
@@ -2964,7 +3073,15 @@ namespace TaimisToolbench.Views
             var snapshot = _getSnapshot();
             if (snapshot != null)
             {
-                text += " (" + StatusText.ForSnapshotAgeSuffix(DateTime.UtcNow - snapshot.CapturedAt) + ")";
+                // Every row here is scored against what the account owns, so
+                // a character the snapshot could not read in full moves the
+                // readiness numbers the same way it moves a plan. This is
+                // the module's narrowest status band, and the widest line it
+                // composes is pinned in StatusText.RankerStatusBudgetChars.
+                text += " (" + StatusText.ForSnapshotDetail(
+                    DateTime.UtcNow - snapshot.CapturedAt,
+                    snapshot.IncompleteCharacterCount,
+                    snapshot.CharacterCount) + ")";
             }
 
             ApplyStatusText(text, isError: false);
@@ -2977,10 +3094,36 @@ namespace TaimisToolbench.Views
                 return;
             }
 
-            string shown = LabelHelpers.EllipsizeToWidth(UiFonts.Status, text, Math.Max(0, _statusLabel.Width));
-            _statusLabel.Text = shown;
+            _statusFullText = text ?? "";
             _statusLabel.TextColor = isError ? ErrorColor : StatusColor;
-            TooltipFacility.ApplyPlain(_statusLabel, string.Equals(shown, text, StringComparison.Ordinal) ? null : text);
+            ApplyStatusText();
+        }
+
+        // The status line's whole text, so a resize re-takes the ellipsis
+        // from the original rather than compounding it onto an
+        // already-shortened string.
+        private string _statusFullText = "";
+
+        // Budget the line ellipsizes against. Held separately from
+        // Label.Width, which stays the width of the TEXT: see
+        // InlineSpinnerLayout.LabelWidthForText.
+        private int _statusBudget;
+
+        private void ApplyStatusText()
+        {
+            if (_statusLabel == null)
+            {
+                return;
+            }
+
+            var font = UiFonts.Status;
+            string shown = LabelHelpers.EllipsizeToWidth(font, _statusFullText, Math.Max(0, _statusBudget));
+            _statusLabel.Text = shown;
+            _statusLabel.Width = InlineSpinnerLayout.LabelWidthForText(
+                LabelHelpers.MeasureWith(font)(shown), _statusBudget);
+            TooltipFacility.ApplyPlain(
+                _statusLabel,
+                string.Equals(shown, _statusFullText, StringComparison.Ordinal) ? null : _statusFullText);
             InlineSpinner.PlaceAfter(_spinner, _statusLabel, InlineSpinnerLayout.LabelGap);
         }
 

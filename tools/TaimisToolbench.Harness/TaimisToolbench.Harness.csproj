@@ -27,6 +27,17 @@
 
   <ItemGroup>
     <Reference Include="System.Net.Http" />
+    <!-- An assembly reference held by a packages.config project does not flow
+         to an SDK-style project that references it, so the fetch profiler
+         names Gw2Sharp itself. The version tracks the module's packages.config
+         entry; the two must not drift, or the profiler would measure a
+         different client than the module runs. -->
+    <Reference Include="Gw2Sharp">
+      <HintPath>..\..\packages\Gw2Sharp.1.7.4\lib\netstandard2.0\Gw2Sharp.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\..\packages\Newtonsoft.Json.13.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>

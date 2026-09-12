@@ -33,10 +33,9 @@ namespace TaimisToolbench.RecipeSeeder
         private const string SchemaVersion = "2026-08-15";
 
         // The least negative id tools/MysticForgeSeeder assigns; see that
-        // tool's RecipeIdBase for why the two producers of negative-id
-        // recipes have to stay in disjoint halves of the id space. Duplicated
-        // rather than shared because MysticForgeSeeder is a standalone net8
-        // project with no reference to this one or to the module.
+        // tool's RecipeIdBase. Duplicated rather than shared because
+        // MysticForgeSeeder is a standalone net8 project with no reference
+        // to this one or to the module.
         private const int MysticForgeRecipeIdBase = -100000;
 
         private static int Main(string[] args)
@@ -158,65 +157,7 @@ namespace TaimisToolbench.RecipeSeeder
                         $"Warning: Could not load mystic forge recipes: {ex.Message}");
                 }
 
-                // Step 5a: Carry forward hand-authored negative-id recipes
-                // that no generator reproduces. ref/recipes_seed.json ships
-                // four synthetic Merchant/achievement rows (ids -1592..-1595,
-                // the Infinite Trebuchet Blueprint chain) that exist in no
-                // source file: mystic_forge_recipes.json holds forge recipes
-                // only, and the API serves no negative ids, so a reseed used
-                // to delete them silently. Same defect class as the dropped
-                // expectedOutputCount overrides in MergeMysticForgeRecipes -
-                // preserve by construction rather than by remembering.
-                int preservedCount = 0;
-                if (File.Exists(recipesPath))
-                {
-                    try
-                    {
-                        Dictionary<int, RawRecipe> previous;
-                        using (var prevStream = File.OpenRead(recipesPath))
-                        {
-                            previous = RecipeCacheSerializer.LoadRecipeSeed(prevStream);
-                        }
-
-                        foreach (var kvp in previous)
-                        {
-                            if (kvp.Key >= 0 || allRecipes.ContainsKey(kvp.Key))
-                            {
-                                continue;
-                            }
-
-                            allRecipes[kvp.Key] = kvp.Value;
-                            if (!searchIndex.TryGetValue(
-                                kvp.Value.OutputItemId, out var preservedList))
-                            {
-                                preservedList = new List<int>();
-                                searchIndex[kvp.Value.OutputItemId] = preservedList;
-                            }
-
-                            if (!preservedList.Contains(kvp.Key))
-                            {
-                                preservedList.Add(kvp.Key);
-                            }
-
-                            preservedCount++;
-                        }
-
-                        if (preservedCount > 0)
-                        {
-                            Console.WriteLine(
-                                $"Preserved {preservedCount} hand-authored negative-id " +
-                                "recipe(s) from the existing seed.");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.Error.WriteLine(
-                            "Warning: could not read the existing recipe seed to " +
-                            $"preserve hand-authored rows: {ex.Message}");
-                    }
-                }
-
-                // Step 5b: Add negative search entries for leaf items
+                // Step 5a: Add negative search entries for leaf items
                 // (ingredients that aren't the output of any recipe)
                 var allIngredientIds = new HashSet<int>();
                 foreach (var recipe in allRecipes.Values)
@@ -540,7 +481,8 @@ namespace TaimisToolbench.RecipeSeeder
             return recipes;
         }
 
-        private static void MergeMysticForgeRecipes(
+        // internal for testability (TaimisToolbench.RecipeSeeder.Tests)
+        internal static void MergeMysticForgeRecipes(
             Stream mfStream,
             Dictionary<int, RawRecipe> allRecipes,
             Dictionary<int, List<int>> searchIndex,
@@ -571,23 +513,19 @@ namespace TaimisToolbench.RecipeSeeder
                             continue;
                         }
 
-                        // Step 5a below carries forward every negative-id
-                        // row of the seed this run is about to overwrite,
-                        // but only where the id is still free - so a forge
-                        // row landing on a hand-authored id replaces it
-                        // rather than colliding with it. The two producers
-                        // own disjoint halves of the negative id space
-                        // (MysticForgeSeeder.RecipeIdBase states the
-                        // partition); refuse the row instead of silently
-                        // eating whatever it lands on.
+                        // Every negative id in the seed belongs to
+                        // MysticForgeSeeder, which numbers from
+                        // MysticForgeRecipeIdBase downwards. A forge row
+                        // above that base means its block needs renumbering;
+                        // emitting it anyway would put an id in the seed
+                        // that the partition says is not a forge recipe.
                         if (id > MysticForgeRecipeIdBase)
                         {
                             Console.Error.WriteLine(
                                 $"Warning: skipping mystic forge recipe {id} -" +
-                                " it sits in the hand-authored half of the" +
-                                " negative id space and would overwrite a row" +
-                                " no generator can rebuild. Re-run" +
-                                " tools/MysticForgeSeeder to renumber the block.");
+                                " it sits above the base id MysticForgeSeeder" +
+                                " numbers from. Re-run tools/MysticForgeSeeder" +
+                                " to renumber the block.");
                             continue;
                         }
 
@@ -624,13 +562,24 @@ namespace TaimisToolbench.RecipeSeeder
                             Flags = new List<string>(),
                         };
 
+                        // An ingredient short of type, id or count refuses the
+                        // whole recipe rather than itself. Dropping just the
+                        // ingredient would write a recipe that costs less
+                        // than it really does, and the solver ranks the
+                        // cheapest route first. Both other readers of
+                        // ref/mystic_forge_recipes.json already refuse the
+                        // recipe: Services/MysticForgeRecipeData.cs records a
+                        // load warning, tools/MysticForgeSeeder/Program.cs
+                        // prints a SKIP line.
+                        bool everyIngredientRead = true;
                         foreach (var ing in ingsArr.EnumerateArray())
                         {
                             if (!ing.TryGetProperty("type", out var ingType) ||
                                 !ing.TryGetProperty("id", out var ingId) ||
                                 !ing.TryGetProperty("count", out var ingCount))
                             {
-                                continue;
+                                everyIngredientRead = false;
+                                break;
                             }
 
                             recipe.Ingredients.Add(new RawIngredient
@@ -639,6 +588,16 @@ namespace TaimisToolbench.RecipeSeeder
                                 Id = ingId.GetInt32(),
                                 Count = ingCount.GetInt32(),
                             });
+                        }
+
+                        if (!everyIngredientRead)
+                        {
+                            Console.Error.WriteLine(
+                                $"Warning: skipping mystic forge recipe {id} -" +
+                                " an ingredient is missing type, id or count," +
+                                " and a recipe short an ingredient would be" +
+                                " seeded cheaper than it really is.");
+                            continue;
                         }
 
                         if (recipe.Ingredients.Count == 0)

@@ -15,8 +15,8 @@ namespace VendorOfferUpdater
     /// with the old and new cost side by side; only rows with no counterpart
     /// are reported as genuine additions or removals.
     /// <para>
-    /// SeasonalFestival is the one field outside the hash, so a change to it
-    /// keeps the offerId and is reported separately as a retag. A row whose id
+    /// SeasonalFestival and the vendor requirement sit outside the hash, so a
+    /// change to either keeps the offerId and is reported as a retag. A row whose id
     /// is shared but whose content is not - a hand-edit, or a row predating a
     /// hash-format change - is reported as a repricing rather than trusted on
     /// its id alone. The converse, a row whose content is unchanged but whose
@@ -130,10 +130,7 @@ namespace VendorOfferUpdater
                 {
                     result.Repriced.Add(new OfferChange(kvp.Value, afterOffer));
                 }
-                else if (!string.Equals(
-                        kvp.Value.SeasonalFestival,
-                        afterOffer.SeasonalFestival,
-                        StringComparison.Ordinal))
+                else if (!string.Equals(TagKey(kvp.Value), TagKey(afterOffer), StringComparison.Ordinal))
                 {
                     result.Retagged.Add(new OfferChange(kvp.Value, afterOffer));
                 }
@@ -262,8 +259,30 @@ namespace VendorOfferUpdater
         private static string DescribeRetag(OfferChange change)
         {
             return $"{change.After.MerchantName ?? "(no merchant)"} | item {change.After.OutputItemId}"
-                 + $" | festival {change.Before.SeasonalFestival ?? "(none)"}"
-                 + $" -> {change.After.SeasonalFestival ?? "(none)"}";
+                 + $" | {TagKey(change.Before)} -> {TagKey(change.After)}";
+        }
+
+        /// <summary>
+        /// The fields outside both the OfferId hash and the content key, as
+        /// one string. A change to any of them keeps the OfferId, so without
+        /// this the diff would report nothing at all.
+        /// </summary>
+        private static string TagKey(VendorOffer offer)
+        {
+            var requirement = offer.Requirement;
+            return $"festival {offer.SeasonalFestival ?? "(none)"}"
+                 + $", requirement {requirement?.Text ?? "(none)"}"
+                 + $", achievement {Optional(requirement?.AchievementId)}"
+                 + $", mastery {Optional(requirement?.MasteryId)}"
+                 + $"/{Optional(requirement?.MasteryLevel)}"
+                 + $", expansion {requirement?.Expansion ?? "(none)"}";
+        }
+
+        private static string Optional(int? value)
+        {
+            return value.HasValue
+                ? value.Value.ToString(CultureInfo.InvariantCulture)
+                : "(none)";
         }
 
         private static string DescribeCost(VendorOffer offer)
@@ -317,9 +336,9 @@ namespace VendorOfferUpdater
         /// <summary>
         /// Removes from <paramref name="gone"/> and <paramref name="came"/>
         /// every row that has a counterpart with the identical content key,
-        /// counting each as rehashed and recording a retag where only the
-        /// SeasonalFestival (the one field outside both the hash and the
-        /// content key) differs. Matching is first-come within a content key,
+        /// counting each as rehashed and recording a retag where only a field
+        /// outside both the hash and the content key differs (see TagKey).
+        /// Matching is first-come within a content key,
         /// which is unambiguous because rows sharing one are interchangeable.
         /// </summary>
         private static void MatchUnchangedByContent(
@@ -359,10 +378,7 @@ namespace VendorOfferUpdater
                 cameMatched[j] = true;
                 result.Rehashed++;
 
-                if (!string.Equals(
-                        gone[i].SeasonalFestival,
-                        came[j].SeasonalFestival,
-                        StringComparison.Ordinal))
+                if (!string.Equals(TagKey(gone[i]), TagKey(came[j]), StringComparison.Ordinal))
                 {
                     result.Retagged.Add(new OfferChange(gone[i], came[j]));
                 }

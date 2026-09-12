@@ -29,6 +29,7 @@ namespace TaimisToolbench.Services
         private readonly Func<int, IReadOnlyList<VendorOffer>> _offersForRecipeSheetItem;
         private readonly InventoryReducer _reducer;
         private readonly IAccountRecipeClient _accountRecipeClient;
+        private readonly IAccountProgressionClient _accountProgressionClient;
         private readonly CurrencyMetadataService _currencyMetadataService;
         private readonly IReadOnlyDictionary<int, AcquisitionHint> _acquisitionHints;
         private readonly IReadOnlyDictionary<int, DailyCooldownItem> _dailyCooldownItems;
@@ -71,7 +72,8 @@ namespace TaimisToolbench.Services
             ModuleLog moduleLog = null,
             IReadOnlyDictionary<int, DailyCooldownItem> dailyCooldownItems = null,
             IReadOnlyDictionary<int, int> recipeSheetItemIdByRecipeId = null,
-            Func<IReadOnlyList<string>> activeFestivalNames = null)
+            Func<IReadOnlyList<string>> activeFestivalNames = null,
+            IAccountProgressionClient accountProgressionClient = null)
         {
             _recipeService = recipeService;
             _tradingPostService = tradingPostService;
@@ -89,6 +91,7 @@ namespace TaimisToolbench.Services
             _dailyCooldownItems = dailyCooldownItems;
             _recipeSheetItemIdByRecipeId = recipeSheetItemIdByRecipeId ?? new Dictionary<int, int>();
             _activeFestivalNames = activeFestivalNames ?? (() => Array.Empty<string>());
+            _accountProgressionClient = accountProgressionClient;
         }
 
         public async Task<CraftingPlanResult> GenerateStructuredAsync(
@@ -105,8 +108,19 @@ namespace TaimisToolbench.Services
             // Threaded separately from `snapshot`: the useOwn:false path
             // passes snapshot: null, which must not also blank the Required
             // Disciplines tiebreak (see AccountSnapshot.CharacterDisciplines).
-            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null)
+            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null,
+            // Ids already fetched by a caller generating several plans in a
+            // row; see GetLearnedRecipeIdsAsync. Null means this generation
+            // fetches its own.
+            ISet<int> learnedRecipeIds = null,
+            // An account refresh running alongside this generation; see
+            // Models/PlanAccountData.cs. When set, its result replaces
+            // `snapshot` and `characterDisciplines` at the one point the
+            // pipeline first reads them. Null keeps the passed values.
+            Func<Task<PlanAccountData>> accountDataAsync = null)
         {
+            Gw2ApiConnectionLimit.Apply();
+
             var valuation = currencyValuation ?? CurrencyValuation.None;
             var tiers = homesteadTiers ?? HomesteadEfficiencyTiers.Default;
             var sw = new Stopwatch();
@@ -144,7 +158,8 @@ namespace TaimisToolbench.Services
             return await RunPipelineAsync(
                 tree, targetItemId, quantity, items: null, snapshot, ct, progress,
                 activeCharacterName, priceBasis, valuation, ownMaterialsMode, tiers,
-                characterDisciplines, sw, timingLog, phaseTracker);
+                characterDisciplines, learnedRecipeIds, sw, timingLog, phaseTracker,
+                accountDataAsync);
         }
 
         /// <summary>
@@ -170,9 +185,11 @@ namespace TaimisToolbench.Services
             OwnMaterialsMode ownMaterialsMode,
             HomesteadEfficiencyTiers tiers,
             IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines,
+            ISet<int> suppliedLearnedRecipeIds,
             Stopwatch sw,
             List<string> timingLog,
-            PhaseTracker phaseTracker)
+            PhaseTracker phaseTracker,
+            Func<Task<PlanAccountData>> accountDataAsync)
         {
             // Always applied; a no-op when the tree has no achievement-bit
             // ingredients. Must run before inventory reduction and the
@@ -210,6 +227,24 @@ namespace TaimisToolbench.Services
             // SeasonalOfferFilter); `vendorOffers` stays the raw, unfiltered
             // dictionary for everything else in this method.
             var solverVendorOffers = SeasonalOfferFilter.ExcludeSeasonal(vendorOffers);
+
+            // The last point before anything reads the account, and so
+            // where a Generate's own refresh is collected: everything above
+            // ran alongside it. The elapsed figure below is what the
+            // overlap did not hide, not the refresh's own duration.
+            if (accountDataAsync != null)
+            {
+                sw.Restart();
+                var accountData = await accountDataAsync();
+                sw.Stop();
+                timingLog.Add($"Await account refresh: {sw.ElapsedMilliseconds}ms");
+
+                if (accountData != null)
+                {
+                    snapshot = accountData.Snapshot;
+                    characterDisciplines = accountData.CharacterDisciplines ?? characterDisciplines;
+                }
+            }
 
             // gw2e's "Value Own Materials" force-buy pre-pass - only when
             // the setting is Valued and a snapshot drives reduction (see
@@ -351,6 +386,12 @@ namespace TaimisToolbench.Services
             // see AddAllVendorOfferItemComponentIds.
             AddAllVendorOfferItemComponentIds(vendorOffers, metadataIds);
             AddAllVendorOfferUnlockItemIds(vendorOffers, metadataIds);
+            // The Required Recipes section names the recipe SHEET, so the
+            // sheet's own name, icon and rarity have to be in this fetch.
+            // Read off the same craft steps PlanResultBuilder derives the
+            // required recipes from, which is why it can run before the
+            // result exists.
+            AddRecipeSheetItemIds(plan.Steps, metadataIds);
             phaseTracker.Start(PlanPhase.FetchingItemDetails, "Fetching item details", metadataIds.Count);
             progress?.Report(new PlanStatus
             {
@@ -374,8 +415,21 @@ namespace TaimisToolbench.Services
                 await AwaitCurrencyMetadataOrNullAsync(currencyTask, progress, sw, timingLog, ct);
 
             // Fetch learned recipe IDs (if permission available)
-            ISet<int> learnedRecipeIds =
-                await FetchLearnedRecipeIdsAsync(progress, sw, timingLog, phaseTracker, ct);
+            ISet<int> learnedRecipeIds = await FetchLearnedRecipeIdsAsync(
+                progress, sw, timingLog, phaseTracker, suppliedLearnedRecipeIds, ct);
+
+            sw.Restart();
+            AccountProgression accountProgression = null;
+            var progressionAccess = AccountProgressionAccess.NotNeeded;
+            if (PlanBuysFromAGatedVendor(plan))
+            {
+                var read = await GetAccountProgressionAsync(ct);
+                accountProgression = read.Progression;
+                progressionAccess = read.Access;
+            }
+
+            sw.Stop();
+            timingLog.Add($"Fetch account progression: {sw.ElapsedMilliseconds}ms");
 
             // Build structured result
             phaseTracker.Start(PlanPhase.BuildingDisplay, "Building display", null);
@@ -386,7 +440,10 @@ namespace TaimisToolbench.Services
             // which equally-good discipline is reported but never change a
             // decision or total (see PlanResultBuilder.Build).
             var result = resultBuilder.Build(
-                plan, treeUsedForSolve, metadata, usedMaterials, learnedRecipeIds, effectiveCharacterDisciplines);
+                plan, treeUsedForSolve, metadata, usedMaterials, learnedRecipeIds,
+                effectiveCharacterDisciplines, _recipeSheetItemIdByRecipeId,
+                accountProgression);
+            result.AccountProgressionAccess = progressionAccess;
             result.CurrencyMetadata = currencyMetadata;
             result.AcquisitionHints = _acquisitionHints;
             result.DailyCooldownItems = _dailyCooldownItems;
@@ -425,6 +482,7 @@ namespace TaimisToolbench.Services
             RecipeSheetSavingsCalculator.Apply(
                 result, learnedRecipeIds, prices, priceBasis, _offersForRecipeSheetItem,
                 _recipeSheetItemIdByRecipeId, effectiveCharacterDisciplines);
+            MissingRecipeSheetSourceCalculator.Apply(result, _offersForRecipeSheetItem);
             SeasonalVendorTipCalculator.Apply(
                 result, vendorOffers, prices, priceBasis, _activeFestivalNames());
 
@@ -443,6 +501,8 @@ namespace TaimisToolbench.Services
                 VendorCostLineValues = solveResult.VendorCostLineValues,
                 Metadata = metadata,
                 LearnedRecipeIds = learnedRecipeIds,
+                AccountProgression = accountProgression,
+                AccountProgressionAccess = progressionAccess,
                 UsedMaterials = usedMaterials,
                 PriceBasis = priceBasis,
                 CurrencyValuation = valuation,
@@ -498,7 +558,9 @@ namespace TaimisToolbench.Services
             // lines; null falls back to "(N items)".
             string requestLabel = null,
             // See the single-item overload's matching parameter.
-            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null)
+            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null,
+            // See the single-item overload's matching parameter.
+            Func<Task<PlanAccountData>> accountDataAsync = null)
         {
             // Marked async so this validation throws inside the returned
             // Task, like every other failure mode of this method.
@@ -522,14 +584,16 @@ namespace TaimisToolbench.Services
                     result = await GenerateStructuredAsync(
                         items[0].ItemId, items[0].Quantity, snapshot, ct, progress,
                         activeCharacterName, priceBasis, currencyValuation, ownMaterialsMode,
-                        homesteadTiers, phaseProgress, characterDisciplines: characterDisciplines);
+                        homesteadTiers, phaseProgress, characterDisciplines: characterDisciplines,
+                        accountDataAsync: accountDataAsync);
                 }
                 else
                 {
                     result = await GenerateStructuredMultiAsync(
                         items, snapshot, ct, progress, activeCharacterName,
                         priceBasis, currencyValuation, ownMaterialsMode, homesteadTiers,
-                        phaseProgress, characterDisciplines: characterDisciplines);
+                        phaseProgress, characterDisciplines: characterDisciplines,
+                        accountDataAsync: accountDataAsync);
                 }
 
                 // Compact per-phase summary derived from the timing lines
@@ -574,8 +638,11 @@ namespace TaimisToolbench.Services
             OwnMaterialsMode ownMaterialsMode,
             HomesteadEfficiencyTiers homesteadTiers,
             IProgress<PlanPhaseEvent> phaseProgress,
-            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null)
+            IReadOnlyList<SnapshotCharacterDiscipline> characterDisciplines = null,
+            Func<Task<PlanAccountData>> accountDataAsync = null)
         {
+            Gw2ApiConnectionLimit.Apply();
+
             var valuation = currencyValuation ?? CurrencyValuation.None;
             var tiers = homesteadTiers ?? HomesteadEfficiencyTiers.Default;
             var sw = new Stopwatch();
@@ -611,7 +678,8 @@ namespace TaimisToolbench.Services
             return await RunPipelineAsync(
                 tree, Gw2Constants.MultiItemWrapperItemId, quantity: 1, items, snapshot, ct,
                 progress, activeCharacterName, priceBasis, valuation, ownMaterialsMode, tiers,
-                characterDisciplines, sw, timingLog, phaseTracker);
+                characterDisciplines, suppliedLearnedRecipeIds: null, sw, timingLog, phaseTracker,
+                accountDataAsync);
         }
 
         /// <summary>
@@ -702,7 +770,9 @@ namespace TaimisToolbench.Services
             var result = resultBuilder.Build(
                 solveResult.Plan, solveTree, context.Metadata,
                 usedMaterials, context.LearnedRecipeIds,
-                context.CharacterDisciplines);
+                context.CharacterDisciplines, _recipeSheetItemIdByRecipeId,
+                context.AccountProgression);
+            result.AccountProgressionAccess = context.AccountProgressionAccess;
             result.CurrencyMetadata = context.CurrencyMetadata;
             result.AcquisitionHints = context.AcquisitionHints;
             result.DailyCooldownItems = context.DailyCooldownItems;
@@ -740,6 +810,7 @@ namespace TaimisToolbench.Services
             RecipeSheetSavingsCalculator.Apply(
                 result, context.LearnedRecipeIds, context.Prices, context.PriceBasis, _offersForRecipeSheetItem,
                 _recipeSheetItemIdByRecipeId, context.CharacterDisciplines);
+            MissingRecipeSheetSourceCalculator.Apply(result, _offersForRecipeSheetItem);
             SeasonalVendorTipCalculator.Apply(
                 result, context.VendorOffers, context.Prices, context.PriceBasis, _activeFestivalNames());
             CompetencyOpportunityCalculator.Apply(result);
@@ -1048,38 +1119,161 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// Fetches learned recipe ids if the account client is wired up and
-        /// permitted. KNOWN-ISSUES #31/api-degradation F4: any non-cancellation
-        /// failure degrades to null, a state PlanResultBuilder already treats
-        /// as supported rather than discarding an otherwise-priced plan.
+        /// Fetches the account's learned recipe ids once, for a caller that
+        /// is about to generate several plans in a row. Hand the result to
+        /// GenerateStructuredAsync's learnedRecipeIds parameter and those
+        /// generations skip the call. Returns null when no client is wired
+        /// up, when the account lacks the Unlocks permission, and on any
+        /// non-cancellation failure. KNOWN-ISSUES #31/api-degradation F4:
+        /// null is the "unknown" state PlanResultBuilder already supports,
+        /// rather than a reason to discard an otherwise-priced plan.
+        /// </summary>
+        public async Task<ISet<int>> GetLearnedRecipeIdsAsync(CancellationToken ct)
+        {
+            if (_accountRecipeClient == null || !_accountRecipeClient.HasRequiredPermission())
+            {
+                return null;
+            }
+
+            try
+            {
+                return await _accountRecipeClient.GetLearnedRecipeIdsAsync(ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Whether any step of <paramref name="plan"/> buys from a vendor
+        /// that names a requirement. False for almost every plan - 12% of
+        /// shipped offers carry one - and the account fetch below is
+        /// skipped entirely when it is, so a plan that runs into no gated
+        /// vendor pays nothing for this feature.
+        /// </summary>
+        private static bool PlanBuysFromAGatedVendor(CraftingPlan plan)
+        {
+            if (plan?.Steps == null)
+            {
+                return false;
+            }
+
+            foreach (var step in plan.Steps)
+            {
+                if (step != null &&
+                    step.Source == AcquisitionSource.BuyFromVendor &&
+                    step.VendorRequirement != null &&
+                    !string.IsNullOrEmpty(step.VendorRequirement.Text))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Reads what the account has unlocked, for the vendor-requirement
+        /// notices, and reports whether it could. Returns null when no
+        /// client is wired up and on any non-cancellation failure, which
+        /// reads downstream as "not checked" rather than "not met".
+        /// Deliberately uncached, like the learned-recipe fetch above: a
+        /// cache of exactly this shape was deleted once for telling a
+        /// player they lacked something they had just earned.
+        /// <para>
+        /// Every outcome is logged. A check the player is told did not
+        /// happen has to say why somewhere they can read it.
+        /// </para>
+        /// </summary>
+        private async Task<(AccountProgression Progression, AccountProgressionAccess Access)>
+            GetAccountProgressionAsync(CancellationToken ct)
+        {
+            if (_accountProgressionClient == null)
+            {
+                LogProgressionAccess(
+                    AccountProgressionAccess.FetchFailed, "no progression client is wired up");
+                return (null, AccountProgressionAccess.FetchFailed);
+            }
+
+            var access = _accountProgressionClient.ProgressionAccess();
+            try
+            {
+                var progression = await _accountProgressionClient.GetProgressionAsync(ct);
+                LogProgressionAccess(access, null);
+                return (progression, access);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                LogProgressionAccess(
+                    AccountProgressionAccess.FetchFailed, $"{ex.GetType().Name} - {ex.Message}");
+                return (null, AccountProgressionAccess.FetchFailed);
+            }
+        }
+
+        private void LogProgressionAccess(AccountProgressionAccess access, string detail)
+        {
+            string suffix = string.IsNullOrEmpty(detail) ? string.Empty : $" ({detail})";
+            if (access == AccountProgressionAccess.Granted)
+            {
+                _moduleLog.Write(
+                    ModuleLogLevel.Info, "plan",
+                    "Account progression read for the vendor requirement checks" + suffix);
+                return;
+            }
+
+            _moduleLog.Write(
+                ModuleLogLevel.Warn, "plan",
+                "Account progression not read, so vendor requirements go unchecked: "
+                    + AccessLogText(access) + suffix);
+        }
+
+        /// <summary>
+        /// One line per <see cref="AccountProgressionAccess"/> case, in the
+        /// words that name the fix rather than the symptom.
+        /// </summary>
+        private static string AccessLogText(AccountProgressionAccess access)
+        {
+            switch (access)
+            {
+                case AccountProgressionAccess.NotConsented:
+                    return "the progression permission is not enabled for this module in Blish HUD";
+                case AccountProgressionAccess.KeyMissingScope:
+                    return "the account API key does not grant progression";
+                case AccountProgressionAccess.SubtokenNotReady:
+                    return "the module's API subtoken has not arrived yet";
+                case AccountProgressionAccess.FetchFailed:
+                    return "the request failed";
+                default:
+                    return "no requirement in this plan needed it";
+            }
+        }
+
+        /// <summary>
+        /// Reports the learned-recipe phase and answers it. A caller that
+        /// already fetched the ids passes them in <paramref name="supplied"/>
+        /// and no call is made, so the timing line reads about 0ms.
         /// </summary>
         private async Task<ISet<int>> FetchLearnedRecipeIdsAsync(
             IProgress<PlanStatus> progress,
             Stopwatch sw,
             List<string> timingLog,
             PhaseTracker phaseTracker,
+            ISet<int> supplied,
             CancellationToken ct)
         {
             phaseTracker.Start(PlanPhase.CheckingLearnedRecipes, "Checking learned recipes", null);
             progress?.Report(new PlanStatus { Message = "Checking learned recipes..." });
             sw.Restart();
-            ISet<int> learnedRecipeIds = null;
-            if (_accountRecipeClient != null && _accountRecipeClient.HasRequiredPermission())
-            {
-                try
-                {
-                    learnedRecipeIds = await _accountRecipeClient.GetLearnedRecipeIdsAsync(ct);
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception)
-                {
-                    learnedRecipeIds = null;
-                }
-            }
-
+            ISet<int> learnedRecipeIds = supplied ?? await GetLearnedRecipeIdsAsync(ct);
             sw.Stop();
             timingLog.Add($"Fetch learned recipes: {sw.ElapsedMilliseconds}ms");
             return learnedRecipeIds;
@@ -1412,6 +1606,69 @@ namespace TaimisToolbench.Services
                     if (offer != null && offer.UnlockRecipeItemId.HasValue)
                     {
                         metadataIds.Add(offer.UnlockRecipeItemId.Value);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// The recipe sheets this plan's craft steps would need, plus the
+        /// items those sheets are bartered for, so their names, icons and
+        /// rarities arrive in the one bulk metadata fetch. Reads the SAME
+        /// craft steps PlanResultBuilder derives the required recipes
+        /// from, so neither the Required Recipes section nor
+        /// MissingRecipeSheetSourceCalculator's note can name an item this
+        /// fetch did not cover.
+        /// </summary>
+        private void AddRecipeSheetItemIds(List<PlanStep> steps, HashSet<int> metadataIds)
+        {
+            if (steps == null || _recipeSheetItemIdByRecipeId.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var step in steps)
+            {
+                if (step != null && step.Source == AcquisitionSource.Craft &&
+                    _recipeSheetItemIdByRecipeId.TryGetValue(step.RecipeId, out int sheetItemId))
+                {
+                    metadataIds.Add(sheetItemId);
+                    AddRecipeSheetBarterItemIds(sheetItemId, metadataIds);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Every item any vendor charges for one recipe sheet. The note
+        /// states a barter cost as "5x &lt;name&gt;", and
+        /// PlanViewModelBuilder drops the whole note rather than print a
+        /// placeholder for a name it does not hold.
+        /// </summary>
+        private void AddRecipeSheetBarterItemIds(int sheetItemId, HashSet<int> metadataIds)
+        {
+            if (_offersForRecipeSheetItem == null)
+            {
+                return;
+            }
+
+            var offers = _offersForRecipeSheetItem(sheetItemId);
+            if (offers == null)
+            {
+                return;
+            }
+
+            foreach (var offer in offers)
+            {
+                if (offer?.CostLines == null)
+                {
+                    continue;
+                }
+
+                foreach (var line in offer.CostLines)
+                {
+                    if (line != null && string.Equals(line.Type, "Item", StringComparison.Ordinal))
+                    {
+                        metadataIds.Add(line.Id);
                     }
                 }
             }

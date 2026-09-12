@@ -59,7 +59,6 @@ namespace TaimisToolbench.Tests.Services
                         OutputCount = outputCount,
                         CostLines = new List<CostLine>(costLines),
                         MerchantName = "Test NPC",
-                        Locations = new List<string>(),
                     },
                 });
 
@@ -479,7 +478,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Item", Id = BarterToken, Count = tokenCount },
                 },
                 MerchantName = "Test NPC",
-                Locations = new List<string>(),
             };
         }
 

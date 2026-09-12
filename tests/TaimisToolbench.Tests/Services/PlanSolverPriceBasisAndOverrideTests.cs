@@ -195,7 +195,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Item", Id = 42, Count = 5 },
                 },
                 MerchantName = "Barter Vendor",
-                Locations = new List<string>(),
             };
             var prices = new Dictionary<int, ItemPrice>
             {
@@ -236,7 +235,6 @@ namespace TaimisToolbench.Tests.Services
                     new CostLine { Type = "Item", Id = 42, Count = 5 },
                 },
                 MerchantName = "Barter Vendor",
-                Locations = new List<string>(),
             };
             var prices = new Dictionary<int, ItemPrice>
             {

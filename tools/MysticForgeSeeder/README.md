@@ -121,15 +121,11 @@ recipe the new run no longer produces.
 
 ## Recipe ID space
 
-Generated IDs start at -100000 and descend. `ref/recipes_seed.json` also
-carries negative-ID rows that no generator rebuilds - currently four
-synthetic Merchant/achievement rows at -1592..-1595 - and
-`tools/TaimisToolbench.RecipeSeeder` merges the two into one dictionary
-keyed by recipe ID, taking the forge block first, so an overlap replaces a
-hand-authored row rather than colliding with it. The two producers own
-disjoint halves: hand-authored rows take [-99999, -1], the generated block
-takes -100000 and below. Growth moves the generated block away from the
-hand-authored half rather than into it.
-`MysticForgeSeedIdSpaceTests` fails the build if the shipped data ever
-breaches the partition, and `MergeMysticForgeRecipes` refuses a forge row
-that lands in the hand-authored half.
+Generated IDs start at -100000 and descend. Recipe ID sign carries
+provenance in `ref/recipes_seed.json`: the official API serves positive IDs
+only, so every negative ID is this block. Starting below -100000 leaves
+[-99999, -1] empty, which is what makes a stray ID there detectable as a
+row no generator wrote. Growth moves the generated block further away from
+that range rather than into it. `SeedProvenanceTests` fails the build if
+the shipped seed ever carries an ID in it, and `MergeMysticForgeRecipes`
+refuses a forge row above the base.

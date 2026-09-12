@@ -17,10 +17,8 @@ namespace TaimisToolbench.Tests.Services
     /// docs/research/m37-r3-achievement-dedup.md Section 1.4) using ids
     /// 55/56/999 exactly as upstream does, since this pass is a
     /// general-purpose algorithm and does not itself need real GW2 item
-    /// ids to be correctly exercised - the real, wiki/API-verified Infinite
-    /// Trebuchet Blueprint scenario (docs/research/m37-r3-achievement-dedup.md
-    /// Section 4.6) is exercised separately, through the real production
-    /// pipeline, in MultiItemPlanTests.
+    /// ids to be correctly exercised. MultiItemPlanTests runs the same
+    /// pass through the real production pipeline on a multi-bit scenario.
     /// </summary>
     public class AchievementBitDedupPrePassTests
     {

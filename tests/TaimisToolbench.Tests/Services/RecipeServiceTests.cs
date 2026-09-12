@@ -293,8 +293,7 @@ namespace TaimisToolbench.Tests.Services
         public async Task SelfReferentialMultiTierChain_SaneWikiScaleQuantities()
         {
             // Realistic 4-tier salvage-trophy chain (Small/Claw/Sharp/Large
-            // Claw shape from the real seed, ref/recipes_seed.json ids
-            // -592..-595): each tier needs 50 of the tier below + 1 of ITS
+            // Claw shape): each tier needs 50 of the tier below + 1 of ITS
             // OWN output + dust + Philosopher's Stones -> 7 of itself.
             // Verified (m5's "explosion to millions" is real wiki-scale
             // math for this brutal ratio, not a compounding bug): the

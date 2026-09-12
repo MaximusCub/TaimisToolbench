@@ -401,8 +401,14 @@ namespace TaimisToolbench.Tests.Services
 
         // --- Required Recipes ---
         [Fact]
-        public void RequiredRecipes_AutoLearned_StatusTag()
+        public void RequiredRecipes_AutoLearned_IsNotListedAtAll()
         {
+            // The game grants an auto-learned recipe with the discipline
+            // rating, so there is no unlock the player can be missing. The
+            // section drops it for the same reason it drops a Mystic Forge
+            // one, through the same predicate the Ranker's Recipes gate
+            // counts by - which is what makes the header's total and that
+            // cell's denominator one number.
             var result = MakeResult(requiredRecipes: new List<RequiredRecipe>
             {
                 new RequiredRecipe
@@ -417,8 +423,8 @@ namespace TaimisToolbench.Tests.Services
             });
             var vm = _builder.Build(result);
 
-            var section = vm.Sections.First(s => s.SectionType == PlanSectionType.RequiredRecipes);
-            Assert.Equal("Auto-learned", section.Rows[0].StatusTag);
+            Assert.DoesNotContain(
+                vm.Sections, s => s.SectionType == PlanSectionType.RequiredRecipes);
         }
 
         [Fact]
@@ -486,7 +492,7 @@ namespace TaimisToolbench.Tests.Services
 
         // --- UI-bundle milestone, Feature A (wiki links) ---
         [Fact]
-        public void RequiredRecipes_Missing_NotLearnedFromItem_WikiUrlLinksToAcquisitionAnchor()
+        public void RequiredRecipes_NotLearnedFromItem_WikiTargetIsTheAcquisitionAnchor()
         {
             var meta = MetaFor((1, "Bolt of Damask", "bolt.png"));
             var result = MakeResult(metadata: meta, requiredRecipes: new List<RequiredRecipe>
@@ -507,11 +513,13 @@ namespace TaimisToolbench.Tests.Services
             var section = vm.Sections.First(s => s.SectionType == PlanSectionType.RequiredRecipes);
             Assert.Equal(
                 "https://wiki.guildwars2.com/wiki/Bolt_of_Damask#Acquisition",
-                section.Rows[0].WikiUrl);
+                section.Rows[0].WikiTarget.BuildUrl());
+            Assert.Equal(
+                IconWikiTarget.AcquisitionHintText, section.Rows[0].WikiTarget.Hint);
         }
 
         [Fact]
-        public void RequiredRecipes_Missing_LearnedFromItem_WikiUrlLinksToRecipeSheet()
+        public void RequiredRecipes_LearnedFromItem_WikiTargetIsTheRecipeSheetPage()
         {
             var meta = MetaFor((1, "Bolt of Damask", "bolt.png"));
             var result = MakeResult(metadata: meta, requiredRecipes: new List<RequiredRecipe>
@@ -532,53 +540,39 @@ namespace TaimisToolbench.Tests.Services
             var section = vm.Sections.First(s => s.SectionType == PlanSectionType.RequiredRecipes);
             Assert.Equal(
                 "https://wiki.guildwars2.com/wiki/Recipe:_Bolt_of_Damask",
-                section.Rows[0].WikiUrl);
+                section.Rows[0].WikiTarget.BuildUrl());
         }
 
-        [Fact]
-        public void RequiredRecipes_Learned_NoWikiUrl()
+        /// <summary>
+        /// A row the player has nothing left to unlock still reaches the
+        /// wiki: every icon in the module opens a page on right-click, and
+        /// an already-learned recipe's page is still the page about it.
+        /// </summary>
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(false, true)]
+        public void RequiredRecipes_LearnedAndMissingRowsStillReachTheWiki(
+            bool isAutoLearned, bool isMissing)
         {
-            var result = MakeResult(requiredRecipes: new List<RequiredRecipe>
+            var meta = MetaFor((1, "Bolt of Damask", "bolt.png"));
+            var result = MakeResult(metadata: meta, requiredRecipes: new List<RequiredRecipe>
             {
                 new RequiredRecipe
                 {
                     RecipeId = 10,
                     OutputItemId = 1,
-                    IsAutoLearned = false,
+                    IsAutoLearned = isAutoLearned,
                     Disciplines = new List<string> { "Weaponsmith" },
                     MinRating = 400,
-                    IsMissing = false,
+                    IsMissing = isMissing,
                 },
             });
             var vm = _builder.Build(result);
 
             var section = vm.Sections.First(s => s.SectionType == PlanSectionType.RequiredRecipes);
-            Assert.Null(section.Rows[0].WikiUrl);
-        }
-
-        [Fact]
-        public void RequiredRecipes_AutoLearned_NoWikiUrl()
-        {
-            var result = MakeResult(requiredRecipes: new List<RequiredRecipe>
-            {
-                new RequiredRecipe
-                {
-                    RecipeId = 10,
-                    OutputItemId = 1,
-                    IsAutoLearned = true,
-                    Disciplines = new List<string> { "Weaponsmith" },
-                    MinRating = 400,
-                    // Verification-fix: true, not null - the real-data shape
-                    // (an AutoLearned recipe below the character rating is
-                    // IsAutoLearned AND IsMissing) is the axis this test must
-                    // pin; null passed vacuously under any gate.
-                    IsMissing = true,
-                },
-            });
-            var vm = _builder.Build(result);
-
-            var section = vm.Sections.First(s => s.SectionType == PlanSectionType.RequiredRecipes);
-            Assert.Null(section.Rows[0].WikiUrl);
+            Assert.Equal(
+                "https://wiki.guildwars2.com/wiki/Bolt_of_Damask#Acquisition",
+                section.Rows[0].WikiTarget.BuildUrl());
         }
 
         [Fact]
@@ -593,7 +587,7 @@ namespace TaimisToolbench.Tests.Services
                     {
                         RecipeId = 10,
                         OutputItemId = 5,
-                        IsAutoLearned = true,
+                        IsAutoLearned = false,
                         Disciplines = new List<string> { "Weaponsmith" },
                         MinRating = 400,
                     },
@@ -670,12 +664,12 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
-        public void RequiredRecipes_MysticForgeWithRealDiscipline_StaysInSection()
+        public void RequiredRecipes_MysticForgeWithRealDiscipline_LeavesSection()
         {
-            // A recipe combining MysticForge with a genuine leveled
-            // discipline still has something real to learn, so it is NOT
-            // filtered - only a recipe whose ENTIRE Disciplines list is
-            // MysticForge is excluded.
+            // PlanResultBuilder forces IsMissing = false as soon as ONE
+            // discipline is unlock-free, so a forge-plus-Weaponsmith recipe
+            // reaches this builder as permanently known. Listing it drew a
+            // row the player can never act on.
             var meta = MetaFor((2, "Blade", "b.png"));
             var result = MakeResult(
                 metadata: meta,
@@ -687,6 +681,41 @@ namespace TaimisToolbench.Tests.Services
                         OutputItemId = 2,
                         IsAutoLearned = false,
                         Disciplines = new List<string> { "MysticForge", "Weaponsmith" },
+                        MinRating = 400,
+                        IsMissing = false,
+                    },
+                });
+            var vm = _builder.Build(result);
+
+            Assert.DoesNotContain(
+                vm.Sections, s => s.SectionType == PlanSectionType.RequiredRecipes);
+        }
+
+        [Fact]
+        public void RequiredRecipes_MerchantSourceTag_LeavesSection()
+        {
+            // Neither the "Merchant" nor the "Achievement" tag has an
+            // unlock, so both are filtered on the same rule the forge is.
+            var meta = MetaFor((1, "Trebuchet Part", "t.png"), (2, "Blade", "b.png"));
+            var result = MakeResult(
+                metadata: meta,
+                requiredRecipes: new List<RequiredRecipe>
+                {
+                    new RequiredRecipe
+                    {
+                        RecipeId = -1595,
+                        OutputItemId = 1,
+                        IsAutoLearned = false,
+                        Disciplines = new List<string> { "Merchant" },
+                        MinRating = 0,
+                        IsMissing = false,
+                    },
+                    new RequiredRecipe
+                    {
+                        RecipeId = 10,
+                        OutputItemId = 2,
+                        IsAutoLearned = false,
+                        Disciplines = new List<string> { "Weaponsmith" },
                         MinRating = 400,
                         IsMissing = true,
                     },
@@ -730,7 +759,7 @@ namespace TaimisToolbench.Tests.Services
                     {
                         RecipeId = 20,
                         OutputItemId = 2,
-                        IsAutoLearned = true,
+                        IsAutoLearned = false,
                         Disciplines = new List<string> { "Weaponsmith" },
                         MinRating = 500,
                     },

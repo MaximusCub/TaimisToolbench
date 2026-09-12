@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Blish_HUD.Controls;
 using Microsoft.Xna.Framework;
 using MonoGame.Extended.BitmapFonts;
@@ -360,6 +362,7 @@ namespace TaimisToolbench.Views.Rendering
                     Text = text,
                     TextWidth = width,
                     Name = amount.Name,
+                    CurrencyId = amount.CurrencyId,
                 });
             }
 
@@ -380,10 +383,74 @@ namespace TaimisToolbench.Views.Rendering
         }
 
         internal static SegmentLayoutHandle LayoutCurrencySegments(
-            Panel parent, List<CoinSegmentMath.CurrencySegmentSpec> segments, int startX, int y, BitmapFont font, float alphaScale = 1f)
+            Panel parent, List<CoinSegmentMath.CurrencySegmentSpec> segments, int startX, int y,
+            BitmapFont font, Func<int, CurrencyTooltipFacts> getCurrencyFacts, float alphaScale = 1f)
         {
-            var controls = new (Label, Panel)[segments.Count];
+            var texts = new string[segments.Count];
             var widths = new int[segments.Count];
+            var ids = new int[segments.Count];
+            for (int i = 0; i < segments.Count; i++)
+            {
+                texts[i] = segments[i].Text;
+                widths[i] = segments[i].TextWidth;
+                ids[i] = segments[i].CurrencyId;
+            }
+
+            // A currency icon carries no visible
+            // name text anywhere in this cell (unlike SummarySectionRenderer.
+            // CreateCurrencyRow, which prints the name as a label before
+            // the icon) - a hover tooltip is the only way to identify it.
+            // Frame-less at the bar tier: beside the digits this icon is
+            // a currency symbol in the coin denominations' role, and
+            // they take no border (IconFrameGeometry.CurrencyIsFramed).
+            // It still occupies the whole measured bar-tier window, so
+            // this segment's advance below is unchanged by the border
+            // coming off.
+            return LayoutSegmentRun(
+                parent, texts, widths, startX, y, font, alphaScale,
+                (i, x, iconY) => IconControls.CreateCurrencyIcon(
+                    parent, ids[i], x, iconY, ItemIconTier.CurrencyBarRun, getCurrencyFacts));
+        }
+
+        /// <summary>
+        /// Bartered ITEMS as a price run: each count followed by that
+        /// item's own icon, the shape a wallet currency already draws in.
+        /// The Required Recipes table's Cost cell is the one caller - a
+        /// recipe sheet is more often paid for in charms and vials than in
+        /// coin.
+        /// </summary>
+        internal static SegmentLayoutHandle LayoutBarterSegments(
+            Panel parent, List<CoinSegmentMath.BarterSegmentSpec> segments, int startX, int y,
+            BitmapFont font, Func<int, ItemTooltipFacts> getItemFacts)
+        {
+            var texts = new string[segments.Count];
+            var widths = new int[segments.Count];
+            var ids = new int[segments.Count];
+            for (int i = 0; i < segments.Count; i++)
+            {
+                texts[i] = segments[i].Text;
+                widths[i] = segments[i].TextWidth;
+                ids[i] = segments[i].ItemId;
+            }
+
+            return LayoutSegmentRun(
+                parent, texts, widths, startX, y, font, 1f,
+                (i, x, iconY) => IconControls.DrawItemIcon(
+                    parent, ids[i], x, iconY, ItemIconTier.CurrencyBarRun, getItemFacts));
+        }
+
+        /// <summary>
+        /// The layout every non-coin price run shares: a number, a gap, the
+        /// unit's icon, a gap, the next number. Only the icon differs
+        /// between a wallet currency and a bartered item, so only the icon
+        /// is the caller's - the advance, the seat and the text colour are
+        /// decided once here.
+        /// </summary>
+        private static SegmentLayoutHandle LayoutSegmentRun(
+            Panel parent, string[] texts, int[] textWidths, int startX, int y, BitmapFont font,
+            float alphaScale, Func<int, int, int, Panel> makeIcon)
+        {
+            var controls = new (Label, Panel)[texts.Length];
             int iconYOffset = DigitSeat(font, CoinSegmentMath.CoinIconSize);
             int x = startX;
             Color textColor = new Color(220, 220, 220);
@@ -392,12 +459,11 @@ namespace TaimisToolbench.Views.Rendering
                 textColor *= alphaScale;
             }
 
-            for (int i = 0; i < segments.Count; i++)
+            for (int i = 0; i < texts.Length; i++)
             {
-                var seg = segments[i];
                 var label = new Label()
                 {
-                    Text = seg.Text,
+                    Text = texts[i],
                     Font = font,
                     TextColor = textColor,
                     AutoSizeWidth = true,
@@ -406,31 +472,60 @@ namespace TaimisToolbench.Views.Rendering
                     Parent = parent,
                 };
 
-                // A currency icon carries no visible
-                // name text anywhere in this cell (unlike SummarySectionRenderer.
-                // CreateCurrencyRow, which prints the name as a label before
-                // the icon) - a hover tooltip is the only way to identify it.
-                // Frame-less at the bar tier: beside the digits this icon is
-                // a currency symbol in the coin denominations' role, and
-                // they take no border (IconFrameGeometry.CurrencyIsFramed).
-                // It still occupies the whole measured bar-tier window, so
-                // this segment's advance below is unchanged by the border
-                // coming off.
-                var icon = IconControls.CreateCurrencyIcon(
-                    parent, seg.IconUrl, x + seg.TextWidth + CoinSegmentMath.CoinLabelIconGap,
-                    y + iconYOffset, ItemIconTier.CurrencyBarRun, seg.Name);
+                var icon = makeIcon(
+                    i, x + textWidths[i] + CoinSegmentMath.CoinLabelIconGap, y + iconYOffset);
 
                 controls[i] = (label, icon);
-                widths[i] = seg.TextWidth;
-                x += seg.TextWidth + CoinSegmentMath.CoinLabelIconGap + CoinSegmentMath.CoinIconSize + CoinSegmentMath.CoinSegmentGap;
+                x += textWidths[i] + CoinSegmentMath.CoinLabelIconGap
+                    + CoinSegmentMath.CoinIconSize + CoinSegmentMath.CoinSegmentGap;
             }
 
             return new SegmentLayoutHandle
             {
                 Controls = controls,
-                TextWidths = widths,
+                TextWidths = textWidths,
                 IconYOffset = iconYOffset,
             };
+        }
+
+        /// <summary>
+        /// Barter specs for one row's items, measured with the font they
+        /// will draw in. The ITEM ID is all a spec carries: the icon
+        /// component resolves the art, the name, the rarity frame and the
+        /// wiki page from it.
+        /// </summary>
+        internal static List<CoinSegmentMath.BarterSegmentSpec> BuildBarterSegments(
+            IReadOnlyList<BarterAmountViewModel> amounts, BitmapFont font)
+        {
+            var segments = new List<CoinSegmentMath.BarterSegmentSpec>();
+            if (amounts == null)
+            {
+                return segments;
+            }
+
+            foreach (var amount in amounts)
+            {
+                string text = amount.Amount.ToString(CultureInfo.InvariantCulture);
+                segments.Add(new CoinSegmentMath.BarterSegmentSpec
+                {
+                    ItemId = amount.ItemId,
+                    Text = text,
+                    TextWidth = (int)Math.Ceiling(font.MeasureString(text).Width),
+                });
+            }
+
+            return segments;
+        }
+
+        /// <summary>
+        /// Width a barter run occupies, off the same specs
+        /// <see cref="LayoutBarterSegments"/> lays out, so a column that
+        /// reserves this can never differ from the run that lands in it.
+        /// </summary>
+        internal static int MeasureBarterWidth(
+            IReadOnlyList<BarterAmountViewModel> amounts, BitmapFont font)
+        {
+            return CoinSegmentMath.TotalBarterSegmentsWidth(BuildBarterSegments(amounts, font));
         }
 
         /// <summary>
@@ -443,11 +538,37 @@ namespace TaimisToolbench.Views.Rendering
         /// valid, currency-only case (not a "zero width" special case).
         /// </summary>
         internal static int MeasureValueWidth(
-            long copper, IReadOnlyList<CurrencyAmountViewModel> currencyAmounts, BitmapFont font)
+            long copper, IReadOnlyList<CurrencyAmountViewModel> currencyAmounts, BitmapFont font,
+            int coinBundleQuantity = 0)
         {
             int coinWidth = copper > 0 ? TotalCoinSegmentsWidth(BuildCoinSegments(copper, font)) : 0;
             int currencyWidth = TotalCurrencySegmentsWidth(BuildCurrencySegments(currencyAmounts, font));
-            return (coinWidth > 0 && currencyWidth > 0) ? coinWidth + CoinSegmentMath.CoinSegmentGap + currencyWidth : coinWidth + currencyWidth;
+            int mixed = (coinWidth > 0 && currencyWidth > 0)
+                ? coinWidth + CoinSegmentMath.CoinSegmentGap + currencyWidth
+                : coinWidth + currencyWidth;
+            return mixed + CoinBundleSuffixWidth(coinBundleQuantity, coinWidth, font);
+        }
+
+        /// <summary>
+        /// The " for N" a coin value wears when it buys N units rather than
+        /// one. Zero when the row has no bundle, or when there is no coin
+        /// value for the suffix to qualify. See
+        /// PlanRowViewModel.UnitCoinBundleQuantity.
+        /// </summary>
+        private static string CoinBundleSuffixText(int coinBundleQuantity)
+        {
+            return " for " + coinBundleQuantity.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static int CoinBundleSuffixWidth(int coinBundleQuantity, int coinWidth, BitmapFont font)
+        {
+            if (coinBundleQuantity <= 1 || coinWidth <= 0)
+            {
+                return 0;
+            }
+
+            return CoinSegmentMath.CoinSegmentGap
+                + (int)Math.Ceiling(font.MeasureString(CoinBundleSuffixText(coinBundleQuantity)).Width);
         }
 
         /// <summary>
@@ -464,6 +585,10 @@ namespace TaimisToolbench.Views.Rendering
             public SegmentLayoutHandle CoinSegments;
             public SegmentLayoutHandle CurrencySegments;
             public Label DashLabel;
+
+            // The " for N" that follows the coin run when the coin value
+            // buys N units. Null on every other cell.
+            public Label CoinBundleLabel;
         }
 
         /// <summary>
@@ -475,19 +600,41 @@ namespace TaimisToolbench.Views.Rendering
         /// </summary>
         internal static ValueCellHandle LayoutValueSegmentsRightAligned(
             Panel parent, long copper, IReadOnlyList<CurrencyAmountViewModel> currencyAmounts,
-            int rightEdgeX, int y, BitmapFont font, float alphaScale = 1f)
+            int rightEdgeX, int y, BitmapFont font,
+            Func<int, CurrencyTooltipFacts> getCurrencyFacts, float alphaScale = 1f,
+            int coinBundleQuantity = 0)
         {
             var coinSegments = copper > 0 ? BuildCoinSegments(copper, font) : new List<CoinSegmentMath.CoinSegmentSpec>();
             var currencySegments = BuildCurrencySegments(currencyAmounts, font);
             int coinWidth = TotalCoinSegmentsWidth(coinSegments);
             int currencyWidth = TotalCurrencySegmentsWidth(currencySegments);
             int gap = (coinWidth > 0 && currencyWidth > 0) ? CoinSegmentMath.CoinSegmentGap : 0;
+            int suffixWidth = CoinBundleSuffixWidth(coinBundleQuantity, coinWidth, font);
 
-            int startX = rightEdgeX - (coinWidth + gap + currencyWidth);
+            int startX = rightEdgeX - (coinWidth + gap + currencyWidth + suffixWidth);
             var coinHandle = LayoutCoinSegments(parent, coinSegments, startX, y, font, alphaScale);
-            var currencyHandle = LayoutCurrencySegments(parent, currencySegments, startX + coinWidth + gap, y, font, alphaScale);
 
-            return new ValueCellHandle { CoinSegments = coinHandle, CurrencySegments = currencyHandle };
+            // Straight after the coin run and before any currency run: the
+            // suffix qualifies the coin value and nothing else.
+            Label bundleLabel = null;
+            if (suffixWidth > 0)
+            {
+                Color suffixColor = alphaScale < 1f ? Color.White * alphaScale : Color.White;
+                bundleLabel = LabelHelpers.CreateRightAlignedLabel(
+                    parent, CoinBundleSuffixText(coinBundleQuantity), font, suffixColor,
+                    startX + coinWidth + suffixWidth, y);
+            }
+
+            var currencyHandle = LayoutCurrencySegments(
+                parent, currencySegments, startX + coinWidth + suffixWidth + gap, y, font,
+                getCurrencyFacts, alphaScale);
+
+            return new ValueCellHandle
+            {
+                CoinSegments = coinHandle,
+                CurrencySegments = currencyHandle,
+                CoinBundleLabel = bundleLabel,
+            };
         }
 
         /// <summary>
@@ -502,7 +649,9 @@ namespace TaimisToolbench.Views.Rendering
         /// </summary>
         internal static ValueCellHandle RenderValueCellRightAligned(
             Panel parent, long copper, IReadOnlyList<CurrencyAmountViewModel> currencyAmounts,
-            int rightEdgeX, int y, BitmapFont font, float alphaScale = 1f)
+            int rightEdgeX, int y, BitmapFont font,
+            Func<int, CurrencyTooltipFacts> getCurrencyFacts, float alphaScale = 1f,
+            int coinBundleQuantity = 0)
         {
             bool hasCoin = copper > 0;
             bool hasCurrency = currencyAmounts != null && currencyAmounts.Count > 0;
@@ -519,7 +668,9 @@ namespace TaimisToolbench.Views.Rendering
                 };
             }
 
-            return LayoutValueSegmentsRightAligned(parent, copper, currencyAmounts, rightEdgeX, y, font, alphaScale);
+            return LayoutValueSegmentsRightAligned(
+                parent, copper, currencyAmounts, rightEdgeX, y, font,
+                getCurrencyFacts, alphaScale, coinBundleQuantity);
         }
 
         /// <summary>
@@ -543,9 +694,21 @@ namespace TaimisToolbench.Views.Rendering
             int currencyWidth = ShoppingColumnMath.SegmentRunWidth(handle.CurrencySegments.TextWidths, CoinSegmentMath.CoinIconSize, CoinSegmentMath.CoinLabelIconGap, CoinSegmentMath.CoinSegmentGap);
             int gap = (coinWidth > 0 && currencyWidth > 0) ? CoinSegmentMath.CoinSegmentGap : 0;
 
-            int startX = rightEdgeX - (coinWidth + gap + currencyWidth);
+            // The label already knows its own width, so the bundle suffix
+            // costs no MeasureString here either.
+            int suffixWidth = handle.CoinBundleLabel != null
+                ? CoinSegmentMath.CoinSegmentGap + handle.CoinBundleLabel.Width
+                : 0;
+
+            int startX = rightEdgeX - (coinWidth + gap + currencyWidth + suffixWidth);
             RepositionSegments(handle.CoinSegments, startX, y);
-            RepositionSegments(handle.CurrencySegments, startX + coinWidth + gap, y);
+            if (handle.CoinBundleLabel != null)
+            {
+                handle.CoinBundleLabel.Location = new Point(
+                    startX + coinWidth + CoinSegmentMath.CoinSegmentGap, y);
+            }
+
+            RepositionSegments(handle.CurrencySegments, startX + coinWidth + suffixWidth + gap, y);
         }
 
         // --- Per-denomination sub-columns (recipe tree cost column) ---
@@ -581,7 +744,8 @@ namespace TaimisToolbench.Views.Rendering
         /// </summary>
         internal static ValueCellHandle RenderValueCellInSubColumns(
             Panel parent, long copper, IReadOnlyList<CurrencyAmountViewModel> currencyAmounts,
-            TreeCostColumnMath.CostSubColumnEdges edges, int y, BitmapFont font, float alphaScale = 1f)
+            TreeCostColumnMath.CostSubColumnEdges edges, int y, BitmapFont font,
+            Func<int, CurrencyTooltipFacts> getCurrencyFacts, float alphaScale = 1f)
         {
             bool hasCoin = copper > 0;
             bool hasCurrency = currencyAmounts != null && currencyAmounts.Count > 0;
@@ -629,7 +793,8 @@ namespace TaimisToolbench.Views.Rendering
             var currencySegments = BuildCurrencySegments(currencyAmounts, font);
             int currencyRunWidth = TotalCurrencySegmentsWidth(currencySegments);
             var currencyHandle = LayoutCurrencySegments(
-                parent, currencySegments, edges.CurrencyRightEdge - currencyRunWidth, y, font, alphaScale);
+                parent, currencySegments, edges.CurrencyRightEdge - currencyRunWidth, y, font,
+                getCurrencyFacts, alphaScale);
 
             return new ValueCellHandle { CoinSegments = coinHandle, CurrencySegments = currencyHandle };
         }

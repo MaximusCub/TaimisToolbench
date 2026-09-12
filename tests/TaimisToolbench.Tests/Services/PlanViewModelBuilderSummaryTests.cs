@@ -758,12 +758,12 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(50, ccRow.Quantity);
         }
 
-        // The paragraph the game's own currency tooltip shows under the
-        // wallet balance. The renderer holds no currency id (see
-        // PlanRowViewModel.CurrencyDescription), so if the builder does not
-        // resolve it here nothing downstream can.
+        // The row carries the currency id, and the renderer resolves the
+        // whole tooltip from it. The description used to be resolved here
+        // and carried down, which is why the Recipe Tree - which had no
+        // such field - showed a bare name.
         [Fact]
-        public void CurrencyTable_DescriptionResolvedFromCurrencyMetadata()
+        public void CurrencyTable_RowCarriesTheCurrencyIdItsTooltipResolvesFrom()
         {
             var result = MakeResult(
                 currencyCosts: new List<CurrencyCost>
@@ -787,13 +787,19 @@ namespace TaimisToolbench.Tests.Services
             var vm = _builder.Build(result);
 
             var ccRow = vm.Sections[0].Rows.Single(r => r.RowType == PlanRowType.CurrencyCost);
-            Assert.Equal("Earned by gaining experience past level 80.", ccRow.CurrencyDescription);
+            Assert.Equal(23, ccRow.CurrencyId);
+
+            // The same id, through the one resolver, gives the paragraph.
+            Assert.Equal(
+                "Earned by gaining experience past level 80.",
+                CurrencyTooltipFacts.ForCurrencyId(
+                    ccRow.CurrencyId, result.CurrencyMetadata, (int?)null).Description);
         }
 
         // No offline description table exists, and one the module wrote
         // itself would be invented data - the hover drops the paragraph.
         [Fact]
-        public void CurrencyTable_NoMetadata_DescriptionIsNull()
+        public void CurrencyTable_NoMetadata_TheHoverDropsTheParagraph()
         {
             var result = MakeResult(currencyCosts: new List<CurrencyCost>
             {
@@ -804,7 +810,9 @@ namespace TaimisToolbench.Tests.Services
 
             var ccRow = vm.Sections[0].Rows.Single(r => r.RowType == PlanRowType.CurrencyCost);
             Assert.Equal("Spirit Shards", ccRow.Label);
-            Assert.Null(ccRow.CurrencyDescription);
+            Assert.Null(
+                CurrencyTooltipFacts.ForCurrencyId(
+                    ccRow.CurrencyId, result.CurrencyMetadata, (int?)null).Description);
         }
 
         // --- currency-ux-package (Feature 2): plan-scope passthrough for

@@ -350,6 +350,58 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(expected, CoinSegmentMath.TotalCoinSegmentsWidth(segments));
         }
 
+        // --- TotalBarterSegmentsWidth ---
+        //
+        // A bartered ITEM is a price in the same shape a wallet currency
+        // is - a number, then the unit's icon - so it advances by the same
+        // formula. These pin that the two agree, because the Required
+        // Recipes Cost cell reserves one band for a run that can be both.
+        [Fact]
+        public void TotalBarterSegmentsWidth_Empty_ReturnsZero()
+        {
+            Assert.Equal(
+                0,
+                CoinSegmentMath.TotalBarterSegmentsWidth(
+                    new List<CoinSegmentMath.BarterSegmentSpec>()));
+        }
+
+        [Fact]
+        public void TotalBarterSegmentsWidth_MatchesACurrencyRunOfTheSameTextWidths()
+        {
+            var barter = new List<CoinSegmentMath.BarterSegmentSpec>
+            {
+                new CoinSegmentMath.BarterSegmentSpec { ItemId = 89216, Text = "5", TextWidth = 30 },
+                new CoinSegmentMath.BarterSegmentSpec { ItemId = 24277, Text = "3", TextWidth = 10 },
+            };
+            var currency = new List<CoinSegmentMath.CurrencySegmentSpec>
+            {
+                new CoinSegmentMath.CurrencySegmentSpec { Text = "5", TextWidth = 30 },
+                new CoinSegmentMath.CurrencySegmentSpec { Text = "3", TextWidth = 10 },
+            };
+
+            int expected =
+                (30 + LabelIconGap + IconSize) +
+                (10 + LabelIconGap + IconSize) +
+                SegmentGap;
+            Assert.Equal(expected, CoinSegmentMath.TotalBarterSegmentsWidth(barter));
+            Assert.Equal(
+                CoinSegmentMath.TotalCurrencySegmentsWidth(currency),
+                CoinSegmentMath.TotalBarterSegmentsWidth(barter));
+        }
+
+        [Fact]
+        public void TotalBarterSegmentsWidth_SingleSegment_NoTrailingGap()
+        {
+            var segments = new List<CoinSegmentMath.BarterSegmentSpec>
+            {
+                new CoinSegmentMath.BarterSegmentSpec { ItemId = 89216, Text = "5", TextWidth = 12 },
+            };
+
+            Assert.Equal(
+                12 + LabelIconGap + IconSize,
+                CoinSegmentMath.TotalBarterSegmentsWidth(segments));
+        }
+
         // --- TotalCurrencySegmentsWidth ---
         [Fact]
         public void TotalCurrencySegmentsWidth_Empty_ReturnsZero()
@@ -375,8 +427,8 @@ namespace TaimisToolbench.Tests.Services
         public void TotalCurrencySegmentsWidth_MultipleSegments_GapBetweenNotAfter()
         {
             // Pins the gap arithmetic exactly (1 gap for 2 segments):
-            // 30 + 2 + 18 = 50 for the first, 10 + 2 + 18 = 30 for the
-            // second, plus a single 6px segmentGap between them = 86.
+            // 30 + 3 + 18 = 51 for the first, 10 + 3 + 18 = 31 for the
+            // second, plus a single 6px segmentGap between them = 88.
             // The 18 is CurrencyIconTiers.WalletBarIconSize, which
             // CoinIconSize now is.
             var segments = new List<CoinSegmentMath.CurrencySegmentSpec>
@@ -390,7 +442,7 @@ namespace TaimisToolbench.Tests.Services
                 (10 + LabelIconGap + IconSize) +
                 SegmentGap;
             Assert.Equal(expected, CoinSegmentMath.TotalCurrencySegmentsWidth(segments));
-            Assert.Equal(86, expected);
+            Assert.Equal(88, expected);
         }
 
         [Fact]

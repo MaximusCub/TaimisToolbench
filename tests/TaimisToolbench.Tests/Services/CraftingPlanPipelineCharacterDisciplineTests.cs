@@ -165,7 +165,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = Gw2Constants.CoinCurrencyId, Count = 200 },
                         },
                         MerchantName = "Test NPC",
-                        Locations = new List<string>(),
                     },
                 });
 

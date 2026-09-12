@@ -12,6 +12,22 @@ namespace TaimisToolbench.Tests.Services
 {
     public class TradingPostServiceTests
     {
+        // A gap that is inside the TTL whatever the TTL is set to, so a
+        // change to that constant moves every "still cached" case with it.
+        private static TimeSpan HalfOf(TimeSpan ttl)
+        {
+            return TimeSpan.FromTicks(ttl.Ticks / 2);
+        }
+
+        // The TTL is a spam guard on the Generate Plan button, not an
+        // incidental cache size - see TradingPostService.CacheTtl. Pinned
+        // so lengthening it back out is a deliberate edit here as well.
+        [Fact]
+        public void CacheTtl_IsTheTwoMinuteSpamGuard()
+        {
+            Assert.Equal(TimeSpan.FromSeconds(120), TradingPostService.CacheTtl);
+        }
+
         [Fact]
         public async Task SingleItem_ReturnsBuyInstantAndSellInstant()
         {
@@ -140,7 +156,7 @@ namespace TaimisToolbench.Tests.Services
 
             await svc.GetPricesAsync(new[] { 1 }, CancellationToken.None);
 
-            clock = clock.AddMinutes(16); // past the 15 minute TTL
+            clock = clock.Add(TradingPostService.CacheTtl).AddSeconds(1);
             var result = await svc.GetPricesAsync(new[] { 1 }, CancellationToken.None);
 
             Assert.Equal(2, api.Calls.Count);
@@ -157,7 +173,7 @@ namespace TaimisToolbench.Tests.Services
 
             await svc.GetPricesAsync(new[] { 1 }, CancellationToken.None);
 
-            clock = clock.AddMinutes(10); // still within the 15 minute TTL
+            clock = clock.Add(HalfOf(TradingPostService.CacheTtl));
             var result = await svc.GetPricesAsync(new[] { 1 }, CancellationToken.None);
 
             Assert.Single(api.Calls); // no second API call
@@ -181,7 +197,7 @@ namespace TaimisToolbench.Tests.Services
 
             await svc.GetPricesAsync(new[] { 1, 99999 }, CancellationToken.None);
 
-            clock = clock.AddMinutes(1); // well inside the 15 minute TTL
+            clock = clock.Add(HalfOf(TradingPostService.CacheTtl));
             var result = await svc.GetPricesAsync(new[] { 1, 99999 }, CancellationToken.None);
 
             Assert.Single(api.Calls); // no second round trip for either id
@@ -198,7 +214,7 @@ namespace TaimisToolbench.Tests.Services
 
             await svc.GetPricesAsync(new[] { 99999 }, CancellationToken.None);
 
-            clock = clock.AddMinutes(16); // past the 15 minute TTL
+            clock = clock.Add(TradingPostService.CacheTtl).AddSeconds(1);
             await svc.GetPricesAsync(new[] { 99999 }, CancellationToken.None);
 
             Assert.Equal(2, api.Calls.Count);
@@ -215,14 +231,14 @@ namespace TaimisToolbench.Tests.Services
             Assert.False(beforePatch.ContainsKey(99999));
 
             api.AddPrice(99999, buyUnitPrice: 100, sellUnitPrice: 200); // a patch makes it tradeable
-            clock = clock.AddMinutes(16);
+            clock = clock.Add(TradingPostService.CacheTtl).AddSeconds(1);
             var afterPatch = await svc.GetPricesAsync(new[] { 99999 }, CancellationToken.None);
 
             Assert.Equal(200, afterPatch[99999].BuyInstant);
 
             // The negative entry was dropped, not just outvoted: the now-
             // cached price serves the next call with no further request.
-            clock = clock.AddMinutes(1);
+            clock = clock.Add(HalfOf(TradingPostService.CacheTtl));
             var third = await svc.GetPricesAsync(new[] { 99999 }, CancellationToken.None);
             Assert.Equal(2, api.Calls.Count);
             Assert.Equal(200, third[99999].BuyInstant);
@@ -234,7 +250,7 @@ namespace TaimisToolbench.Tests.Services
             // A batch that threw proves nothing about whether its ids are
             // tradeable - only a response that came back and omitted them
             // does. Negative-caching a transient failure would blank those
-            // prices for 15 minutes.
+            // prices for a whole TTL.
             var api = new InMemoryPriceApiClient();
             api.AddPrice(1, buyUnitPrice: 100, sellUnitPrice: 200);
             api.ThrowOnCallNumber = 1;
@@ -253,9 +269,9 @@ namespace TaimisToolbench.Tests.Services
         // for an endpoint-level outage as readily as for "every id in this
         // batch is untradeable", and Gw2PriceApiClient turns that 404 into
         // an empty batch WITHOUT throwing. Negative-caching those ids would
-        // latch a whole plan into "no price for anything" for a full 15
-        // minute TTL, and - because the freshness scan then skips them -
-        // without a single further request to recover on.
+        // latch a whole plan into "no price for anything" for a full TTL,
+        // and - because the freshness scan then skips them - without a
+        // single further request to recover on.
         [Fact]
         public async Task UnprovenEmptyBatch_DoesNotNegativeCacheItsIds()
         {
@@ -270,7 +286,7 @@ namespace TaimisToolbench.Tests.Services
             var duringOutage = await svc.GetPricesAsync(new[] { 1, 2 }, CancellationToken.None);
             Assert.Empty(duringOutage);
 
-            clock = clock.AddMinutes(1); // well inside the 15 minute TTL
+            clock = clock.Add(HalfOf(TradingPostService.CacheTtl));
             var afterOutage = await svc.GetPricesAsync(new[] { 1, 2 }, CancellationToken.None);
 
             Assert.Equal(2, api.Calls.Count); // the recovery request happened
@@ -289,12 +305,12 @@ namespace TaimisToolbench.Tests.Services
 
             // Item 1 fetched first, then left to go stale.
             await svc.GetPricesAsync(new[] { 1 }, CancellationToken.None);
-            clock = clock.AddMinutes(16);
+            clock = clock.Add(TradingPostService.CacheTtl).AddSeconds(1);
 
             // Item 2 fetched fresh, right before the mixed request.
             await svc.GetPricesAsync(new[] { 2 }, CancellationToken.None);
 
-            // Third call requests both: item 1 is stale (16 min old), item 2 is fresh (0 min old).
+            // Third call requests both: item 1 is past the TTL, item 2 was just fetched.
             var result = await svc.GetPricesAsync(new[] { 1, 2 }, CancellationToken.None);
 
             Assert.Equal(3, api.Calls.Count);

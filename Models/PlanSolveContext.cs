@@ -208,5 +208,21 @@ namespace TaimisToolbench.Models
         /// see UnreducedTree's doc comment.
         /// </summary>
         public string ActiveCharacterName { get; set; }
+
+        /// <summary>
+        /// What the account had unlocked at GENERATION time, snapshotted
+        /// for the same reason as LearnedRecipeIds above: a local override
+        /// re-solve must re-derive the vendor-requirement notices without a
+        /// network call. Null when no client was wired up or the fetch
+        /// failed, which reads as "not checked" rather than "not met".
+        /// </summary>
+        public AccountProgression AccountProgression { get; set; }
+
+        /// <summary>
+        /// Why <see cref="AccountProgression"/> is what it is, snapshotted
+        /// with it so a re-solve tells the player the same thing about the
+        /// same read - see Models/AccountProgression.cs.
+        /// </summary>
+        public AccountProgressionAccess AccountProgressionAccess { get; set; }
     }
 }

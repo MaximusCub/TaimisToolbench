@@ -94,10 +94,15 @@ namespace TaimisToolbench.Tests.Services
             AssertRequestLayerMatches(fixtureName, onDisk, load.Plan);
 
             int fixtureVersion = onDisk.Value<int>("SchemaVersion");
-            if (fixtureVersion == PersistedPlan.CurrentSchemaVersion)
+            bool inReadableRange =
+                fixtureVersion >= PersistedPlan.MinimumReadableSchemaVersion
+                && fixtureVersion <= PersistedPlan.CurrentSchemaVersion;
+
+            if (inReadableRange)
             {
                 Assert.True(load.HasResult,
-                    fixtureName + " is stamped at the current schema version and must load whole; "
+                    fixtureName + " is stamped at schema " + fixtureVersion
+                    + ", inside this build's readable range, and must load whole; "
                     + "the result was discarded instead: " + (info ?? error));
                 Assert.NotNull(load.Plan.Result.Plan);
             }
@@ -105,7 +110,8 @@ namespace TaimisToolbench.Tests.Services
             {
                 Assert.False(load.HasResult,
                     fixtureName + " is stamped at schema " + fixtureVersion
-                    + ", which this build never wrote, so its result must be discarded unread.");
+                    + ", outside this build's readable range, so its result must be "
+                    + "discarded unread.");
                 Assert.Null(load.Plan.Result);
             }
         }

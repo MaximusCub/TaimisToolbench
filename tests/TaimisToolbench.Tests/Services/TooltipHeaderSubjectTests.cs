@@ -16,6 +16,10 @@ namespace TaimisToolbench.Tests.Services
     /// </summary>
     public class TooltipHeaderSubjectTests
     {
+        // The composer never reads the id; it is the key the
+        // facts are resolved by.
+        private const int TestCurrencyId = 23;
+
         private const string ItemIcon = "https://render.guildwars2.com/file/AAA/1.png";
         private const string CurrencyIcon = "https://render.guildwars2.com/file/BBB/2.png";
 
@@ -27,7 +31,16 @@ namespace TaimisToolbench.Tests.Services
         private static TooltipContent CurrencyContent(string description = "Earned in the mists.")
         {
             return CurrencyTooltipComposer.BuildContent(
-                CurrencyTooltipFacts.For("Spirit Shards", CurrencyIcon, description, 412));
+                CurrencyTooltipFacts.ForCurrencyEntry(
+                TestCurrencyId,
+                new CurrencyMetadata
+                {
+                    CurrencyId = TestCurrencyId,
+                    Name = "Spirit Shards",
+                    IconUrl = CurrencyIcon,
+                    Description = description,
+                },
+                412));
         }
 
         [Fact]
@@ -48,9 +61,9 @@ namespace TaimisToolbench.Tests.Services
                 CurrencyContent().Lines[0].Spans.Single().Role);
 
             var item = ItemRowTooltipComposer.BuildRowContent(
-                (ItemStatBlock)null,
+                null,
                 ItemTooltipIdentity.ForItem("Unlooked Thing", ItemIcon, null),
-                extraLines: null);
+                null);
 
             Assert.Equal(TooltipSpanRole.Rarity, item.Lines[0].Spans.Single().Role);
         }
@@ -63,9 +76,9 @@ namespace TaimisToolbench.Tests.Services
             // item's frame.
             var currency = SubjectOfFirstLine(CurrencyContent());
             var item = SubjectOfFirstLine(ItemRowTooltipComposer.BuildRowContent(
-                (ItemStatBlock)null,
+                null,
                 ItemTooltipIdentity.ForItem("Unlooked Thing", ItemIcon, null),
-                extraLines: null));
+                null));
 
             Assert.Null(currency.RarityKey);
             Assert.Null(item.RarityKey);
@@ -77,9 +90,9 @@ namespace TaimisToolbench.Tests.Services
         public void AnItemRowHeaderCarriesTheRarityTheRowResolved()
         {
             var subject = SubjectOfFirstLine(ItemRowTooltipComposer.BuildRowContent(
-                (ItemStatBlock)null,
+                null,
                 ItemTooltipIdentity.ForItem("Mithril Ore", ItemIcon, "Basic"),
-                extraLines: null));
+                null));
 
             Assert.False(subject.IsCurrency);
             Assert.Equal("Basic", subject.RarityKey);

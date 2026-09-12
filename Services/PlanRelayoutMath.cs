@@ -94,11 +94,30 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// Left x of the icon frame on a plan row that OPENS with its icon -
+        /// the Recipe Tree, Required Recipes, and every row this rail's
+        /// header word is drawn for. The two tables that open with an
+        /// Amount band instead start theirs past it, at
+        /// <see cref="AmountLedRowMath.IconX"/>.
+        /// <para>
+        /// Two renderers restate this pair as literals of their own rather
+        /// than reading it here: Views/Rendering/RecipesSectionRenderer.cs
+        /// and Services/NotesSectionLayoutMath.cs. They agree only because
+        /// all three spell out the same numbers, so a change here has to be
+        /// made in those two as well.
+        /// </para>
+        /// </summary>
+        public const int IconLedRowIconX = 8;
+
+        /// <summary>Left x of the name past that icon.</summary>
+        public const int IconLedRowNameX =
+            IconLedRowIconX + PlanContentHeightMath.RowIconFrameSize + 8;
+
+        /// <summary>
         /// The one rail every plan table's left-hand header word sits on:
-        /// <see cref="ColumnHeaderLabelMath"/> applied to the icon gutter
-        /// the tables open their rows with
-        /// (<see cref="ShoppingColumnMath.IconX"/>), which Used Materials
-        /// and Required Recipes duplicate as their own IconX/NameX pair.
+        /// <see cref="ColumnHeaderLabelMath"/> applied to
+        /// <see cref="IconLedRowIconX"/>, the icon gutter those tables open
+        /// their rows with.
         /// <para>
         /// A rail rather than each table's own answer because the Recipe
         /// Tree's grid differs from the tables stacked under it - a caret
@@ -110,7 +129,7 @@ namespace TaimisToolbench.Services
         /// </para>
         /// </summary>
         public static int TableLeftHeaderX =>
-            ColumnHeaderLabelMath.LabelX(ShoppingColumnMath.NameX, ShoppingColumnMath.IconX);
+            ColumnHeaderLabelMath.LabelX(IconLedRowNameX, IconLedRowIconX);
 
         /// <summary>
         /// FLOOR width of the recipe tree's decision column - the narrowest

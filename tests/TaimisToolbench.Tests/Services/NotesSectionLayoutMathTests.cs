@@ -162,9 +162,9 @@ namespace TaimisToolbench.Tests.Services
                 () => NotesSectionLayoutMath.WrapNote("abc", LivePanelWidth, 0, null));
         }
 
-        // --- BodyHeight: the arm that now counts LINES, not note rows ---
+        // --- NoteHeight: the arm that counts LINES, not note rows ---
         [Fact]
-        public void BodyHeight_CountsWrappedLinesNotNoteRows()
+        public void NoteHeight_CountsWrappedLinesNotNoteRows()
         {
             const string note = "This plan includes a Mystic Clover-style Mystic Forge yield - its " +
                 "expected output is already probability-adjusted.";
@@ -174,23 +174,173 @@ namespace TaimisToolbench.Tests.Services
             Assert.True(lines > 1);
             Assert.Equal(
                 lines * PlanContentHeightMath.FallbackTextRowHeight,
-                NotesSectionLayoutMath.BodyHeight(lines));
+                NotesSectionLayoutMath.NoteHeight(lines, hasIcon: false));
             // The pre-fix arm (one row per note) would have undercounted.
             Assert.True(
-                NotesSectionLayoutMath.BodyHeight(lines) > PlanContentHeightMath.FallbackTextRowHeight);
+                NotesSectionLayoutMath.NoteHeight(lines, hasIcon: false)
+                    > PlanContentHeightMath.FallbackTextRowHeight);
         }
 
         [Fact]
-        public void BodyHeight_ZeroLines_IsZero()
+        public void NoteHeight_ZeroLines_IsZero()
         {
-            Assert.Equal(0, NotesSectionLayoutMath.BodyHeight(0));
-            Assert.Equal(0, NotesSectionLayoutMath.BodyHeight(-3));
+            Assert.Equal(0, NotesSectionLayoutMath.NoteHeight(0, hasIcon: false));
+            Assert.Equal(0, NotesSectionLayoutMath.NoteHeight(-3, hasIcon: false));
         }
 
         [Fact]
-        public void BodyHeight_UsesTheSharedFixedRowHeightConstant()
+        public void NoteHeight_UsesTheSharedFixedRowHeightConstant()
         {
-            Assert.Equal(PlanContentHeightMath.FallbackTextRowHeight, NotesSectionLayoutMath.BodyHeight(1));
+            Assert.Equal(
+                PlanContentHeightMath.FallbackTextRowHeight,
+                NotesSectionLayoutMath.NoteHeight(1, hasIcon: false));
+        }
+
+        /// <summary>
+        /// A note that names an item spends the icon-led band on its FIRST
+        /// line and a plain text row on every line after it, so its height
+        /// is not a multiple of either.
+        /// </summary>
+        [Fact]
+        public void NoteHeight_WithAnIcon_SpendsTheIconBandOnTheFirstLineOnly()
+        {
+            Assert.Equal(
+                NotesSectionLayoutMath.IconLineHeight,
+                NotesSectionLayoutMath.NoteHeight(1, hasIcon: true));
+            Assert.Equal(
+                NotesSectionLayoutMath.IconLineHeight
+                    + (2 * PlanContentHeightMath.FallbackTextRowHeight),
+                NotesSectionLayoutMath.NoteHeight(3, hasIcon: true));
+            Assert.True(
+                NotesSectionLayoutMath.IconLineHeight
+                    > PlanContentHeightMath.FallbackTextRowHeight,
+                "an icon-led line has to be taller than a text line to hold the icon");
+        }
+
+        /// <summary>
+        /// The subject's name eats into its own note's first line and
+        /// nothing else: later lines hang from the name's rule and get the
+        /// full column.
+        /// </summary>
+        [Fact]
+        public void SubjectBudgets_OnlyTheFirstLinePaysForTheNameAndTheCoinCell()
+        {
+            int first = NotesSectionLayoutMath.SubjectFirstLineBudget(LivePanelWidth, 0, 100);
+            int rest = NotesSectionLayoutMath.SubjectRestBudget(LivePanelWidth);
+
+            Assert.Equal(rest - 100, first);
+            Assert.True(
+                NotesSectionLayoutMath.SubjectFirstLineBudget(LivePanelWidth, 60, 100) < first,
+                "a coin cell has to narrow the first line it sits on");
+        }
+
+        [Fact]
+        public void SubjectLabel_PartsTheNameFromTheNote()
+        {
+            Assert.Equal("Gift of the Hylek:", NotesSectionLayoutMath.SubjectLabel("Gift of the Hylek"));
+
+            // The name is ellipsized before the separator is appended, so
+            // a name too long for its third of the column keeps the mark.
+            Assert.Equal("Gift of the H...:", NotesSectionLayoutMath.SubjectLabel("Gift of the H..."));
+        }
+
+        [Fact]
+        public void SubjectLabel_NoName_IsEmpty()
+        {
+            Assert.Equal("", NotesSectionLayoutMath.SubjectLabel(null));
+            Assert.Equal("", NotesSectionLayoutMath.SubjectLabel(""));
+        }
+
+        /// <summary>
+        /// The run the note's own text is placed after. It ends in ONE
+        /// space, so the gap after the name is a space character rather
+        /// than a gap between two cells.
+        /// </summary>
+        [Fact]
+        public void SubjectRun_EndsInOneSpace()
+        {
+            Assert.Equal(
+                "Gift of the Hylek: ", NotesSectionLayoutMath.SubjectRun("Gift of the Hylek"));
+            Assert.Equal(
+                NotesSectionLayoutMath.SubjectLabel("Gift of the Hylek") + " ",
+                NotesSectionLayoutMath.SubjectRun("Gift of the Hylek"));
+            Assert.Equal("", NotesSectionLayoutMath.SubjectRun(null));
+            Assert.Equal("", NotesSectionLayoutMath.SubjectRun(""));
+        }
+
+        /// <summary>
+        /// Two faces seated on one note line land on one baseline. A box
+        /// top would not: a label's box is its own face's line box, and the
+        /// two faces put their letters at different depths inside it.
+        /// </summary>
+        [Fact]
+        public void TheSubjectLine_SeatsEveryFaceOnOneBaseline()
+        {
+            int body = TypeRampMetrics.BaselineAlignedY(
+                TypeRampMetrics.BodyInk, NotesSectionLayoutMath.SubjectLineBaseline);
+            int caption = TypeRampMetrics.BaselineAlignedY(
+                TypeRampMetrics.CaptionInk, NotesSectionLayoutMath.SubjectLineBaseline);
+
+            Assert.Equal(
+                NotesSectionLayoutMath.SubjectLineBaseline,
+                body + TypeRampMetrics.BodyInk.BaselineY);
+            Assert.Equal(
+                body + TypeRampMetrics.BodyInk.BaselineY,
+                caption + TypeRampMetrics.CaptionInk.BaselineY);
+            Assert.True(
+                caption > body,
+                "a shorter face has to drop to meet the same baseline, not share a box top");
+        }
+
+        /// <summary>
+        /// Both seats keep their own line's descenders inside the row that
+        /// line is built at - the height contract NotesSectionRenderer's
+        /// own DEBUG assert polices at run time.
+        /// </summary>
+        [Fact]
+        public void LineSeats_KeepTheirDescendersInsideTheirRows()
+        {
+            Assert.True(
+                TypeRampMetrics.InkBottom(
+                    TypeRampMetrics.BodyInk,
+                    TypeRampMetrics.BaselineAlignedY(
+                        TypeRampMetrics.BodyInk, NotesSectionLayoutMath.SubjectLineBaseline))
+                    <= NotesSectionLayoutMath.IconLineHeight,
+                "a note's first line draws inside the icon band");
+            Assert.True(
+                TypeRampMetrics.InkBottom(
+                    TypeRampMetrics.BodyInk,
+                    TypeRampMetrics.BaselineAlignedY(
+                        TypeRampMetrics.BodyInk, NotesSectionLayoutMath.TextLineBaseline))
+                    <= PlanContentHeightMath.FallbackTextRowHeight,
+                "a note's text lines draw inside a plain text row");
+        }
+
+        /// <summary>
+        /// The rule under a link may not thin below two logical pixels -
+        /// one can rasterize to nothing at the GW2 UI scale - so it spends
+        /// one pixel of ink over two rows instead.
+        /// </summary>
+        [Fact]
+        public void LinkUnderline_LaysDownOnePixelOfInkOverTwoRows()
+        {
+            Assert.True(NotesSectionLayoutMath.LinkUnderlineThickness >= 2);
+            Assert.Equal(
+                1f,
+                NotesSectionLayoutMath.LinkUnderlineInkAlpha
+                    * NotesSectionLayoutMath.LinkUnderlineThickness);
+        }
+
+        [Fact]
+        public void SubjectMaxWidth_HoldsTheFloorOnAPathologicallyNarrowPanel()
+        {
+            Assert.Equal(
+                NotesSectionLayoutMath.MinTextBudget,
+                NotesSectionLayoutMath.SubjectMaxWidth(40));
+            Assert.True(
+                NotesSectionLayoutMath.SubjectMaxWidth(LivePanelWidth)
+                    < NotesSectionLayoutMath.SubjectRestBudget(LivePanelWidth),
+                "a name may never take the whole note column");
         }
     }
 }

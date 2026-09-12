@@ -73,6 +73,11 @@ namespace TaimisToolbench.Harness
 
         private static async Task<int> MainAsync(string[] args)
         {
+            if (args.Contains("--fetch-profile"))
+            {
+                return await FetchProfiler.RunAsync(args);
+            }
+
             // Parse CLI arguments
             int profile = -1;
             int iterations = 1;
@@ -168,8 +173,7 @@ namespace TaimisToolbench.Harness
                             // documents <0|1|2> as the only valid values - reject
                             // out-of-range input here with a usage error instead
                             // of letting the exception crash the tool, mirroring
-                            // ModuleSettings.ClampTier / SettingsInputParser.
-                            // TryParseTier's reject-invalid discipline.
+                            // ModuleSettings.ClampTier's own 0-2 range.
                             if (homesteadTier < 0 || homesteadTier > 2)
                             {
                                 Console.Error.WriteLine(
@@ -191,7 +195,10 @@ namespace TaimisToolbench.Harness
                     "[--print-cache-stats] [--clear-overlay-cache] [--dump-tree] " +
                     "[--classify] [--force-craft-root] " +
                     "[--homestead-tier <0|1|2>] " +
-                    "[--alloc] [--drift <n>] [--startup-timing] [--items <id,id,...>]");
+                    "[--alloc] [--drift <n>] [--startup-timing] [--items <id,id,...>]\n"
+                    + "   or: TaimisToolbench.Harness --fetch-profile [--dry-run] "
+                    + "[--per-minute <n>] [--max-requests <n>] [--characters <n>] "
+                    + "[--only <substring>] [--out <dir>]");
                 return 1;
             }
 

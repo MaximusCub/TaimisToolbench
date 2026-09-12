@@ -6,10 +6,28 @@ using System.Threading.Tasks;
 namespace TaimisToolbench.Services
 {
     /// <summary>
+    /// What is known about a wiki link launch once it has been handed to the
+    /// shell. Named for what was measured, not for what the browser did:
+    /// Windows can still refuse a browser the foreground after the grant
+    /// succeeds. See docs/ARCHITECTURE.md, S2.10.
+    /// </summary>
+    internal enum WikiLaunchOutcome
+    {
+        /// <summary>The page opened and the foreground grant succeeded.</summary>
+        ForegroundGranted,
+
+        /// <summary>The page opened and the foreground grant was refused.</summary>
+        ForegroundRefused,
+
+        /// <summary>Nothing opened.</summary>
+        Failed,
+    }
+
+    /// <summary>
     /// A thin Process.Start wrapper for opening a wiki page, kept separate from
     /// the pure, unit-tested WikiLinkBuilder: this class is side-effecting and
-    /// carries no logic beyond "launch, and do not let a launch failure
-    /// propagate into the caller's UI event handler".
+    /// carries no logic beyond "launch, report what happened, and do not let a
+    /// launch failure propagate into the caller's UI event handler".
     /// <para>
     /// net48/Process.Start(string) already resolves through ShellExecute
     /// (UseShellExecute defaults to true on this target framework), so a bare
@@ -19,7 +37,7 @@ namespace TaimisToolbench.Services
     /// </para>
     /// <para>
     /// ShellExecuteEx BLOCKS the calling thread until the shell hands the URL
-    /// off, and both call sites are mouse-event handlers dispatched from the
+    /// off, and its one call site is a mouse-event handler dispatched from the
     /// game update loop, so the call is offloaded to Task.Run. The try/catch
     /// stays INSIDE the task - not around Task.Run itself - so a launch failure
     /// is still caught and logged. See docs/ARCHITECTURE.md, S2.10.
@@ -36,79 +54,110 @@ namespace TaimisToolbench.Services
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool AllowSetForegroundWindow(int dwProcessId);
 
+        /// <summary>
+        /// Set once by Module.Initialize to put the outcome on screen, and
+        /// cleared on Unload. Null until then, and null in tests, so every
+        /// read has to tolerate it.
+        /// </summary>
+        internal static Action<WikiLaunchOutcome> OutcomeReported;
+
+        /// <summary>
+        /// The launch itself, swapped in tests so they can exercise Launch's
+        /// real branches without starting a browser. Returns the process
+        /// handle ShellExecute hands back, which may be null.
+        /// </summary>
+        internal static Func<string, IDisposable> Opener = url => Process.Start(url);
+
         public static void Open(string url)
         {
-            if (string.IsNullOrEmpty(url))
+            if (!IsLaunchable(url))
             {
                 return;
             }
 
-            // every current caller only ever passes a
-            // WikiLinkBuilder result (always BaseUrl-prefixed), but this is
-            // the module's first shell-out and Process.Start(string) on
-            // net48 resolves through ShellExecute (UseShellExecute
-            // defaults to true), which will happily launch a local
-            // executable, a UNC path, or a file:/custom-scheme handler.
-            // Guarding here keeps the safety property at the launch site
-            // rather than depending on every present and future caller.
-            if (!url.StartsWith("https://", StringComparison.Ordinal))
-            {
-                return;
-            }
+            // The right belongs to the process, not to a thread, so the
+            // Task.Run below still carries it. The call stays on this thread
+            // because the grant depends on this process's foreground state at
+            // the moment of the call, and this thread is running a mouse
+            // handler.
+            bool granted = TryGrantForegroundRight();
 
-            // Windows only lets a process raise a window to the foreground
-            // if that process owns the current foreground window, started the
-            // process that owns it, or received the last input event. The
-            // first click starts the browser, so Windows lets it come
-            // forward. A later click hands the URL to a browser that is
-            // already running, and Windows refuses that process the
-            // foreground. The grant below passes this process's own right on
-            // to whichever process the shell picks. The right belongs to the
-            // process, not to a thread, so the Task.Run below still carries
-            // it. The call stays on this thread because the right depends on
-            // this process's foreground state at the moment of the call, and
-            // this thread is running a mouse handler.
-            GrantForegroundRightToBrowser();
-
-            Task.Run(() =>
-            {
-                try
-                {
-                    // dispose the handle ShellExecute hands
-                    // back on a successful launch - discarding it undisposed
-                    // leaks a process handle per click in a long-running
-                    // overlay. The ShellExecute path can return null here;
-                    // `using` tolerates that.
-                    using (Process.Start(url))
-                    {
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Services/ convention (see grep across this directory): no
-                    // Blish_HUD.Logger dependency here - ModuleLog.Shared is
-                    // this module's own Blish-free logging sink, already used
-                    // for the same "warn and keep going" shape elsewhere (e.g.
-                    // MainView.RefreshNowAsync's failure branch).
-                    ModuleLog.Shared.Write(ModuleLogLevel.Warn, "wiki", $"Failed to open wiki link: {ex.GetType().Name} - {ex.Message}");
-                }
-            });
+            Task.Run(() => Launch(url, granted));
         }
 
-        private static void GrantForegroundRightToBrowser()
+        /// <summary>
+        /// Rejects everything but an https URL. Every current caller only
+        /// passes a WikiLinkBuilder result (always BaseUrl-prefixed), but
+        /// Process.Start(string) on net48 resolves through ShellExecute, which
+        /// will happily launch a local executable, a UNC path, or a
+        /// file:/custom-scheme handler. Guarding at the launch site keeps the
+        /// safety property here rather than in every present and future caller.
+        /// Internal so a link can ask, before it draws, whether the url it
+        /// carries is one this class would open.
+        /// </summary>
+        internal static bool IsLaunchable(string url)
+        {
+            return !string.IsNullOrEmpty(url)
+                && url.StartsWith("https://", StringComparison.Ordinal);
+        }
+
+        internal static void Launch(string url, bool granted)
         {
             try
             {
-                if (!AllowSetForegroundWindow(AsfwAny))
+                // dispose the handle ShellExecute hands back on a successful
+                // launch - discarding it undisposed leaks a process handle per
+                // click in a long-running overlay. The ShellExecute path can
+                // return null here; `using` tolerates that.
+                using (Opener(url))
                 {
-                    // Blish HUD is an overlay and does not always hold the
-                    // foreground when a row is clicked. Windows then refuses
-                    // the grant and the browser stays behind the game. The
-                    // player can do nothing about that, so this is Debug. It
-                    // only separates "Windows said no" from "the call was
-                    // never made".
-                    ModuleLog.Shared.Write(ModuleLogLevel.Debug, "wiki", "AllowSetForegroundWindow was refused; the browser may open behind the game.");
                 }
+            }
+            catch (Exception ex)
+            {
+                // Services/ convention (see grep across this directory): no
+                // Blish_HUD.Logger dependency here - ModuleLog.Shared is
+                // this module's own Blish-free logging sink, already used
+                // for the same "warn and keep going" shape elsewhere (e.g.
+                // MainView.RefreshNowAsync's failure branch).
+                ModuleLog.Shared.Write(ModuleLogLevel.Warn, "wiki", $"Failed to open wiki link: {ex.GetType().Name} - {ex.Message}");
+                Report(WikiLaunchOutcome.Failed);
+                return;
+            }
+
+            Report(granted ? WikiLaunchOutcome.ForegroundGranted : WikiLaunchOutcome.ForegroundRefused);
+        }
+
+        private static void Report(WikiLaunchOutcome outcome)
+        {
+            // Debug, because the player can do nothing about a refusal: it
+            // separates "Windows said no" from "the launch never ran".
+            ModuleLog.Shared.Write(ModuleLogLevel.Debug, "wiki", $"Wiki link launch: {outcome}.");
+
+            // Read once: Unload can null the field between a test for null
+            // and the invoke. The handler runs on a thread pool thread and
+            // its own failure must not escape into an unobserved task.
+            var handler = OutcomeReported;
+            if (handler == null)
+            {
+                return;
+            }
+
+            try
+            {
+                handler(outcome);
+            }
+            catch (Exception ex)
+            {
+                ModuleLog.Shared.Write(ModuleLogLevel.Warn, "wiki", $"Wiki launch notice failed: {ex.GetType().Name} - {ex.Message}");
+            }
+        }
+
+        private static bool TryGrantForegroundRight()
+        {
+            try
+            {
+                return AllowSetForegroundWindow(AsfwAny);
             }
             catch (Exception ex)
             {
@@ -117,6 +166,7 @@ namespace TaimisToolbench.Services
                 // link was clicked from. Losing the grant only costs the
                 // browser its jump to the front.
                 ModuleLog.Shared.Write(ModuleLogLevel.Debug, "wiki", $"AllowSetForegroundWindow failed: {ex.GetType().Name} - {ex.Message}");
+                return false;
             }
         }
     }

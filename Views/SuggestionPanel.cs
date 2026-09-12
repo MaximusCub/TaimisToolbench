@@ -297,7 +297,7 @@ namespace TaimisToolbench.Views
                 // The art is inset rather than the box grown, so the row's
                 // own geometry is exactly what it was: the SearchSuggestion
                 // tier's frame is IconSize on the nose.
-                IconControls.CreateItemIcon(
+                IconControls.CreateItemIconFromCapture(
                     row, item.IconUrl, ItemIconFrame.UnknownRarity(), 2,
                     (RowHeight - IconSize) / 2, ItemIconTier.SearchSuggestion,
                     ItemIconTooltip.None(ItemIconSilence.WouldCoverTheListItSitsIn));

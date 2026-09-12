@@ -1,22 +1,22 @@
 ﻿{
   "seedVersion": 1,
   "gw2BuildId": 205780,
-  "createdUtc": "2026-08-25T05:13:59.1518915Z",
+  "createdUtc": "2026-09-12T17:46:25.2622159Z",
   "files": [
     {
       "name": "recipes_seed.json",
-      "rowCount": 15109,
-      "sha256": "766ea63c283f3a6ab281b7f27feddc9b1339c4b57d9eccbd3a63c630be6afd43"
+      "rowCount": 15105,
+      "sha256": "246fbb066fbadfd38ca5db5b6d3a763d043590278f60aca7b7e54b40fa2b3cf2"
     },
     {
       "name": "recipe_search_seed.json",
-      "rowCount": 16282,
-      "sha256": "e00d040c8a105e4a3e5b25b9d124ed49618674ea3a632d683920c1139e5111f7"
+      "rowCount": 16277,
+      "sha256": "6dba6f78f0e82e2c3552c392ccad16542ca1acab0763058aaca4a7488831e13e"
     },
     {
       "name": "item_name_seed.json",
-      "rowCount": 14906,
-      "sha256": "c4e21c6bff876d3af7497f40ed39c078983393b066f599974b1acc02da08afeb"
+      "rowCount": 14902,
+      "sha256": "0543adc84fe6553f94923ef5e3eac1f15fe801ee09b37a075e0f839de85c1f41"
     }
   ]
 }

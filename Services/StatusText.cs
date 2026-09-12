@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 
 namespace TaimisToolbench.Services
@@ -79,15 +80,41 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// Characters the Crafting Ranker's status line may run to before
-        /// it ellipsizes. RankerRowLayout.Toolbar leaves the status band
-        /// roughly 750px at the module's 1378px window minimum, once the
-        /// Analyze button, the two display toggles and the spinner have
-        /// taken theirs. MEASURED: 75 characters of this line is about
-        /// 720px in the 18-bold status face. The band's own width is
-        /// derived rather than measured in game, so treat this as a width
-        /// to stay well inside rather than a hard edge.
+        /// it ellipsizes. MEASURED on screen at the module's 1378px window
+        /// minimum, from where the ellipsizer cut a line too long for it:
+        /// RankerRowLayout.Toolbar leaves the status band at least 779 and
+        /// under 786 logical pixels once the Analyze button, the two
+        /// display toggles and the spinner have taken theirs. 86 characters
+        /// of a status line of this letter mix ink under 779; 87 ink over
+        /// 785. The band gains a pixel for every pixel the window gains, so
+        /// this is its floor.
+        /// <para>
+        /// A character count is a proxy for a pixel width and holds only
+        /// for lines of roughly this mix. Blish's ContentService sets
+        /// LetterSpacing to -1 on every font it loads, which is worth about
+        /// a pixel per character, so a budget derived from raw glyph
+        /// advances overstates an 80-character line by 80 pixels.
+        /// </para>
         /// </summary>
-        public const int RankerStatusBudgetChars = 75;
+        public const int RankerStatusBudgetChars = 86;
+
+        /// <summary>
+        /// Characters the Crafting Plan's status line may run to. Its band
+        /// is 1206 logical pixels at the same window floor -
+        /// TopRegionLayoutMath.StatusBandWidth derives that from the shipped
+        /// constants and TopRegionLayoutMathTests pins it - and the two
+        /// bands draw the same face, so this is
+        /// <see cref="RankerStatusBudgetChars"/>' own measured rate carried
+        /// across: 86 characters in 779 pixels is 9.06 a character, and 1206
+        /// buys 133 of them.
+        /// <para>
+        /// The line is written short enough to fit rather than shortened
+        /// after the fact. PlanStatusLineTests builds the widest line the
+        /// strip can compose through the real composition and holds it
+        /// under this number.
+        /// </para>
+        /// </summary>
+        public const int PlanStatusBudgetChars = 133;
 
         /// <summary>
         /// The Crafting Ranker's per-item progress line: which item of how
@@ -275,6 +302,216 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// The same age spelled out - "14 minutes ago", "3 hours ago",
+        /// "2 days ago", "4 months ago". For prose a reader meets once: the
+        /// stale-account-data dialog and its Log tab line.
+        /// <para>
+        /// <see cref="ForAgeAgo"/>'s "14m ago" is written for a status band
+        /// that is already short of room and is read at a glance. Neither of
+        /// these two is, and both have the width.
+        /// </para>
+        /// <para>
+        /// Only the coarsest unit is named, so "3h 12m ago" becomes "3 hours
+        /// ago". The finer term buys a reader deciding whether to regenerate
+        /// nothing, and it costs the sentence its rhythm.
+        /// </para>
+        /// </summary>
+        public static string ForAgeAgoInWords(TimeSpan age)
+        {
+            if (age < TimeSpan.Zero)
+            {
+                age = TimeSpan.Zero;
+            }
+
+            if (age.TotalMinutes < 1)
+            {
+                return "just now";
+            }
+
+            if (age.TotalHours < 1)
+            {
+                return Count((int)age.TotalMinutes, "minute") + " ago";
+            }
+
+            if (age.TotalDays < 1)
+            {
+                return Count((int)age.TotalHours, "hour") + " ago";
+            }
+
+            if (age.TotalDays < AgeDaysPerMonth)
+            {
+                return Count((int)age.TotalDays, "day") + " ago";
+            }
+
+            return Count((int)(age.TotalDays / AgeDaysPerMonth), "month") + " ago";
+        }
+
+        /// <summary>
+        /// How much of the account's character data a snapshot is missing,
+        /// or null when it is missing none. A character counts when its
+        /// bags, its equipment or its disciplines failed to fetch, so its
+        /// holdings are absent and the plan can tell the user to buy an item
+        /// their own bags hold.
+        /// <para>
+        /// The noun agrees with the total, so a one-character account reads
+        /// "1 of 1 character" rather than "1 of 1 characters".
+        /// </para>
+        /// </summary>
+        public static string ForIncompleteCharacters(int incompleteCharacters, int characterCount)
+        {
+            if (!HasIncompleteCharacters(incompleteCharacters, characterCount))
+            {
+                return null;
+            }
+
+            int incomplete = Math.Min(incompleteCharacters, characterCount);
+            return "incomplete for " + incomplete + " of " + Count(characterCount, "character");
+        }
+
+        /// <summary>
+        /// Whether a snapshot failed to read part of what a character was
+        /// holding - the condition <see cref="ForIncompleteCharacters"/>
+        /// writes its clause for. Views/MainView.cs reads it on its own to
+        /// decide the Snapshot tab's amber recolor, which is a second
+        /// consequence of the same fact rather than a second test of it.
+        /// </summary>
+        public static bool HasIncompleteCharacters(int incompleteCharacters, int characterCount)
+        {
+            return incompleteCharacters > 0 && characterCount > 0;
+        }
+
+        /// <summary>
+        /// The parenthesised detail that follows a snapshot-backed
+        /// timestamp: how old the data on screen is, then what the fetch
+        /// could not read in full. The Snapshot tab and the Crafting Ranker
+        /// both show exactly these two facts, so the join lives here rather
+        /// than in each view.
+        /// <para>
+        /// Age first, because it is the fact the reader is already looking
+        /// for beside a timestamp. Both halves are widest at once when a
+        /// FRESH snapshot is missing a character: sub-minute reads "just
+        /// captured", which is the longest string
+        /// <see cref="ForSnapshotAgeSuffix"/> has. That combination is the
+        /// reported fault's own condition, so it is also the line to size
+        /// the band against - see <see cref="RankerStatusBudgetChars"/>.
+        /// </para>
+        /// </summary>
+        public static string ForSnapshotDetail(
+            TimeSpan age, int incompleteCharacters, int characterCount)
+        {
+            string detail = ForSnapshotAgeSuffix(age);
+            string incomplete = ForIncompleteCharacters(incompleteCharacters, characterCount);
+            return incomplete == null ? detail : detail + ", " + incomplete;
+        }
+
+        /// <summary>
+        /// The Crafting Plan status line's account-data clause, or null when
+        /// there is nothing to say about the snapshot the plan subtracted
+        /// owned materials from. It reports two faults: data older than
+        /// <paramref name="staleThreshold"/>, and characters the fetch could
+        /// not read in full.
+        /// <para>
+        /// The age half is gated on the same threshold as the Snapshot tab's
+        /// recolor and Module.Update()'s auto-refresh, so the three cannot
+        /// disagree. The incomplete half has no threshold: a snapshot taken
+        /// ten seconds ago with a character missing is exactly the fault
+        /// that makes a plan recommend buying an owned item. It is a flag
+        /// and not a count - four clauses compete for
+        /// <see cref="PlanStatusBudgetChars"/>, and the Snapshot tab names
+        /// the count through <see cref="ForSnapshotDetail"/>. The clause names
+        /// account data rather than following the Crafting Ranker's bare
+        /// "(37m ago)", which after a "Plan generated" timestamp would read
+        /// as restating it.
+        /// </para>
+        /// </summary>
+        public static string ForPlanAccountDataNote(
+            TimeSpan age, TimeSpan staleThreshold, int incompleteCharacters, int characterCount)
+        {
+            if (age < TimeSpan.Zero)
+            {
+                age = TimeSpan.Zero;
+            }
+
+            var parts = new List<string>(2);
+            if (IsStale(age, staleThreshold))
+            {
+                parts.Add(AgeMagnitude(age) + " old");
+            }
+
+            if (HasIncompleteCharacters(incompleteCharacters, characterCount))
+            {
+                parts.Add("incomplete");
+            }
+
+            return parts.Count == 0 ? null : "account data " + string.Join(", ", parts);
+        }
+
+        /// <summary>
+        /// Whether the account snapshot has moved since the plan on screen
+        /// was solved. True only when both stamps are known and the live
+        /// one is strictly newer.
+        /// <para>
+        /// A plan with no stamp of its own never reports moved data. Two
+        /// plans have none: one restored from disk, which no longer knows
+        /// what it was solved against, and one solved with Use Own
+        /// Materials off, which read no holdings and so cannot be
+        /// superseded by new ones.
+        /// </para>
+        /// </summary>
+        public static bool PlanAccountDataMoved(
+            DateTime? planCapturedAtUtc, DateTime? currentCapturedAtUtc)
+        {
+            if (planCapturedAtUtc == null || currentCapturedAtUtc == null)
+            {
+                return false;
+            }
+
+            return currentCapturedAtUtc.Value > planCapturedAtUtc.Value;
+        }
+
+        /// <summary>
+        /// The Crafting Plan strip's standing notice: what has changed
+        /// since this plan was solved that the next Generate would pick up.
+        /// Null when nothing has.
+        /// <para>
+        /// The remedy is not spelled out. The Generate Plan button sits on
+        /// this same strip, two rows above the line, so "Generate Plan to
+        /// apply" spent 22 of the band's 133 characters
+        /// (<see cref="PlanStatusBudgetChars"/>) restating the control the
+        /// reader is already looking at.
+        /// </para>
+        /// <para>
+        /// Deliberately not merged with
+        /// <see cref="ForPlanAccountDataNote"/>. That clause is frozen into
+        /// the completion text and describes the data the plan USED; this
+        /// one is standing state and reports data that arrived AFTER it.
+        /// </para>
+        /// </summary>
+        public static string ForPlanStaleInputs(bool settingsChanged, bool accountDataChanged)
+        {
+            if (!settingsChanged && !accountDataChanged)
+            {
+                return null;
+            }
+
+            string subject;
+            if (settingsChanged && accountDataChanged)
+            {
+                subject = "Settings and account data";
+            }
+            else if (settingsChanged)
+            {
+                subject = "Settings";
+            }
+            else
+            {
+                subject = "Account data";
+            }
+
+            return subject + " changed";
+        }
+
+        /// <summary>
         /// Whether a snapshot of the given age counts as stale against the
         /// caller-supplied threshold. The Snapshot tab's staleness recolor
         /// (Views/MainView.cs) and Module.Update()'s auto-refresh gate both
@@ -289,35 +526,60 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// The account was not refreshed because the module has no GW2 API
+        /// access it can use. Says NOT REFRESHED, not failed: nothing was
+        /// attempted, and the user has to add or widen a key in Blish
+        /// before anything can be.
+        /// </summary>
+        public const string NoApiAccess = "Not refreshed: no GW2 API access";
+
+        /// <summary>
+        /// The account was not refreshed because no character is in the
+        /// world. Blish renews a module's subtoken off a MumbleLink
+        /// character-name change, so signing in is the one thing that
+        /// changes the outcome.
+        /// </summary>
+        public const string NotInWorld = "Not refreshed: sign in to a character";
+
+        /// <summary>
         /// Cause text for a failed Refresh Now (Views/MainView.cs), keyed
         /// by SnapshotFailureClassifier's classification - the fix,
         /// measured in game, for the "Refresh Failed" dead end (at CHARACTER
-        /// SELECT every account data source throws an invalid-token
-        /// exception, and the bare status line gave no hint why). Callers
-        /// pass the result to <see cref="Stamp"/> as the verb, so the
-        /// Unknown case still reads exactly like every other status line
-        /// (nothing more specific to say once no known pattern matched).
+        /// SELECT every source throws an invalid-token exception, and the
+        /// bare status line gave no hint why). Callers pass the result to
+        /// <see cref="Stamp"/> as the verb, so the Unknown case still reads
+        /// like every other status line.
         /// ApiAccessNotReady also drives Views/MainView.cs's walkthrough
-        /// dialog, but still gets its own status text here so the header
-        /// label reads correctly once that dialog is closed.
+        /// dialog, but keeps its own status text so the header label reads
+        /// correctly once that dialog is closed.
         /// <para>
         /// The cause clause is introduced by a COLON, not a dash:
         /// <see cref="StampSeparator"/> owns the dash, and a line carrying
         /// both ("Refresh failed - could not reach the GW2 API - Aug 15,
-        /// 2026 3:41 PM") gave two unrelated clauses the same separator and
-        /// no way to tell which was which.
+        /// 2026 3:41 PM") gave two clauses one separator. Every clause says
+        /// FAILED, the partial one included: a fetch that could not read
+        /// everything commits nothing.
         /// </para>
         /// </summary>
-        public static string ForRefreshFailure(SnapshotFailureKind kind, int failedSourceCount, int totalSourceCount)
+        public static string ForRefreshFailure(SnapshotFailureClassification classification)
         {
-            switch (kind)
+            if (classification == null)
+            {
+                return "Refresh failed";
+            }
+
+            switch (classification.Kind)
             {
                 case SnapshotFailureKind.ApiAccessNotReady:
                     return "Refresh failed: GW2 API access not ready";
                 case SnapshotFailureKind.NetworkOrApiDown:
                     return "Refresh failed: could not reach the GW2 API";
                 case SnapshotFailureKind.PartialFailure:
-                    return $"Refresh partially failed: {failedSourceCount} of {totalSourceCount} sources";
+                    return "Refresh failed: " + classification.FailedSourceCount
+                        + " of " + classification.TotalSourceCount + " sources unavailable";
+                case SnapshotFailureKind.IncompleteCharacters:
+                    return "Refresh failed: could not read "
+                        + Count(classification.IncompleteCharacterCount, "character") + " in full";
                 default:
                     return "Refresh failed";
             }

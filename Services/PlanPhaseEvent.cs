@@ -1,9 +1,9 @@
 namespace TaimisToolbench.Services
 {
     /// <summary>
-    /// The six coarse, user-facing phases of one
-    /// CraftingPlanPipeline.GenerateStructuredAsync
-    /// run. Deliberately coarser than the pipeline's own internal timingLog
+    /// The seven coarse, user-facing phases of one Generate Plan press:
+    /// the wait Module spends on API access, then the six
+    /// CraftingPlanPipeline.GenerateStructuredAsync reports. Deliberately coarser than the pipeline's own internal timingLog
     /// (~10 detailed steps - see CraftingPlanPipeline.FinishTimingLog),
     /// which keeps reporting unchanged; this enum exists purely to drive a
     /// stable, small live indicator (CraftingPlanView's status strip) that
@@ -12,6 +12,13 @@ namespace TaimisToolbench.Services
     /// </summary>
     internal enum PlanPhase
     {
+        // First because it is the only phase that runs before the pipeline
+        // does, and PhaseOrdinalGuard needs declaration order to match
+        // emission order. Module reports it, and only on a press that
+        // actually waits - see ApiHandoverWait and Module's own
+        // WaitForApiHandoverAsync.
+        WaitingForGame,
+
         BuildingTree,
         FetchingPrices,
         SolvingDecisions,

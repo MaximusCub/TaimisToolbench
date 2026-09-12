@@ -131,21 +131,31 @@ namespace TaimisToolbench.Tests.Services
         }
 
         /// <summary>
-        /// Without currency metadata the note can name nothing on screen -
-        /// the offline fallback for these ids is the word "Currency" - so
-        /// the plan states the whole requirement rather than a Needed no
-        /// visible note accounts for.
+        /// Needed is arithmetic on the player's own wallet, so whether
+        /// /v2/currencies has answered yet cannot move it. The same plan
+        /// used to read 18 before the fetch landed and 14 after.
         /// </summary>
         [Fact]
-        public async Task WithNoCurrencyMetadata_NothingComesOffNeeded()
+        public async Task WithNoCurrencyMetadata_NeededIsStillTheSameNumber()
         {
-            var vm = new PlanViewModelBuilder().Build(
+            var withMetadata = new PlanViewModelBuilder().Build(
+                await GenerateAsync(WalletHolding(1013)));
+            var without = new PlanViewModelBuilder().Build(
                 await GenerateAsync(WalletHolding(1013), currencyMetadata: false));
-            var row = Assert.Single(NonCoinRows(vm));
 
-            Assert.Equal(18, row.Quantity);
-            Assert.Equal(18, row.CurrencyNeededQuantity);
-            Assert.Null(row.TradeUpCurrencyHeld);
+            var before = Assert.Single(NonCoinRows(without));
+            var after = Assert.Single(NonCoinRows(withMetadata));
+
+            Assert.Equal(18, before.Quantity);
+            Assert.Equal(14, before.CurrencyNeededQuantity);
+            Assert.Equal(after.CurrencyNeededQuantity, before.CurrencyNeededQuantity);
+
+            // The note is still seated. Its icon frame carries the currency
+            // name on hover, so the number keeps a derivation on screen even
+            // with no art to draw.
+            Assert.Equal(1013, before.TradeUpCurrencyHeld);
+            Assert.Equal(4, before.TradeUpBuysQuantity);
+            Assert.False(string.IsNullOrEmpty(before.TradeUpCurrencyName));
         }
 
         /// <summary>
@@ -187,6 +197,208 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(5L * CurrencyPerUnit, currency.Amount);
         }
 
+        /// <summary>
+        /// The reported disagreement. The Shopping List states the whole
+        /// outstanding requirement, 18, which is the number the Total Cost
+        /// table states beside it. The plan step's own quantity is 5, only
+        /// the part the solver routed through the vendor, and it was never
+        /// what to buy.
+        /// </summary>
+        [Fact]
+        public async Task TheShoppingListStatesTheWholeRequirement_NotTheStepQuantity()
+        {
+            var result = await GenerateAsync(WalletHolding(1592));
+            var step = Assert.Single(result.Plan.Steps, s => s.ItemId == TradedUpItem);
+            Assert.Equal(5, step.Quantity);
+
+            var vm = new PlanViewModelBuilder().Build(result);
+            var row = Assert.Single(NonCoinRows(vm));
+
+            Assert.Equal(18, row.Quantity);
+            Assert.Equal(18, TradedUpShoppingRow(vm).Quantity);
+
+            // The Note is a separate claim about the wallet, not a second
+            // statement of the requirement.
+            Assert.Equal(6, row.TradeUpBuysQuantity);
+        }
+
+        /// <summary>
+        /// The listed purchase costs 18 x 250, the currency the whole
+        /// requirement really takes, not the 6 x 250 the wallet can convert
+        /// today or the plan step's 5 x 250.
+        /// </summary>
+        [Fact]
+        public async Task TheShoppingListStatesWhatThatPurchaseCosts()
+        {
+            var vm = new PlanViewModelBuilder().Build(await GenerateAsync(WalletHolding(1592)));
+
+            var amount = Assert.Single(TradedUpShoppingRow(vm).CurrencyCosts);
+            Assert.Equal("Calcified Gasp", amount.Name);
+            Assert.Equal(18 * CurrencyPerUnit, amount.Amount);
+        }
+
+        /// <summary>
+        /// A holding that buys none changes nothing about what the plan
+        /// costs, so the Shopping List states the same requirement and the
+        /// same currency total as it does with a full wallet.
+        /// </summary>
+        [Fact]
+        public async Task AHoldingThatBuysNone_StillPutsTheWholeRequirementOnTheShoppingList()
+        {
+            var vm = new PlanViewModelBuilder().Build(await GenerateAsync(WalletHolding(163)));
+
+            var shopping = TradedUpShoppingRow(vm);
+            Assert.Equal(18, shopping.Quantity);
+            Assert.Equal(18 * CurrencyPerUnit, Assert.Single(shopping.CurrencyCosts).Amount);
+            Assert.Equal(18, Assert.Single(NonCoinRows(vm)).Quantity);
+        }
+
+        /// <summary>
+        /// Without a wallet snapshot the module cannot say what the holding
+        /// buys, and the Note states nothing. What the purchase costs is
+        /// not a wallet question, so the Shopping List states it anyway.
+        /// </summary>
+        [Fact]
+        public async Task WithNoWalletSnapshot_TheShoppingRowStillStatesTheCost()
+        {
+            var vm = new PlanViewModelBuilder().Build(await GenerateAsync());
+
+            Assert.Null(Assert.Single(NonCoinRows(vm)).TradeUpCurrencyHeld);
+
+            var shopping = TradedUpShoppingRow(vm);
+            Assert.Equal(18, shopping.Quantity);
+            Assert.Equal(18 * CurrencyPerUnit, Assert.Single(shopping.CurrencyCosts).Amount);
+        }
+
+        /// <summary>
+        /// A wallet the module read as holding none is not the same fact as
+        /// a wallet it never read. The first seats a Note reading 0; the
+        /// second seats none.
+        /// </summary>
+        [Fact]
+        public async Task AHoldingOfZero_SeatsANoteReadingZero()
+        {
+            var vm = new PlanViewModelBuilder().Build(await GenerateAsync(WalletHolding(0)));
+            var row = Assert.Single(NonCoinRows(vm));
+
+            Assert.Equal(0, row.TradeUpCurrencyHeld);
+            Assert.Equal(0, row.TradeUpBuysQuantity);
+            Assert.Equal("0", SummarySectionLayoutMath.TradeUpNoteHeldText(row));
+            Assert.Equal("Buys 0", SummarySectionLayoutMath.TradeUpNoteBuysText(row));
+        }
+
+        /// <summary>
+        /// Owning some of the item itself shrinks what is left to acquire,
+        /// so the holding is capped against the smaller outstanding count.
+        /// Have on the Total Cost row stays the literal item count.
+        /// </summary>
+        [Fact]
+        public async Task OwningSomeOfTheItem_CapsTheDirectiveAndLeavesHaveLiteral()
+        {
+            var vm = new PlanViewModelBuilder().Build(
+                await GenerateAsync(WalletHolding(100000, ownedItems: 16)));
+
+            var row = Assert.Single(NonCoinRows(vm));
+            Assert.Equal(16, row.CurrencyOwnedQuantity);
+            Assert.Equal(2, row.TradeUpBuysQuantity);
+            Assert.Equal(2, TradedUpShoppingRow(vm).Quantity);
+        }
+
+        /// <summary>
+        /// What the wallet holds is not part of what the plan costs, so
+        /// moving it moves neither the listed quantity, the listed currency
+        /// total, nor either plan-level total. Only the Note moves.
+        /// </summary>
+        [Fact]
+        public async Task ChangingTheWalletHolding_MovesOnlyTheNote()
+        {
+            var poorResult = await GenerateAsync(WalletHolding(1250));
+            var richResult = await GenerateAsync(WalletHolding(1592));
+            var poor = new PlanViewModelBuilder().Build(poorResult);
+            var rich = new PlanViewModelBuilder().Build(richResult);
+
+            Assert.Equal(18, TradedUpShoppingRow(poor).Quantity);
+            Assert.Equal(18, TradedUpShoppingRow(rich).Quantity);
+            Assert.Equal(
+                Assert.Single(TradedUpShoppingRow(poor).CurrencyCosts).Amount,
+                Assert.Single(TradedUpShoppingRow(rich).CurrencyCosts).Amount);
+
+            Assert.Equal(5, Assert.Single(NonCoinRows(poor)).TradeUpBuysQuantity);
+            Assert.Equal(6, Assert.Single(NonCoinRows(rich)).TradeUpBuysQuantity);
+
+            Assert.Equal(poorResult.Plan.TotalCoinCost, richResult.Plan.TotalCoinCost);
+            Assert.Equal(0, TradedUpShoppingRow(rich).CoinValue);
+            Assert.Equal(
+                Assert.Single(poor.NonCoinCostTotals).Amount,
+                Assert.Single(rich.NonCoinCostTotals).Amount);
+        }
+
+        /// <summary>
+        /// Only the coalesced item is re-stated. The vendor row for an item
+        /// bought outright keeps the plan step's own quantity.
+        /// </summary>
+        [Fact]
+        public async Task AnOrdinaryVendorRowIsUntouched()
+        {
+            var vm = new PlanViewModelBuilder().Build(await GenerateAsync(WalletHolding(1592)));
+
+            var row = Assert.Single(ShoppingRows(vm), r => r.Label == "Sealed Reliquary");
+            Assert.Equal(1, row.Quantity);
+        }
+
+        /// <summary>
+        /// A plan restored from disk carries the wallet it was generated
+        /// with, so both numbers are equally old. They still come from one
+        /// derivation, so they still agree; only regenerating the plan
+        /// picks up a wallet that has since changed.
+        /// </summary>
+        [Fact]
+        public async Task ARestoredPlan_StillAgreesWithItsOwnNote()
+        {
+            var result = await GenerateAsync(WalletHolding(1592));
+
+            using (var tmp = new TempDirectory())
+            {
+                var store = new PlanStore(tmp.Path);
+                store.Save(new PersistedPlan
+                {
+                    SchemaVersion = PersistedPlan.CurrentSchemaVersion,
+                    GeneratedAt = new DateTime(2026, 9, 6, 12, 0, 0, DateTimeKind.Local),
+                    RequestItems = new List<PlanRequestItem>
+                    {
+                        new PlanRequestItem { ItemId = BarterParent, Quantity = 1 },
+                        new PlanRequestItem { ItemId = CraftParent, Quantity = 1 },
+                    },
+                    PriceBasis = PriceBasis.InstantBuy,
+                    ValueOwnMaterials = true,
+                    Result = result,
+                });
+
+                var restored = store.LoadLatest()?.Plan?.Result;
+                Assert.NotNull(restored);
+
+                var vm = new PlanViewModelBuilder().Build(restored);
+                Assert.Equal(6, Assert.Single(NonCoinRows(vm)).TradeUpBuysQuantity);
+                Assert.Equal(18, Assert.Single(NonCoinRows(vm)).Quantity);
+                Assert.Equal(18, TradedUpShoppingRow(vm).Quantity);
+            }
+        }
+
+        private static PlanSectionViewModel ShoppingSection(PlanViewModel vm)
+        {
+            return vm.Sections.Single(s => s.SectionType == PlanSectionType.ShoppingList);
+        }
+
+        private static List<PlanRowViewModel> ShoppingRows(PlanViewModel vm)
+        {
+            return ShoppingSection(vm).Rows;
+        }
+
+        private static PlanRowViewModel TradedUpShoppingRow(PlanViewModel vm)
+        {
+            return Assert.Single(ShoppingRows(vm), r => r.Label == "Clot of Congealed Screams");
+        }
+
         private static List<PlanRowViewModel> NonCoinRows(PlanViewModel vm)
         {
             return vm.Sections
@@ -196,11 +408,23 @@ namespace TaimisToolbench.Tests.Services
                 .ToList();
         }
 
-        private static AccountSnapshot WalletHolding(int gasps)
+        private static AccountSnapshot WalletHolding(int gasps, int ownedItems = 0)
         {
+            var items = new List<SnapshotItemEntry>();
+            if (ownedItems > 0)
+            {
+                items.Add(new SnapshotItemEntry
+                {
+                    ItemId = TradedUpItem,
+                    Name = "Clot of Congealed Screams",
+                    Count = ownedItems,
+                    Source = "bank",
+                });
+            }
+
             return new AccountSnapshot
             {
-                Items = new List<SnapshotItemEntry>(),
+                Items = items,
                 Wallet = new List<SnapshotWalletEntry>
                 {
                     new SnapshotWalletEntry { CurrencyId = SubCurrency, CurrencyName = "Calcified Gasp", Value = gasps },
@@ -269,7 +493,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Item", Id = TradedUpItem, Count = 13 },
                         },
                         MerchantName = "Test NPC",
-                        Locations = new List<string>(),
                     },
                     new VendorOffer
                     {
@@ -281,7 +504,6 @@ namespace TaimisToolbench.Tests.Services
                             new CostLine { Type = "Currency", Id = currencyId, Count = CurrencyPerUnit },
                         },
                         MerchantName = "Test Provisioner",
-                        Locations = new List<string>(),
                     },
                 });
 

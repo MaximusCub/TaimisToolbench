@@ -1,11 +1,11 @@
 {
   "name": "Taimi's Toolbench",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "namespace": "TaimisToolbench",
   "package": "TaimisToolbench.dll",
   "manifest_version": 1,
 
-  "description": "A crafting-plan solver: decides whether to craft, buy on the Trading Post, buy from a vendor, or use what you already own for every ingredient in a recipe tree, with live prices.",
+  "description": "Taimi's Toolbench aims to be your ultimate in-game crafting companion. Plan the most efficient way to craft anything from simple items to legendaries, taking into account your inventory, materials, recipes, achievements and more. A crafting ranker helps you find out which items on your wishlist you're closest to completing, or your progress against a list of items you want to craft in priority order. An account snapshot tool allows you to quickly search any item across your entire account and pop-out windows for your shopping list and crafting steps let you keep that info handy in game while you craft, play or shop.",
   "dependencies": {
     "bh.blishhud": ">=1.3.0"
   },
@@ -21,7 +21,8 @@
     "inventories": { "optional": false, "details": "Required for bank, shared inventory, materials, and character bags" },
     "wallet":      { "optional": false, "details": "Required for wallet currency data" },
     "unlocks":     { "optional": true,  "details": "Used to check which recipes your account has learned and to read your Legendary Armory" },
-    "builds":      { "optional": true,  "details": "Used to count the gear your characters are wearing as items you already own" }
+    "builds":      { "optional": true,  "details": "Used to count the gear your characters are wearing as items you already own" },
+    "progression": { "optional": true,  "details": "Used to check whether you have the achievements and masteries a vendor requires before it will trade" }
   },
   "directories": ["data"]
 }

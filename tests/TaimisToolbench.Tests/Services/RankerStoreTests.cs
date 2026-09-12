@@ -111,6 +111,55 @@ namespace TaimisToolbench.Tests.Services
         }
 
         [Fact]
+        public void FileAtTheFloorVersion_KeepsItsRowsAndIsRestampedByTheNextSave()
+        {
+            // The floor is a readable version, not a tolerated one. Today
+            // it equals the current version, so this asserts the range's
+            // lower end holds when the two later differ.
+            var payload = SampleWatchlist();
+            payload.SchemaVersion = RankerWatchlist.MinimumReadableSchemaVersion;
+            File.WriteAllText(FilePath, JsonConvert.SerializeObject(payload));
+
+            int errors = 0;
+            var store = new RankerStore(_temp.Path, (_, __) => errors++);
+
+            var loaded = store.Load();
+
+            Assert.Equal(0, errors);
+            Assert.Equal(2, loaded.Entries.Count);
+            Assert.Equal(30684, loaded.Entries[0].ItemId);
+
+            store.Save(loaded);
+            var written = JObject.Parse(File.ReadAllText(FilePath));
+            Assert.Equal(RankerWatchlist.CurrentSchemaVersion, (int)written["SchemaVersion"]);
+        }
+
+        [Fact]
+        public void FileBelowTheFloorVersion_ReturnsEmptyAndFiresOnErrorOnce()
+        {
+            var payload = SampleWatchlist();
+            payload.SchemaVersion = RankerWatchlist.MinimumReadableSchemaVersion - 1;
+            File.WriteAllText(FilePath, JsonConvert.SerializeObject(payload));
+
+            int errors = 0;
+            var store = new RankerStore(_temp.Path, (_, __) => errors++);
+
+            Assert.Empty(store.Load().Entries);
+            Assert.Equal(1, errors);
+        }
+
+        [Fact]
+        public void MinimumReadableSchemaVersion_IsNotAboveCurrent()
+        {
+            Assert.True(
+                RankerWatchlist.MinimumReadableSchemaVersion <= RankerWatchlist.CurrentSchemaVersion,
+                "RankerWatchlist.MinimumReadableSchemaVersion ("
+                + RankerWatchlist.MinimumReadableSchemaVersion
+                + ") is above CurrentSchemaVersion (" + RankerWatchlist.CurrentSchemaVersion
+                + "), which leaves no readable version at all.");
+        }
+
+        [Fact]
         public void Save_WritesSchemaVersionEvenWhenTheCallerLeftItZero()
         {
             var store = new RankerStore(_temp.Path);
@@ -270,7 +319,7 @@ namespace TaimisToolbench.Tests.Services
         public void Save_ToAnUnwritablePath_ReportsFailureRatherThanThrowing()
         {
             // A file where the directory should be: every Save path under it
-            // fails, which is the "your list could not be saved" case the view
+            // fails, which is the "your wishlist could not be saved" case the view
             // surfaces rather than losing the tab.
             string blocked = Path.Combine(_temp.Path, "blocked");
             File.WriteAllText(blocked, "not a directory");

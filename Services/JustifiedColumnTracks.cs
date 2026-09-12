@@ -228,6 +228,26 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
+        /// X at which a header takes the same right edge its column's cells
+        /// take, instead of centring over their ink. For a column whose
+        /// header should read as part of the edge the values rule on: the
+        /// word and the numbers under it then end on one line, which
+        /// centring over a band narrower than the header does not give.
+        /// <para>
+        /// Clamped into <paramref name="room"/> exactly as
+        /// <see cref="CenteredOverContent"/> is, so a header too wide for
+        /// the gap beside it pins to the room's left bound and overhangs
+        /// rightward only.
+        /// </para>
+        /// </summary>
+        public static int RightAlignedOverContent(
+            int contentRightEdge, int headerWidth, HeaderRoom room)
+        {
+            return CenteredOverContent(
+                contentRightEdge - headerWidth, headerWidth, headerWidth, room);
+        }
+
+        /// <summary>
         /// Whether a span is wide enough to distribute at all. A track has
         /// to hold its own reserved band plus the gap that keeps a wide
         /// value out of the column to its left; below that width there is

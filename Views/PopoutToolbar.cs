@@ -1,0 +1,252 @@
+using System;
+using System.Threading.Tasks;
+using Blish_HUD;
+using Blish_HUD.Controls;
+using Microsoft.Xna.Framework;
+using TaimisToolbench.Services;
+using TaimisToolbench.Views.Rendering;
+
+namespace TaimisToolbench.Views
+{
+    /// <summary>
+    /// A popout's own chrome: the transparency slider and its readout on
+    /// the left, the Refresh button on the right, and the status line the
+    /// two report through.
+    /// <para>
+    /// The three are the only parts of a popout with no equivalent on the
+    /// Crafting Plan tab, so they are the only parts drawn by new code. Each
+    /// is built from a control the module already uses: the button is the
+    /// Account Snapshot tab's Refresh Now shape (a FeedbackButton with a
+    /// status label and a trailing spinner), and the slider is the Settings
+    /// tab's volume row (a TrackBar with a percent readout beside it).
+    /// </para>
+    /// </summary>
+    internal sealed class PopoutToolbar
+    {
+        private const int RefreshButtonWidth = 90;
+
+        private const string OpacityCaption = "Opacity";
+
+        /// <summary>
+        /// Narrowest content box the strip holds without the Refresh button
+        /// touching the opacity readout. Read by the window before any
+        /// strip exists, so it measures the caption the same way the
+        /// constructor does rather than reading a width back off a Label.
+        /// </summary>
+        internal static int MinContentWidth()
+        {
+            return PopoutToolbarLayout.MinContentWidth(
+                (int)Math.Ceiling(UiFonts.Status.MeasureString(OpacityCaption).Width),
+                RefreshButtonWidth);
+        }
+
+        private const int SliderHeight = 16;
+
+        private const int CaptionY = 6;
+
+        private const int SliderY = 8;
+
+        private const int ButtonY = (PopoutLayout.ToolbarHeight - UiMetrics.ButtonHeight) / 2;
+
+        private const int SeparatorZIndex = 11;
+
+        private readonly Action<int> _setOpacityPercent;
+        private readonly Action<int> _applyOpacity;
+
+        private readonly Panel _bar;
+        private readonly Panel _separator;
+        private readonly FeedbackButton _refreshButton;
+        private readonly Label _readout;
+        private readonly Label _status;
+        private readonly LoadingSpinner _spinner;
+
+        private TrackBar _slider;
+
+        // Measured once: the caption is one unchanging word, and every
+        // seat on the strip's left cluster is ruled off it.
+        private readonly int _captionWidth;
+
+        internal PopoutToolbar(
+            Container parent,
+            int contentWidth,
+            int opacityPercent,
+            Action<int> setOpacityPercent,
+            Action<int> applyOpacity,
+            Func<Task> onRefresh)
+        {
+            _setOpacityPercent = setOpacityPercent ?? throw new ArgumentNullException(nameof(setOpacityPercent));
+            _applyOpacity = applyOpacity ?? throw new ArgumentNullException(nameof(applyOpacity));
+
+            _bar = new Panel()
+            {
+                Size = new Point(contentWidth, PopoutLayout.ToolbarHeight),
+                Parent = parent,
+            };
+
+            _refreshButton = new FeedbackButton()
+            {
+                Text = "Refresh",
+                Size = new Point(RefreshButtonWidth, UiMetrics.ButtonHeight),
+                Location = new Point(
+                    PopoutToolbarLayout.RefreshX(contentWidth, RefreshButtonWidth), ButtonY),
+                Parent = _bar,
+            };
+            _refreshButton.Click += async (_, __) => await onRefresh();
+            TooltipFacility.ApplyPlain(
+                _refreshButton,
+                "Syncs your account, then takes off this list what you have picked up since "
+                + "the last sync. Clears every tick. It does not rebuild the plan.");
+
+            int percent = PopoutOpacity.Clamp(opacityPercent);
+
+            // Measured, not banded: the word is wider at the Status tier
+            // than the 60px band it used to be given, and the slider was
+            // seated off that band rather than off the word. Measured beside
+            // an autosized Label rather than read back off one, which is
+            // LabelHelpers.CreateRightAlignedLabel's own shape: a Blish
+            // Label recalculates its width on the next layout pass, not
+            // inside the property that changes it.
+            _captionWidth = (int)Math.Ceiling(
+                UiFonts.Status.MeasureString(OpacityCaption).Width);
+            new Label()
+            {
+                Text = OpacityCaption,
+                Font = UiFonts.Status,
+                AutoSizeWidth = true,
+                AutoSizeHeight = true,
+                Location = new Point(PopoutToolbarLayout.CaptionX, CaptionY),
+                Parent = _bar,
+            };
+
+            // MinValue and MaxValue are assigned even though they match the
+            // vendor defaults: the setters are what fill the snap table a
+            // Ctrl+drag aggregates over, and a TrackBar that never had
+            // either assigned throws on one - see the identical note on
+            // Views/SettingsTabContent's volume slider.
+            _slider = new TrackBar()
+            {
+                MinValue = PopoutOpacity.MinPercent,
+                MaxValue = PopoutOpacity.MaxPercent,
+                Value = percent,
+                Size = new Point(SettingsFormLayout.SliderWidth, SliderHeight),
+                Location = new Point(PopoutToolbarLayout.SliderX(_captionWidth), SliderY),
+                BasicTooltipText =
+                    "Fades the window over the game. It stops at "
+                    + PopoutOpacity.MinPercent + "% so it can never vanish.",
+                Parent = _bar,
+            };
+
+            _readout = new Label()
+            {
+                Text = percent + "%",
+                Font = UiFonts.Status,
+                AutoSizeWidth = false,
+                AutoSizeHeight = true,
+                Size = new Point(SettingsFormLayout.ReadoutWidth, PopoutLayout.ToolbarHeight),
+                Location = new Point(PopoutToolbarLayout.ReadoutX(_captionWidth), CaptionY),
+                Parent = _bar,
+            };
+
+            // Subscribed after the initial Value assignment above, so it
+            // does not fire while the window is still being built.
+            _slider.ValueChanged += OnSliderValueChanged;
+
+            _status = new Label()
+            {
+                Font = UiFonts.Status,
+                AutoSizeWidth = true,
+                AutoSizeHeight = true,
+                Location = new Point(0, PopoutLayout.ToolbarHeight + PopoutLayout.StatusTextY),
+                Parent = parent,
+            };
+            _spinner = InlineSpinner.Create(parent, InlineSpinnerLayout.PlanStripSize);
+
+            // Above the scrolling panel below it and above a pinned column
+            // header's clip (StickyHeaderHost.ClipZIndex is 10), so the rule
+            // paints last: the viewport's cutoff reaches one slip budget
+            // above the line it publishes, and at the UI Sizes whose clip
+            // round trip loses pixels a scrolled row can otherwise notch it.
+            _separator = new Panel()
+            {
+                Size = new Point(contentWidth, PopoutLayout.SeparatorHeight),
+                Location = new Point(0, PopoutLayout.ToolbarHeight + PopoutLayout.StatusRowHeight),
+                BackgroundColor = new Color(180, 180, 180),
+                ZIndex = SeparatorZIndex,
+                Parent = parent,
+            };
+        }
+
+        private void OnSliderValueChanged(object sender, ValueEventArgs<float> e)
+        {
+            int percent;
+            if (!PopoutOpacity.TryPercentFromSliderValue(e.Value, out percent))
+            {
+                return;
+            }
+
+            _setOpacityPercent(percent);
+            ShowPercent(percent);
+            _applyOpacity(percent);
+        }
+
+        internal void ShowPercent(int percent)
+        {
+            _readout.Text = PopoutOpacity.Clamp(percent) + "%";
+        }
+
+        /// <summary>
+        /// One line under the toolbar, with the module's inline spinner
+        /// trailing it while a sync runs. Re-anchored on every write: a
+        /// Blish Label with AutoSizeWidth recalculates its own width inside
+        /// the Text setter.
+        /// </summary>
+        internal void SetStatus(string text)
+        {
+            _status.Text = text ?? string.Empty;
+            InlineSpinner.PlaceAfter(_spinner, _status, InlineSpinnerLayout.LabelGap);
+        }
+
+        /// <summary>
+        /// Six seconds of an unchanged button reads as a broken one, so the
+        /// press disables it and shows the spinner for as long as the fetch
+        /// takes.
+        /// </summary>
+        internal void SetBusy(bool busy)
+        {
+            _refreshButton.Enabled = !busy;
+            _spinner.Visible = busy;
+        }
+
+        /// <summary>
+        /// Only the Refresh button moves: the opacity cluster rules off the
+        /// strip's left edge, which does not move with the window.
+        /// </summary>
+        internal void Relayout(int contentWidth)
+        {
+            _bar.Size = new Point(contentWidth, PopoutLayout.ToolbarHeight);
+            _separator.Size = new Point(contentWidth, PopoutLayout.SeparatorHeight);
+            _refreshButton.Location = new Point(
+                PopoutToolbarLayout.RefreshX(contentWidth, RefreshButtonWidth), ButtonY);
+        }
+
+        /// <summary>
+        /// Disposed rather than dropped, and taken out of the tree first so
+        /// the window's own child sweep cannot reach it a second time: a
+        /// TrackBar hooks the static input handler and leaks if it is only
+        /// unparented, which is why Views/SettingsTabContent disposes its
+        /// own.
+        /// </summary>
+        internal void Dispose()
+        {
+            if (_slider == null)
+            {
+                return;
+            }
+
+            _slider.ValueChanged -= OnSliderValueChanged;
+            _slider.Parent = null;
+            _slider.Dispose();
+            _slider = null;
+        }
+    }
+}

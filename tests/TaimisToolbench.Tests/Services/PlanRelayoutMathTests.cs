@@ -344,7 +344,7 @@ namespace TaimisToolbench.Tests.Services
         // one example total: Menomonia's digits are not one width, so the
         // column a plan reserves depends on which digits its total happens
         // to contain. TreeCostColumnMath.SegmentWidth adds
-        // CoinLabelIconGap(2) + CoinIconSize to each of three segments
+        // CoinLabelIconGap(3) + CoinIconSize to each of three segments
         // and CoinSegmentGap(6) sits twice between them, so the column is
         // the three digit runs' MeasureString widths plus that fixed chrome.
         //
@@ -803,9 +803,9 @@ namespace TaimisToolbench.Tests.Services
         [Fact]
         public void TableLeftHeaderX_IsTheIconGutter_NotTheNameBesideIt()
         {
-            Assert.Equal(ShoppingColumnMath.IconX, PlanRelayoutMath.TableLeftHeaderX);
+            Assert.Equal(PlanRelayoutMath.IconLedRowIconX, PlanRelayoutMath.TableLeftHeaderX);
             Assert.True(
-                PlanRelayoutMath.TableLeftHeaderX < ShoppingColumnMath.NameX,
+                PlanRelayoutMath.TableLeftHeaderX < PlanRelayoutMath.IconLedRowNameX,
                 "the rail is left of the name the tables' rows print");
             Assert.True(
                 PlanRelayoutMath.TableLeftHeaderX < TreeRowShapePlanner.NameColumnOffset,
