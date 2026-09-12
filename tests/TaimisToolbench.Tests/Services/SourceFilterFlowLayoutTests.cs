@@ -123,5 +123,109 @@ namespace TaimisToolbench.Tests.Services
             Assert.Equal(0, result.TotalHeight);
             Assert.Equal(0, result.Cells[1].Y);
         }
+
+        // ---- LayoutGroups ----
+        private static SourceFilterFlowResult LayoutGroups(
+            int availableWidth, params int[][] groups)
+        {
+            var asLists = new List<IReadOnlyList<int>>();
+            foreach (var group in groups)
+            {
+                asLists.Add(group);
+            }
+
+            return SourceFilterFlowLayout.LayoutGroups(
+                asLists, availableWidth, CellHeight, GapX, GapY);
+        }
+
+        [Fact]
+        public void LayoutGroups_NullGroups_NoCellsNoHeight()
+        {
+            var result = SourceFilterFlowLayout.LayoutGroups(null, 500, CellHeight, GapX, GapY);
+
+            Assert.Empty(result.Cells);
+            Assert.Equal(0, result.RowCount);
+            Assert.Equal(0, result.TotalHeight);
+        }
+
+        // Two sets that would share a row if flowed as one run do not, which
+        // is what makes them read as two sets.
+        [Fact]
+        public void LayoutGroups_SecondGroup_StartsOnItsOwnRow()
+        {
+            var result = LayoutGroups(500, new[] { 70, 70 }, new[] { 70 });
+
+            Assert.Equal(2, result.RowCount);
+            Assert.Equal(0, result.Cells[0].X);
+            Assert.Equal(80, result.Cells[1].X);
+            Assert.Equal(0, result.Cells[2].X);
+            Assert.Equal(CellHeight + GapY, result.Cells[2].Y);
+            Assert.Equal((2 * CellHeight) + GapY, result.TotalHeight);
+        }
+
+        [Fact]
+        public void LayoutGroups_AGroupThatWraps_CarriesTheNextGroupPastItsLastRow()
+        {
+            var result = LayoutGroups(150, new[] { 70, 70, 70 }, new[] { 70 });
+
+            Assert.Equal(3, result.RowCount);
+            Assert.Equal(0, result.Cells[0].Y);
+            Assert.Equal(0, result.Cells[1].Y);
+            Assert.Equal(CellHeight + GapY, result.Cells[2].Y);
+            Assert.Equal(2 * (CellHeight + GapY), result.Cells[3].Y);
+            Assert.Equal(0, result.Cells[3].X);
+        }
+
+        [Fact]
+        public void LayoutGroups_EmptyOrNullGroups_TakeNoRow()
+        {
+            var result = SourceFilterFlowLayout.LayoutGroups(
+                new List<IReadOnlyList<int>> { new int[0], null, new[] { 70, 70 } },
+                500, CellHeight, GapX, GapY);
+
+            Assert.Equal(2, result.Cells.Count);
+            Assert.Equal(1, result.RowCount);
+            Assert.Equal(0, result.Cells[0].Y);
+        }
+
+        [Fact]
+        public void LayoutGroups_AllGroupsEmpty_NoCellsNoHeight()
+        {
+            var result = SourceFilterFlowLayout.LayoutGroups(
+                new List<IReadOnlyList<int>> { new int[0], null },
+                500, CellHeight, GapX, GapY);
+
+            Assert.Empty(result.Cells);
+            Assert.Equal(0, result.RowCount);
+            Assert.Equal(0, result.TotalHeight);
+        }
+
+        // One group behaves exactly like the ungrouped run.
+        [Fact]
+        public void LayoutGroups_OneGroup_MatchesLayout()
+        {
+            var grouped = LayoutGroups(250, new[] { 70, 170, 70 });
+            var flat = Layout(250, 70, 170, 70);
+
+            Assert.Equal(flat.RowCount, grouped.RowCount);
+            Assert.Equal(flat.TotalHeight, grouped.TotalHeight);
+            for (int i = 0; i < flat.Cells.Count; i++)
+            {
+                Assert.Equal(flat.Cells[i].X, grouped.Cells[i].X);
+                Assert.Equal(flat.Cells[i].Y, grouped.Cells[i].Y);
+            }
+        }
+
+        // The narrowest realistic case: every cell on a row of its own, and
+        // still one row per cell plus nothing lost between the groups.
+        [Fact]
+        public void LayoutGroups_TooNarrowForAnyCell_KeepsEveryCellPlaced()
+        {
+            var result = LayoutGroups(0, new[] { 70, 70 }, new[] { 70, 70 });
+
+            Assert.Equal(4, result.Cells.Count);
+            Assert.Equal(4, result.RowCount);
+            Assert.All(result.Cells, c => Assert.Equal(0, c.X));
+        }
     }
 }

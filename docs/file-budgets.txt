@@ -99,7 +99,7 @@ Models/SnapshotCharacterDiscipline.cs                                           
 Models/SnapshotHoldLocation.cs                                                          84
 Models/SnapshotItemEntry.cs                                                             80
 Models/SnapshotSearchRow.cs                                                             58
-Models/SnapshotSourceFilter.cs                                                          47
+Models/SnapshotSourceFilter.cs                                                          48
 Models/SnapshotWalletEntry.cs                                                           13
 Models/SocketedUpgradeIds.cs                                                            35
 Models/TimegatedItem.cs                                                                 37
@@ -114,7 +114,7 @@ Properties/AssemblyInfo.cs                                                      
 Services/AboutLayoutMath.cs                                                             163
 Services/AccountCurrencyIndex.cs                                                        44
 Services/AccountDataSource.cs                                                           117
-Services/AccountItemIndex.cs                                                            450
+Services/AccountItemIndex.cs                                                            489
 Services/AchievementBitDedupPrePass.cs                                                  197
 Services/AcquisitionHintService.cs                                                      75
 Services/BoundedConcurrency.cs                                                          51
@@ -283,7 +283,7 @@ Services/SnapshotItemGridLayout.cs                                              
 Services/SnapshotIconWindow.cs                                                          185
 Services/SnapshotRefreshSlot.cs                                                         185
 Services/SnapshotResultLayout.cs                                                        90
-Services/SnapshotSearchResultBuilder.cs                                                 661
+Services/SnapshotSearchResultBuilder.cs                                                 692
 Services/SnapshotStore.cs                                                               98
 Services/SnapshotTableSorter.cs                                                         99
 Services/SocketedUpgradeIndex.cs                                                        146
@@ -291,7 +291,7 @@ Services/SocketedUpgradeView.cs                                                 
 Services/SolveResult.cs                                                                 21
 Services/SolverDecision.cs                                                              124
 Services/SortIndicatorLayout.cs                                                         101
-Services/SourceFilterFlowLayout.cs                                                      85
+Services/SourceFilterFlowLayout.cs                                                      162
 Services/StaticItemSearchProvider.cs                                                    42
 Services/StatusStore.cs                                                                 73
 Services/StatusText.cs                                                                  589
@@ -345,7 +345,7 @@ Views/ItemInputRowStrip.cs                                                      
 Views/ItemRowState.cs                                                                   39
 Views/LogTabContent.cs                                                                  1538
 Views/MainThreadMarshal.cs                                                              141
-Views/MainView.cs                                                                       3354
+Views/MainView.cs                                                                       3695
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    428
@@ -485,6 +485,7 @@ tests/TaimisToolbench.Tests/Services/DisciplinesColumnMathTests.cs              
 tests/TaimisToolbench.Tests/Services/EquipmentTemplatePlaceTests.cs                     351
 tests/TaimisToolbench.Tests/Services/EquippedRuneSetTests.cs                            217
 tests/TaimisToolbench.Tests/Services/ExcessCraftOutputCalculatorTests.cs                345
+tests/TaimisToolbench.Tests/Services/FilterSetTests.cs                                  307
 tests/TaimisToolbench.Tests/Services/FirstLoadSnapshotGateTests.cs                      153
 tests/TaimisToolbench.Tests/Services/GridLawGoldenTests.cs                              100
 tests/TaimisToolbench.Tests/Services/Gw2ApiClient404Tests.cs                            213
@@ -656,7 +657,7 @@ tests/TaimisToolbench.Tests/Services/SnapshotTableSorterTests.cs                
 tests/TaimisToolbench.Tests/Services/SocketedItemRowsTests.cs                           937
 tests/TaimisToolbench.Tests/Services/SocketedUpgradeTests.cs                            321
 tests/TaimisToolbench.Tests/Services/SortIndicatorLayoutTests.cs                        151
-tests/TaimisToolbench.Tests/Services/SourceFilterFlowLayoutTests.cs                     127
+tests/TaimisToolbench.Tests/Services/SourceFilterFlowLayoutTests.cs                     231
 tests/TaimisToolbench.Tests/Services/StatusStoreTests.cs                                116
 tests/TaimisToolbench.Tests/Services/StatusTextTests.cs                                 693
 tests/TaimisToolbench.Tests/Services/StatusUpdateGuardTests.cs                          33

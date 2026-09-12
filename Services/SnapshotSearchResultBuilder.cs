@@ -34,25 +34,27 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// The extra line the Snapshot tab's "No items match ..." message
-        /// carries when <see cref="MinCharacterSearchLength"/> is the reason the
-        /// list is empty, and null in every other case.
+        /// carries when <see cref="MinCharacterSearchLength"/> is the reason
+        /// the list is empty, and null in every other case.
         /// <para>
-        /// Emitted ONLY on that exact case - a query shorter than the minimum,
-        /// and a roster character whose name really would match it at the next
-        /// keystroke - so it never appears as boilerplate under an ordinary
-        /// empty result. A character the source filter has unchecked is not a
-        /// match: typing another letter would still not surface it, and a hint
-        /// that promises otherwise is worse than none. That is why the
-        /// exclusion set is a parameter rather than assumed empty - it is the
-        /// same set <see cref="SnapshotSourceFilter.UncheckedCharacters"/>
-        /// carries. No id is involved: the hint names no character at all.
+        /// Emitted ONLY on that exact case - a query shorter than the
+        /// minimum, and a roster character whose name really would match it
+        /// at the next keystroke - so it never appears as boilerplate. A
+        /// hint that promises a match the filter has already hidden is worse
+        /// than none, so two filter states withhold it: a character in
+        /// uncheckedCharacterNames (the set
+        /// <see cref="SnapshotSourceFilter.UncheckedCharacters"/> carries),
+        /// and anyCharacterPlaceShown false, which is the location set
+        /// hiding bags, worn gear and equipment templates together. No id is
+        /// involved: the hint names no character at all.
         /// </para>
         /// <para>Why the hold-back needs a hint at all: docs/ARCHITECTURE.md,
         /// "Services Q-Z: relocated design narrative".</para>
         /// </summary>
         public static string ShortQueryCharacterHint(
             string searchText, IReadOnlyList<string> characterNames,
-            ICollection<string> uncheckedCharacterNames = null)
+            ICollection<string> uncheckedCharacterNames = null,
+            bool anyCharacterPlaceShown = true)
         {
             string trimmed = (searchText ?? string.Empty).Trim();
             if (trimmed.Length == 0 || trimmed.Length >= MinCharacterSearchLength)
@@ -60,7 +62,7 @@ namespace TaimisToolbench.Services
                 return null;
             }
 
-            if (characterNames == null)
+            if (characterNames == null || !anyCharacterPlaceShown)
             {
                 return null;
             }
@@ -463,8 +465,9 @@ namespace TaimisToolbench.Services
         /// <summary>
         /// Names the places drawing this armory item that the source filter
         /// still shows. Unchecking a character hides its bags and its worn
-        /// gear, and unchecking the Bank hides a banked piece, so neither
-        /// may go on being named under the Legendary Armory.
+        /// gear, unchecking Equipped hides every wearer, and unchecking the
+        /// Bank hides a banked piece. None of those may go on being named
+        /// under the Legendary Armory.
         /// <para>
         /// Wearers stay names; a socket anywhere else becomes a whole place
         /// phrase, because "Equipped" is not what a banked piece is
@@ -490,6 +493,10 @@ namespace TaimisToolbench.Services
             List<string> socketSources = null;
             var excluded = filter == null ? null : filter.UncheckedCharacters;
 
+            // A wearer is worn gear, so the Equipped location box hides one
+            // just as unchecking that character does.
+            bool wearersShown = filter == null || filter.Equipped;
+
             for (int i = 0; i < draws.Count; i++)
             {
                 var draw = draws[i];
@@ -514,7 +521,8 @@ namespace TaimisToolbench.Services
                     continue;
                 }
 
-                if (string.IsNullOrEmpty(draw.CharacterName)
+                if (!wearersShown
+                    || string.IsNullOrEmpty(draw.CharacterName)
                     || (excluded != null && excluded.Contains(draw.CharacterName)))
                 {
                     continue;
@@ -557,9 +565,14 @@ namespace TaimisToolbench.Services
         }
 
         /// <summary>
-        /// True when the raw AccountItemIndex source string passes the
-        /// currently-checked categories in <paramref name="filter"/>. A
-        /// null filter is treated as "show everything" (matches the
+        /// True when the raw AccountItemIndex source string passes both
+        /// filter sets in <paramref name="filter"/>. The location set is
+        /// asked about every source. The character set is asked only about
+        /// bags, worn gear and equipment templates, which are the only
+        /// places that name a character, so unchecking every character
+        /// still leaves the account-wide locations showing.
+        /// <para>
+        /// A null filter is treated as "show everything" (matches the
         /// controls' own all-checked default), as is a character whose name
         /// is absent from SnapshotSourceFilter.UncheckedCharacters. A raw
         /// source string that matches none of the known shapes
@@ -568,6 +581,7 @@ namespace TaimisToolbench.Services
         /// failing open rather than silently hiding real inventory data
         /// the module does not yet recognize (KNOWN-ISSUES #31's "never
         /// silently mask data" posture); there is no such source today.
+        /// </para>
         /// </summary>
         public static bool IsSourceEnabled(string rawSource, SnapshotSourceFilter filter)
         {
@@ -581,13 +595,13 @@ namespace TaimisToolbench.Services
                 return false;
             }
 
-            int characterNameOffset = AccountItemIndex.CharacterNameOffset(rawSource);
-            if (characterNameOffset >= 0)
+            int characterNameOffset;
+            var place = AccountItemIndex.CharacterPlaceOf(rawSource, out characterNameOffset);
+            if (place != CharacterPlaceKind.None)
             {
-                // Tested before the roster, because this checkbox is what
-                // hides a spare set without hiding the character holding it.
-                if (!filter.EquipmentTemplates
-                    && AccountItemIndex.IsTemplateGearPlace(rawSource))
+                // The location set is tested first, then the character set.
+                // Both must pass for a character-held place to show.
+                if (!CharacterPlaceEnabled(place, filter))
                 {
                     return false;
                 }
@@ -627,6 +641,23 @@ namespace TaimisToolbench.Services
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Which location checkbox governs a character-held place.
+        /// </summary>
+        private static bool CharacterPlaceEnabled(
+            CharacterPlaceKind place, SnapshotSourceFilter filter)
+        {
+            switch (place)
+            {
+                case CharacterPlaceKind.Equipped:
+                    return filter.Equipped;
+                case CharacterPlaceKind.TemplateGear:
+                    return filter.EquipmentTemplates;
+                default:
+                    return filter.Bags;
+            }
         }
 
         /// <summary>
