@@ -336,6 +336,8 @@
     <Compile Include="Views\Rendering\ItemIconTooltip.cs" />
     <Compile Include="Views\Rendering\ItemStatWarmer.cs" />
     <Compile Include="Views\Rendering\LabelHelpers.cs" />
+    <Compile Include="Views\Rendering\LinkRunStyle.cs" />
+    <Compile Include="Views\Rendering\LinkedTextRenderer.cs" />
     <Compile Include="Views\Rendering\CoinCurrencyRenderer.cs" />
     <Compile Include="Views\Rendering\RichTooltipSurface.cs" />
     <Compile Include="Views\Rendering\TooltipFacility.cs" />

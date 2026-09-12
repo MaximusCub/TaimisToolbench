@@ -372,7 +372,7 @@ Views/Rendering/IconControls.cs                                                 
 Views/Rendering/IconNameRowHelpers.cs                                                   182
 Views/Rendering/InlineSpinner.cs                                                        65
 Views/Rendering/LabelHelpers.cs                                                         273
-Views/Rendering/NotesSectionRenderer.cs                                                 523
+Views/Rendering/NotesSectionRenderer.cs                                                 474
 Views/Rendering/OutlineFramePanel.cs                                                    59
 Views/Rendering/PillColors.cs                                                           151
 Views/Rendering/PlanHeaderRenderer.cs                                                   322
