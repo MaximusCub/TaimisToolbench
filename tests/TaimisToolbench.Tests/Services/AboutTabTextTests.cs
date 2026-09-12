@@ -56,6 +56,17 @@ namespace TaimisToolbench.Tests.Services
             Assert.Contains("Ecmel Tugcu", thanks);
         }
 
+        // gw2efficiency's maintainer restricts their recipe and crafting
+        // DATA, not the approach, so the sentence names custom data.
+        [Fact]
+        public void TheCreditCopy_SaysWhatItRunsIndependentlyOf()
+        {
+            Assert.Contains(
+                "runs completely independently of their libraries, custom data or APIs,"
+                    + " but reimplements similar approaches.",
+                PlanNoteSegment.Join(AboutTabText.CreditParagraphs()[0]));
+        }
+
         [Fact]
         public void EveryParagraph_RejoinsToTheTextItWasSplitFrom()
         {
