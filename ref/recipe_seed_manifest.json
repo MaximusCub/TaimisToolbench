@@ -6,12 +6,12 @@
     {
       "name": "recipes_seed.json",
       "rowCount": 15105,
-      "sha256": "0046bbe3300576243b24f9fc74adc2a601df0ec71889f55d7f82fcfad7df3b8d"
+      "sha256": "246fbb066fbadfd38ca5db5b6d3a763d043590278f60aca7b7e54b40fa2b3cf2"
     },
     {
       "name": "recipe_search_seed.json",
       "rowCount": 16277,
-      "sha256": "b5f9704c0b1a13a87b5548d660f89a33078531e8352a414d44e4dfb50540b4a6"
+      "sha256": "6dba6f78f0e82e2c3552c392ccad16542ca1acab0763058aaca4a7488831e13e"
     },
     {
       "name": "item_name_seed.json",
