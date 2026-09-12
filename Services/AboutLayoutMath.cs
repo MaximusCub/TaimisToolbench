@@ -45,15 +45,14 @@ namespace TaimisToolbench.Services
         public const string AuthorLabel = "Author";
         public const string BuiltWithLabel = "Built with";
         public const string LicenseLabel = "License";
-        public const string CreditsLabel = "Credits";
         public const string DataDirectoryLabel = "Data directory";
 
         /// <summary>
-        /// The six fact labels the tab ships, in render order. They live
+        /// The five fact labels the tab ships, in render order. They live
         /// here rather than inline in the view so
         /// <see cref="LabelRunChars"/> can be checked against the strings it
         /// exists to hold - a floor derived from one label copied into a
-        /// test proves nothing about the other five.
+        /// test proves nothing about the other four.
         /// </summary>
         public static readonly IReadOnlyList<string> FactLabels = new[]
         {
@@ -61,14 +60,13 @@ namespace TaimisToolbench.Services
             AuthorLabel,
             BuiltWithLabel,
             LicenseLabel,
-            CreditsLabel,
             DataDirectoryLabel,
         };
 
         /// <summary>
         /// Floor for the facts column's label band: 14 characters ("Data
         /// directory") at the same upper-bound-per-character rule the grids
-        /// use. The band itself is MEASURED across the six labels at build;
+        /// use. The band itself is MEASURED across the five labels at build;
         /// this is what it cannot go below.
         /// </summary>
         public const int LabelRunChars = 14;

@@ -111,7 +111,7 @@ Models/VendorOffer.cs                                                           
 Models/VendorOfferDataset.cs                                                            15
 Module.cs                                                                               3643
 Properties/AssemblyInfo.cs                                                              12
-Services/AboutLayoutMath.cs                                                             163
+Services/AboutLayoutMath.cs                                                             161
 Services/AccountCurrencyIndex.cs                                                        44
 Services/AccountDataSource.cs                                                           117
 Services/AccountItemIndex.cs                                                            450
@@ -336,7 +336,7 @@ Services/WikiLinkBuilder.cs                                                     
 Services/WikiLinkLauncher.cs                                                           173
 Services/WindowPlacement.cs                                                             106
 Services/WindowSizing.cs                                                                298
-Views/AboutTabContent.cs                                                                1000
+Views/AboutTabContent.cs                                                                1096
 Views/ApiAccessDialog.cs                                                                231
 Views/AutocompleteTextBox.cs                                                            45
 Views/CraftingPlanView.cs                                                               5615
