@@ -344,10 +344,10 @@ namespace TaimisToolbench.Tests.Services
                 shortfall, "Karma", RankerMode.Independent);
 
             // In Cascade mode the held figure is the wallet residual, so the
-            // chip's bare "300 short" is not measured against the wallet.
-            Assert.Contains("300 Karma", cascade);
+            // line's bare "200/500" is not measured against the wallet.
+            Assert.Contains("200 of the 500 Karma", cascade);
             Assert.Contains("higher-priority", cascade);
-            Assert.Contains("300 Karma", independent);
+            Assert.Contains("200 of the 500 Karma", independent);
             Assert.Contains("full wallet", independent);
             Assert.DoesNotContain("higher-priority", independent);
         }
@@ -358,8 +358,80 @@ namespace TaimisToolbench.Tests.Services
             Assert.Null(RankerReadinessCalculator.ShortfallTooltip(null, "Karma", RankerMode.Cascade));
 
             string text = RankerReadinessCalculator.ShortfallTooltip(
-                new RankerCurrencyShortfall { CurrencyId = 23, Short = 5 }, null, RankerMode.Cascade);
-            Assert.Contains("5 this currency", text);
+                new RankerCurrencyShortfall { CurrencyId = 23, Needed = 5, Short = 5 },
+                null,
+                RankerMode.Cascade);
+            Assert.Contains("0 of the 5 this item still needs", text);
+        }
+
+        [Fact]
+        public void ShortfallText_ReadsAsHeldOverNeeded()
+        {
+            string text = RankerReadinessCalculator.ShortfallText(new RankerCurrencyShortfall
+            {
+                CurrencyId = 23,
+                Needed = 1500,
+                Held = 1000,
+                Short = 500,
+                BaselineNeeded = 1500,
+            });
+
+            Assert.Equal("1,000/1,500", text);
+        }
+
+        [Fact]
+        public void ShortfallText_CapsAWalletThatHoldsMoreThanTheItemNeeds()
+        {
+            // The currency line draws the shared full-coverage marker in this
+            // case, so this never reaches the screen. The formatter still has
+            // to be total: "9,000/1,500" would read as owing more than 100%.
+            string text = RankerReadinessCalculator.ShortfallText(new RankerCurrencyShortfall
+            {
+                CurrencyId = 23,
+                Needed = 1500,
+                Held = 9000,
+                Short = 0,
+                BaselineNeeded = 1500,
+            });
+
+            Assert.Equal("1,500/1,500", text);
+        }
+
+        [Fact]
+        public void ShortfallText_GroupsWalletScaleNumbers()
+        {
+            // Karma reaches seven figures. Without separators the pair is an
+            // unreadable run of digits.
+            string text = RankerReadinessCalculator.ShortfallText(new RankerCurrencyShortfall
+            {
+                CurrencyId = 23,
+                Needed = 2400000,
+                Held = 2100000,
+                Short = 300000,
+                BaselineNeeded = 2400000,
+            });
+
+            Assert.Equal("2,100,000/2,400,000", text);
+        }
+
+        [Fact]
+        public void ShortfallText_ToleratesANullShortfall()
+        {
+            Assert.Null(RankerReadinessCalculator.ShortfallText(null));
+        }
+
+        [Fact]
+        public void ShortfallText_FormatsWhatTheSolverActuallyProduced()
+        {
+            var currency = new List<CurrencyCost> { new CurrencyCost { CurrencyId = 29, Amount = 500 } };
+            var availability = Availability(currency: new Dictionary<int, int> { { 29, 400 } });
+
+            var metrics = RankerReadinessCalculator.Compute(
+                Result(currencies: currency), Result(currencies: currency), availability, 0);
+
+            Assert.Equal(
+                "400/500",
+                RankerReadinessCalculator.ShortfallText(metrics.CurrencyShortfalls.Single()));
         }
 
         [Fact]
