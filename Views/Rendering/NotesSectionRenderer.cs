@@ -160,17 +160,18 @@ namespace TaimisToolbench.Views.Rendering
             string subjectLabel = hasIcon
                 ? NotesSectionLayoutMath.SubjectLabel(subject)
                 : "";
+            string subjectRun = hasIcon
+                ? NotesSectionLayoutMath.SubjectRun(subject)
+                : "";
 
-            // The advance, not the measured right edge: NameToNoteGap is a
-            // gap between two runs of text, and the separator's box is two
-            // pixels wider than its advance.
-            int subjectWidth = hasIcon ? advance(subjectLabel) : 0;
+            // The advance, not the measured right edge: the note's first
+            // run is drawn at the pen the name and its space end on, and a
+            // measurement stops at the last drawn glyph instead.
+            int subjectRunWidth = hasIcon ? advance(subjectRun) : 0;
             int restX = hasIcon ? NotesSectionLayoutMath.NameX : NotesSectionLayoutMath.LabelX;
-            int firstTextX = hasIcon
-                ? restX + subjectWidth + NotesSectionLayoutMath.NameToNoteGap
-                : restX;
 
-            var wrapped = WrapAt(segments, panelWidth, coinCellWidth, subjectWidth, hasIcon, measure);
+            var wrapped = WrapAt(
+                segments, panelWidth, coinCellWidth, subjectRunWidth, hasIcon, measure);
             var linePanels = new List<Panel>(wrapped.Lines.Count);
             var plainLabels = new List<Label>();
             CoinCurrencyRenderer.ValueCellHandle coinHandle = null;
@@ -217,7 +218,7 @@ namespace TaimisToolbench.Views.Rendering
                 }
 
                 DrawLine(
-                    linePanel, wrapped.Lines[i], isFirst ? firstTextX : restX, textY, font,
+                    linePanel, wrapped.Lines[i], restX, isFirst ? subjectRun : "", textY, font,
                     advance, plainLabels);
 
                 linePanels.Add(linePanel);
@@ -254,10 +255,11 @@ namespace TaimisToolbench.Views.Rendering
                     ? LabelHelpers.EllipsizeToWidth(
                         font, row.NoteSubject, NotesSectionLayoutMath.SubjectMaxWidth(w))
                     : "";
-                int newSubjectWidth = hasIcon
-                    ? advance(NotesSectionLayoutMath.SubjectLabel(newSubject))
+                int newSubjectRunWidth = hasIcon
+                    ? advance(NotesSectionLayoutMath.SubjectRun(newSubject))
                     : 0;
-                var rewrapped = WrapAt(segments, w, coinCellWidth, newSubjectWidth, hasIcon, measure);
+                var rewrapped = WrapAt(
+                    segments, w, coinCellWidth, newSubjectRunWidth, hasIcon, measure);
 
                 if (!string.Equals(newSubject, subject, StringComparison.Ordinal)
                     || !LineTexts(rewrapped).SequenceEqual(builtLines, StringComparer.Ordinal))
@@ -275,11 +277,11 @@ namespace TaimisToolbench.Views.Rendering
         /// </summary>
         private static NoteSegmentWrap.WrappedNote WrapAt(
             IReadOnlyList<PlanNoteSegment> segments, int panelWidth, int coinCellWidth,
-            int subjectWidth, bool hasIcon, Func<string, int> measure)
+            int subjectRunWidth, bool hasIcon, Func<string, int> measure)
         {
             int first = hasIcon
                 ? NotesSectionLayoutMath.SubjectFirstLineBudget(
-                    panelWidth, coinCellWidth, subjectWidth)
+                    panelWidth, coinCellWidth, subjectRunWidth)
                 : NotesSectionLayoutMath.TextBudget(panelWidth, coinCellWidth);
             int rest = hasIcon
                 ? NotesSectionLayoutMath.SubjectRestBudget(panelWidth)
@@ -311,15 +313,17 @@ namespace TaimisToolbench.Views.Rendering
 
         /// <summary>
         /// One wrapped line's runs, laid left to right at the positions
-        /// NoteRunLayout computes. Every run is drawn in the SAME face as
-        /// the sentence around it; a link differs by colour and by its rule
-        /// alone.
+        /// NoteRunLayout computes. <paramref name="prefix"/> is the text
+        /// the caller already drew at <paramref name="startX"/> - the
+        /// subject's name on a note's first line, empty on every other
+        /// line. Every run is drawn in the SAME face as the sentence around
+        /// it; a link differs by colour and by its rule alone.
         /// </summary>
         private static void DrawLine(
-            Panel linePanel, IReadOnlyList<PlanNoteSegment> pieces, int startX, int y,
-            BitmapFont font, Func<string, int> advance, List<Label> plainLabels)
+            Panel linePanel, IReadOnlyList<PlanNoteSegment> pieces, int startX, string prefix,
+            int y, BitmapFont font, Func<string, int> advance, List<Label> plainLabels)
         {
-            foreach (var run in NoteRunLayout.Place(pieces, startX, advance))
+            foreach (var run in NoteRunLayout.Place(pieces, startX, advance, prefix))
             {
                 var piece = run.Piece;
                 var label = LabelHelpers.WithDescenderClearance(new Label()
@@ -470,12 +474,15 @@ namespace TaimisToolbench.Views.Rendering
             return NotesSectionLayoutMath.NoteHeight(lineCount, hasIcon: false);
         }
 
-        // The seat the plan's tables put a row's reading line on, so a
-        // note's own name lands on the same line an icon-led table row's
-        // does.
-        private const int SubjectTextY = PlanContentHeightMath.IconRowIconY + 12;
+        // The y a body-face run needs for its baseline to land on the
+        // line's own baseline. Every control on a note line is seated from
+        // that baseline rather than from a shared box top, so the name and
+        // the note text sit on one line of letters.
+        private static readonly int SubjectTextY = TypeRampMetrics.BaselineAlignedY(
+            TypeRampMetrics.BodyInk, NotesSectionLayoutMath.SubjectLineBaseline);
 
-        private const int PlainTextY = 4;
+        private static readonly int PlainTextY = TypeRampMetrics.BaselineAlignedY(
+            TypeRampMetrics.BodyInk, NotesSectionLayoutMath.TextLineBaseline);
 
         // Every line of a truncated note carries the full text, so a hover
         // anywhere on the note reads the whole thing - not only its last

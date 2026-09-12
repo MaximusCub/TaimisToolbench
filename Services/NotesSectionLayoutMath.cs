@@ -41,9 +41,6 @@ namespace TaimisToolbench.Services
         /// </summary>
         public const int NameX = IconX + PlanContentHeightMath.RowIconFrameSize + 8;
 
-        /// <summary>Gap between the subject's name and the note itself.</summary>
-        public const int NameToNoteGap = 12;
-
         /// <summary>
         /// What parts the subject's name from the note beside it. Without
         /// it the two read as one run of prose that changes subject with no
@@ -60,6 +57,52 @@ namespace TaimisToolbench.Services
         public static string SubjectLabel(string subject)
         {
             return string.IsNullOrEmpty(subject) ? "" : subject + SubjectSeparator;
+        }
+
+        /// <summary>
+        /// The name, the separator and the ONE space that parts them from
+        /// the note, as a single string. The note's first run is placed at
+        /// the advance of this, so the gap after the name is a space
+        /// character and measures what a space between two of the note's
+        /// own words measures. It was a fixed 12px cell gap, against 6px
+        /// for a space in the body face, and the two read as separate
+        /// cells rather than as one sentence.
+        /// </summary>
+        public static string SubjectRun(string subject)
+        {
+            string label = SubjectLabel(subject);
+            return label.Length == 0 ? "" : label + " ";
+        }
+
+        /// <summary>
+        /// Top of the body face's line box on a note's first line. The seat
+        /// every icon-led plan row puts its reading line on, which is what
+        /// keeps a note's name level with the names in the tables above it
+        /// (Views/Rendering/CraftStepsSectionRenderer).
+        /// </summary>
+        private const int IconLineTextY = PlanContentHeightMath.IconRowIconY + 12;
+
+        /// <summary>The same on a note's own text lines, which carry no
+        /// icon and open at the top of a plain text row.</summary>
+        private const int TextLineTextY = 4;
+
+        /// <summary>
+        /// Baseline of a note's FIRST line, in pixels under the top of that
+        /// line. Every control on the line is seated from this through
+        /// TypeRampMetrics.BaselineAlignedY rather than from a shared box
+        /// top: a label's box is its own face's line box, so two faces hung
+        /// from one top do not share the line their letters sit on.
+        /// </summary>
+        public static int SubjectLineBaseline
+        {
+            get { return IconLineTextY + TypeRampMetrics.BodyInk.BaselineY; }
+        }
+
+        /// <summary>The same for a note's own text lines - see
+        /// <see cref="SubjectLineBaseline"/>.</summary>
+        public static int TextLineBaseline
+        {
+            get { return TextLineTextY + TypeRampMetrics.BodyInk.BaselineY; }
         }
 
         /// <summary>
@@ -185,15 +228,17 @@ namespace TaimisToolbench.Services
 
         /// <summary>
         /// Text budget for the first line of a note with an item subject,
-        /// which starts past that name and still has to leave room for any
+        /// which starts past that name and the space after it
+        /// (<paramref name="subjectRunWidth"/> is the advance of
+        /// <see cref="SubjectRun"/>) and still has to leave room for any
         /// right-aligned coin cell.
         /// </summary>
         public static int SubjectFirstLineBudget(
-            int panelWidth, int coinCellWidth, int subjectWidth)
+            int panelWidth, int coinCellWidth, int subjectRunWidth)
         {
             return Clamp(PlanRelayoutMath.NameMaxWidthBeforeColumn(
                 panelWidth - RightPadding, coinCellWidth, coinCellWidth > 0 ? CoinGap : 0,
-                NameX + subjectWidth + NameToNoteGap));
+                NameX + subjectRunWidth));
         }
 
         /// <summary>

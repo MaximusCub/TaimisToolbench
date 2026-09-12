@@ -195,7 +195,7 @@ Services/ModuleSettings.cs                                                      
 Services/MultiItemHeaderLayout.cs                                                       137
 Services/MultiItemHeaderTooltipComposer.cs                                              67
 Services/MysticForgeRecipeData.cs                                                       211
-Services/NotesSectionLayoutMath.cs                                                      214
+Services/NotesSectionLayoutMath.cs                                                      259
 Services/OwnedMaterialsForceBuyPrePass.cs                                               128
 Services/PanelChromeMath.cs                                                             132
 Services/PhaseOrdinalGuard.cs                                                           40
@@ -372,7 +372,7 @@ Views/Rendering/IconControls.cs                                                 
 Views/Rendering/IconNameRowHelpers.cs                                                   182
 Views/Rendering/InlineSpinner.cs                                                        65
 Views/Rendering/LabelHelpers.cs                                                         273
-Views/Rendering/NotesSectionRenderer.cs                                                 523
+Views/Rendering/NotesSectionRenderer.cs                                                 530
 Views/Rendering/OutlineFramePanel.cs                                                    59
 Views/Rendering/PillColors.cs                                                           151
 Views/Rendering/PlanHeaderRenderer.cs                                                   322
@@ -527,7 +527,7 @@ tests/TaimisToolbench.Tests/Services/MultiItemPlanTests.cs                      
 tests/TaimisToolbench.Tests/Services/MysticForgeIntegrationTests.cs                     696
 tests/TaimisToolbench.Tests/Services/MysticForgeRecipeDataTests.cs                      633
 tests/TaimisToolbench.Tests/Services/MysticForgeSeedStalenessTests.cs                   480
-tests/TaimisToolbench.Tests/Services/NotesSectionLayoutMathTests.cs                     281
+tests/TaimisToolbench.Tests/Services/NotesSectionLayoutMathTests.cs                     346
 tests/TaimisToolbench.Tests/Services/OwnedMaterialsForceBuyPrePassTests.cs              178
 tests/TaimisToolbench.Tests/Services/OwnedStockBadgeCoverageTests.cs                    243
 tests/TaimisToolbench.Tests/Services/PanelChromeMathTests.cs                            317

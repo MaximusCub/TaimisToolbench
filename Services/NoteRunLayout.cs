@@ -38,12 +38,27 @@ namespace TaimisToolbench.Services
         /// <summary>
         /// Lays one wrapped line's runs left to right from
         /// <paramref name="startX"/>. Each run is placed at the advance of
-        /// the line's own PREFIX rather than at a running sum of per-run
-        /// advances: Blish tracks its fonts at minus one pixel, so the two
-        /// differ by a pixel per join.
+        /// the line's own text so far rather than at a running sum of
+        /// per-run advances: Blish tracks its fonts at minus one pixel, so
+        /// the two differ by a pixel per join.
         /// </summary>
         public static List<PlacedRun> Place(
             IReadOnlyList<PlanNoteSegment> pieces, int startX, Func<string, int> advance)
+        {
+            return Place(pieces, startX, advance, "");
+        }
+
+        /// <summary>
+        /// The same placement for a line that opens with text the CALLER
+        /// draws - the note's subject name. <paramref name="startX"/> is
+        /// where that prefix starts, and the first run lands on the pen the
+        /// prefix ends on, so the name and the note are one run of text.
+        /// The prefix carries the space that parts them, which is what
+        /// makes that space measure the same as a space between two words.
+        /// </summary>
+        public static List<PlacedRun> Place(
+            IReadOnlyList<PlanNoteSegment> pieces, int startX, Func<string, int> advance,
+            string prefix)
         {
             if (advance == null)
             {
@@ -56,14 +71,14 @@ namespace TaimisToolbench.Services
                 return placed;
             }
 
-            string prefix = "";
-            int prefixAdvance = 0;
+            string line = prefix ?? "";
+            int penAdvance = advance(line);
             foreach (var piece in pieces)
             {
-                prefix += piece.Text;
-                int nextAdvance = advance(prefix);
-                placed.Add(new PlacedRun(piece, startX + prefixAdvance, nextAdvance - prefixAdvance));
-                prefixAdvance = nextAdvance;
+                line += piece.Text;
+                int nextAdvance = advance(line);
+                placed.Add(new PlacedRun(piece, startX + penAdvance, nextAdvance - penAdvance));
+                penAdvance = nextAdvance;
             }
 
             return placed;
