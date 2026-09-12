@@ -38,6 +38,41 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
+gw2efficiency recipe-calculation
+--------------------------------
+
+Models/CurrencyDecisionDefaults.cs, compiled into TaimisToolbench.dll, carries
+a table of default decision-only currency valuations. The first block of that
+table is adapted from @gw2efficiency/recipe-calculation,
+src/static/currencyDecisionPrices.ts
+(https://github.com/gw2efficiency/recipe-calculation), used under the MIT
+License. Entries were dropped or restated where this module needed a
+different value; that file records each change. The second block of that
+table is this repository's own work and carries no upstream claim. No other
+part of this module is derived from gw2efficiency.
+
+gw2efficiency recipe-calculation
+Copyright (c) 2016 queicherius (David Reess)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
 MIT-Licensed Assemblies
 -----------------------
 
