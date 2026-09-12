@@ -279,7 +279,7 @@ Services/SnapshotFetchFailedException.cs                                        
 Services/SnapshotHeaderLayout.cs                                                        209
 Services/SnapshotHelpers.cs                                                             79
 Services/SnapshotHoldLine.cs                                                            668
-Services/SnapshotItemGridLayout.cs                                                      321
+Services/SnapshotItemGridLayout.cs                                                      343
 Services/SnapshotIconWindow.cs                                                          185
 Services/SnapshotRefreshSlot.cs                                                         185
 Services/SnapshotResultLayout.cs                                                        90
@@ -345,7 +345,7 @@ Views/ItemInputRowStrip.cs                                                      
 Views/ItemRowState.cs                                                                   39
 Views/LogTabContent.cs                                                                  1538
 Views/MainThreadMarshal.cs                                                              141
-Views/MainView.cs                                                                       3354
+Views/MainView.cs                                                                       3347
 Views/DialogWindow.cs                                                                   108
 Views/ModalBackdrop.cs                                                                  132
 Views/ModalDialog.cs                                                                    428
