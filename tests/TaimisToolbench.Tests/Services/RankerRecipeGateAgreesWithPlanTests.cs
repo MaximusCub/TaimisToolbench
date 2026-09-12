@@ -28,10 +28,6 @@ namespace TaimisToolbench.Tests.Services
         private const int GiftOfDedication = 78936;
         private const int AuricIngotRecipeId = 10229;
 
-        // Its one Achievement recipe is fed by three Merchant ones, so every
-        // recipe in this plan carries a source tag rather than a discipline.
-        private const int InfiniteTrebuchetBlueprint = 103980;
-
         /// <summary>The legendary staff, and the legendary ring.</summary>
         private const int TheBifrost = 30698;
 
@@ -189,25 +185,6 @@ namespace TaimisToolbench.Tests.Services
                 .RecipeId;
 
             return RecipesGate(await PlanAsync(itemId, learnedRecipeId));
-        }
-
-        [Fact]
-        public async Task NeitherSurfaceCountsAnAchievementOrMerchantRecipe()
-        {
-            var result = await PlanAsync(InfiniteTrebuchetBlueprint);
-
-            Assert.Equal(4, result.RequiredRecipes.Count);
-            Assert.All(result.RequiredRecipes, r => Assert.False(r.IsMissing));
-            Assert.All(result.RequiredRecipes, r =>
-                Assert.True(RequiredRecipesVisibility.IsUnlockFree(r.Disciplines)));
-
-            // Nothing here can be learned, so the plan raises no Required
-            // Recipes section and the Ranker's Recipes gate does not apply.
-            // Scoring these four used to report a measured 4-of-4.
-            Assert.DoesNotContain(
-                new PlanViewModelBuilder().Build(result).Sections,
-                s => s.SectionType == PlanSectionType.RequiredRecipes);
-            Assert.False(RecipesGate(result).Applies);
         }
     }
 }

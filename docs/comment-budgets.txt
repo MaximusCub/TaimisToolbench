@@ -106,7 +106,6 @@ tests/TaimisToolbench.Tests/Services/PlanViewModelBuilderSummaryTests.cs        
 tests/TaimisToolbench.Tests/Services/RecipeClientFactoryTests.cs                             1     0
 tests/TaimisToolbench.Tests/Services/RecipeServiceTests.cs                                   1     0
 tests/TaimisToolbench.Tests/Services/RecipeSheetSavingsCalculatorTests.cs                    1     0
-tests/TaimisToolbench.Tests/Services/Recipes/RecipeCacheSerializerTests.cs                   1     0
 tests/TaimisToolbench.Tests/Services/SettingsCurrencyGridLayoutTests.cs                      1     0
 tests/TaimisToolbench.Tests/Services/SnapshotCommitGateTests.cs                              1     0
 tests/TaimisToolbench.Tests/Services/SnapshotFetchFailedExceptionTests.cs                    1     0

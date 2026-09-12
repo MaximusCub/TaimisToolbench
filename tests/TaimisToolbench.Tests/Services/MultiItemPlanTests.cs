@@ -1512,10 +1512,8 @@ namespace TaimisToolbench.Tests.Services
                 Disciplines = new List<string> { "Achievement" },
             });
             // No recipe registered for any of the 4 bit items - each is
-            // priced directly (a real acquisition path per gw2e's own
-            // Merchant sub-recipes is out of scope for this specific test;
-            // exercised separately by the seeded ref/recipes_seed.json
-            // entries in production).
+            // priced directly. Giving them acquisition paths is out of
+            // scope for this test, which covers the dedup pass alone.
 
             // InMemoryPriceApiClient.AddPrice(id, buyUnitPrice, sellUnitPrice)
             // feeds RawPriceEntry.BuyUnitPrice/SellUnitPrice, which

@@ -785,10 +785,9 @@ namespace TaimisToolbench.Tests.Services
         [InlineData("Merchant")]
         public void RecipesGate_IgnoresTheOtherUnlockFreeSourceTags(string discipline)
         {
-            // ref/recipes_seed.json carries three "Merchant" recipes and one
-            // "Achievement" recipe. PlanResultBuilder marks each not missing
-            // on the same no-unlock rule it applies to the forge, so each
-            // padded this fraction exactly as a forge recipe used to.
+            // PlanResultBuilder marks a "Merchant" or "Achievement" recipe
+            // not missing on the same no-unlock rule it applies to the
+            // forge, so each padded this fraction as a forge recipe used to.
             var owned = Result(coin: 50);
             owned.RequiredRecipes = new List<RequiredRecipe>
             {

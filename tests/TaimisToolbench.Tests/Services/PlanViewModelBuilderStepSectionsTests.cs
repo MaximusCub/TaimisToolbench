@@ -694,9 +694,8 @@ namespace TaimisToolbench.Tests.Services
         [Fact]
         public void RequiredRecipes_MerchantSourceTag_LeavesSection()
         {
-            // ref/recipes_seed.json carries three "Merchant" recipes and one
-            // "Achievement" recipe. Neither tag has an unlock, so both are
-            // filtered on the same rule the forge is.
+            // Neither the "Merchant" nor the "Achievement" tag has an
+            // unlock, so both are filtered on the same rule the forge is.
             var meta = MetaFor((1, "Trebuchet Part", "t.png"), (2, "Blade", "b.png"));
             var result = MakeResult(
                 metadata: meta,
